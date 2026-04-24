@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}Custom Text Plaque — AI Team Workspace{% endblock %}
+{% block content_width %}max-w-2xl{% endblock %}
+{% block content %}
+
+<div x-data="plaqueGen()" class="space-y-6">
+
+  {# ── Header ─────────────────────────────────────────────── #}
+  <div>
+    <h1 class="text-2xl font-bold text-notion-text">
+      Custom Text Plaque
+      <span class="text-base font-normal text-notion-muted">{{ plaque_version }}</span>
+    </h1>
+    <p class="text-sm text-notion-muted mt-1">
+      Enter three lines of text to engrave on the plaque. Generates a Bambu Studio-ready
+      <code class="bg-[#F7F6F3] px-1 rounded">.3mf</code> file under the matching course's
+      <code class="bg-[#F7F6F3] px-1 rounded">3MFs/</code> folder.
+      {% if last_modified %}
+        <span class="text-notion-muted">Last updated {{ last_modified }}.</span>
+      {% endif %}
+    </p>
+  </div>
+
+  {# ── Form ────────────────────────────────────────────────── #}
+  <div class="bg-white border border-notion-border rounded-xl p-6 space-y-5 shadow-sm">
+
+    <div class="space-y-4">
+
+      <div>
+        <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">
+          Line 1 — Top
+        </label>
+        <input type="text"
+               x-model="line1"
+               placeholder="e.g. Moffett Field Golf Course"
+               @keydown.enter="generate()"
+               class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white
+                      focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">
+          Line 2 — Middle
+        </label>
+        <input type="text"
+               x-model="line2"
+               placeholder="e.g. Mike Kallbrier — Hole in One"
+               @keydown.enter="generate()"
+               class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white
+                      focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">
+          Line 3 — Bottom
+        </label>
+        <input type="text"
+               x-model="line3"
+               placeholder="e.g. Hole 7   8 Iron   10/9/25"
+               @keydown.enter="generate()"
+               class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white
+                      focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+    </div>
+
+    <div class="pt-1 flex items-center gap-4">
+      <button @click="generate()"
+              :disabled="loading"
+              :class="loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-teal-700'"
+              class="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-teal-600
+                     text-white transition-default font-medium">
+        <svg x-show="loading" class="animate-spin h-4 w-4 text-white"
+             xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <span x-text="loading ? 'Generating…' : 'Generate'"></span>
+      </button>
+
+      <span x-show="statusMsg"
+            x-text="statusMsg"
+            :class="statusOk ? 'text-green-600' : 'text-red-500'"
+            class="text-sm font-medium"
+            x-transition></span>
+    </div>
+  </div>
+
+  {# ── Result ──────────────────────────────────────────────── #}
+  <div x-show="filename" x-cloak
+       class="bg-[#F0FDF4] border border-green-200 rounded-xl p-5 space-y-2">
+    <p class="text-sm font-semibold text-green-700">3MF generated successfully</p>
+    <p class="text-sm text-notion-text">
+      Saved to
+      <code class="bg-white border border-green-200 rounded px-1.5 py-0.5 text-xs"
+            x-text="'GolfCourses/' + course + '/3MFs/' + filename"></code>
+    </p>
+    <p class="text-xs text-notion-muted mt-1">
+      Open in Bambu Studio to preview and slice.
+    </p>
+  </div>
+
+  {# ── Tips ─────────────────────────────────────────────────── #}
+  <div class="bg-notion-sidebar border border-notion-border rounded-xl p-5 space-y-2">
+    <p class="text-xs font-semibold text-notion-muted uppercase tracking-wide">Tips</p>
+    <ul class="text-sm text-notion-muted space-y-1 list-disc list-inside">
+      <li>Leave a line blank if you only need 1 or 2 lines.</li>
+      <li>Text is automatically scaled down to fit the plaque width (≤ 130 mm).</li>
+      <li>The plaque body and all transform data come from the Mike Kallbrier template.</li>
+      <li>The top line is matched against existing course folders under <code class="bg-white rounded px-1">GolfCourses/</code>. If nothing matches, you'll be prompted to create a new folder.</li>
+    </ul>
+  </div>
+
+  {# ── New Course dialog ───────────────────────────────────── #}
+  <div x-show="showNewCourseDialog" x-cloak
+       class="fixed inset-0 flex items-center justify-center" style="z-index:9999"
+       @keydown.escape.window="showNewCourseDialog = false">
+    <div class="absolute inset-0 bg-black/30" @click="showNewCourseDialog = false"></div>
+    <div class="relative bg-white rounded-xl shadow-xl border border-notion-border p-6 w-full max-w-md space-y-5">
+      <h2 class="text-lg font-semibold text-notion-text">New Golf Course Folder</h2>
+
+      <p class="text-sm text-notion-muted">
+        No existing golf-course folder matched the top line. A new folder will be created under
+        <code class="bg-[#F7F6F3] px-1 rounded">EliteGolfMoments/GolfCourses/</code>
+        with the standard <code class="bg-[#F7F6F3] px-1 rounded">3MFs</code>,
+        <code class="bg-[#F7F6F3] px-1 rounded">EGMs</code>,
+        <code class="bg-[#F7F6F3] px-1 rounded">Images</code>, and
+        <code class="bg-[#F7F6F3] px-1 rounded">STLs</code> subfolders.
+      </p>
+
+      <div>
+        <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">
+          Folder Name
+        </label>
+        <input type="text"
+               x-model="newCourseName"
+               x-ref="newCourseInput"
+               @keydown.enter="if (newCourseName.trim() && !creating) createCourse()"
+               placeholder="e.g. Moffett Field"
+               autocomplete="off"
+               class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white
+                      focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      <p x-show="dialogError" x-text="dialogError" x-cloak
+         class="text-sm text-red-500"></p>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button @click="showNewCourseDialog = false"
+                :disabled="creating"
+                class="text-sm px-4 py-2 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-text transition-default">
+          Cancel
+        </button>
+        <button @click="createCourse()"
+                :disabled="!newCourseName.trim() || creating"
+                :class="(!newCourseName.trim() || creating) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-600'"
+                class="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-md bg-notion-accent text-white transition-default">
+          <svg x-show="creating" class="animate-spin h-4 w-4 text-white"
+               xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+          <span x-text="creating ? 'Creating…' : 'OK'"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function plaqueGen() {
+  return {
+    line1: 'Moffett Field Golf Course',
+    line2: 'Bozo the Clown — Hole in One',
+    line3: 'Hole 7   8 Iron   10/9/25',
+    loading: false,
+    statusMsg: '',
+    statusOk: true,
+    filename: '',
+    course: '',
+
+    // New-course dialog state
+    showNewCourseDialog: false,
+    newCourseName: '',
+    dialogError: '',
+    creating: false,
+
+    async generate() {
+      if (this.loading) return;
+      if (!this.line1.trim() && !this.line2.trim() && !this.line3.trim()) {
+        this.statusMsg = 'Please enter at least one line of text.';
+        this.statusOk = false;
+        return;
+      }
+      this.loading = true;
+      this.statusMsg = '';
+      this.filename = '';
+
+      try {
+        const resp = await fetch('/api/generate_plate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            line1: this.line1,
+            line2: this.line2,
+            line3: this.line3,
+          }),
+        });
+        const json = await resp.json();
+        if (json.status === 'ok') {
+          this.filename = json.filename;
+          this.course = json.course || '';
+          this.statusMsg = 'Done!';
+          this.statusOk = true;
+        } else if (json.status === 'no_course_match') {
+          this.newCourseName = json.suggested || '';
+          this.dialogError = '';
+          this.showNewCourseDialog = true;
+          this.statusMsg = '';
+          this.$nextTick(() => {
+            if (this.$refs.newCourseInput) this.$refs.newCourseInput.focus();
+          });
+        } else {
+          this.statusMsg = json.msg || 'Generation failed.';
+          this.statusOk = false;
+        }
+      } catch (err) {
+        this.statusMsg = 'Request failed: ' + err.message;
+        this.statusOk = false;
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    async createCourse() {
+      if (this.creating) return;
+      const name = this.newCourseName.trim();
+      if (!name) return;
+      this.creating = true;
+      this.dialogError = '';
+      try {
+        const resp = await fetch('/api/create_course', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            course: name,
+            line1: this.line1,
+            line2: this.line2,
+            line3: this.line3,
+          }),
+        });
+        const json = await resp.json();
+        if (json.status === 'ok') {
+          this.filename = json.filename;
+          this.course = json.course || name;
+          this.statusMsg = 'Done!';
+          this.statusOk = true;
+          this.showNewCourseDialog = false;
+        } else {
+          this.dialogError = json.msg || 'Failed to create course folder.';
+        }
+      } catch (err) {
+        this.dialogError = 'Request failed: ' + err.message;
+      } finally {
+        this.creating = false;
+      }
+    }
+  };
+}
+</script>
+
+{% endblock %}

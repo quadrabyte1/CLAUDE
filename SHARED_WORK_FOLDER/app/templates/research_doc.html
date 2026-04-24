@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Research{% endblock %}
+{% block content %}
+
+{# ── Breadcrumb ──────────────────────────────────────────────── #}
+<div class="flex items-center gap-2 text-sm text-notion-muted mb-6">
+  <a href="/"
+     hx-get="/" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+     class="hover:text-notion-text transition-default">Dashboard</a>
+  <span>/</span>
+  <span class="text-notion-text">Research</span>
+  <span>/</span>
+  <span class="text-notion-text">{{ filename }}</span>
+</div>
+
+{# ── Document header ─────────────────────────────────────────── #}
+<div class="mb-8">
+  <div class="flex items-center gap-2 mb-3">
+    <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full font-medium
+      {% if badge == 'Hiring' %}bg-purple-50 text-purple-600{% else %}bg-blue-50 text-blue-600{% endif %}">
+      {{ badge }}
+    </span>
+  </div>
+  <h1 class="text-[28px] font-bold text-notion-text leading-tight">{{ title }}</h1>
+</div>
+
+{# ── Content (rendered markdown) ─────────────────────────────── #}
+<div class="text-[15px] leading-relaxed text-notion-text max-w-3xl">
+  {{ content_html | safe }}
+</div>
+
+{% endblock %}

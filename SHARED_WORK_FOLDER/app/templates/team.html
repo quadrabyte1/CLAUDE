@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Team — AI Team Workspace{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+  <h1 class="text-[28px] font-bold text-notion-text leading-tight">Team</h1>
+  <p class="text-notion-muted mt-1">{{ members|length }} member{{ 's' if members|length != 1 else '' }} in the workspace.</p>
+</div>
+
+<div class="space-y-3">
+  {% for m in members %}
+  <div class="rounded-lg border border-notion-border p-5 hover:shadow-sm transition-default group">
+    <div class="flex items-start gap-4">
+      <div class="w-10 h-10 rounded-full bg-notion-accent/10 text-notion-accent flex items-center justify-center text-base font-semibold flex-shrink-0">
+        {{ m.name[0] }}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2.5">
+          <h3 class="font-semibold text-base text-notion-text">{{ m.name }}</h3>
+          <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full
+            {% if m.model == 'opus' %}bg-purple-50 text-purple-600{% elif m.model == 'sonnet' %}bg-blue-50 text-blue-600{% elif m.model == 'haiku' %}bg-emerald-50 text-emerald-600{% else %}bg-gray-100 text-gray-500{% endif %}">
+            {{ m.model | capitalize if m.model else 'Opus' }}
+          </span>
+          <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
+            {{ 'bg-green-50 text-green-700' if m.status == 'active' else 'bg-gray-100 text-gray-500' }}">
+            <span class="w-1.5 h-1.5 rounded-full {{ 'bg-green-500' if m.status == 'active' else 'bg-gray-400' }}"></span>
+            {{ m.status }}
+          </span>
+        </div>
+        <p class="text-sm text-notion-muted mt-0.5">{{ m.role }}</p>
+        {% if m.persona_file %}
+        <p class="text-xs text-notion-muted mt-2 opacity-0 group-hover:opacity-100 transition-default">
+          <span class="bg-notion-sidebar px-1.5 py-0.5 rounded">{{ m.persona_file }}</span>
+        </p>
+        {% endif %}
+      </div>
+      <div class="text-xs text-notion-muted flex-shrink-0">
+        Joined {{ m.created_at[:10] }}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not members %}
+<div class="rounded-lg border border-notion-border border-dashed p-12 text-center">
+  <p class="text-notion-muted">No team members yet.</p>
+</div>
+{% endif %}
+
+{% endblock %}

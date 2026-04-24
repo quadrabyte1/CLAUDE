@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+<!-- Dashboard version: bump dashboard_version in app.py when layout/functionality changes -->
+{% block title %}Dashboard — AI Team Workspace{% endblock %}
+{% block content %}
+
+<div id="dashboard-poll"
+     class="bg-gradient-to-br from-blue-50 via-white to-white rounded-xl p-1"
+     hx-get="/"
+     hx-trigger="every 750ms"
+     hx-target="#dashboard-poll"
+     hx-swap="innerHTML"
+     hx-select="#dashboard-poll > *"
+>
+
+{# ── Page header ─────────────────────────────────────────────── #}
+<div class="mb-8">
+  <h1 class="text-[28px] font-bold text-notion-text leading-tight">Dashboard <span class="text-base font-normal text-notion-muted">(updated {{ updated_at }})</span> <span class="text-xs font-normal text-notion-muted opacity-50 ml-1">{{ dashboard_version }}</span></h1>
+  <p class="text-notion-muted mt-1">Welcome back. Here is what is happening in the workspace.</p>
+</div>
+
+{# ── Stats cards ─────────────────────────────────────────────── #}
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-10">
+  {% set cards = [
+    ('Team members', team|length, 'bg-blue-50 text-blue-600'),
+    ('Total tasks', task_counts.total, 'bg-gray-50 text-gray-600'),
+    ('In progress', task_counts.in_progress, 'bg-yellow-50 text-yellow-700'),
+    ('Completed', task_counts.done, 'bg-green-50 text-green-600'),
+    ('Journal entries', journal_count, 'bg-purple-50 text-purple-600'),
+  ] %}
+  {% for label, value, colors in cards %}
+  <div class="rounded-lg border border-notion-border p-5 {{ colors }} transition-default hover:shadow-sm">
+    <div class="text-3xl font-bold">{{ value }}</div>
+    <div class="text-xs mt-1 opacity-70 font-medium uppercase tracking-wide">{{ label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Team — full width ────────────────────────────────────────── #}
+<div class="mb-10">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-semibold text-notion-text">Team</h2>
+    <a href="/team" hx-get="/team" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+       class="text-xs text-notion-accent hover:underline">View all</a>
+  </div>
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+    {% for m in team %}
+    <div class="p-3 rounded-lg border transition-default
+      {% if m.id in busy_tasks %}bg-yellow-100 border-yellow-300 hover:bg-yellow-200
+      {% elif m.id in recently_done %}task-recently-done border-green-200
+      {% else %}border-notion-border hover:bg-notion-hover{% endif %}">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-notion-accent/10 text-notion-accent flex items-center justify-center text-sm font-semibold flex-shrink-0">
+          {{ m.name[0] }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-sm truncate">{{ m.name }}</div>
+          <div class="text-xs text-notion-muted truncate">{{ m.role }}</div>
+          {% if m.id in busy_tasks %}
+          <div class="text-xs text-yellow-700 font-medium mt-0.5">Working for {{ busy_tasks[m.id] | elapsed }}</div>
+          {% endif %}
+        </div>
+        <div class="flex flex-col items-end gap-1 flex-shrink-0">
+          <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full
+            {% if m.model == 'opus' %}bg-purple-50 text-purple-600{% elif m.model == 'sonnet' %}bg-blue-50 text-blue-600{% elif m.model == 'haiku' %}bg-emerald-50 text-emerald-600{% else %}bg-gray-100 text-gray-500{% endif %}">
+            {{ m.model | capitalize if m.model else 'Sonnet' }}
+          </span>
+          <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
+            {{ 'bg-green-50 text-green-700' if m.status == 'active' else 'bg-gray-100 text-gray-500' }}">
+            <span class="w-1.5 h-1.5 rounded-full {{ 'bg-green-500' if m.status == 'active' else 'bg-gray-400' }}"></span>
+            {{ m.status }}
+          </span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+    {% if not team %}
+    <p class="text-notion-muted text-sm py-4 text-center col-span-full">No team members yet.</p>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Bottom row: Journal + Research ──────────────────────────── #}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+  {# Left: Latest Journal Entry #}
+  <div>
+    {% if journal %}
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-notion-text">
+        {% if journal.date == today %}Today's Journal{% else %}Latest Journal Entry{% endif %}
+      </h2>
+      <a href="/journal/{{ journal.date }}"
+         hx-get="/journal/{{ journal.date }}" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+         class="text-xs text-notion-accent hover:underline">Read more</a>
+    </div>
+    <div class="rounded-lg border border-notion-border p-6 hover:shadow-sm transition-default">
+      <div class="flex items-center gap-2 mb-3">
+        <span class="text-xs text-notion-muted bg-notion-sidebar px-2 py-0.5 rounded">{{ journal.date }}</span>
+        <span class="text-xs text-notion-muted">{{ journal.updated_at[:16] | replace('T', ' at ') }} UTC</span>
+        {% if journal.title %}
+        <span class="text-sm font-medium text-notion-text">· {{ journal.title }}</span>
+        {% endif %}
+      </div>
+      <div class="text-sm text-notion-text prose-sm">
+        {{ journal.content | md | safe }}
+      </div>
+    </div>
+    {% else %}
+    <h2 class="text-lg font-semibold text-notion-text mb-4">Journal</h2>
+    <div class="rounded-lg border border-notion-border border-dashed p-8 text-center">
+      <p class="text-notion-muted text-sm mb-3">No journal entries yet.</p>
+      <a href="/journal/new"
+         hx-get="/journal/new" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+         class="inline-flex items-center gap-1.5 text-sm text-notion-accent hover:underline">
+        Write your first entry
+      </a>
+    </div>
+    {% endif %}
+  </div>
+
+  {# Right: Research Documents #}
+  <div>
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-lg font-semibold text-notion-text">Research Documents</h2>
+    </div>
+    {% if research_docs %}
+    <div class="rounded-lg border border-notion-border overflow-hidden">
+      {% for doc in research_docs %}
+      <a href="/research/{{ doc.url_path }}"
+         hx-get="/research/{{ doc.url_path }}" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+         class="flex items-center gap-3 px-4 py-3 hover:bg-notion-hover transition-default
+           {% if not loop.last %}border-b border-notion-border{% endif %}">
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-medium text-notion-text truncate">{{ doc.title }}</div>
+          <div class="text-xs text-notion-muted mt-0.5">{{ doc.date }}</div>
+        </div>
+        <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full flex-shrink-0
+          {% if doc.badge == 'Hiring' %}bg-purple-50 text-purple-600{% else %}bg-blue-50 text-blue-600{% endif %}">
+          {{ doc.badge }}
+        </span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"
+             class="text-notion-muted flex-shrink-0">
+          <path d="m9 18 6-6-6-6"/>
+        </svg>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="rounded-lg border border-notion-border border-dashed p-8 text-center">
+      <p class="text-notion-muted text-sm">No research documents yet.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>{# /bottom row #}
+
+<div class="text-xs text-notion-muted text-right mt-6 opacity-50">Last refreshed {{ updated_at }}</div>
+</div>{# /dashboard-poll #}
+
+{% endblock %}

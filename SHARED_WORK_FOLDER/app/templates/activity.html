@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Activity — AI Team Workspace{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+  <h1 class="text-[28px] font-bold text-notion-text leading-tight">Activity Log</h1>
+  <p class="text-notion-muted mt-1">{{ activities|length }} event{{ 's' if activities|length != 1 else '' }} recorded.</p>
+</div>
+
+{% if activities %}
+<div class="relative">
+  {# Timeline line #}
+  <div class="absolute left-[15px] top-0 bottom-0 w-px bg-notion-border"></div>
+
+  <div class="space-y-1">
+    {% set ns = namespace(current_date='') %}
+    {% for a in activities %}
+      {# Date separator #}
+      {% if a.created_at[:10] != ns.current_date %}
+        {% set ns.current_date = a.created_at[:10] %}
+        <div class="relative flex items-center gap-3 py-3">
+          <div class="w-[31px] flex justify-center relative z-10">
+            <div class="w-2.5 h-2.5 rounded-full bg-notion-border"></div>
+          </div>
+          <span class="text-xs font-semibold text-notion-muted uppercase tracking-wide">{{ ns.current_date }}</span>
+        </div>
+      {% endif %}
+
+      <div class="relative flex items-start gap-3 py-2 pl-0 hover:bg-notion-hover rounded-lg transition-default">
+        <div class="w-[31px] flex justify-center relative z-10 pt-1">
+          <div class="w-2 h-2 rounded-full bg-notion-accent/40"></div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm">
+            <span class="font-medium text-notion-text">{{ a.actor }}</span>
+            <span class="text-notion-muted">{{ a.action | replace('_', ' ') }}</span>
+            {% if a.entity_type %}
+            <span class="text-notion-muted">on</span>
+            <span class="text-notion-text">{{ a.entity_type | replace('_', ' ') }}{% if a.entity_id %} #{{ a.entity_id }}{% endif %}</span>
+            {% endif %}
+          </div>
+          {% if a.details %}
+          <p class="text-xs text-notion-muted mt-1 leading-relaxed">{{ a.details }}</p>
+          {% endif %}
+          <p class="text-xs text-notion-muted/60 mt-0.5">{{ a.created_at[11:16] }} UTC</p>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="rounded-lg border border-notion-border border-dashed p-12 text-center">
+  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-notion-border mb-3"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+  <p class="text-notion-muted">No activity recorded yet.</p>
+</div>
+{% endif %}
+
+{% endblock %}

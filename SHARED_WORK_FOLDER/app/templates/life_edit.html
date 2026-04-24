@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if item else 'New' }} Life Item — AI Team Workspace{% endblock %}
+{% block content_width %}max-w-2xl{% endblock %}
+
+{% block content %}
+
+{% set is_new = item is none %}
+{% set action = url_for('life_edit', item_id=item.id) if not is_new else url_for('life_new') %}
+
+{# ── Header ───────────────────────────────────────────────────── #}
+<div class="mb-8 flex items-center gap-3">
+  <a href="/life"
+     hx-get="/life" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+     class="text-notion-muted hover:text-notion-text transition-default">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+  </a>
+  <div>
+    <h1 class="text-[24px] font-bold text-notion-text leading-tight">
+      {{ 'Edit Life Item' if not is_new else 'New Life Item' }}
+    </h1>
+    {% if not is_new %}
+    <p class="text-xs text-notion-muted mt-0.5">Last updated {{ item.updated_at[:10] }}</p>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Form ─────────────────────────────────────────────────────── #}
+<form method="POST" action="{{ action }}" class="space-y-5">
+
+  {# Title #}
+  <div>
+    <label class="block text-sm font-medium text-notion-text mb-1.5">Title <span class="text-red-500">*</span></label>
+    <input type="text" name="title" required
+           value="{{ item.title if not is_new else '' }}"
+           placeholder="What needs doing…"
+           class="w-full text-sm border border-notion-border rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent transition-default" />
+  </div>
+
+  {# Notes #}
+  <div>
+    <label class="block text-sm font-medium text-notion-text mb-1.5">Notes</label>
+    <textarea name="notes" rows="4" placeholder="Any additional context…"
+              class="w-full text-sm border border-notion-border rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent transition-default resize-none">{{ item.notes if (not is_new and item.notes) else '' }}</textarea>
+  </div>
+
+  {# Area + Priority — two columns #}
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-notion-text mb-1.5">Area</label>
+      <select name="area_id"
+              class="w-full text-sm border border-notion-border rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent transition-default">
+        <option value="">No area</option>
+        {% for a in areas %}
+        <option value="{{ a.id }}" {{ 'selected' if (not is_new and item.area_id == a.id) else '' }}>
+          {{ a.icon or '' }} {{ a.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-notion-text mb-1.5">Priority</label>
+      <select name="priority"
+              class="w-full text-sm border border-notion-border rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent transition-default">
+        {% for pval, plabel in [('urgent','🔴 Urgent'),('high','🟠 High'),('normal','🔵 Normal'),('low','⚪ Low')] %}
+        <option value="{{ pval }}" {{ 'selected' if (not is_new and item.priority == pval) or (is_new and pval == 'normal') else '' }}>
+          {{ plabel }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  {# Due date + Escalation days #}
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-notion-text mb-1.5">Due Date</label>
+      <input type="date" name="due_date"
+             value="{{ item.due_date if (not is_new and item.due_date) else '' }}"
+             class="w-full text-sm border border-notion-border rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent transition-default" />
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-notion-text mb-1.5">Escalation Days</label>
+      <input type="number" name="escalation_days" min="0" max="365"
+             value="{{ item.escalation_days if (not is_new and item.escalation_days is not none) else '3' }}"
+             placeholder="3"
+             class="w-full text-sm border border-notion-border rounded-xl px-4 py-2.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent transition-default" />
+      <p class="text-xs text-notion-muted mt-1">Days overdue before item escalates colour.</p>
+    </div>
+  </div>
+
+  {# Recurrence ─────────────────────────────────────────────────── #}
+  <div class="border border-notion-border rounded-xl p-4 space-y-3" x-data="{ rule: '{{ item.recur_rule if (not is_new and item.recur_rule) else '' }}' }">
+    <h3 class="text-sm font-semibold text-notion-text">Recurrence</h3>
+
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs text-notion-muted mb-1">Repeat rule</label>
+        <select name="recur_rule" x-model="rule"
+                class="w-full text-sm border border-notion-border rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent transition-default">
+          <option value="">No recurrence</option>
+          <option value="daily"    {{ 'selected' if (not is_new and item.recur_rule == 'daily')    else '' }}>Daily</option>
+          <option value="weekly"   {{ 'selected' if (not is_new and item.recur_rule == 'weekly')   else '' }}>Weekly</option>
+          <option value="monthly"  {{ 'selected' if (not is_new and item.recur_rule == 'monthly')  else '' }}>Monthly</option>
+          <option value="yearly"   {{ 'selected' if (not is_new and item.recur_rule == 'yearly')   else '' }}>Yearly</option>
+          <option value="interval" {{ 'selected' if (not is_new and item.recur_rule == 'interval') else '' }}>Every N days</option>
+        </select>
+      </div>
+
+      <div x-show="rule === 'interval'" x-cloak>
+        <label class="block text-xs text-notion-muted mb-1">Every N days</label>
+        <input type="number" name="recur_interval" min="1"
+               value="{{ item.recur_interval if (not is_new and item.recur_interval) else '7' }}"
+               class="w-full text-sm border border-notion-border rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent transition-default" />
+      </div>
+    </div>
+
+    <p class="text-xs text-notion-muted" x-show="rule !== ''">
+      When you mark this item complete, a new copy will be created automatically with the next due date.
+    </p>
+  </div>
+
+  {# Actions #}
+  <div class="flex items-center justify-between pt-2">
+    <a href="/life"
+       hx-get="/life" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+       class="text-sm text-notion-muted hover:text-notion-text transition-default">Cancel</a>
+    <button type="submit"
+            class="bg-notion-accent text-white text-sm rounded-xl px-6 py-2.5 hover:bg-blue-600 transition-default font-medium">
+      {{ 'Save Changes' if not is_new else 'Create Item' }}
+    </button>
+  </div>
+
+</form>
+
+{% endblock %}

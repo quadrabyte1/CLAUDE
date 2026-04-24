@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ entry.title or entry.date }} — Journal{% endblock %}
+{% block content %}
+
+{# ── Breadcrumb ──────────────────────────────────────────────── #}
+<div class="flex items-center gap-2 text-sm text-notion-muted mb-6">
+  <a href="/journal"
+     hx-get="/journal" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+     class="hover:text-notion-text transition-default">Journal</a>
+  <span>/</span>
+  <span class="text-notion-text">{{ entry.date }}</span>
+</div>
+
+{# ── Entry header ────────────────────────────────────────────── #}
+<div class="mb-8">
+  <div class="flex items-center gap-2.5 mb-3">
+    <span class="text-xs text-notion-muted bg-notion-sidebar px-2 py-0.5 rounded font-mono">{{ entry.date }}</span>
+    <a href="/journal/{{ entry.date }}/edit"
+       hx-get="/journal/{{ entry.date }}/edit" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+       class="text-xs text-notion-accent hover:underline ml-auto">Edit</a>
+  </div>
+  <h1 class="text-[32px] font-bold text-notion-text leading-tight">
+    {{ entry.title or 'Untitled' }}
+  </h1>
+</div>
+
+{# ── Content (rendered markdown) ─────────────────────────────── #}
+<div class="text-[15px] leading-relaxed text-notion-text">
+  {{ entry.content | md | safe }}
+</div>
+
+{# ── Footer ──────────────────────────────────────────────────── #}
+<div class="mt-12 pt-6 border-t border-notion-border text-xs text-notion-muted flex items-center gap-4">
+  <span>Created {{ entry.created_at[:16] | replace('T', ' at ') }}</span>
+  {% if entry.updated_at != entry.created_at %}
+  <span>Updated {{ entry.updated_at[:16] | replace('T', ' at ') }}</span>
+  {% endif %}
+</div>
+
+{% endblock %}

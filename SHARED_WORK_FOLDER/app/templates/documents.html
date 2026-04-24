@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Documents — AI Team Workspace{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+  <h1 class="text-[28px] font-bold text-notion-text leading-tight">Documents</h1>
+  <p class="text-notion-muted mt-1">{{ documents|length }} document{{ 's' if documents|length != 1 else '' }} in the workspace.</p>
+</div>
+
+{% if documents %}
+<div class="border border-notion-border rounded-lg overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-notion-sidebar text-left text-xs text-notion-muted uppercase tracking-wide">
+        <th class="px-4 py-3 font-medium">Filename</th>
+        <th class="px-4 py-3 font-medium">Source</th>
+        <th class="px-4 py-3 font-medium">Type</th>
+        <th class="px-4 py-3 font-medium">Size</th>
+        <th class="px-4 py-3 font-medium">Uploaded by</th>
+        <th class="px-4 py-3 font-medium">Task</th>
+        <th class="px-4 py-3 font-medium">Date</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-notion-border">
+      {% for d in documents %}
+      <tr class="hover:bg-notion-hover transition-default">
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="text-notion-muted flex-shrink-0"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+            <span class="font-medium text-notion-text">{{ d.filename }}</span>
+          </div>
+          {% if d.description %}
+          <div class="text-xs text-notion-muted mt-0.5 ml-5 truncate max-w-xs">{{ d.description }}</div>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3">
+          <span class="text-xs px-2 py-0.5 rounded-full
+            {{ 'bg-blue-50 text-blue-600' if d.source_inbox == 'owner_inbox' else 'bg-purple-50 text-purple-600' }}">
+            {{ d.source_inbox | replace('_', ' ') | title }}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-xs text-notion-muted">
+          {{ d.mime_type or '—' }}
+        </td>
+        <td class="px-4 py-3 text-xs text-notion-muted whitespace-nowrap">
+          {% if d.size_bytes %}
+            {% if d.size_bytes >= 1048576 %}
+              {{ '%.1f' | format(d.size_bytes / 1048576) }} MB
+            {% elif d.size_bytes >= 1024 %}
+              {{ '%.1f' | format(d.size_bytes / 1024) }} KB
+            {% else %}
+              {{ d.size_bytes }} B
+            {% endif %}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-sm text-notion-muted">{{ d.uploaded_by or '—' }}</td>
+        <td class="px-4 py-3 text-sm text-notion-muted">{{ d.task_title or '—' }}</td>
+        <td class="px-4 py-3 text-xs text-notion-muted whitespace-nowrap">{{ d.created_at[:10] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="rounded-lg border border-notion-border border-dashed p-12 text-center">
+  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="mx-auto text-notion-border mb-3"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
+  <p class="text-notion-muted">No documents uploaded yet.</p>
+</div>
+{% endif %}
+
+{% endblock %}

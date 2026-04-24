@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Journal — AI Team Workspace{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-[28px] font-bold text-notion-text leading-tight">Journal</h1>
+    <p class="text-notion-muted mt-1">{{ entries|length }} entr{{ 'ies' if entries|length != 1 else 'y' }}.</p>
+  </div>
+  <a href="/journal/new"
+     hx-get="/journal/new" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+     class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-white bg-notion-accent rounded-lg hover:opacity-90 transition-default">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    New entry
+  </a>
+</div>
+
+<div class="space-y-2">
+  {% for e in entries %}
+  <a href="/journal/{{ e.date }}"
+     hx-get="/journal/{{ e.date }}" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+     class="block rounded-lg border border-notion-border p-5 hover:shadow-sm hover:border-notion-accent/30 transition-default group">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2.5 mb-1.5">
+          <span class="text-xs text-notion-muted bg-notion-sidebar px-2 py-0.5 rounded font-mono">{{ e.date }}</span>
+        </div>
+        <h3 class="font-semibold text-base text-notion-text group-hover:text-notion-accent transition-default">
+          {{ e.title or 'Untitled' }}
+        </h3>
+        {% if e.content %}
+        <p class="text-sm text-notion-muted mt-1.5 line-clamp-2">
+          {{ e.content[:200] | replace('#', '') | replace('*', '') | replace('-', '') | truncate(200) }}
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% if not entries %}
+<div class="rounded-lg border border-notion-border border-dashed p-12 text-center">
+  <p class="text-notion-muted mb-3">No journal entries yet.</p>
+  <a href="/journal/new"
+     hx-get="/journal/new" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
+     class="text-sm text-notion-accent hover:underline">Write your first entry</a>
+</div>
+{% endif %}
+
+{% endblock %}

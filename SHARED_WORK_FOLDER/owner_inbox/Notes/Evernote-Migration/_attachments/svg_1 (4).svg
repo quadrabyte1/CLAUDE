@@ -1,0 +1,13 @@
+<svg class="graphic bg-cap header_banner_bottom_overlay fill-color fill-color-white rotate-180 js-evernote-checked" viewBox="0 0 800 50" preserveAspectRatio="none" data-evernote-id="211" xmlns="http://www.w3.org/2000/svg">
+<defs data-evernote-id="212" class="js-evernote-checked"></defs>
+<g class="fl-shape-content js-evernote-checked" data-evernote-id="213">
+<g class="fl-shape js-evernote-checked" transform="matrix(1,0,0,1,0,0)" data-evernote-id="214">
+<clipPath id="SVGID_2_" data-evernote-id="215" class="js-evernote-checked">
+<rect id="SVGID_1_" y="0" width="800" height="50" data-evernote-id="216" class="js-evernote-checked"></rect>
+</clipPath>
+<g data-evernote-id="217" class="js-evernote-checked">
+<path d="M800,50C666.7,22.6,379.8,8,245,8C195,8,88,18,0,50L0,0l800,0V50z" data-evernote-id="218" class="js-evernote-checked"></path>
+</g>
+</g>
+</g>
+</svg>

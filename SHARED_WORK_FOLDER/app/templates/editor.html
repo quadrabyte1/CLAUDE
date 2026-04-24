@@ -1,0 +1,1565 @@
+{% extends "base.html" %}
+{% block title %}Boundary Editor — AI Team Workspace{% endblock %}
+{% block content_width %}max-w-6xl{% endblock %}
+{% block content %}
+
+<div x-data="polygonEditor()" x-init="init()" class="space-y-4" @keydown.window="handleKey($event)">
+
+  {# ── Header ─────────────────────────────────────────────── #}
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.18</span></h1>
+      <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
+    </div>
+  </div>
+
+  {# ── Action bar ─────────────────────────────────────────── #}
+  <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
+    <button @click="dlgCourse = courseName; dlgHole = ''; dlgImage = selectedImage || ''; refreshImageList(); showNewDialog = true"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-notion-accent hover:bg-blue-600 text-white transition-default">
+      New Project
+    </button>
+
+    <button @click="openProjectDialog()"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-white border border-notion-border hover:bg-notion-hover text-notion-text transition-default">
+      Open Project
+    </button>
+
+    <button @click="generateSTL()"
+            :disabled="!(polygons.length > 0 && courseName && holeName)"
+            :class="(polygons.length > 0 && courseName && holeName) ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-600/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+      Generate
+    </button>
+
+    {# ── Green style selector ────────────────────────────────── #}
+    <div class="flex items-center gap-2 pl-3 border-l border-notion-border">
+      <label class="text-xs font-medium text-notion-muted whitespace-nowrap">Green</label>
+      <select x-model="greenStyle"
+              class="text-xs bg-white border border-notion-border rounded px-2 py-1 text-notion-text focus:outline-none focus:ring-1 focus:ring-teal-500">
+        <option value="smooth">Smooth</option>
+        <option value="terraced">Terraced</option>
+      </select>
+    </div>
+
+
+    <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
+          x-text="courseName + ' — Hole ' + holeName + ' (' + polygons.length + ' regions)'"></span>
+
+    <div class="ml-auto">
+      <span x-show="statusMsg" x-text="statusMsg" x-transition
+            :class="statusOk ? 'text-green-600' : 'text-red-500'"
+            class="text-sm font-medium"></span>
+    </div>
+  </div>
+
+  {# ── New Project dialog ────────────────────────────────── #}
+  <div x-show="showNewDialog" x-cloak
+       class="fixed inset-0 flex items-center justify-center" style="z-index:9999" @keydown.escape.window="showNewDialog = false">
+      <div class="absolute inset-0 bg-black/30" @click="showNewDialog = false"></div>
+      <div class="relative bg-white rounded-xl shadow-xl border border-notion-border p-6 w-full max-w-md space-y-5">
+        <h2 class="text-lg font-semibold text-notion-text">New Project</h2>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Golf Course</label>
+            <input type="text" x-model="dlgCourse" x-ref="dlgCourseInput" placeholder="e.g. Moffett Field" autocomplete="off"
+                   class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Hole Number</label>
+            <input type="text" x-model="dlgHole" placeholder="e.g. 9" autocomplete="off"
+                   class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Source Image</label>
+            <select x-model="dlgImage"
+                    class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+              <option value="">-- select --</option>
+              <template x-for="img in dlgImages" :key="img.url">
+                <option :value="img.filename" x-text="img.filename"></option>
+              </template>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button @click="showNewDialog = false"
+                  class="text-sm px-4 py-2 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-text transition-default">
+            Cancel
+          </button>
+          <button @click="startNewProject()"
+                  :disabled="!dlgImage || !dlgCourse.trim() || !dlgHole.trim()"
+                  :class="(!dlgImage || !dlgCourse.trim() || !dlgHole.trim()) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-600'"
+                  class="text-sm px-4 py-2 rounded-md bg-notion-accent text-white transition-default">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  {# /dialog #}
+
+  {# ── Open Project dialog ───────────────────────────────── #}
+  <div x-show="showOpenDialog" x-cloak
+       class="fixed inset-0 flex items-center justify-center" style="z-index:9999" @keydown.escape.window="showOpenDialog = false">
+    <div class="absolute inset-0 bg-black/30" @click="showOpenDialog = false"></div>
+    <div class="relative bg-white rounded-xl shadow-xl border border-notion-border p-6 w-full max-w-md space-y-5">
+      <h2 class="text-lg font-semibold text-notion-text">Open Project</h2>
+
+      <div x-show="openProjectsLoading" class="text-sm text-notion-muted py-4 text-center">Loading projects...</div>
+      <div x-show="!openProjectsLoading && openProjects.length === 0" class="text-sm text-notion-muted py-4 text-center">No saved projects found.</div>
+
+      <div x-show="!openProjectsLoading && openProjects.length > 0" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+        <template x-for="(proj, i) in openProjects" :key="i">
+          <button @click="loadProject(proj)"
+                  :class="selectedOpenProject && selectedOpenProject.filename === proj.filename ? 'border-notion-accent bg-blue-50' : 'border-notion-border hover:bg-notion-hover'"
+                  class="w-full text-left px-4 py-3 rounded-lg border transition-default">
+            <div class="text-sm font-medium text-notion-text" x-text="proj.course + ' — Hole ' + proj.hole"></div>
+            <div class="text-xs text-notion-muted mt-0.5" x-text="proj.image + ' · ' + proj.polygon_count + ' region(s)'"></div>
+          </button>
+        </template>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2">
+        <button @click="showOpenDialog = false"
+                class="text-sm px-4 py-2 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-text transition-default">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+  {# /open dialog #}
+
+  {# ── Canvas ─────────────────────────────────────────────── #}
+  <div class="border border-notion-border rounded-lg overflow-hidden bg-gray-100 relative" style="min-height:400px;">
+    <canvas x-ref="canvas"
+            @mousedown="onMouseDown($event)"
+            @mousemove="onMouseMove($event)"
+            @mouseup="onMouseUp($event)"
+            @dblclick="onDblClick($event)"
+            @contextmenu.prevent="onRightClick($event)"
+            class="block w-full"
+            style="cursor: default;">
+    </canvas>
+    <div x-show="!imgLoaded" class="absolute inset-0 flex items-center justify-center text-notion-muted text-sm">
+      <span x-show="!selectedImage">Click <strong>New Project</strong> to begin.</span>
+      <span x-show="selectedImage && !imgLoaded">Loading image...</span>
+    </div>
+  </div>
+
+  {# ── Help text ──────────────────────────────────────────── #}
+  <div class="text-xs text-notion-muted space-y-0.5 pb-4">
+    <p><strong>Drag</strong> a vertex to move it. <strong>Shift+click</strong> to multi-select. <strong>Right-click</strong> edge to add vertex, right-click vertex to remove. <strong>Cmd+Z</strong> undo, <strong>Cmd+Shift+Z</strong> redo.</p>
+    <p><strong>Contour mode:</strong> click "Add Contour", then click to place points. <strong>Double-click or Enter</strong> to finish. Click the <strong>↑/↓ direction arrow</strong> on a contour to flip its uphill side. Right-click a contour vertex to delete it.</p>
+  </div>
+</div>
+
+<script>
+function polygonEditor() {
+  return {
+    selectedImage: '{{ image | e }}',
+    selectedImageUrl: '',
+    holeName: '',
+    courseName: '',
+
+    // New Project dialog state
+    showNewDialog: false,
+    dlgCourse: '',
+    dlgHole: '',
+    dlgImage: '',
+    dlgImages: [],
+    _pendingDetect: false,
+
+    // Open Project dialog state
+    showOpenDialog: false,
+    openProjects: [],
+    openProjectsLoading: false,
+    selectedOpenProject: null,
+    _pendingRestore: null,
+    polygons: [],
+    selectedPoly: 0,
+    img: null,
+    imgLoaded: false,
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    imgW: 0,
+    imgH: 0,
+
+    // Drag state
+    dragging: false,
+    dragPolyIdx: -1,
+    dragPointIdx: -1,
+    dragStartX: 0,
+    dragStartY: 0,
+
+    // Selected vertices: array of {poly, idx} — supports multi-select with shift
+    selectedVerts: [],
+
+
+    // Rubber band selection
+    rubberBand: false,
+    rbStartX: 0,
+    rbStartY: 0,
+    rbCurX: 0,
+    rbCurY: 0,
+    rbShift: false,  // whether shift was held when rubber band started
+    preRbSelection: [],  // selection before rubber band started (for shift mode)
+
+    // Undo/redo stacks — each entry is a JSON snapshot of polygons
+    undoStack: [],
+    redoStack: [],
+    maxUndo: 100,
+
+    statusMsg: '',
+    statusOk: true,
+
+    POINT_RADIUS: 8,
+    EDGE_HIT_DIST: 10,
+
+    // Contour lines — open polylines (type: "contour", closed: false)
+    contours: [],          // [{name, direction, points:[{x,y}]}]
+    contourMode: false,    // whether we are currently drawing a contour
+    contourDraft: [],      // points being drawn in the current session
+    contourStep: 10.0,     // mm elevation increment per contour line
+    grassAmplitude: 0.5,   // grass bump height in mm
+    grassSpacing: 2.4,     // distance between bump centers in mm
+    greenStyle: 'terraced',  // 'smooth' or 'terraced'
+    selectedContour: -1,   // index into contours[]
+    // contour vertex drag state
+    draggingContour: false,
+    dragContourIdx: -1,
+    dragContourPtIdx: -1,
+    // direction-button hit area stored per contour
+    _contourArrowBtns: [],  // [{cx, cy, idx}] in canvas (logical) px
+
+    // Initial boundary data from hole9_boundaries.py
+    hole9Data: {
+      green: [
+        [235,80],[258,66],[285,56],[315,50],[345,48],[375,50],[405,56],[430,66],[452,80],
+        [470,98],[484,120],[494,145],[500,172],[502,200],[500,230],[494,258],[484,284],[470,308],
+        [452,328],[430,344],[405,358],[378,368],[350,374],[322,374],[295,368],
+        [270,356],[248,340],[230,320],[216,296],
+        [206,270],[198,242],[194,214],[192,186],[194,160],[200,136],[210,114],[222,96],[235,80]
+      ],
+      trapLeft: [
+        [95,240],[120,232],[142,236],[160,248],[172,268],[180,294],[184,326],[186,360],
+        [184,394],[180,424],[176,448],[172,468],[170,488],[172,510],[176,530],[178,548],
+        [174,564],[164,576],[148,582],[130,580],[112,572],[94,558],[78,540],[64,516],
+        [52,488],[42,456],[36,422],[34,388],[36,354],[42,322],[50,294],[62,270],[76,252],[95,240]
+      ],
+      trapRight: [
+        [520,308],[542,302],[562,304],[580,312],[596,326],[608,346],[618,370],[624,398],[628,428],
+        [626,458],[620,484],[610,506],[598,524],[582,540],[562,552],[540,560],[516,564],[494,562],
+        [476,556],[460,544],[450,526],[444,504],[444,478],[448,452],[454,428],[462,404],[472,382],
+        [484,362],[498,344],[508,326],[520,308]
+      ]
+    },
+
+    init() {
+      if (this.selectedImage) {
+        this.loadImage();
+      }
+    },
+
+    loadImage() {
+      if (!this.selectedImage) return;
+      this.imgLoaded = false;
+      this.img = new Image();
+      const onImageReady = () => {
+        this.imgW = this.img.naturalWidth;
+        this.imgH = this.img.naturalHeight;
+        this.imgLoaded = true;
+        if (this._pendingRestore) {
+          const restored = this._pendingRestore;
+          this._pendingRestore = null;
+          this.polygons = restored.filter(p => p.type !== 'contour').map(p => ({
+            name: p.name,
+            type: p.type,
+            color: p.type === 'green' ? '#22C55E' : '#EF4444',
+            points: p.points.map(pt => ({ x: pt.x, y: pt.y })),
+          }));
+          this.contours = restored.filter(p => p.type === 'contour').map(p => ({
+            name: p.name,
+            direction: p.direction || 'left',
+            color: '#FFE600',
+            points: p.points.map(pt => ({ x: pt.x, y: pt.y })),
+          }));
+          this.selectedPoly = 0;
+          this.$nextTick(() => { this.resizeCanvas(); });
+        } else if (this._pendingDetect) {
+          this._pendingDetect = false;
+          this.$nextTick(() => { this.resizeCanvas(); this.runDetection(); });
+        } else {
+          this.initPolygons();
+          this.$nextTick(() => this.resizeCanvas());
+        }
+      };
+      this.img.onload = onImageReady;
+      this.img.onerror = () => {
+        console.error('Image failed to load:', this.selectedImage);
+        this.imgLoaded = true;  // unstick the loading message
+        this.flash('Failed to load image: ' + this.selectedImage, false);
+      };
+      // Cache-buster query param forces the browser to re-request the image,
+      // ensuring onload always fires even if the underlying file is cached.
+      this.img.src = (this.selectedImageUrl || '/team_inbox/' + encodeURIComponent(this.selectedImage)) + '?t=' + Date.now();
+    },
+
+    runDetection() {
+      this.flash('Detecting boundaries...', true);
+      fetch('/api/detect_boundaries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: this.selectedImage, course: this.courseName }),
+      })
+      .then(resp => resp.json())
+      .then(result => {
+        if (result.status === 'ok' && result.polygons.length > 0) {
+          // Separate regular polygons from contour lines
+          const regularPolygons = result.polygons.filter(p => p.type !== 'contour');
+          const detectedContours = result.polygons.filter(p => p.type === 'contour');
+
+          this.polygons = regularPolygons.map(p => ({
+            name: p.name,
+            type: p.type,
+            color: p.type === 'green' ? '#22C55E' : '#EF4444',
+            points: p.points,
+          }));
+
+          this.contours = detectedContours.map(c => ({
+            name: c.name,
+            direction: c.direction || 'left',
+            color: '#FFE600',
+            points: c.points.map(pt => ({ x: pt.x, y: pt.y })),
+          }));
+
+          if (result.contourStep != null) {
+            this.contourStep = result.contourStep;
+          }
+
+          this.selectedPoly = 0;
+          this.draw();
+          // Debug: draw a red circle at each polygon's first point
+          var _c = this.$refs.canvas, _ctx = _c ? _c.getContext('2d') : null;
+          if (_ctx) {
+            _ctx.fillStyle = 'red';
+            for (var _p of this.polygons) {
+              if (_p.points.length > 0) {
+                var _pt = this.imgToCanvas(_p.points[0].x, _p.points[0].y);
+                _ctx.beginPath();
+                _ctx.arc(_pt.x, _pt.y, 20, 0, Math.PI*2);
+                _ctx.fill();
+              }
+            }
+          }
+          const totalRegions = this.polygons.length + this.contours.length;
+          this.flash('Detected ' + this.polygons.length + ' region(s) + ' + this.contours.length + ' contour(s) — scale=' + this.scale.toFixed(3), true);
+          this.autoSave();
+        } else {
+          this.initPolygons();
+          this.draw();
+          this.flash('Detection returned no results — using defaults', false);
+        }
+      })
+      .catch((err) => {
+        console.error('Detection error:', err);
+        this.initPolygons();
+        this.draw();
+        this.flash('Detection failed — using defaults', false);
+      });
+    },
+
+    initPolygons() {
+      // Default rectangle fallback for any image
+      const w = this.imgW, h = this.imgH;
+      const cx = w / 2, cy = h / 2;
+      this.polygons = [
+        { name: 'Green', type: 'green', color: '#22C55E', points: [
+          {x: cx-w*0.15, y: cy-h*0.15}, {x: cx+w*0.15, y: cy-h*0.15},
+          {x: cx+w*0.15, y: cy+h*0.15}, {x: cx-w*0.15, y: cy+h*0.15}
+        ]},
+      ];
+      this.selectedPoly = 0;
+      // Resample: green gets 8 points, obstacles get 16
+      for (const poly of this.polygons) {
+        const n = poly.type === 'green' ? 8 : 16;
+        poly.points = this.resamplePoly(poly.points, n);
+      }
+    },
+
+    resizeCanvas() {
+      const canvas = this.$refs.canvas;
+      if (!canvas || !this.imgLoaded) return;
+      const container = canvas.parentElement;
+      const maxW = container.clientWidth;
+      const maxH = window.innerHeight * 0.7;
+      const aspect = this.imgW / this.imgH;
+
+      let cw, ch;
+      if (maxW / aspect <= maxH) {
+        cw = maxW;
+        ch = maxW / aspect;
+      } else {
+        ch = maxH;
+        cw = maxH * aspect;
+      }
+
+      // Use devicePixelRatio for crisp rendering
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = cw * dpr;
+      canvas.height = ch * dpr;
+      canvas.style.width = cw + 'px';
+      canvas.style.height = ch + 'px';
+
+      this.scale = cw / this.imgW;
+      this.offsetX = 0;
+      this.offsetY = 0;
+
+      this.draw();
+    },
+
+    // Convert image coords to canvas display coords
+    imgToCanvas(x, y) {
+      const dpr = window.devicePixelRatio || 1;
+      return {
+        x: (x * this.scale + this.offsetX) * dpr,
+        y: (y * this.scale + this.offsetY) * dpr,
+      };
+    },
+
+    // Convert mouse event coords to image coords
+    canvasToImg(e) {
+      const canvas = this.$refs.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      return {
+        x: (mx - this.offsetX) / this.scale,
+        y: (my - this.offsetY) / this.scale,
+      };
+    },
+
+    // Trace a closed Catmull-Rom spline through canvas-space points
+    traceSplinePath(ctx, cpts) {
+      const n = cpts.length;
+      if (n < 2) return;
+      ctx.beginPath();
+      const segsPerEdge = 16;
+      const tension = 0.5; // 0.5 = standard Catmull-Rom
+
+      for (let i = 0; i < n; i++) {
+        const p0 = cpts[(i - 1 + n) % n];
+        const p1 = cpts[i];
+        const p2 = cpts[(i + 1) % n];
+        const p3 = cpts[(i + 2) % n];
+
+        for (let s = 0; s < segsPerEdge; s++) {
+          const t = s / segsPerEdge;
+          const t2 = t * t;
+          const t3 = t2 * t;
+
+          // Catmull-Rom basis
+          const x = tension * (
+            (-t3 + 2*t2 - t) * p0.x +
+            (3*t3 - 5*t2 + 2) * p1.x +
+            (-3*t3 + 4*t2 + t) * p2.x +
+            (t3 - t2) * p3.x
+          );
+          const y = tension * (
+            (-t3 + 2*t2 - t) * p0.y +
+            (3*t3 - 5*t2 + 2) * p1.y +
+            (-3*t3 + 4*t2 + t) * p2.y +
+            (t3 - t2) * p3.y
+          );
+
+          if (i === 0 && s === 0) {
+            ctx.moveTo(x, y);
+          } else {
+            ctx.lineTo(x, y);
+          }
+        }
+      }
+      ctx.closePath();
+    },
+
+    draw() {
+      const canvas = this.$refs.canvas;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw image
+      if (this.imgLoaded && this.img) {
+        ctx.drawImage(this.img, 0, 0, canvas.width, canvas.height);
+      }
+
+      // Draw polygons
+      for (let pi = 0; pi < this.polygons.length; pi++) {
+        const poly = this.polygons[pi];
+        const pts = poly.points;
+        if (pts.length < 2) continue;
+
+        const isSelected = (pi === this.selectedPoly);
+
+        // Convert control points to canvas coords
+        const cpts = pts.map(p => this.imgToCanvas(p.x, p.y));
+
+        // Build closed Catmull-Rom spline path
+        this.traceSplinePath(ctx, cpts);
+        ctx.fillStyle = poly.color + (isSelected ? '26' : '1A');
+        ctx.fill();
+
+        this.traceSplinePath(ctx, cpts);
+        ctx.strokeStyle = poly.color;
+        ctx.lineWidth = (isSelected ? 3 : 2) * dpr;
+        ctx.stroke();
+
+        // Vertices
+        const baseR = isSelected ? this.POINT_RADIUS : 4;
+        const baseLW = isSelected ? 2 : 1.5;
+        for (let i = 0; i < pts.length; i++) {
+          const p = this.imgToCanvas(pts[i].x, pts[i].y);
+          const isSelVert = this.isVertSelected(pi, i);
+          const r = (isSelVert ? baseR + 3 : baseR) * dpr;
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = isSelVert ? '#FFFFFF' : poly.color;
+          ctx.fill();
+          ctx.strokeStyle = isSelVert ? poly.color : '#FFFFFF';
+          ctx.lineWidth = (isSelVert ? 3 : baseLW) * dpr;
+          ctx.stroke();
+        }
+      }
+
+      // Draw contour lines
+      this._contourArrowBtns = [];
+      for (let ci = 0; ci < this.contours.length; ci++) {
+        const c = this.contours[ci];
+        const pts = c.points;
+        if (pts.length < 2) continue;
+        const isSelC = (ci === this.selectedContour);
+
+        const cpts = pts.map(p => this.imgToCanvas(p.x, p.y));
+
+        // Draw solid contour line
+        ctx.beginPath();
+        ctx.strokeStyle = isSelC ? '#FFD000' : '#FFE600';
+        ctx.lineWidth = (isSelC ? 3.5 : 2.5) * dpr;
+        ctx.moveTo(cpts[0].x, cpts[0].y);
+        for (let i = 1; i < cpts.length; i++) ctx.lineTo(cpts[i].x, cpts[i].y);
+        ctx.stroke();
+
+        // Draw vertices
+        for (let i = 0; i < cpts.length; i++) {
+          const p = cpts[i];
+          const isSelV = (this.selectedContour === ci && this.selectedVerts.some(v => v.poly === -1 - ci && v.idx === i));
+          const r = (isSelV ? 7 : 4) * dpr;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = isSelV ? '#FFFFFF' : '#FFE600';
+          ctx.fill();
+          ctx.strokeStyle = isSelV ? '#FFD000' : '#FFFFFF';
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.stroke();
+        }
+
+        // Compute midpoint for direction arrow
+        if (pts.length >= 2) {
+          const mi = Math.floor((pts.length - 1) / 2);
+          const a = cpts[mi], b = cpts[mi + 1 < cpts.length ? mi + 1 : mi];
+          const mx = (a.x + b.x) / 2;
+          const my = (a.y + b.y) / 2;
+          // Direction along line
+          const ldx = b.x - a.x, ldy = b.y - a.y;
+          const llen = Math.hypot(ldx, ldy) || 1;
+          const lnx = ldx / llen, lny = ldy / llen;
+          // Normal (left side of line direction = perpendicular CCW)
+          const nnx = -lny, nny = lnx;
+          // "up" side: direction='left' → up is to the left of travel direction
+          const sign = (c.direction === 'left') ? 1 : -1;
+          const arrowLen = 18 * dpr;
+          const ex = mx + sign * nnx * arrowLen;
+          const ey = my + sign * nny * arrowLen;
+
+          // Draw arrow shaft
+          ctx.beginPath();
+          ctx.strokeStyle = '#EF4444';
+          ctx.lineWidth = 2 * dpr;
+          ctx.moveTo(mx, my);
+          ctx.lineTo(ex, ey);
+          ctx.stroke();
+
+          // Arrowhead
+          const hlen = 7 * dpr;
+          const hangle = Math.PI / 6;
+          const adx = ex - mx, ady = ey - my;
+          const alen = Math.hypot(adx, ady) || 1;
+          const ax = adx / alen, ay = ady / alen;
+          ctx.beginPath();
+          ctx.fillStyle = '#EF4444';
+          ctx.moveTo(ex, ey);
+          ctx.lineTo(ex - hlen * (ax - ay * Math.tan(hangle)), ey - hlen * (ay + ax * Math.tan(hangle)));
+          ctx.lineTo(ex - hlen * (ax + ay * Math.tan(hangle)), ey - hlen * (ay - ax * Math.tan(hangle)));
+          ctx.closePath();
+          ctx.fill();
+
+          // Direction toggle button — small circle at arrow tip
+          const btnR = 9 * dpr;
+          ctx.beginPath();
+          ctx.arc(ex, ey, btnR, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(239,68,68,0.18)';
+          ctx.fill();
+          ctx.strokeStyle = '#EF4444';
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.stroke();
+          // Store button hit area in logical pixels (divide out dpr)
+          this._contourArrowBtns.push({ cx: ex / dpr, cy: ey / dpr, idx: ci });
+        }
+      }
+
+      // Draw in-progress contour draft
+      if (this.contourMode && this.contourDraft.length > 0) {
+        const dpts = this.contourDraft.map(p => this.imgToCanvas(p.x, p.y));
+        ctx.beginPath();
+        ctx.setLineDash([6 * dpr, 4 * dpr]);
+        ctx.strokeStyle = '#FFE600';
+        ctx.lineWidth = 2 * dpr;
+        ctx.moveTo(dpts[0].x, dpts[0].y);
+        for (let i = 1; i < dpts.length; i++) ctx.lineTo(dpts[i].x, dpts[i].y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        for (const p of dpts) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 4 * dpr, 0, Math.PI * 2);
+          ctx.fillStyle = '#FFE600';
+          ctx.fill();
+        }
+      }
+
+      // Draw rubber band rectangle
+      if (this.rubberBand) {
+        const r0 = this.imgToCanvas(this.rbStartX, this.rbStartY);
+        const r1 = this.imgToCanvas(this.rbCurX, this.rbCurY);
+        const rx = Math.min(r0.x, r1.x);
+        const ry = Math.min(r0.y, r1.y);
+        const rw = Math.abs(r1.x - r0.x);
+        const rh = Math.abs(r1.y - r0.y);
+        ctx.setLineDash([6 * dpr, 4 * dpr]);
+        ctx.strokeStyle = '#2383E2';
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.strokeRect(rx, ry, rw, rh);
+        ctx.fillStyle = 'rgba(35, 131, 226, 0.08)';
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.setLineDash([]);
+      }
+    },
+
+    // Find which point (if any) is under the mouse
+    hitTestPoint(imgX, imgY) {
+      const hitR = this.POINT_RADIUS / this.scale + 2;
+      // Check selected polygon first for priority
+      const order = [this.selectedPoly, ...this.polygons.map((_, i) => i).filter(i => i !== this.selectedPoly)];
+      for (const pi of order) {
+        if (pi < 0 || pi >= this.polygons.length) continue;
+        const pts = this.polygons[pi].points;
+        for (let i = 0; i < pts.length; i++) {
+          const dx = imgX - pts[i].x;
+          const dy = imgY - pts[i].y;
+          if (Math.sqrt(dx * dx + dy * dy) < hitR) {
+            return { polyIdx: pi, pointIdx: i };
+          }
+        }
+      }
+      return null;
+    },
+
+    // Sample Catmull-Rom spline points (in image coords) for a polygon.
+    // Returns an array of {x, y, edgeIdx} where edgeIdx is the control-point
+    // edge index that each sample belongs to, so callers can map back to the
+    // original edge after finding the nearest sample.
+    sampleSplinePoints(pts, segsPerEdge = 16) {
+      const n = pts.length;
+      if (n < 2) return [];
+      const tension = 0.5;
+      const samples = [];
+      for (let i = 0; i < n; i++) {
+        const p0 = pts[(i - 1 + n) % n];
+        const p1 = pts[i];
+        const p2 = pts[(i + 1) % n];
+        const p3 = pts[(i + 2) % n];
+        for (let s = 0; s <= segsPerEdge; s++) {
+          const t = s / segsPerEdge;
+          const t2 = t * t;
+          const t3 = t2 * t;
+          const x = tension * (
+            (-t3 + 2*t2 - t) * p0.x +
+            (3*t3 - 5*t2 + 2) * p1.x +
+            (-3*t3 + 4*t2 + t) * p2.x +
+            (t3 - t2) * p3.x
+          );
+          const y = tension * (
+            (-t3 + 2*t2 - t) * p0.y +
+            (3*t3 - 5*t2 + 2) * p1.y +
+            (-3*t3 + 4*t2 + t) * p2.y +
+            (t3 - t2) * p3.y
+          );
+          samples.push({ x, y, edgeIdx: i });
+        }
+      }
+      return samples;
+    },
+
+    // Find the nearest edge across all polygons (selected polygon checked first).
+    // Uses sampled Catmull-Rom spline segments for hit testing so that clicks
+    // near the visible curve are detected correctly, even when control points
+    // are sparse.  The returned edgeIdx always refers to the control-point edge
+    // index so that onRightClick can splice the new point at the right position.
+    hitTestEdge(imgX, imgY) {
+      const hitD = this.EDGE_HIT_DIST / this.scale + 2;
+      const order = [this.selectedPoly, ...this.polygons.map((_, i) => i).filter(i => i !== this.selectedPoly)];
+      let bestDist = Infinity;
+      let bestPoly = -1;
+      let bestIdx = -1;
+      for (const pi of order) {
+        if (pi < 0 || pi >= this.polygons.length) continue;
+        const pts = this.polygons[pi].points;
+        const samples = this.sampleSplinePoints(pts, 16);
+        // Walk consecutive sample pairs as short straight segments
+        for (let s = 0; s < samples.length - 1; s++) {
+          const a = samples[s];
+          const b = samples[s + 1];
+          // Skip the seam between the last sample of one edge and the first of
+          // the next — those are from different control-point edges and the gap
+          // would produce a spurious segment across the whole polygon.
+          if (a.edgeIdx !== b.edgeIdx) continue;
+          const d = this.distToSegment(imgX, imgY, a.x, a.y, b.x, b.y);
+          if (d < bestDist) {
+            bestDist = d;
+            bestPoly = pi;
+            bestIdx = a.edgeIdx;
+          }
+        }
+      }
+      if (bestDist < hitD) {
+        return { polyIdx: bestPoly, edgeIdx: bestIdx };
+      }
+      return null;
+    },
+
+    distToSegment(px, py, x1, y1, x2, y2) {
+      const dx = x2 - x1, dy = y2 - y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+      let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+    },
+
+    isVertSelected(poly, idx) {
+      return this.selectedVerts.some(v => v.poly === poly && v.idx === idx);
+    },
+
+    toggleVertSelection(poly, idx, shift) {
+      if (shift) {
+        // Toggle this vertex in the selection
+        const existing = this.selectedVerts.findIndex(v => v.poly === poly && v.idx === idx);
+        if (existing >= 0) {
+          this.selectedVerts.splice(existing, 1);
+        } else {
+          this.selectedVerts.push({ poly, idx });
+        }
+      } else {
+        // Replace selection with just this vertex
+        this.selectedVerts = [{ poly, idx }];
+      }
+    },
+
+    onMouseDown(e) {
+      if (e.button !== 0) return; // left click only
+      const { x, y } = this.canvasToImg(e);
+
+      // In contour drawing mode, clicks add points to the draft
+      if (this.contourMode) {
+        this.contourDraft.push({ x: Math.round(x), y: Math.round(y) });
+        this.draw();
+        return;
+      }
+
+      // Check direction arrow buttons first (logical canvas coords)
+      const canvas = this.$refs.canvas;
+      const rect = canvas.getBoundingClientRect();
+      const lx = e.clientX - rect.left;
+      const ly = e.clientY - rect.top;
+      for (const btn of this._contourArrowBtns) {
+        if (Math.hypot(lx - btn.cx, ly - btn.cy) < 12) {
+          this.contours[btn.idx].direction = (this.contours[btn.idx].direction === 'left') ? 'right' : 'left';
+          this.draw();
+          this.autoSave();
+          return;
+        }
+      }
+
+      // Check contour vertices
+      const chit = this.hitTestContourPoint(x, y);
+      if (chit) {
+        this.selectedContour = chit.contourIdx;
+        this.selectedVerts = [{ poly: -1 - chit.contourIdx, idx: chit.pointIdx }];
+        this.pushUndo();
+        this.draggingContour = true;
+        this.dragContourIdx = chit.contourIdx;
+        this.dragContourPtIdx = chit.pointIdx;
+        this.dragStartX = x;
+        this.dragStartY = y;
+        this.$refs.canvas.style.cursor = 'grabbing';
+        this.draw();
+        return;
+      }
+
+      const hit = this.hitTestPoint(x, y);
+      if (hit) {
+        this.selectedPoly = hit.polyIdx;
+        this.selectedContour = -1;
+
+        // If clicking an already-selected vertex, start drag without changing selection
+        if (!this.isVertSelected(hit.polyIdx, hit.pointIdx)) {
+          this.toggleVertSelection(hit.polyIdx, hit.pointIdx, e.shiftKey);
+        }
+
+        this.pushUndo();
+        this.dragging = true;
+        this.dragPolyIdx = hit.polyIdx;
+        this.dragPointIdx = hit.pointIdx;
+        this.dragStartX = x;
+        this.dragStartY = y;
+        this.$refs.canvas.style.cursor = 'grabbing';
+        this.draw();
+      } else {
+        // Click on empty space — start rubber band selection
+        this.selectedContour = -1;
+        this.rubberBand = true;
+        this.rbStartX = x;
+        this.rbStartY = y;
+        this.rbCurX = x;
+        this.rbCurY = y;
+        this.rbShift = e.shiftKey;
+        this.preRbSelection = e.shiftKey ? [...this.selectedVerts] : [];
+        if (!e.shiftKey) {
+          this.selectedVerts = [];
+        }
+        this.$refs.canvas.style.cursor = 'crosshair';
+        this.draw();
+      }
+    },
+
+    onMouseMove(e) {
+      const { x, y } = this.canvasToImg(e);
+
+      if (this.draggingContour) {
+        const dx = x - this.dragStartX;
+        const dy = y - this.dragStartY;
+        this.dragStartX = x;
+        this.dragStartY = y;
+        const pt = this.contours[this.dragContourIdx].points[this.dragContourPtIdx];
+        pt.x = Math.max(0, Math.min(this.imgW, Math.round(pt.x + dx)));
+        pt.y = Math.max(0, Math.min(this.imgH, Math.round(pt.y + dy)));
+        this.draw();
+        return;
+      }
+
+      if (this.dragging) {
+        const dx = x - this.dragStartX;
+        const dy = y - this.dragStartY;
+        this.dragStartX = x;
+        this.dragStartY = y;
+
+        // Move all selected vertices by the delta
+        for (const sv of this.selectedVerts) {
+          const pt = this.polygons[sv.poly].points[sv.idx];
+          pt.x = Math.max(0, Math.min(this.imgW, Math.round(pt.x + dx)));
+          pt.y = Math.max(0, Math.min(this.imgH, Math.round(pt.y + dy)));
+        }
+        this.draw();
+        return;
+      }
+
+      if (this.rubberBand) {
+        this.rbCurX = x;
+        this.rbCurY = y;
+        // Compute which vertices fall inside the rectangle
+        const minX = Math.min(this.rbStartX, x);
+        const maxX = Math.max(this.rbStartX, x);
+        const minY = Math.min(this.rbStartY, y);
+        const maxY = Math.max(this.rbStartY, y);
+        const inRect = [];
+        for (let pi = 0; pi < this.polygons.length; pi++) {
+          const pts = this.polygons[pi].points;
+          for (let i = 0; i < pts.length; i++) {
+            if (pts[i].x >= minX && pts[i].x <= maxX && pts[i].y >= minY && pts[i].y <= maxY) {
+              inRect.push({ poly: pi, idx: i });
+            }
+          }
+        }
+        // Merge with pre-existing selection if shift was held
+        if (this.rbShift) {
+          const merged = [...this.preRbSelection];
+          for (const v of inRect) {
+            if (!merged.some(m => m.poly === v.poly && m.idx === v.idx)) {
+              merged.push(v);
+            }
+          }
+          this.selectedVerts = merged;
+        } else {
+          this.selectedVerts = inRect;
+        }
+        this.draw();
+        return;
+      }
+
+      // Cursor hint — no visual highlight until clicked
+      const hit = this.hitTestPoint(x, y);
+      this.$refs.canvas.style.cursor = hit ? 'grab' : 'default';
+    },
+
+    onMouseUp(e) {
+      if (this.draggingContour) {
+        this.draggingContour = false;
+        this.$refs.canvas.style.cursor = 'default';
+        this.autoSave();
+      }
+      if (this.dragging) {
+        this.dragging = false;
+        this.$refs.canvas.style.cursor = 'default';
+        this.autoSave();
+      }
+      if (this.rubberBand) {
+        this.rubberBand = false;
+        this.$refs.canvas.style.cursor = 'default';
+        this.draw();
+      }
+    },
+
+    onDblClick(e) {
+      // In contour mode, double-click finishes the contour
+      if (this.contourMode) {
+        this.finishContour();
+        return;
+      }
+
+      const { x, y } = this.canvasToImg(e);
+      // First check if clicking a point (no-op)
+      if (this.hitTestPoint(x, y)) return;
+      // Check for edge hit to insert vertex
+      const edge = this.hitTestEdge(x, y);
+      if (edge) {
+        this.pushUndo();
+        const pts = this.polygons[edge.polyIdx].points;
+        const newPt = { x: Math.round(x), y: Math.round(y) };
+        pts.splice(edge.edgeIdx + 1, 0, newPt);
+        this.draw();
+        this.flash('Vertex added', true);
+        this.autoSave();
+      }
+    },
+
+    onRightClick(e) {
+      const { x, y } = this.canvasToImg(e);
+
+      // Check contour vertex right-click (delete vertex)
+      const chit = this.hitTestContourPoint(x, y);
+      if (chit) {
+        const pts = this.contours[chit.contourIdx].points;
+        if (pts.length > 2) {
+          this.pushUndo();
+          pts.splice(chit.pointIdx, 1);
+          this.draw();
+          this.flash('Contour vertex removed', true);
+          this.autoSave();
+        } else {
+          // Delete the whole contour if only 1 or 2 pts remain
+          this.pushUndo();
+          this.contours.splice(chit.contourIdx, 1);
+          this.selectedContour = -1;
+          this.draw();
+          this.flash('Contour deleted', true);
+          this.autoSave();
+        }
+        return;
+      }
+
+      const hit = this.hitTestPoint(x, y);
+      if (hit) {
+        // Right-click on a vertex — remove it
+        const pts = this.polygons[hit.polyIdx].points;
+        if (pts.length > 3) {
+          this.pushUndo();
+          pts.splice(hit.pointIdx, 1);
+          this.selectedVerts = this.selectedVerts.filter(v => !(v.poly === hit.polyIdx && v.idx === hit.pointIdx));
+          for (const sv of this.selectedVerts) {
+            if (sv.poly === hit.polyIdx && sv.idx > hit.pointIdx) sv.idx--;
+          }
+          this.draw();
+          this.flash('Vertex removed', true);
+          this.autoSave();
+        } else {
+          this.flash('Minimum 3 vertices required', false);
+        }
+      } else {
+        // Right-click on an edge — insert a vertex and start dragging it
+        const edge = this.hitTestEdge(x, y);
+        if (edge) {
+          this.pushUndo();
+          const newIdx = edge.edgeIdx + 1;
+          const pts = this.polygons[edge.polyIdx].points;
+          const newPt = { x: Math.round(x), y: Math.round(y) };
+          pts.splice(newIdx, 0, newPt);
+          this.selectedPoly = edge.polyIdx;
+          this.selectedVerts = [{ poly: edge.polyIdx, idx: newIdx }];
+          // Start dragging the new point immediately
+          this.dragging = true;
+          this.dragPolyIdx = edge.polyIdx;
+          this.dragPointIdx = newIdx;
+          this.dragStartX = x;
+          this.dragStartY = y;
+          this.$refs.canvas.style.cursor = 'grabbing';
+          this.draw();
+        }
+      }
+    },
+
+    resamplePoly(pts, n) {
+      if (pts.length < 2 || n < 3) return pts;
+      // Compute cumulative arc lengths along the closed polygon
+      const len = pts.length;
+      const cumLen = [0];
+      for (let i = 1; i <= len; i++) {
+        const a = pts[(i - 1) % len];
+        const b = pts[i % len];
+        const d = Math.hypot(b.x - a.x, b.y - a.y);
+        cumLen.push(cumLen[i - 1] + d);
+      }
+      const totalLen = cumLen[len];
+      if (totalLen === 0) return pts;
+
+      // Place n points at equal arc-length intervals
+      const result = [];
+      for (let i = 0; i < n; i++) {
+        const target = (i / n) * totalLen;
+        // Find which segment this falls on
+        let seg = 0;
+        while (seg < len && cumLen[seg + 1] < target) seg++;
+        const segStart = cumLen[seg];
+        const segEnd = cumLen[seg + 1];
+        const t = segEnd > segStart ? (target - segStart) / (segEnd - segStart) : 0;
+        const a = pts[seg % len];
+        const b = pts[(seg + 1) % len];
+        result.push({
+          x: Math.round(a.x + t * (b.x - a.x)),
+          y: Math.round(a.y + t * (b.y - a.y)),
+        });
+      }
+      return result;
+    },
+
+    // -- Contour helpers --
+    addContour() {
+      if (this.contourMode) {
+        // Toggle off: cancel any draft in progress
+        this.contourMode = false;
+        this.contourDraft = [];
+        this.draw();
+        return;
+      }
+      this.contourMode = true;
+      this.contourDraft = [];
+      this.flash('Contour mode: click to place points, double-click or Enter to finish', true);
+    },
+
+    finishContour() {
+      if (!this.contourMode) return;
+      this.contourMode = false;
+      // Remove duplicate last point added by the double-click mousedown
+      const draft = this.contourDraft;
+      if (draft.length >= 4) {
+        // double-click fires mousedown twice before dblclick, remove last dup
+        const last = draft[draft.length - 1];
+        const prev = draft[draft.length - 2];
+        if (Math.hypot(last.x - prev.x, last.y - prev.y) < 3) {
+          draft.pop();
+        }
+      }
+      if (draft.length < 2) {
+        this.contourDraft = [];
+        this.flash('Contour needs at least 2 points — cancelled', false);
+        this.draw();
+        return;
+      }
+      this.pushUndo();
+      const ci = this.contours.length + 1;
+      this.contours.push({
+        name: 'Contour ' + ci,
+        direction: 'left',
+        points: [...draft],
+      });
+      this.contourDraft = [];
+      this.selectedContour = this.contours.length - 1;
+      this.draw();
+      this.flash('Contour ' + ci + ' added — click ↑ arrow to flip uphill side', true);
+      this.autoSave();
+    },
+
+    hitTestContourPoint(imgX, imgY) {
+      const hitR = this.POINT_RADIUS / this.scale + 2;
+      for (let ci = 0; ci < this.contours.length; ci++) {
+        const pts = this.contours[ci].points;
+        for (let i = 0; i < pts.length; i++) {
+          const dx = imgX - pts[i].x;
+          const dy = imgY - pts[i].y;
+          if (Math.sqrt(dx * dx + dy * dy) < hitR) {
+            return { contourIdx: ci, pointIdx: i };
+          }
+        }
+      }
+      return null;
+    },
+
+    // -- Undo/Redo --
+    snapshotPolygons() {
+      return JSON.stringify({
+        polygons: this.polygons.map(p => ({
+          name: p.name, type: p.type, color: p.color,
+          points: p.points.map(pt => ({ x: pt.x, y: pt.y })),
+        })),
+        contours: this.contours.map(c => ({
+          name: c.name, direction: c.direction,
+          points: c.points.map(pt => ({ x: pt.x, y: pt.y })),
+        })),
+      });
+    },
+
+    pushUndo() {
+      this.undoStack.push(this.snapshotPolygons());
+      if (this.undoStack.length > this.maxUndo) this.undoStack.shift();
+      this.redoStack = [];
+    },
+
+    restoreSnapshot(json) {
+      const data = JSON.parse(json);
+      // Support both old format (plain array) and new format ({polygons, contours})
+      if (Array.isArray(data)) {
+        this.polygons = data;
+      } else {
+        this.polygons = data.polygons || data;
+        this.contours = (data.contours || []).map(c => ({
+          name: c.name, direction: c.direction || 'left',
+          points: c.points.map(pt => ({ x: pt.x, y: pt.y })),
+        }));
+      }
+      this.selectedVerts = [];
+      if (this.selectedPoly >= this.polygons.length) {
+        this.selectedPoly = Math.max(0, this.polygons.length - 1);
+      }
+      this.draw();
+    },
+
+    undo() {
+      if (this.undoStack.length === 0) { this.flash('Nothing to undo', false); return; }
+      this.redoStack.push(this.snapshotPolygons());
+      this.restoreSnapshot(this.undoStack.pop());
+      this.flash('Undo', true);
+      this.autoSave();
+    },
+
+    redo() {
+      if (this.redoStack.length === 0) { this.flash('Nothing to redo', false); return; }
+      this.undoStack.push(this.snapshotPolygons());
+      this.restoreSnapshot(this.redoStack.pop());
+      this.flash('Redo', true);
+      this.autoSave();
+    },
+
+    resampleAll() {
+      this.pushUndo();
+      const n = Math.max(3, Math.min(200, this.numPoints || 20));
+      for (const poly of this.polygons) {
+        poly.points = this.resamplePoly(poly.points, n);
+      }
+      this.selectedVerts = [];
+      this.draw();
+      this.flash('Resampled to ' + n + ' points each', true);
+      this.autoSave();
+    },
+
+    addTrap() {
+      this.pushUndo();
+      const trapCount = this.polygons.filter(p => p.type === 'trap').length;
+      const cx = this.imgW / 2;
+      const cy = this.imgH / 2;
+      const r = Math.min(this.imgW, this.imgH) * 0.08;
+      // Create a small octagon at center
+      const pts = [];
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8 - Math.PI / 2;
+        pts.push({ x: Math.round(cx + r * Math.cos(a)), y: Math.round(cy + r * Math.sin(a)) });
+      }
+      this.polygons.push({
+        name: 'Trap ' + (trapCount + 1),
+        type: 'trap',
+        color: '#EF4444',
+        points: pts,
+      });
+      this.selectedPoly = this.polygons.length - 1;
+      this.draw();
+      this.flash('Trap added - drag to position', true);
+      this.autoSave();
+    },
+
+    removePoly(idx) {
+      if (this.polygons[idx].type !== 'trap') return;
+      this.pushUndo();
+      this.polygons.splice(idx, 1);
+      if (this.selectedPoly >= this.polygons.length) {
+        this.selectedPoly = this.polygons.length - 1;
+      }
+      // Rename traps
+      let tc = 0;
+      for (const p of this.polygons) {
+        if (p.type === 'trap') {
+          tc++;
+          p.name = 'Trap ' + tc;
+        }
+      }
+      this.draw();
+      this.flash('Trap removed', true);
+      this.autoSave();
+    },
+
+    async autoSave() {
+      if (!this.imgLoaded || this.polygons.length === 0) return;
+      if (!this.courseName.trim() || !this.holeName.trim()) return;
+      // Build combined polygons list: regular polygons + contour lines
+      const allPolygons = [
+        ...this.polygons.map(p => ({
+          name: p.name,
+          type: p.type,
+          closed: true,
+          points: p.points.map(pt => ({ x: pt.x, y: pt.y })),
+        })),
+        ...this.contours.map(c => ({
+          name: c.name,
+          type: 'contour',
+          closed: false,
+          direction: c.direction,
+          points: c.points.map(pt => ({ x: pt.x, y: pt.y })),
+        })),
+      ];
+      const data = {
+        course: this.courseName.trim(),
+        hole: this.holeName.trim(),
+        image: this.selectedImage,
+        imageSize: { width: this.imgW, height: this.imgH },
+        contourStep: this.contourStep,
+        grassAmplitude: this.grassAmplitude,
+        grassSpacing: this.grassSpacing,
+        greenStyle: this.greenStyle,
+        polygons: allPolygons,
+      };
+      try {
+        await fetch('/api/boundaries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+      } catch (err) {
+        // Silent — don't interrupt the user
+      }
+    },
+
+    async refreshImageList() {
+      try {
+        const resp = await fetch('/api/images');
+        this.dlgImages = await resp.json();
+      } catch (e) {
+        console.error('Failed to refresh image list:', e);
+      }
+    },
+
+    async openProjectDialog() {
+      this.showOpenDialog = true;
+      this.openProjectsLoading = true;
+      this.openProjects = [];
+      this.selectedOpenProject = null;
+      try {
+        const resp = await fetch('/api/boundaries/list?t=' + Date.now());
+        const data = await resp.json();
+        this.openProjects = data.projects || [];
+      } catch (err) {
+        this.flash('Failed to load projects', false);
+      } finally {
+        this.openProjectsLoading = false;
+      }
+    },
+
+    async loadProject(proj) {
+      this.selectedOpenProject = proj;
+      this.showOpenDialog = false;
+      try {
+        const resp = await fetch('/api/boundaries/load?filename=' + encodeURIComponent(proj.filename));
+        const data = await resp.json();
+        if (data.status !== 'ok') {
+          this.flash('Failed to load project', false);
+          return;
+        }
+        this.courseName = data.course;
+        this.holeName = data.hole;
+        this.selectedImage = data.image;
+        this.selectedImageUrl = data.course
+          ? '/egm/images/' + encodeURIComponent(data.course) + '/' + encodeURIComponent(data.image)
+          : '/team_inbox/' + encodeURIComponent(data.image);
+        this.contourStep = data.contourStep != null ? data.contourStep : 10.0;
+        this.grassAmplitude = data.grassAmplitude != null ? data.grassAmplitude : 0.5;
+        this.grassSpacing = data.grassSpacing != null ? data.grassSpacing : 2.4;
+        this.greenStyle = data.greenStyle || 'terraced';
+        this.undoStack = [];
+        this.redoStack = [];
+        this.selectedVerts = [];
+        this.polygons = [];
+        this.contours = [];
+        this._pendingRestore = data.polygons;
+        this.loadImage();
+        this.flash('Loaded: ' + data.course + ' — Hole ' + data.hole, true);
+      } catch (err) {
+        this.flash('Error loading project', false);
+      }
+    },
+
+    startNewProject() {
+      if (!this.dlgImage || !this.dlgCourse.trim() || !this.dlgHole.trim()) return;
+      this.courseName = this.dlgCourse.trim();
+      this.holeName = this.dlgHole.trim();
+      this.selectedImage = this.dlgImage;
+      const matchedImg = this.dlgImages.find(i => i.filename === this.dlgImage);
+      this.selectedImageUrl = matchedImg ? matchedImg.url : '';
+      this.showNewDialog = false;
+      this.undoStack = [];
+      this.redoStack = [];
+      this.selectedVerts = [];
+      this.polygons = [];
+      this._pendingDetect = true;
+      this.loadImage();
+    },
+
+    async findContours() {
+      // Find the green polygon from the current editor state
+      const greenPoly = this.polygons.find(p => p.type === 'green');
+      if (!greenPoly) {
+        this.flash('No green polygon found', false);
+        return;
+      }
+      if (!this.selectedImage) {
+        this.flash('No image loaded', false);
+        return;
+      }
+
+      // Clear all existing contours first
+      this.contours = [];
+      this.draw();
+      this.flash('Finding contours...', true);
+
+      // Sample the Catmull-Rom spline to get a dense set of points
+      // (the API needs a good polygon, not just control points)
+      const splinePts = this.sampleSplinePoints(greenPoly.points, 16);
+      const greenPoints = splinePts.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+
+      try {
+        const resp = await fetch('/api/find_contours', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image: this.selectedImage,
+            green_points: greenPoints,
+            imageSize: { width: this.imgW, height: this.imgH },
+          }),
+        });
+        const result = await resp.json();
+        if (result.status === 'ok' && result.contours && result.contours.length > 0) {
+          // Add detected contours to the editor
+          for (const c of result.contours) {
+            this.contours.push({
+              name: c.name || ('Contour ' + (this.contours.length + 1)),
+              direction: c.direction || 'left',
+              color: '#FFE600',
+              points: c.points.map(pt => ({ x: pt.x, y: pt.y })),
+            });
+          }
+          this.draw();
+          this.flash('Found ' + result.contours.length + ' contour(s)', true);
+          this.autoSave();
+        } else {
+          this.flash('No contours found', false);
+        }
+      } catch (err) {
+        this.flash('Contour detection error: ' + err.message, false);
+      }
+    },
+
+    async generateSTL() {
+      if (!this.courseName.trim() || !this.holeName.trim()) {
+        this.flash('Set course name and hole number first', false);
+        return;
+      }
+      if (this.polygons.length === 0) {
+        this.flash('No polygons to generate models from', false);
+        return;
+      }
+      this.flash('Generating...', true);
+      // Auto-save first so the pipeline reads the latest EGM (including grass params)
+      await this.autoSave();
+      const allPolygons = [
+        ...this.polygons.map(p => ({
+          name: p.name,
+          type: p.type,
+          closed: true,
+          points: p.points.map(pt => ({ x: pt.x, y: pt.y })),
+        })),
+        ...this.contours.map(c => ({
+          name: c.name,
+          type: 'contour',
+          closed: false,
+          direction: c.direction,
+          points: c.points.map(pt => ({ x: pt.x, y: pt.y })),
+        })),
+      ];
+      const data = {
+        course: this.courseName.trim(),
+        hole: this.holeName.trim(),
+        image: this.selectedImage,
+        imageSize: { width: this.imgW, height: this.imgH },
+        contourStep: this.contourStep,
+        grassAmplitude: this.grassAmplitude,
+        grassSpacing: this.grassSpacing,
+        greenStyle: this.greenStyle,
+        polygons: allPolygons,
+      };
+      try {
+        const resp = await fetch('/api/generate_models', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        const result = await resp.json();
+        if (result.status === 'ok') {
+          this.flash('Generated: ' + result.file.name, true);
+        } else {
+          this.flash('Generation failed: ' + (result.error || 'unknown error'), false);
+        }
+      } catch (err) {
+        this.flash('Generation error: ' + err.message, false);
+      }
+    },
+
+    flash(msg, ok) {
+      this.statusMsg = msg;
+      this.statusOk = ok;
+      setTimeout(() => { this.statusMsg = ''; }, 3000);
+    },
+
+    handleKey(e) {
+      // Undo: Cmd+Z / Ctrl+Z
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        this.undo();
+        return;
+      }
+      // Redo: Cmd+Shift+Z / Ctrl+Shift+Z or Ctrl+Y
+      if (((e.metaKey || e.ctrlKey) && e.key === 'z' && e.shiftKey) ||
+          ((e.metaKey || e.ctrlKey) && e.key === 'y')) {
+        e.preventDefault();
+        this.redo();
+        return;
+      }
+      // Enter: finish contour if in drawing mode
+      if (e.key === 'Enter' && this.contourMode) {
+        e.preventDefault();
+        this.finishContour();
+        return;
+      }
+      // Escape: cancel contour drawing mode
+      if (e.key === 'Escape' && this.contourMode) {
+        this.contourMode = false;
+        this.contourDraft = [];
+        this.draw();
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (this.selectedVerts.length === 0) return;
+        this.pushUndo();
+        const sorted = [...this.selectedVerts].sort((a, b) => {
+          if (a.poly !== b.poly) return b.poly - a.poly;
+          return b.idx - a.idx;
+        });
+        let removed = 0;
+        for (const sv of sorted) {
+          const pts = this.polygons[sv.poly].points;
+          if (pts.length > 3) {
+            pts.splice(sv.idx, 1);
+            removed++;
+          }
+        }
+        this.selectedVerts = [];
+        this.draw();
+        if (removed > 0) {
+          this.flash(removed + ' vertex(es) removed', true);
+          this.autoSave();
+        } else {
+          this.flash('Minimum 3 vertices required', false);
+        }
+      }
+    },
+  };
+}
+
+// Handle window resize
+let _editorResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_editorResizeTimer);
+  _editorResizeTimer = setTimeout(() => {
+    // Find the Alpine component and resize
+    const el = document.querySelector('[x-data]');
+    if (el && el.__x) {
+      el.__x.$data.resizeCanvas();
+    } else if (el && el._x_dataStack) {
+      // Alpine v3
+      const data = el._x_dataStack[0];
+      if (data && data.resizeCanvas) data.resizeCanvas();
+    }
+  }, 100);
+});
+
+// Handle DPR changes when the window moves between monitors with different
+// pixel densities. The resize event does not fire in this case, so we use
+// a matchMedia listener on the current resolution query instead.
+function watchDPR() {
+  const mql = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+  mql.addEventListener('change', () => {
+    // DPR has changed — recalculate canvas backing store and redraw
+    const el = document.querySelector('[x-data]');
+    if (el && el.__x) {
+      el.__x.$data.resizeCanvas();
+    } else if (el && el._x_dataStack) {
+      const data = el._x_dataStack[0];
+      if (data && data.resizeCanvas) data.resizeCanvas();
+    }
+    // Re-register with the new DPR value since the old query no longer matches
+    watchDPR();
+  }, { once: true });
+}
+watchDPR();
+</script>
+
+{% endblock %}

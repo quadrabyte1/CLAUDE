@@ -46,10 +46,12 @@
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
           x-text="courseName + ' — Hole ' + holeName + ' (' + polygons.length + ' regions)'"></span>
 
-    <div class="ml-auto">
+    <div class="ml-auto flex items-center gap-1.5">
       <span x-show="statusMsg" x-text="statusMsg" x-transition
             :class="statusOk ? 'text-green-600' : 'text-red-500'"
             class="text-sm font-medium"></span>
+      <code x-show="statusMsg && statusFilename" x-text="statusFilename" x-transition
+            class="text-sm font-mono bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"></code>
     </div>
   </div>
 
@@ -215,6 +217,8 @@ function polygonEditor() {
 
     statusMsg: '',
     statusOk: true,
+    statusFilename: '',
+    _flashTimer: null,
 
     POINT_RADIUS: 8,
     EDGE_HIT_DIST: 10,
@@ -1417,7 +1421,6 @@ function polygonEditor() {
         this.flash('No polygons to generate models from', false);
         return;
       }
-      this.flash('Generating...', true);
       // Auto-save first so the pipeline reads the latest EGM (including grass params)
       await this.autoSave();
       const allPolygons = [
@@ -1454,19 +1457,22 @@ function polygonEditor() {
         });
         const result = await resp.json();
         if (result.status === 'ok') {
-          this.flash('Generated: ' + result.file.name, true);
+          const fname = result.file && result.file.name ? result.file.name : '';
+          this.flash('Generated' + (fname ? ':' : ''), true, fname, 8000);
         } else {
-          this.flash('Generation failed: ' + (result.error || 'unknown error'), false);
+          this.flash('Generation failed: ' + (result.msg || result.error || 'unknown error'), false);
         }
       } catch (err) {
         this.flash('Generation error: ' + err.message, false);
       }
     },
 
-    flash(msg, ok) {
+    flash(msg, ok, filename = '', durationMs = 3000) {
+      if (this._flashTimer) { clearTimeout(this._flashTimer); this._flashTimer = null; }
       this.statusMsg = msg;
       this.statusOk = ok;
-      setTimeout(() => { this.statusMsg = ''; }, 3000);
+      this.statusFilename = filename;
+      this._flashTimer = setTimeout(() => { this.statusMsg = ''; this.statusFilename = ''; this._flashTimer = null; }, durationMs);
     },
 
     handleKey(e) {

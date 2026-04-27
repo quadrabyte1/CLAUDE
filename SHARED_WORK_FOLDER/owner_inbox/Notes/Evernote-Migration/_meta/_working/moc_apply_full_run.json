@@ -2,15 +2,16 @@
   "run": "full",
   "date": "2026-04-27",
   "operator": "Cairn (PKM Specialist)",
-  "phase": "1-deletions-in-progress",
+  "phase": "complete",
   "vault_base": "owner_inbox/Notes/Evernote-Migration",
 
   "deletion_manifest": {
     "authorized_by": "Boss (via Larry, 2026-04-27)",
-    "git_commit_title": "Delete out-of-date Work/Embedded Systems/Job Search/GMS notes",
+    "git_commit": "Delete out-of-date Work/Embedded Systems/Job Search/GMS notes",
+    "git_commit_hash": "b4b98d5",
     "categories": {
       "cat1_work_decorator": {
-        "description": "Notes originally tagged ●-●-●-work-●-●-● or ●-●-●-software-●-●-● (WORK context Evernote decorator). Three had tags retired in dry run; one still carries ●-●-●-software-●-●-● tag.",
+        "description": "Notes originally tagged ●-●-●-work-●-●-● or ●-●-●-software-●-●-●",
         "count": 4,
         "files": [
           "10 - Atomic Notes/2011-08-30 - Keil microVision tool.md",
@@ -20,13 +21,14 @@
         ]
       },
       "cat2_embedded_systems": {
-        "description": "Notes tagged embedded-systems. None found in vault — tag may never have been used or notes were not migrated.",
+        "description": "Notes tagged embedded-systems",
         "count": 0,
-        "files": []
+        "files": [],
+        "note": "Tag not found in vault — category vacuous"
       },
       "cat3_job_search": {
-        "description": "Job Search content: job-search tagged notes, dice.com clips, resume/cover-letter notes, job posting web clips, contractor lead notes.",
-        "count": 9,
+        "description": "Job Search content: tagged notes, dice.com clips, resume/cover-letter notes, job posting web clips",
+        "count": 10,
         "files": [
           "10 - Atomic Notes/2011-04-02 - Valident.md",
           "10 - Atomic Notes/2011-04-26 - Tektronix.md",
@@ -36,22 +38,12 @@
           "10 - Atomic Notes/2013-03-14 - Untitled note.md",
           "10 - Atomic Notes/2013-04-12 - Brooks Automation Automation, vacuum & instrumentation for ..md",
           "10 - Atomic Notes/2017-07-19 - Untitled Note.md",
-          "10 - Atomic Notes/2020-04-14 - Senior Software Architect - Surgical Robotics - Medtronic Careers.md"
-        ],
-        "notes": {
-          "Valident": "job-search tagged, 2011 job lead",
-          "Tektronix": "job-search tagged, 2011 job lead",
-          "Thermo Fisher Scientific": "job-search tagged, 2011 job lead",
-          "Ann Mitchell": "job-search tagged, 2011 recruiter contact",
-          "Sabin Alibrandi": "originally job-search tagged in Evernote (tag retired in dry run); 2011 financial advisor note filed under job-search by boss",
-          "Untitled note 2013-03-14": "dice.com job board URL, unambiguous job-search content",
-          "Brooks Automation": "2013 contractor job lead ($70/hr corp-to-corp)",
-          "Untitled Note 2017-07-19": "cover letter notes",
-          "Senior Software Architect Medtronic Careers": "2020 job posting web clip, ●-●-●-software-●-●-● decorator context"
-        }
+          "10 - Atomic Notes/2020-04-14 - Senior Software Architect - Surgical Robotics - Medtronic Careers.md",
+          "20 - MOCs/Job Search.md"
+        ]
       },
       "cat4_gms": {
-        "description": "Notes originally tagged gms (Girls Middle School). Tags retired in dry run. Boss confirmed: 'completely irrelevant, delete the ~2 notes carrying that tag, including the TODO note where GMS prep 1.5 appears.'",
+        "description": "Notes originally tagged gms (Girls Middle School)",
         "count": 2,
         "files": [
           "10 - Atomic Notes/2013-06-02 - TODO.md",
@@ -59,19 +51,56 @@
         ]
       }
     },
-    "moc_deletion": {
-      "description": "Job Search MOC deleted per boss decision to drop entire Job Search hub.",
-      "files": [
-        "20 - MOCs/Job Search.md"
-      ]
-    },
-    "total_files_deleted": 16,
-    "notes": "Embedded Systems: 0 notes found with that tag in vault — category is vacuous. GMS body-mention notes (2014-03-21, 2014-03-29, 2015-05-09 TODOs) were NOT deleted — they only mention GMS as a task item in household TODO lists and were never tagged gms. Boss spec was 'notes carrying that tag.'"
+    "total_files_deleted": 16
   },
 
   "moc_linking_pass": {
-    "status": "pending",
-    "notes_processed": 0,
-    "notes_remaining_after_deletions": null
+    "git_commit": "MOC linking full run — 7 hubs, 404 atomic notes + 106 running-journal entries",
+    "git_commit_hash": "93c0d1c",
+    "status": "complete",
+    "vault_final_state": {
+      "atomic_notes": 444,
+      "running_journal_entries": 106,
+      "total_notes": 550,
+      "moc_files": 10,
+      "archived_files": 6,
+      "total_files": 566
+    },
+    "moc_link_counts": {
+      "Running": 109,
+      "Woodworking": 19,
+      "3D Printing": 12,
+      "Laser Engraver": 6,
+      "Enterprise Architect": 22,
+      "Software Development": 71,
+      "Maker & Electronics": 12,
+      "total": 251
+    },
+    "notes_linked": 227,
+    "notes_unlinked": 323,
+    "link_rate_pct": 41.3,
+    "broken_links": 0,
+    "tags_retired_this_pass": [
+      "edx (2)", "c# (1)", "edd (1)", "unemployment (1)",
+      "andreliz-(go) (1)", "notes (1)", "medtronic (1)"
+    ],
+    "sensitive_notes_skipped": [
+      "2014-01-28 - Marty Klein.md",
+      "2020-10-30 - Password Mapping.md",
+      "2021-01-13 - Family Data.md",
+      "2022-02-02 - Protonmail recovery.md",
+      "2024-12-11 - AI Model API Keys.md",
+      "2024-12-18 - server login credentials.md"
+    ],
+    "quality_notes": {
+      "false_positive_bug": "Initial script matched 'pla', 'stl', 'layer' too broadly against 3D Printing — audit+fix pass corrected ~114 spurious links before commit",
+      "audit_pass": "Comprehensive audit+fix run after initial linking; all 164 files corrected; 0 spurious links remain"
+    },
+    "items_for_boss_review": [
+      "edx notes (2013-2014 vintage): kept as Software Development spokes — boss may prefer deletion",
+      "323 unlinked notes: personal/health/household content — potential Home or Personal MOC in future",
+      "2023-12-12 - Pillow List.md: end-of-life planning note, unlinked",
+      "6 sensitive/credential notes: recommend encrypted store rather than plain Markdown"
+    ]
   }
 }

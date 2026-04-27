@@ -580,6 +580,25 @@ def list_images():
     return jsonify(_collect_course_images())
 
 
+@app.route("/api/courses")
+def list_courses():
+    """Return sorted list of existing course folder names under GolfCourses/.
+
+    Used by the New Project dialog to surface matching folders before the user
+    creates a new (potentially duplicate) folder.
+    """
+    courses = []
+    if os.path.isdir(_EGM_BASE):
+        for entry in sorted(os.listdir(_EGM_BASE)):
+            if entry.startswith("."):
+                continue
+            if os.path.isdir(os.path.join(_EGM_BASE, entry)):
+                courses.append(entry)
+    resp = jsonify({"courses": courses})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
 @app.route("/team_inbox/<path:filename>")
 def serve_team_inbox(filename):
     """Serve images from team_inbox for the editor (backwards compat)."""

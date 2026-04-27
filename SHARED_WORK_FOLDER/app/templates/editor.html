@@ -15,7 +15,7 @@
 
   {# ── Action bar ─────────────────────────────────────────── #}
   <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
-    <button @click="dlgCourse = courseName; dlgHole = ''; dlgImage = selectedImage || ''; refreshImageList(); showNewDialog = true"
+    <button @click="dlgCourse = courseName; dlgHole = ''; dlgImage = selectedImage || ''; refreshImageList(); refreshCourseList(); showNewDialog = true; newDlgStep = 'form'"
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-notion-accent hover:bg-blue-600 text-white transition-default">
       New Project
     </button>
@@ -26,32 +26,28 @@
     </button>
 
     <button @click="generateSTL()"
-            :disabled="!(polygons.length > 0 && courseName && holeName)"
-            :class="(polygons.length > 0 && courseName && holeName) ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-600/40 cursor-not-allowed'"
-            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
-      Generate
+            :disabled="!(polygons.length > 0 && courseName && holeName) || generating"
+            :class="(polygons.length > 0 && courseName && holeName) && !generating ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-600/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
+            x-text="generating ? 'Generating…' : 'Generate'">
     </button>
 
-    {# ── Green style selector ────────────────────────────────── #}
-    <div class="flex items-center gap-2 pl-3 border-l border-notion-border">
-      <label class="text-xs font-medium text-notion-muted whitespace-nowrap">Green</label>
-      <select x-model="greenStyle"
-              class="text-xs bg-white border border-notion-border rounded px-2 py-1 text-notion-text focus:outline-none focus:ring-1 focus:ring-teal-500">
-        <option value="smooth">Smooth</option>
-        <option value="terraced">Terraced</option>
-      </select>
-    </div>
-
+    <button @click="addTrap()"
+            :disabled="!imgLoaded"
+            :class="imgLoaded ? 'bg-amber-500 hover:bg-amber-600' : 'bg-amber-500/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+      Add Trap
+    </button>
 
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
-          x-text="courseName + ' — Hole ' + holeName + ' (' + polygons.length + ' regions)'"></span>
+          x-text="courseName + ' — Hole ' + holeName"></span>
 
     <div class="ml-auto flex items-center gap-1.5">
       <span x-show="statusMsg" x-text="statusMsg" x-transition
             :class="statusOk ? 'text-green-600' : 'text-red-500'"
             class="text-sm font-medium"></span>
-      <code x-show="statusMsg && statusFilename" x-text="statusFilename" x-transition
-            class="text-sm font-mono bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"></code>
+      <span x-show="statusMsg && statusFilename" x-text="statusFilename" x-transition
+            class="text-sm bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"></span>
     </div>
   </div>
 
@@ -60,45 +56,112 @@
        class="fixed inset-0 flex items-center justify-center" style="z-index:9999" @keydown.escape.window="showNewDialog = false">
       <div class="absolute inset-0 bg-black/30" @click="showNewDialog = false"></div>
       <div class="relative bg-white rounded-xl shadow-xl border border-notion-border p-6 w-full max-w-md space-y-5">
-        <h2 class="text-lg font-semibold text-notion-text">New Project</h2>
 
-        <div class="space-y-4">
-          <div>
-            <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Golf Course</label>
-            <input type="text" x-model="dlgCourse" x-ref="dlgCourseInput" placeholder="e.g. Moffett Field" autocomplete="off"
-                   class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+        {# ── Step 1: main form ── #}
+        <template x-if="newDlgStep === 'form'">
+          <div class="space-y-5">
+            <h2 class="text-lg font-semibold text-notion-text">New Project</h2>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Golf Course</label>
+                <input type="text" x-model="dlgCourse" x-ref="dlgCourseInput"
+                       list="course-suggestions"
+                       placeholder="e.g. Moffett Field" autocomplete="off"
+                       class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+                <datalist id="course-suggestions">
+                  <template x-for="c in existingCourses" :key="c">
+                    <option :value="c"></option>
+                  </template>
+                </datalist>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Hole Number</label>
+                <input type="text" x-model="dlgHole" placeholder="e.g. 9" autocomplete="off"
+                       class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Source Image</label>
+                <select x-model="dlgImage"
+                        class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+                  <option value="">-- select --</option>
+                  <template x-for="img in dlgImages" :key="img.url">
+                    <option :value="img.filename" x-text="img.filename"></option>
+                  </template>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+              <button @click="showNewDialog = false"
+                      class="text-sm px-4 py-2 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-text transition-default">
+                Cancel
+              </button>
+              <button @click="checkCourseAndProceed()"
+                      :disabled="!dlgImage || !dlgCourse.trim() || !dlgHole.trim()"
+                      :class="(!dlgImage || !dlgCourse.trim() || !dlgHole.trim()) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-600'"
+                      class="text-sm px-4 py-2 rounded-md bg-notion-accent text-white transition-default">
+                OK
+              </button>
+            </div>
           </div>
+        </template>
 
-          <div>
-            <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Hole Number</label>
-            <input type="text" x-model="dlgHole" placeholder="e.g. 9" autocomplete="off"
-                   class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+        {# ── Step 2: course-match confirmation ── #}
+        <template x-if="newDlgStep === 'confirm'">
+          <div class="space-y-5">
+            <h2 class="text-lg font-semibold text-notion-text">Course folder check</h2>
+
+            <template x-if="dlgCourseMatches.length > 0">
+              <div class="space-y-3">
+                <p class="text-sm text-notion-text">
+                  No exact match for <strong x-text="'«' + dlgCourse.trim() + '»'"></strong>.
+                  Use an existing folder instead?
+                </p>
+                <div class="space-y-1.5">
+                  <template x-for="m in dlgCourseMatches" :key="m">
+                    <button @click="confirmUseExisting(m)"
+                            class="w-full text-left text-sm px-3 py-2 rounded-md border border-notion-border hover:bg-notion-hover text-notion-text transition-default">
+                      Use <strong x-text="m"></strong>
+                    </button>
+                  </template>
+                </div>
+                <div class="border-t border-notion-border pt-3 flex justify-between gap-2">
+                  <button @click="newDlgStep = 'form'"
+                          class="text-sm px-4 py-2 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-text transition-default">
+                    Back
+                  </button>
+                  <button @click="confirmCreateNew()"
+                          class="text-sm px-4 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white transition-default">
+                    Create new <strong x-text="'«' + dlgCourse.trim() + '»'"></strong>
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <template x-if="dlgCourseMatches.length === 0">
+              <div class="space-y-4">
+                <p class="text-sm text-notion-text">
+                  No existing folder matches <strong x-text="'«' + dlgCourse.trim() + '»'"></strong>.
+                  This will create a new course folder.
+                </p>
+                <div class="flex justify-between gap-2">
+                  <button @click="newDlgStep = 'form'"
+                          class="text-sm px-4 py-2 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-text transition-default">
+                    Back
+                  </button>
+                  <button @click="confirmCreateNew()"
+                          class="text-sm px-4 py-2 rounded-md bg-notion-accent hover:bg-blue-600 text-white transition-default">
+                    Create new folder
+                  </button>
+                </div>
+              </div>
+            </template>
           </div>
+        </template>
 
-          <div>
-            <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1.5">Source Image</label>
-            <select x-model="dlgImage"
-                    class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
-              <option value="">-- select --</option>
-              <template x-for="img in dlgImages" :key="img.url">
-                <option :value="img.filename" x-text="img.filename"></option>
-              </template>
-            </select>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-2 pt-2">
-          <button @click="showNewDialog = false"
-                  class="text-sm px-4 py-2 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-text transition-default">
-            Cancel
-          </button>
-          <button @click="startNewProject()"
-                  :disabled="!dlgImage || !dlgCourse.trim() || !dlgHole.trim()"
-                  :class="(!dlgImage || !dlgCourse.trim() || !dlgHole.trim()) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-600'"
-                  class="text-sm px-4 py-2 rounded-md bg-notion-accent text-white transition-default">
-            OK
-          </button>
-        </div>
       </div>
     </div>
   {# /dialog #}
@@ -153,7 +216,7 @@
 
   {# ── Help text ──────────────────────────────────────────── #}
   <div class="text-xs text-notion-muted space-y-0.5 pb-4">
-    <p><strong>Drag</strong> a vertex to move it. <strong>Shift+click</strong> to multi-select. <strong>Right-click</strong> edge to add vertex, right-click vertex to remove. <strong>Cmd+Z</strong> undo, <strong>Cmd+Shift+Z</strong> redo.</p>
+    <p><strong>Drag</strong> a vertex to move it. <strong>Shift+click</strong> to multi-select. <strong>Right-click</strong> edge to add vertex, right-click vertex to remove. <strong>Cmd+Z</strong> undo, <strong>Cmd+Shift+Z</strong> redo. <strong>Cmd+Delete</strong> removes the selected trap.</p>
     <p><strong>Contour mode:</strong> click "Add Contour", then click to place points. <strong>Double-click or Enter</strong> to finish. Click the <strong>↑/↓ direction arrow</strong> on a contour to flip its uphill side. Right-click a contour vertex to delete it.</p>
   </div>
 </div>
@@ -168,10 +231,13 @@ function polygonEditor() {
 
     // New Project dialog state
     showNewDialog: false,
+    newDlgStep: 'form',       // 'form' | 'confirm'
     dlgCourse: '',
     dlgHole: '',
     dlgImage: '',
     dlgImages: [],
+    existingCourses: [],      // fetched from /api/courses for the datalist
+    dlgCourseMatches: [],     // partial matches found when user hits OK
     _pendingDetect: false,
 
     // Open Project dialog state
@@ -218,6 +284,7 @@ function polygonEditor() {
     statusMsg: '',
     statusOk: true,
     statusFilename: '',
+    generating: false,
     _flashTimer: null,
 
     POINT_RADIUS: 8,
@@ -1293,6 +1360,60 @@ function polygonEditor() {
       }
     },
 
+    async refreshCourseList() {
+      try {
+        const resp = await fetch('/api/courses');
+        const data = await resp.json();
+        this.existingCourses = data.courses || [];
+      } catch (e) {
+        console.error('Failed to refresh course list:', e);
+      }
+    },
+
+    // Case-insensitive substring match: does `haystack` contain `needle`?
+    _courseSubstrMatch(needle, haystack) {
+      return haystack.toLowerCase().includes(needle.toLowerCase());
+    },
+
+    checkCourseAndProceed() {
+      if (!this.dlgImage || !this.dlgCourse.trim() || !this.dlgHole.trim()) return;
+      const typed = this.dlgCourse.trim();
+      // Exact match (case-insensitive) → proceed silently
+      const exactMatch = this.existingCourses.find(
+        c => c.toLowerCase() === typed.toLowerCase()
+      );
+      if (exactMatch) {
+        // Normalise capitalisation to the canonical folder name
+        this.dlgCourse = exactMatch;
+        this.startNewProject();
+        return;
+      }
+      // Subset match: typed contains existing name OR existing name contains typed
+      const matches = this.existingCourses.filter(c =>
+        this._courseSubstrMatch(typed, c) || this._courseSubstrMatch(c, typed)
+      );
+      if (matches.length > 0) {
+        // Show confirmation step
+        this.dlgCourseMatches = matches;
+        this.newDlgStep = 'confirm';
+      } else {
+        // No matches at all — still confirm creating a brand-new folder
+        this.dlgCourseMatches = [];
+        this.newDlgStep = 'confirm';
+      }
+    },
+
+    confirmUseExisting(courseName) {
+      this.dlgCourse = courseName;
+      this.newDlgStep = 'form';
+      this.startNewProject();
+    },
+
+    confirmCreateNew() {
+      this.newDlgStep = 'form';
+      this.startNewProject();
+    },
+
     async openProjectDialog() {
       this.showOpenDialog = true;
       this.openProjectsLoading = true;
@@ -1449,6 +1570,7 @@ function polygonEditor() {
         greenStyle: this.greenStyle,
         polygons: allPolygons,
       };
+      this.generating = true;
       try {
         const resp = await fetch('/api/generate_models', {
           method: 'POST',
@@ -1464,6 +1586,8 @@ function polygonEditor() {
         }
       } catch (err) {
         this.flash('Generation error: ' + err.message, false);
+      } finally {
+        this.generating = false;
       }
     },
 
@@ -1500,6 +1624,15 @@ function polygonEditor() {
         this.contourMode = false;
         this.contourDraft = [];
         this.draw();
+        return;
+      }
+      // Cmd+Delete / Ctrl+Delete: remove the selected polygon if it is a trap
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'Delete' || e.key === 'Backspace')) {
+        if (this.selectedPoly >= 0 && this.selectedPoly < this.polygons.length &&
+            this.polygons[this.selectedPoly].type === 'trap') {
+          e.preventDefault();
+          this.removePoly(this.selectedPoly);
+        }
         return;
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {

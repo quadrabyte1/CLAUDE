@@ -2,7 +2,7 @@
 title: Notes with Mary June
 uid: 20221101T1751
 created: '2022-11-01'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []
@@ -156,3 +156,7 @@ abilify too
         5 mg
 
 follow up in six weeks 12/13 1:00
+
+## See also
+
+- [[Woodworking]]

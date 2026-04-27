@@ -3,7 +3,7 @@ title: 'Have You Heard About PLA Wood and Its Printing Tips? Here''s Everything 
   Need to Know : r/BambuLab'
 uid: 20241231T1843
 created: '2024-12-31'
-updated: '2024-12-31'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -244,3 +244,7 @@ Does it \_look\_ like wood? The photos so far are not convincing me, but I haven
 [![](data:image/svg+xml,%3csvg%20rpl=''%20fill='currentColor'%20height='16'%20icon-name='join-outline'%20viewBox='0%200%2020%2020'%20width='16'%20xmlns='http://www.w3.org/2000/svg'%3e%20%3cpath%20d='M10.625%209.375H14v1.25h-3.375V14h-1.25v-3.375H6v-1.25h3.375V6h1.25v3.375ZM20%2010A10%2010%200%201%201%2010%200a10.011%2010.011%200%200%201%2010%2010Zm-1.25%200A8.75%208.75%200%201%200%2010%2018.75%208.76%208.76%200%200%200%2018.75%2010Z'%3e%3c/path%3e%20%3c/svg%3e) More replies](https://www.reddit.com/r/BambuLab/comments/1gzh6sb/comment/lywpwmq/) [![](data:image/svg+xml,%3csvg%20rpl=''%20fill='currentColor'%20height='16'%20icon-name='join-outline'%20viewBox='0%200%2020%2020'%20width='16'%20xmlns='http://www.w3.org/2000/svg'%3e%20%3cpath%20d='M10.625%209.375H14v1.25h-3.375V14h-1.25v-3.375H6v-1.25h3.375V6h1.25v3.375ZM20%2010A10%2010%200%201%201%2010%200a10.011%2010.011%200%200%201%2010%2010Zm-1.25%200A8.75%208.75%200%201%200%2010%2018.75%208.76%208.76%200%200%200%2018.75%2010Z'%3e%3c/path%3e%20%3c/svg%3e) More replies](https://www.reddit.com/r/BambuLab/comments/1gzh6sb/comment/lyw9mtv/)
 
 \
+
+## See also
+
+- [[3D Printing]]

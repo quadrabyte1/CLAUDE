@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20180223T0154
 created: '2018-02-23'
-updated: '2024-10-17'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags:
@@ -21,3 +21,7 @@ Laser To Text
 ![](_attachments/Evernote%20(2))
 
 \
+
+## See also
+
+- [[Software Development]]

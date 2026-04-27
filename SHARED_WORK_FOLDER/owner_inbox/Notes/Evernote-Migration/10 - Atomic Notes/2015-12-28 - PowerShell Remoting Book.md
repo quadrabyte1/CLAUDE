@@ -2,7 +2,7 @@
 title: PowerShell Remoting Book
 uid: 20151228T2255
 created: '2015-12-28'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags:

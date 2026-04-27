@@ -2,7 +2,7 @@
 title: Running Journal (closed 6 Jan 2025) 2024
 uid: 20240401T1538
 created: '2024-04-01'
-updated: '2025-07-21'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags:
@@ -2818,3 +2818,11 @@ sent a note to energysage asking for help:
     we will do bloodwork on wednesday
 
 \
+
+## See also
+
+- [[3D Printing]]
+- [[Enterprise Architect]]
+- [[Maker & Electronics]]
+- [[Running]]
+- [[Software Development]]

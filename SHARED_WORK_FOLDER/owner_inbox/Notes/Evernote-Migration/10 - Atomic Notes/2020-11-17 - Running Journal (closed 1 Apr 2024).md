@@ -2,7 +2,7 @@
 title: Running Journal (closed 1 Apr 2024)
 uid: 20201117T1759
 created: '2020-11-17'
-updated: '2025-01-06'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags:
@@ -8063,3 +8063,11 @@ Wed 25-Nov-20 04:58 PM
 \
 
 \
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Maker & Electronics]]
+- [[Running]]
+- [[Software Development]]
+- [[Woodworking]]

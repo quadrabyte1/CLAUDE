@@ -2,7 +2,7 @@
 title: how to get all page urls from a website - Python Tutorial
 uid: 20241016T1434
 created: '2024-10-16'
-updated: '2024-10-16'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -95,3 +95,7 @@ Message\
 Copyright © 2015 - 2023 - Pythonspot.  \| [Cookie policy](https://pythonspot.com/cookie-policy/) \| [Terms of use](https://pythonspot.com/terms-of-use/) \| [Privacy policy](https://pythonspot.com/privacy-policy/)
 
 \
+
+## See also
+
+- [[Software Development]]

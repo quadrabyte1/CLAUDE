@@ -2,7 +2,7 @@
 title: Calendar - Brennan-Marquez, Thomas - Outlook
 uid: 20240603T1433
 created: '2024-06-03'
-updated: '2024-06-03'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

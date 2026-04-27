@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20190605T1656
 created: '2019-06-05'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []
@@ -62,3 +62,7 @@ c) the MEDICAL DEVICE ARCHITECTURE supports proper operation of any SOUP items.
 \[Class B, C\]
 
 \
+
+## See also
+
+- [[Software Development]]

@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20171103T2211
 created: '2017-11-03'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []
@@ -26,3 +26,7 @@ Further, we will additional people (possibility with entirely different skill s
 **In conclusion, by assessing the requirements and capabilities, more resources, including but not limited to Verily’s security expertise, will be needed to accomplish a successful cybersecurity program for the Verb Surgical System.**  As a next step, we recommend proceeding with detailed assessments of schedule and resource needs, either based on yearly or “design control/phase-wised” work breakdown, for both Verb and Verily, plus potential outsourced firms.
 
 \
+
+## See also
+
+- [[Maker & Electronics]]

@@ -2,7 +2,7 @@
 title: Clip to bind parts
 uid: 20250625T2357
 created: '2025-06-25'
-updated: '2025-06-26'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []

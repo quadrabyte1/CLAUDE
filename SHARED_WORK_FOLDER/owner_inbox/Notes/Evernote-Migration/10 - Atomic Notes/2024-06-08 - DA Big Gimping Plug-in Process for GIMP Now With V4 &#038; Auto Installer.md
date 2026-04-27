@@ -2,7 +2,7 @@
 title: DA Big Gimping Plug-in Process for GIMP Now With V4 &#038; Auto Installer
 uid: 20240608T1232
 created: '2024-06-08'
-updated: '2024-06-08'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags:
@@ -507,3 +507,9 @@ Products
 Copyright 2024 © **Flatsome Theme**
 
 \
+
+## See also
+
+- [[Laser Engraver]]
+- [[Software Development]]
+- [[Woodworking]]

@@ -2,7 +2,7 @@
 title: Wainlux Laser L3 Engraver Notes
 uid: 20240528T1337
 created: '2024-05-28'
-updated: '2024-05-28'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags:
@@ -44,3 +44,7 @@ aliases: []
   - ☐
 
     running from the Mac
+
+## See also
+
+- [[Laser Engraver]]

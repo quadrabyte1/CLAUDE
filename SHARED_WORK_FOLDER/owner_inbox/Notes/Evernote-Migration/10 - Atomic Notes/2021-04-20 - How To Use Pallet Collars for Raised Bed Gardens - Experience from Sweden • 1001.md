@@ -3,7 +3,7 @@ title: How To Use Pallet Collars for Raised Bed Gardens - Experience from Sweden
   1001 Pallets
 uid: 20210420T1009
 created: '2021-04-20'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []
@@ -431,3 +431,7 @@ Mon fils, entraîneur de chevaux de course, se fait livrer les aliments pour ses
 Handcrafted with ** by [Akceli](https://www.akceli.co/) © 2021 [1001Pallets](https://www.1001pallets.com/)
 
 \
+
+## See also
+
+- [[Woodworking]]

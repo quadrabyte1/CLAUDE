@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20181009T2241
 created: '2018-10-09'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []
@@ -252,3 +252,9 @@ When a Situation triggers (becomes active because its Trigger Pattern is found) 
 **Reporter Support Class**
 
 \
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Maker & Electronics]]
+- [[Software Development]]

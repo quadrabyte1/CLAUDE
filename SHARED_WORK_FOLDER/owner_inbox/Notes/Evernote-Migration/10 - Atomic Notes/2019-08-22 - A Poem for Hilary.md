@@ -2,7 +2,7 @@
 title: A Poem for Hilary
 uid: 20190822T1458
 created: '2019-08-22'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []

@@ -2,7 +2,7 @@
 title: a place to get hurricane deck (and bowl)
 uid: 20141030T0324
 created: '2014-10-30'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []

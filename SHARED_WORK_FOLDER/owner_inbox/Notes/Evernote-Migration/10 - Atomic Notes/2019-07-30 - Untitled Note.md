@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20190730T1724
 created: '2019-07-30'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []
@@ -15,3 +15,7 @@ source_url: https://www.nomagic.com/product-addons/magicdraw-addons/cameo-simula
 \
 
 Grady Booch
+
+## See also
+
+- [[Enterprise Architect]]

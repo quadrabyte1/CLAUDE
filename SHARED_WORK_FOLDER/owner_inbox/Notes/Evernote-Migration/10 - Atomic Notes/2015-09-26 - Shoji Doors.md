@@ -2,7 +2,7 @@
 title: Shoji Doors
 uid: 20150926T1652
 created: '2015-09-26'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []

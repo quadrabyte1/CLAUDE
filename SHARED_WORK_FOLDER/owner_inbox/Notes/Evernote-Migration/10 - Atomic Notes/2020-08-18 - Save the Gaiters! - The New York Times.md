@@ -2,7 +2,7 @@
 title: Save the Gaiters! - The New York Times
 uid: 20200818T1416
 created: '2020-08-18'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []

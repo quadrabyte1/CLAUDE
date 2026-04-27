@@ -2,7 +2,7 @@
 title: Customizing greetings and settings - Google voice mail
 uid: 20130327T1640
 created: '2013-03-27'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []

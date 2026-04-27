@@ -2,7 +2,7 @@
 title: 'Fw: macro recording vs code'
 uid: 20241102T1442
 created: '2024-11-02'
-updated: '2024-11-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -48,3 +48,7 @@ aliases: []
 > `     Ctrl+Alt+P : Playback`
 
 \
+
+## See also
+
+- [[Software Development]]

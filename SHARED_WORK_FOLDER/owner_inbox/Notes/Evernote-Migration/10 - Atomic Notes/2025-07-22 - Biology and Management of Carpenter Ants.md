@@ -2,7 +2,7 @@
 title: Biology and Management of Carpenter Ants
 uid: 20250722T2314
 created: '2025-07-22'
-updated: '2025-07-22'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []

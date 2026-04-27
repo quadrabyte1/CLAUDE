@@ -2,7 +2,7 @@
 title: Hernia surgery
 uid: 20220107T1335
 created: '2022-01-07'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []

@@ -4,7 +4,7 @@ title: Veise Smart Lock, Fingerprint Door Lock, 7-in-1 Keyless Entry Door Lock w
   for Front Door, Matte Black - Amazon.com
 uid: 20250320T2206
 created: '2025-03-20'
-updated: '2025-03-20'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []

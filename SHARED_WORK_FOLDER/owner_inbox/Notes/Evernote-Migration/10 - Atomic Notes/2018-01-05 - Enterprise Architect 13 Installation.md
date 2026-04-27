@@ -2,7 +2,7 @@
 title: Enterprise Architect 13 Installation
 uid: 20180105T2037
 created: '2018-01-05'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []
@@ -387,3 +387,8 @@ Once again, thank you for your purchase. 
 The Sales Team at Sparx Systems 
 
 [http://www.sparxsystems.com](http://www.sparxsystems.com/)
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Software Development]]

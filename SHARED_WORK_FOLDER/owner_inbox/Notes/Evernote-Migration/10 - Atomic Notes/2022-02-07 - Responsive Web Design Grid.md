@@ -2,7 +2,7 @@
 title: Responsive Web Design Grid
 uid: 20220207T1147
 created: '2022-02-07'
-updated: '2024-10-12'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -302,3 +302,7 @@ W3Schools is optimized for learning and training. Examples might be simplified t
 [](https://www.w3schools.com/css/css_rwd_grid.aspundefined)
 
 \
+
+## See also
+
+- [[Software Development]]

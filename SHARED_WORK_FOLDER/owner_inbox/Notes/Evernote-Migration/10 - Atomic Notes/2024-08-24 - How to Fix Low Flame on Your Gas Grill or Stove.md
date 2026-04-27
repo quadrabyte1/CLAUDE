@@ -2,7 +2,7 @@
 title: How to Fix Low Flame on Your Gas Grill or Stove
 uid: 20240824T1437
 created: '2024-08-24'
-updated: '2024-08-24'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

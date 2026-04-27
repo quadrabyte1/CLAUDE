@@ -2,7 +2,7 @@
 title: 107_the_perfect_coffee_scoop.zip
 uid: 20241007T1416
 created: '2024-10-07'
-updated: '2024-10-07'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

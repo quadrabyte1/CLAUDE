@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20190311T1905
 created: '2019-03-11'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []
@@ -107,3 +107,8 @@ Thomas has been building embedded software systems for forty years in Silicon Va
 \
 
 *By the end of the presentation, it will hopefully be clear that this approach is not as daunting as it first appears. By putting the tools we have demonstrated to use (all of them freely available through a Git repository on the web) most of the development necessary to solve some other particular problem would be limited to creating good models rather than writing hundreds of lines of code.*
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Software Development]]

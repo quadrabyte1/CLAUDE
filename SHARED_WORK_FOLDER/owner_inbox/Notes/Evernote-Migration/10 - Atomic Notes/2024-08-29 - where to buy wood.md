@@ -14,7 +14,3 @@ aliases: []
 ![](_attachments/IMG_1606.PNG)
 
 \
-
-## See also
-
-- [[Woodworking]]

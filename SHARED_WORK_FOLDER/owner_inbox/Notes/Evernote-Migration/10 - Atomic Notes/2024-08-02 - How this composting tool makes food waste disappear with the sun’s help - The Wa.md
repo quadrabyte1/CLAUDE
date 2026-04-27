@@ -3,7 +3,7 @@ title: How this composting tool makes food waste disappear with the sun’s help
   Washington Post
 uid: 20240802T1604
 created: '2024-08-02'
-updated: '2024-08-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

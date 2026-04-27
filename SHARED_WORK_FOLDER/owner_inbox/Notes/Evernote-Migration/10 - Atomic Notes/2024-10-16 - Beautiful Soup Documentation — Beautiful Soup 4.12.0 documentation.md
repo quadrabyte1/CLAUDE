@@ -2,7 +2,7 @@
 title: '>>>> Beautiful Soup Documentation — Beautiful Soup 4.12.0 documentation'
 uid: 20241016T1448
 created: '2024-10-16'
-updated: '2024-10-16'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -3296,3 +3296,7 @@ The `prettify()` method now returns a Unicode string, not a bytestring.
 © Copyright 2004-2023, Leonard Richardson. Created using [Sphinx](https://www.sphinx-doc.org/) 7.2.6.
 
 \
+
+## See also
+
+- [[Software Development]]

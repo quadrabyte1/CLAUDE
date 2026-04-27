@@ -2,7 +2,7 @@
 title: MagicDraw Notes
 uid: 20170822T2108
 created: '2017-08-22'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []

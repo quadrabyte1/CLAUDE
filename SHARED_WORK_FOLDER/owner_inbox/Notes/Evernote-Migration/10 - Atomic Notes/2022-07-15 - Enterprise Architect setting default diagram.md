@@ -2,7 +2,7 @@
 title: 'Enterprise Architect: setting default diagram'
 uid: 20220715T1521
 created: '2022-07-15'
-updated: '2025-02-21'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags:
@@ -33,3 +33,7 @@ aliases: []
 ![](_attachments/image%20(32).png)
 
 \
+
+## See also
+
+- [[Enterprise Architect]]

@@ -2,7 +2,7 @@
 title: another edx out of the blue breakage
 uid: 20141020T2102
 created: '2014-10-20'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []
@@ -40,3 +40,7 @@ vagrant ssh 
 cd /edx/app/edx_ansible/edx_ansible/playbooks
 
 sudo /edx/app/edx_ansible/venvs/edx_ansible/bin/ansible-playbook -i localhost, -c local run_role.yml -e 'role=mongo' -e 'mongo_create_users=True'
+
+## See also
+
+- [[Software Development]]

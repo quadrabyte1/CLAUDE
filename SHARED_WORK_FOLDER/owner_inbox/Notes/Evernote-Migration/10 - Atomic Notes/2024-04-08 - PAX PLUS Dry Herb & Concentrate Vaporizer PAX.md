@@ -2,7 +2,7 @@
 title: PAX PLUS Dry Herb & Concentrate Vaporizer | PAX
 uid: 20240408T0951
 created: '2024-04-08'
-updated: '2024-04-08'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

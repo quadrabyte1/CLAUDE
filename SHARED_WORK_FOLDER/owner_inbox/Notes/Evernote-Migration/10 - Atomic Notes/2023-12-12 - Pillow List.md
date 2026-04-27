@@ -2,7 +2,7 @@
 title: Pillow List
 uid: 20231212T1553
 created: '2023-12-12'
-updated: '2024-06-27'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

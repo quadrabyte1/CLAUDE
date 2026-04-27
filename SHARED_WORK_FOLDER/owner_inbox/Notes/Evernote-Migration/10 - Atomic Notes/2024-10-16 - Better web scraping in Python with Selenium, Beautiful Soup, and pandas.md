@@ -2,7 +2,7 @@
 title: Better web scraping in Python with Selenium, Beautiful Soup, and pandas
 uid: 20241016T1436
 created: '2024-10-16'
-updated: '2024-10-16'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -330,3 +330,7 @@ You can [make a tax-deductible donation here](https://www.freecodecamp.org/donat
 [About](https://www.freecodecamp.org/news/about/) [Alumni Network](https://www.linkedin.com/school/free-code-camp/people/) [Open Source](https://github.com/freeCodeCamp/) [Shop](https://www.freecodecamp.org/news/shop/) [Support](https://www.freecodecamp.org/news/support/) [Sponsors](https://www.freecodecamp.org/news/sponsors/) [Academic Honesty](https://www.freecodecamp.org/news/academic-honesty-policy/) [Code of Conduct](https://www.freecodecamp.org/news/code-of-conduct/) [Privacy Policy](https://www.freecodecamp.org/news/privacy-policy/) [Terms of Service](https://www.freecodecamp.org/news/terms-of-service/) [Copyright Policy](https://www.freecodecamp.org/news/copyright-policy/)
 
 \
+
+## See also
+
+- [[Software Development]]

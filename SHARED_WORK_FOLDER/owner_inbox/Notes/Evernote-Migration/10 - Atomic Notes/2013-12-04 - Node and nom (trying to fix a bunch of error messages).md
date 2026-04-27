@@ -2,7 +2,7 @@
 title: Node and nom (trying to fix a bunch of error messages)
 uid: 20131204T0317
 created: '2013-12-04'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []
@@ -609,3 +609,7 @@ npm@1.3.11 /usr/local/lib/node_modules/npm
 (edx-platform)
 
 ~/edx_all/edx-platform/node\>
+
+## See also
+
+- [[Software Development]]

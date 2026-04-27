@@ -2,7 +2,7 @@
 title: Hugo Projects
 uid: 20240422T1641
 created: '2024-04-22'
-updated: '2024-04-23'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -86,3 +86,8 @@ aliases: []
     - ☐
 
       build a scanner to find
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Software Development]]

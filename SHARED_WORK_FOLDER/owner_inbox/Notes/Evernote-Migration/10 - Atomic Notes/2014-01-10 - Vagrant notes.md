@@ -22,7 +22,3 @@ Here’s a note about a tool to keep Vagrant Guest Additions up to date: [http:
 \
 
 \
-
-## See also
-
-- [[Software Development]]

@@ -2,7 +2,7 @@
 title: N3 Nano Kit – N3Nano
 uid: 20240804T1220
 created: '2024-08-04'
-updated: '2024-08-04'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -128,3 +128,7 @@ The N³ Nano Kit has everything you need to add the ultimate in diamond-hard pr
 © 2024, [N3Nano](https://n3nano.com/) [Powered by Shopify](https://www.shopify.com/?utm_campaign=poweredby&utm_medium=shopify&utm_source=onlinestore)
 
 \
+
+## See also
+
+- [[Maker & Electronics]]

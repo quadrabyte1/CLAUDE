@@ -18,7 +18,3 @@ UF-B for underground, 18 inch trench
 10/3 looks like the choice, 100 ft is only \$160
 
 \
-
-## See also
-
-- [[Woodworking]]

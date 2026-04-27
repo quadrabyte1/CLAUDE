@@ -2,7 +2,7 @@
 title: Model Driven Software Engineering v2.0
 uid: 20210303T1425
 created: '2021-03-03'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []
@@ -246,3 +246,8 @@ aliases: []
     Contact
 
 \
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Software Development]]

@@ -2,7 +2,7 @@
 title: When I Left California
 uid: 20250711T1817
 created: '2025-07-11'
-updated: '2025-07-17'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []

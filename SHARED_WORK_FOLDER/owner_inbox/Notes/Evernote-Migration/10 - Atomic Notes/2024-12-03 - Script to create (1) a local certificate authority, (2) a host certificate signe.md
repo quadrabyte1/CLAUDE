@@ -3,7 +3,7 @@ title: Script to create (1) a local certificate authority, (2) a host certificat
   signed by that authority for the hostname of your choice
 uid: 20241203T2304
 created: '2024-12-03'
-updated: '2024-12-03'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -76,3 +76,7 @@ Web Clip
 | 55 |  |
 
 \
+
+## See also
+
+- [[Software Development]]

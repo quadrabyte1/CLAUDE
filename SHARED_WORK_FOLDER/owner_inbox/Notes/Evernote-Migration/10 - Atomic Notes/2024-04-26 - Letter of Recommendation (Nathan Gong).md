@@ -2,7 +2,7 @@
 title: Letter of Recommendation (Nathan Gong)
 uid: 20240426T1559
 created: '2024-04-26'
-updated: '2024-04-26'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

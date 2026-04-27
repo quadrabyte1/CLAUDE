@@ -2,7 +2,7 @@
 title: '109 Waterside Ln, West Hartford, CT 06107 | MLS #170075647  | Zillow'
 uid: 20180504T1836
 created: '2018-05-04'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags:

@@ -2,7 +2,7 @@
 title: How to Microdose - Getting Started | Microdosing Institute
 uid: 20240423T2013
 created: '2024-04-23'
-updated: '2024-04-23'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

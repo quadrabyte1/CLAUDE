@@ -2,7 +2,7 @@
 title: Rosetta Requirements
 uid: 20240822T1302
 created: '2024-08-22'
-updated: '2024-11-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -50,3 +50,7 @@ Changes to .md.in files shall be integrated into shared Git branches via the sam
 ![](data:image/svg+xml;base64,PHN2ZyB2aWV3Ym94PSIwIDAgMjQgMjQiPjx1c2UgeGxpbms6aHJlZj0iIzFmek5DIiAvPjwvc3ZnPg==)
 
 \
+
+## See also
+
+- [[Software Development]]

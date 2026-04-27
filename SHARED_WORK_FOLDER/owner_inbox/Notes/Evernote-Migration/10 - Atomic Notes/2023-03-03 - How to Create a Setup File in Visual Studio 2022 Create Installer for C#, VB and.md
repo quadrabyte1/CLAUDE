@@ -3,7 +3,7 @@ title: How to Create a Setup File in Visual Studio 2022 | Create Installer for C
   VB and C++ Applications
 uid: 20230303T1001
 created: '2023-03-03'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []

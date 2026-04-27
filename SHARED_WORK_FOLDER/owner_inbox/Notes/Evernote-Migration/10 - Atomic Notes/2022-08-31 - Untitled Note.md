@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20220831T1859
 created: '2022-08-31'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []
@@ -40,3 +40,7 @@ Node.js
 sqlite3 
 
         https://www.tutorialspoint.com/sqlite/sqlite_installation.htm
+
+## See also
+
+- [[Software Development]]

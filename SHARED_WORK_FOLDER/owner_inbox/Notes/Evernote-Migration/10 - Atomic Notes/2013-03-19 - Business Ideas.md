@@ -2,7 +2,7 @@
 title: Business Ideas
 uid: 20130319T1821
 created: '2013-03-19'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags:
@@ -22,3 +22,7 @@ aliases: []
   PC Efficiency (Tips and Tricks)
 
   Classes to teach people how to use their Windows computers more efficientlyInspired first by Kim, then reignited by a talk and session with SabinHe suggested perhaps teaching a class at UCExAlso, market to small businesses to come in and teach peopleperhaps \$900 for a 90 minute sessiongreat idea (Sabin's): give the decision maker at the company a free 30 minute session to demonstrate how valuable it ismaybe allow any number of attendees but with the caveat that more people means less time for detailed interaction and questions90 minute classesWindows Explorer GMailExcel
+
+## See also
+
+- [[Software Development]]

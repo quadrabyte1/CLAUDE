@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20180129T0050
 created: '2018-01-29'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags:
@@ -47,3 +47,7 @@ this worked better because the XMI format output was better:
 > \
 
 \
+
+## See also
+
+- [[Enterprise Architect]]

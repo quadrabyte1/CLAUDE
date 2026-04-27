@@ -2,7 +2,7 @@
 title: VS Code Tricks and Tips
 uid: 20221105T1531
 created: '2022-11-05'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []
@@ -28,3 +28,7 @@ Snippets are incredible: [https://code.visualstudio.com/docs/editor/userdefineds
 \
 
 \
+
+## See also
+
+- [[Software Development]]

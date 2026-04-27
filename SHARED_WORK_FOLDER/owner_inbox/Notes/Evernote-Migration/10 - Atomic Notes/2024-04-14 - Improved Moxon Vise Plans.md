@@ -2,7 +2,7 @@
 title: Improved Moxon Vise Plans
 uid: 20240414T0933
 created: '2024-04-14'
-updated: '2024-04-14'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

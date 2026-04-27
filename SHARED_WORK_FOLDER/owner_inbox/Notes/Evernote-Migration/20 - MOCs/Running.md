@@ -31,8 +31,16 @@ Anything related to:
 
 ## Notes
 
-*(Back-filled after full run — links to individual spoke notes go here.)*
+109 spoke notes total after full run (2026-04-27): 106 in `40 - Areas/Running/` + 3 closed-journal files in `10 - Atomic Notes/`.
+
+### Closed running journal files (in Atomic Notes)
+- [[2020-11-17 - Running Journal (closed 1 Apr 2024)]] *(Nov 2020–Apr 2024, ~3.5 years)*
+- [[2024-04-01 - Running Journal (closed 6 Jan 2025) 2024]] *(Apr–Dec 2024)*
+- [[2025-01-06 - Running Journal 2025]] *(Jan–Jul 2025)*
+
+### Active running journal (in 40 - Areas/Running/)
+See [[Running Journal (Chronological)]] for the full flat list of 106 entries.
 
 ## See also
 
-*(Connections to other MOCs to be added after full run.)*
+- [[Software Development]] — cross-mention (work notes appear inside running journals)

@@ -2,7 +2,7 @@
 title: No-Dent Bottle Opener - Stainless Bottle Stoppers Made in USA
 uid: 20250625T2357
 created: '2025-06-25'
-updated: '2025-06-26'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -150,3 +150,7 @@ Hosting and support by [Wheaton Website Services](https://www.wheatonwebsiteserv
 ![](_attachments/sbi-sprite.png)
 
 \
+
+## See also
+
+- [[Woodworking]]

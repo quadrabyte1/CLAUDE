@@ -2,7 +2,7 @@
 title: Solar Project Notes
 uid: 20221203T1259
 created: '2022-12-03'
-updated: '2024-07-26'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

@@ -2,7 +2,7 @@
 title: Dell UltraSharp 43 4K USB-C Monitor - U4320Q
 uid: 20220125T1440
 created: '2022-01-25'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []
@@ -18,3 +18,8 @@ https://www.dell.com/en-us/work/shop/dell-ultrasharp-43-4k-usb-c-monitor-u4320q/
 \
 
 How do I go about requesting a monitor like that?
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Software Development]]

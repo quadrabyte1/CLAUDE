@@ -2,7 +2,7 @@
 title: Mac File Comparison
 uid: 20140218T1829
 created: '2014-02-18'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags:

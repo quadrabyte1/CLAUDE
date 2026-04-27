@@ -2,7 +2,7 @@
 title: Bran Flax Muffins Recipe - Allrecipes.com
 uid: 20190123T1257
 created: '2019-01-23'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []
@@ -753,3 +753,7 @@ ADVERTISEMENT
 - [The Allrecipes Blog](http://press.allrecipes.com/blog/)
 
 \
+
+## See also
+
+- [[Software Development]]

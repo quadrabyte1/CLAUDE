@@ -2,7 +2,7 @@
 title: STAMP and STPA
 uid: 20200214T1721
 created: '2020-02-14'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []

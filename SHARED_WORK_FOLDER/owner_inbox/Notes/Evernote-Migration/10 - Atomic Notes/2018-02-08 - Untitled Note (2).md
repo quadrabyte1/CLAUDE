@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20180208T1929
 created: '2018-02-08'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags:
@@ -61,3 +61,7 @@ repo rebase
 repo prune
 
 \
+
+## See also
+
+- [[Software Development]]

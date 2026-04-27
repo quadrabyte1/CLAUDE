@@ -2,7 +2,7 @@
 title: Polyvagal theory in practice - Counseling Today
 uid: 20210219T1619
 created: '2021-02-19'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []

@@ -2,7 +2,7 @@
 title: Solid Brass Hinge Pin Door Stop | House of Antique Hardware
 uid: 20250328T2036
 created: '2025-03-28'
-updated: '2025-03-28'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []

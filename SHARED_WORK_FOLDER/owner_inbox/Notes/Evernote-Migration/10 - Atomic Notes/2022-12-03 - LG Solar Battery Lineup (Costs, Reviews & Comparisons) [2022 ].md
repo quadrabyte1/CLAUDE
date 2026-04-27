@@ -2,7 +2,7 @@
 title: LG Solar Battery Lineup (Costs, Reviews & Comparisons) [2022 ]
 uid: 20221203T1657
 created: '2022-12-03'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []

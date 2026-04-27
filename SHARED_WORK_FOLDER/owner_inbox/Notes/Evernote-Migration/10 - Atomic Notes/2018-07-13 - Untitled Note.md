@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20180713T0305
 created: '2018-07-13'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []
@@ -69,3 +69,7 @@ This is not an off-the-cuff request. I have been asking for this very thing for 
 It doesn't matter to me if Nick does the work to produce the list or someone else. What does matter is that the list be generated and preferably in some automatically repeated way so that an automation tool can double check that the latest module list is still in sync with the latest set of installed things.
 
 \
+
+## See also
+
+- [[Maker & Electronics]]

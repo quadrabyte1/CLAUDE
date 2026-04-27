@@ -2,7 +2,7 @@
 title: SWI Tagging Project
 uid: 20240522T1259
 created: '2024-05-22'
-updated: '2024-05-22'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -38,3 +38,7 @@ files with one or more SWI tags: 3779
                         committers identified: 48
 
                                   cmake files: 533
+
+## See also
+
+- [[Enterprise Architect]]

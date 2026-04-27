@@ -3,7 +3,7 @@ title: Workshop Accommodations & Logistics | Partnership for Systems Approaches 
   Safety and Security (PSASS)
 uid: 20200206T2012
 created: '2020-02-06'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []
@@ -158,3 +158,7 @@ Check the internet for a large array of Boston evening activities, including the
 [Proudly powered by WordPress.](http://wordpress.org/ "Semantic Personal Publishing Platform")
 
 \
+
+## See also
+
+- [[Enterprise Architect]]

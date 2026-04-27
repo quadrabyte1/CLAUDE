@@ -12,6 +12,8 @@ aliases: ["Software Dev MOC"]
 
 One umbrella hub for all personal programming notes, code snippets, tool tips, and online-learning saves. Sections break out sub-domains for easier navigation; no splitting into separate MOCs (EC-2 decision: one hub).
 
+**71 spoke notes confirmed after full run (2026-04-27).** Partial listing below — see vault for full set.
+
 ## Scope
 
 All personal programming and software-tool notes: web dev, scripting, database, version control, online learning, and general software tools.
@@ -34,7 +36,7 @@ All personal programming and software-tool notes: web dev, scripting, database, 
 
 ### C# / .NET
 - [[2012-10-01 - ErrorProvider]]
-- [[2012-03-07 - Coding and Modeling Standards]] *(dual-link: also Enterprise Architect)*
+*(Note: 2012-03-07 - Coding and Modeling Standards was deleted in full-run cleanup — was a WORK decorator note)*
 
 ### Web Dev & CodePen
 - [[2024-10-17 - Neural Noise]]

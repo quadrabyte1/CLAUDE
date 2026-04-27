@@ -2,12 +2,10 @@
 title: Intuit Online (data access notes)
 uid: 20111210T2320
 created: '2011-12-10'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags:
-- andreliz-(go)
-- ●-●-●-home-●-●-●
 aliases: []
 ---
 

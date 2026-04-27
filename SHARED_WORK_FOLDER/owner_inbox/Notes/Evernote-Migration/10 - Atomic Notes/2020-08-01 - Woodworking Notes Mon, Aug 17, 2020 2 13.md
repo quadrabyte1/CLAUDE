@@ -2,7 +2,7 @@
 title: Woodworking Notes Mon, Aug 17, 2020 2:13
 uid: 20200801T2249
 created: '2020-08-01'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags:
@@ -49,3 +49,7 @@ Excellent workbench (plus some nice technique): [https://www.youtube.com/watch?
 \
 
 \
+
+## See also
+
+- [[Woodworking]]

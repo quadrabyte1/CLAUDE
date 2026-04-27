@@ -2,7 +2,7 @@
 title: Get links from webpage - Python
 uid: 20241016T1434
 created: '2024-10-16'
-updated: '2024-10-16'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -110,3 +110,7 @@ from bs4 import BeautifulSoup.
 © 2023 https://pythonprogramminglanguage.com
 
 \
+
+## See also
+
+- [[Software Development]]

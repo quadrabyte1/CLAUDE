@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20180224T0046
 created: '2018-02-24'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []
@@ -471,3 +471,7 @@ On Fri, Feb 23, 2018 at 10:16 AM, Thomas Brennan-Marquez \<[thomasbrennan-marqu
 > \
 
 \
+
+## See also
+
+- [[Maker & Electronics]]

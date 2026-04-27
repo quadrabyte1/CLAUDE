@@ -2,7 +2,7 @@
 title: How to Clean Copper
 uid: 20240812T1300
 created: '2024-08-12'
-updated: '2024-08-12'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -188,3 +188,7 @@ Avoid leaving copper objects in humid environments. "High humidity or direct con
 Was this page helpful?
 
 \
+
+## See also
+
+- [[Software Development]]

@@ -2,7 +2,7 @@
 title: import sqlite3
 uid: 20250413T2231
 created: '2025-04-13'
-updated: '2025-04-14'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -22,3 +22,7 @@ def get_classes_and_associations(qeax_path): conn = sqlite3.connect(qeax_path) c
 get_classes_and_associations("your_file.qeax")
 
 \
+
+## See also
+
+- [[Software Development]]

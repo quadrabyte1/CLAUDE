@@ -3,7 +3,7 @@ title: I can't believe we coded an app with AI in 67 mins (V0, Cursor AI, Replit
   Claude AI) - YouTube
 uid: 20241010T1755
 created: '2024-10-10'
-updated: '2024-10-10'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -112,3 +112,7 @@ Top Comments
 \
 
 \
+
+## See also
+
+- [[Software Development]]

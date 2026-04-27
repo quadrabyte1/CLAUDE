@@ -2,7 +2,7 @@
 title: Untitled Note
 uid: 20170309T2341
 created: '2017-03-09'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []
@@ -95,3 +95,7 @@ here's an example of using threading and a queue that is useful (from [http://s
 \
 
 ` s = q.get()print s`
+
+## See also
+
+- [[Software Development]]

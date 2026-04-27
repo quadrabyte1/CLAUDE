@@ -2,7 +2,7 @@
 title: Note from Valentine's Day in United States
 uid: 20140214T1534
 created: '2014-02-14'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []
@@ -56,3 +56,7 @@ Penn State
 Home Depot
 
    Square poplar for boxes
+
+## See also
+
+- [[Woodworking]]

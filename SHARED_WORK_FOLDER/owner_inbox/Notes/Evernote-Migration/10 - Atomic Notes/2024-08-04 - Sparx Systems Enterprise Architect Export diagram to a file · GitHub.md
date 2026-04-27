@@ -2,7 +2,7 @@
 title: 'Sparx Systems Enterprise Architect: Export diagram to a file · GitHub'
 uid: 20240804T1404
 created: '2024-08-04'
-updated: '2024-08-04'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -90,3 +90,8 @@ Web Clip
 | 70 | } |
 
 \
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Software Development]]

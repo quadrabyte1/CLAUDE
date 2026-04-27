@@ -2,7 +2,7 @@
 title: How to perform Web Scraping using Selenium and Python | BrowserStack
 uid: 20241016T1444
 created: '2024-10-16'
-updated: '2024-10-16'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -461,3 +461,7 @@ Social
 - [Sitemap](https://www.browserstack.com/sitemap)
 
 \
+
+## See also
+
+- [[Software Development]]

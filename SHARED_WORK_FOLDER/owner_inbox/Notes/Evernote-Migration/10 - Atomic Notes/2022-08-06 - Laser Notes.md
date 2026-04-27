@@ -2,7 +2,7 @@
 title: Laser Notes
 uid: 20220806T2115
 created: '2022-08-06'
-updated: '2024-11-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -42,3 +42,7 @@ aliases: []
 ![](_attachments/image%20(75).png)
 
 \
+
+## See also
+
+- [[Laser Engraver]]

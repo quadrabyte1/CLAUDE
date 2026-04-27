@@ -2,7 +2,7 @@
 title: SSH Git and connecting problems
 uid: 20240604T2220
 created: '2024-06-04'
-updated: '2024-12-13'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []

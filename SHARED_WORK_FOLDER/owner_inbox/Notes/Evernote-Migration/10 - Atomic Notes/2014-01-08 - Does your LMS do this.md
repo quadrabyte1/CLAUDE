@@ -2,7 +2,7 @@
 title: Does your LMS do this?
 uid: 20140108T1852
 created: '2014-01-08'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []
@@ -187,3 +187,7 @@ Search for:
 - [WordPress.org](http://wordpress.org/ "Powered by WordPress, state-of-the-art semantic personal publishing platform.")
 
 [Proudly powered by WordPress](http://wordpress.org/ "Semantic Personal Publishing Platform")
+
+## See also
+
+- [[Software Development]]

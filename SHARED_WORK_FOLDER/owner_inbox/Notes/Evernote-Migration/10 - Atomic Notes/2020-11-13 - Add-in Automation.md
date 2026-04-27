@@ -2,7 +2,7 @@
 title: Add-in Automation
 uid: 20201113T0131
 created: '2020-11-13'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags:
@@ -35,3 +35,7 @@ C# example, connecting add-in:
 \
 
 \
+
+## See also
+
+- [[Enterprise Architect]]

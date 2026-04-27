@@ -2,7 +2,7 @@
 title: 'Sennheiser All-Day Clear Hearing Aid: Review & Prices'
 uid: 20240830T1700
 created: '2024-08-30'
-updated: '2024-08-30'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags:
@@ -692,3 +692,7 @@ Connect
 © 2024 Soundly
 
 \
+
+## See also
+
+- [[Software Development]]

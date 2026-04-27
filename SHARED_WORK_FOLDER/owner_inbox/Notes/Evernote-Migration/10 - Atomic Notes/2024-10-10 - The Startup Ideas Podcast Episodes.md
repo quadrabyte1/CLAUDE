@@ -2,7 +2,7 @@
 title: The Startup Ideas Podcast Episodes
 uid: 20241010T1313
 created: '2024-10-10'
-updated: '2024-10-10'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -217,3 +217,7 @@ Greg Isenberg
 Greg Isenberg
 
 \
+
+## See also
+
+- [[Software Development]]

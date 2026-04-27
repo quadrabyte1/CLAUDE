@@ -3,7 +3,7 @@ title: Cellular 'powerhouses' may explain health effects of stress - Psychosomat
   Medicine Journal Outlines Role of Mitochondria - Science Magazine
 uid: 20180203T1634
 created: '2018-02-03'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
 tags: []

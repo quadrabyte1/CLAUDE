@@ -2,7 +2,7 @@
 title: translucent/transparent panel
 uid: 20150422T1858
 created: '2015-04-22'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags: []
@@ -46,3 +46,7 @@ protected override void OnPaintBackground(PaintEventArgs e)
 \
 
 \
+
+## See also
+
+- [[Software Development]]

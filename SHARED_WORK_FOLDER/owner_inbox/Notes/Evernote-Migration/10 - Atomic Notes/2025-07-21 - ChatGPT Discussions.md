@@ -2,7 +2,7 @@
 title: ChatGPT Discussions
 uid: 20250721T2109
 created: '2025-07-21'
-updated: '2025-07-21'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -146,3 +146,7 @@ aliases: []
 ------------------------------------------------------------------------
 
 \
+
+## See also
+
+- [[Software Development]]

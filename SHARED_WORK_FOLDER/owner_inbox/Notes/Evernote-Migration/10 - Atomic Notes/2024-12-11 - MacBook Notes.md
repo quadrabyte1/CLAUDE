@@ -2,7 +2,7 @@
 title: MacBook Notes
 uid: 20241211T2100
 created: '2024-12-11'
-updated: '2024-12-11'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []

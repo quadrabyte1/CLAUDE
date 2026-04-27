@@ -2,7 +2,7 @@
 title: Equalizer APO / Documentation Wiki / Documentation
 uid: 20240723T1825
 created: '2024-07-23'
-updated: '2024-07-23'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -855,3 +855,7 @@ A way to globally disable OpenAL hardware-acceleration however is to move or ren
 1 [2](https://sourceforge.net/p/equalizerapo/wiki/Documentation/?page=1) [\>](https://sourceforge.net/p/equalizerapo/wiki/Documentation/?page=1) [\>\>](https://sourceforge.net/p/equalizerapo/wiki/Documentation/?page=1) (Page 1 of 2)
 
 \
+
+## See also
+
+- [[Software Development]]

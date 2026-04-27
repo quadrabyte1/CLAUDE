@@ -2,7 +2,7 @@
 title: Features | Cursor - The AI-first Code Editor
 uid: 20241010T1240
 created: '2024-10-10'
-updated: '2024-10-10'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

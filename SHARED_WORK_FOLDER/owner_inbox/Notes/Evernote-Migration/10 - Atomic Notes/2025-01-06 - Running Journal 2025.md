@@ -2,7 +2,7 @@
 title: Running Journal 2025
 uid: 20250106T1902
 created: '2025-01-06'
-updated: '2025-07-22'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -3162,3 +3162,10 @@ HAPPY NEW YEAR!
 \
 
 \
+
+## See also
+
+- [[Enterprise Architect]]
+- [[Maker & Electronics]]
+- [[Running]]
+- [[Software Development]]

@@ -2,7 +2,7 @@
 title: John is Dead
 uid: 20240508T2324
 created: '2024-05-08'
-updated: '2024-05-08'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []

@@ -3,7 +3,7 @@ title: 'Windmill AC 3.0 review: A smart air conditioner that’s attractive, qui
   powerful'
 uid: 20250711T1924
 created: '2025-07-11'
-updated: '2025-07-11'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []

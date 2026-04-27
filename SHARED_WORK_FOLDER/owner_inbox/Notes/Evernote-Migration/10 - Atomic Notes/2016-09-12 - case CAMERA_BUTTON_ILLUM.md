@@ -2,7 +2,7 @@
 title: 'case CAMERA_BUTTON_ILLUM:'
 uid: 20160912T2351
 created: '2016-09-12'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags:

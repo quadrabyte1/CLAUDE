@@ -2,7 +2,7 @@
 title: Notes on generating XSD
 uid: 20240427T2223
 created: '2024-04-27'
-updated: '2024-04-27'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -116,3 +116,7 @@ aliases: []
 - ☐
 
   \
+
+## See also
+
+- [[Software Development]]

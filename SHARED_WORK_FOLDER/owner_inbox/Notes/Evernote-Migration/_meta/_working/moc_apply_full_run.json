@@ -1,0 +1,77 @@
+{
+  "run": "full",
+  "date": "2026-04-27",
+  "operator": "Cairn (PKM Specialist)",
+  "phase": "1-deletions-in-progress",
+  "vault_base": "owner_inbox/Notes/Evernote-Migration",
+
+  "deletion_manifest": {
+    "authorized_by": "Boss (via Larry, 2026-04-27)",
+    "git_commit_title": "Delete out-of-date Work/Embedded Systems/Job Search/GMS notes",
+    "categories": {
+      "cat1_work_decorator": {
+        "description": "Notes originally tagged ●-●-●-work-●-●-● or ●-●-●-software-●-●-● (WORK context Evernote decorator). Three had tags retired in dry run; one still carries ●-●-●-software-●-●-● tag.",
+        "count": 4,
+        "files": [
+          "10 - Atomic Notes/2011-08-30 - Keil microVision tool.md",
+          "10 - Atomic Notes/2011-09-23 - NXP.md",
+          "10 - Atomic Notes/2012-03-07 - Coding and Modeling Standards.md",
+          "10 - Atomic Notes/2020-12-24 - Become an Awesome Software Architect Book 1 Foundation 2019 Volkhover, Anatoly 9.md"
+        ]
+      },
+      "cat2_embedded_systems": {
+        "description": "Notes tagged embedded-systems. None found in vault — tag may never have been used or notes were not migrated.",
+        "count": 0,
+        "files": []
+      },
+      "cat3_job_search": {
+        "description": "Job Search content: job-search tagged notes, dice.com clips, resume/cover-letter notes, job posting web clips, contractor lead notes.",
+        "count": 9,
+        "files": [
+          "10 - Atomic Notes/2011-04-02 - Valident.md",
+          "10 - Atomic Notes/2011-04-26 - Tektronix.md",
+          "10 - Atomic Notes/2011-05-06 - Thermo Fisher Scientific.md",
+          "10 - Atomic Notes/2011-05-10 - Ann Mitchell.md",
+          "10 - Atomic Notes/2011-05-10 - Sabin Alibrandi.md",
+          "10 - Atomic Notes/2013-03-14 - Untitled note.md",
+          "10 - Atomic Notes/2013-04-12 - Brooks Automation Automation, vacuum & instrumentation for ..md",
+          "10 - Atomic Notes/2017-07-19 - Untitled Note.md",
+          "10 - Atomic Notes/2020-04-14 - Senior Software Architect - Surgical Robotics - Medtronic Careers.md"
+        ],
+        "notes": {
+          "Valident": "job-search tagged, 2011 job lead",
+          "Tektronix": "job-search tagged, 2011 job lead",
+          "Thermo Fisher Scientific": "job-search tagged, 2011 job lead",
+          "Ann Mitchell": "job-search tagged, 2011 recruiter contact",
+          "Sabin Alibrandi": "originally job-search tagged in Evernote (tag retired in dry run); 2011 financial advisor note filed under job-search by boss",
+          "Untitled note 2013-03-14": "dice.com job board URL, unambiguous job-search content",
+          "Brooks Automation": "2013 contractor job lead ($70/hr corp-to-corp)",
+          "Untitled Note 2017-07-19": "cover letter notes",
+          "Senior Software Architect Medtronic Careers": "2020 job posting web clip, ●-●-●-software-●-●-● decorator context"
+        }
+      },
+      "cat4_gms": {
+        "description": "Notes originally tagged gms (Girls Middle School). Tags retired in dry run. Boss confirmed: 'completely irrelevant, delete the ~2 notes carrying that tag, including the TODO note where GMS prep 1.5 appears.'",
+        "count": 2,
+        "files": [
+          "10 - Atomic Notes/2013-06-02 - TODO.md",
+          "10 - Atomic Notes/2014-08-18 - Note conflict Terese's Birthday Party.md"
+        ]
+      }
+    },
+    "moc_deletion": {
+      "description": "Job Search MOC deleted per boss decision to drop entire Job Search hub.",
+      "files": [
+        "20 - MOCs/Job Search.md"
+      ]
+    },
+    "total_files_deleted": 16,
+    "notes": "Embedded Systems: 0 notes found with that tag in vault — category is vacuous. GMS body-mention notes (2014-03-21, 2014-03-29, 2015-05-09 TODOs) were NOT deleted — they only mention GMS as a task item in household TODO lists and were never tagged gms. Boss spec was 'notes carrying that tag.'"
+  },
+
+  "moc_linking_pass": {
+    "status": "pending",
+    "notes_processed": 0,
+    "notes_remaining_after_deletions": null
+  }
+}

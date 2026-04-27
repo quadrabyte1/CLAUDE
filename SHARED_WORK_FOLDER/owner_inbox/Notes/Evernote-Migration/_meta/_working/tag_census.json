@@ -1,0 +1,1566 @@
+{
+  "testing": {
+    "count": 1,
+    "sample_titles": [
+      "Testing"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-08-16 - Testing.md",
+        "title": "Testing"
+      }
+    ]
+  },
+  "edx": {
+    "count": 4,
+    "sample_titles": [
+      "Testing",
+      "Vagrant notes",
+      "making progress"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-08-16 - Testing.md",
+        "title": "Testing"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-01-10 - Vagrant notes.md",
+        "title": "Vagrant notes"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-11-13 - making progress.md",
+        "title": "making progress"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-10-29 - python IDE.md",
+        "title": "python IDE"
+      }
+    ]
+  },
+  "vagrant": {
+    "count": 1,
+    "sample_titles": [
+      "Vagrant notes"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-01-10 - Vagrant notes.md",
+        "title": "Vagrant notes"
+      }
+    ]
+  },
+  "fema": {
+    "count": 1,
+    "sample_titles": [
+      "Paid, via State Farm, the flood insurance $1718: Meriwest, 4386880001374801,01/2"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-06-18 - Paid, via State Farm, the flood insurance $1718 Meriwest, 4386880001374801,01 2.md",
+        "title": "Paid, via State Farm, the flood insurance $1718: Meriwest, 4386880001374801,01/2"
+      }
+    ]
+  },
+  "flood-insurance": {
+    "count": 1,
+    "sample_titles": [
+      "Paid, via State Farm, the flood insurance $1718: Meriwest, 4386880001374801,01/2"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-06-18 - Paid, via State Farm, the flood insurance $1718 Meriwest, 4386880001374801,01 2.md",
+        "title": "Paid, via State Farm, the flood insurance $1718: Meriwest, 4386880001374801,01/2"
+      }
+    ]
+  },
+  "cnc": {
+    "count": 1,
+    "sample_titles": [
+      "Autodesk's Fusion 360 now supports Shapeoko!"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-08-22 - Autodesk's Fusion 360 now supports Shapeoko!.md",
+        "title": "Autodesk's Fusion 360 now supports Shapeoko!"
+      }
+    ]
+  },
+  "gms": {
+    "count": 2,
+    "sample_titles": [
+      "Autodesk's Fusion 360 now supports Shapeoko!",
+      "Note conflict Terese's Birthday Party"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-08-22 - Autodesk's Fusion 360 now supports Shapeoko!.md",
+        "title": "Autodesk's Fusion 360 now supports Shapeoko!"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-08-18 - Note conflict Terese's Birthday Party.md",
+        "title": "Note conflict Terese's Birthday Party"
+      }
+    ]
+  },
+  "journal": {
+    "count": 9,
+    "sample_titles": [
+      "Untitled Note",
+      "Untitled Note",
+      "RelocateLegal = !"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-08-15 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-08-16 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-09-01 - RelocateLegal = !.md",
+        "title": "RelocateLegal = !"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-09-01 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-06-09 - Untitled Note (2).md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-06-15 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-10-28 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-06-09 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-10-21 - Untitled Note.md",
+        "title": "Untitled Note"
+      }
+    ]
+  },
+  "andreliz-(go)": {
+    "count": 2,
+    "sample_titles": [
+      "Drupal",
+      "Intuit Online (data access notes)"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-02-09 - Drupal.md",
+        "title": "Drupal"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-12-10 - Intuit Online (data access notes).md",
+        "title": "Intuit Online (data access notes)"
+      }
+    ]
+  },
+  "●-●-●-home-●-●-●": {
+    "count": 11,
+    "sample_titles": [
+      "Drupal",
+      "Beer",
+      "Thermo Fisher Scientific"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-02-09 - Drupal.md",
+        "title": "Drupal"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-04-24 - Beer.md",
+        "title": "Beer"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-05-06 - Thermo Fisher Scientific.md",
+        "title": "Thermo Fisher Scientific"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-03-13 - Malware and Viruses.md",
+        "title": "Malware and Viruses"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-04-26 - Tektronix.md",
+        "title": "Tektronix"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-05-10 - Ann Mitchell.md",
+        "title": "Ann Mitchell"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2010-10-30 - DroidX version is 2.2.md",
+        "title": "DroidX version is 2.2"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-04-02 - Valident.md",
+        "title": "Valident"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-05-10 - Sabin Alibrandi.md",
+        "title": "Sabin Alibrandi"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-12-10 - Intuit Online (data access notes).md",
+        "title": "Intuit Online (data access notes)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2010-10-06 - Toilet rebate.md",
+        "title": "Toilet rebate"
+      }
+    ]
+  },
+  "laser-engraver": {
+    "count": 4,
+    "sample_titles": [
+      "grandchild coaster notes",
+      "Wainlux Laser L3 Engraver Notes",
+      "https://www.amazon.com/Component-Pro-Powder-Paint-Black/dp/B0051LMJV6"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-10-30 - grandchild coaster notes.md",
+        "title": "grandchild coaster notes"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-05-28 - Wainlux Laser L3 Engraver Notes.md",
+        "title": "Wainlux Laser L3 Engraver Notes"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-06-08 - https www.amazon.com Component-Pro-Powder-Paint-Black dp B0051LMJV6.md",
+        "title": "https://www.amazon.com/Component-Pro-Powder-Paint-Black/dp/B0051LMJV6"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-06-08 - DA Big Gimping Plug-in Process for GIMP Now With V4 &#038; Auto Installer.md",
+        "title": "DA Big Gimping Plug-in Process for GIMP Now With V4 &#038; Auto Installer"
+      }
+    ]
+  },
+  "enterprise-architect": {
+    "count": 6,
+    "sample_titles": [
+      "Getting a high resolution diagram image from EA",
+      "Untitled Note",
+      "Enterprise Architect: setting default diagram"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2025-01-08 - Getting a high resolution diagram image from EA.md",
+        "title": "Getting a high resolution diagram image from EA"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2018-01-18 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2022-07-15 - Enterprise Architect setting default diagram.md",
+        "title": "Enterprise Architect: setting default diagram"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2018-01-29 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2020-11-13 - Add-in Automation.md",
+        "title": "Add-in Automation"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2025-02-13 - Enterprise Architect -- Finding a command by search.md",
+        "title": "Enterprise Architect -- Finding a command by search"
+      }
+    ]
+  },
+  "python": {
+    "count": 1,
+    "sample_titles": [
+      "python script--find parent directory trick"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2025-07-02 - python script--find parent directory trick.md",
+        "title": "python script--find parent directory trick"
+      }
+    ]
+  },
+  "powershell": {
+    "count": 1,
+    "sample_titles": [
+      "PowerShell Remoting Book"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2015-12-28 - PowerShell Remoting Book.md",
+        "title": "PowerShell Remoting Book"
+      }
+    ]
+  },
+  "cocktails": {
+    "count": 1,
+    "sample_titles": [
+      "Beer"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-04-24 - Beer.md",
+        "title": "Beer"
+      }
+    ]
+  },
+  "medtronic": {
+    "count": 1,
+    "sample_titles": [
+      "Become an Awesome Software Architect: Book 1: Foundation 2019: Volkhover, Anatoly: 9781697271065: Amazon.com: Books"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2020-12-24 - Become an Awesome Software Architect Book 1 Foundation 2019 Volkhover, Anatoly 9.md",
+        "title": "Become an Awesome Software Architect: Book 1: Foundation 2019: Volkhover, Anatoly: 9781697271065: Amazon.com: Books"
+      }
+    ]
+  },
+  "●-●-●-software-●-●-●": {
+    "count": 1,
+    "sample_titles": [
+      "Become an Awesome Software Architect: Book 1: Foundation 2019: Volkhover, Anatoly: 9781697271065: Amazon.com: Books"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2020-12-24 - Become an Awesome Software Architect Book 1 Foundation 2019 Volkhover, Anatoly 9.md",
+        "title": "Become an Awesome Software Architect: Book 1: Foundation 2019: Volkhover, Anatoly: 9781697271065: Amazon.com: Books"
+      }
+    ]
+  },
+  "web-applications": {
+    "count": 1,
+    "sample_titles": [
+      "ClientsFriday"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-03-08 - ClientsFriday.md",
+        "title": "ClientsFriday"
+      }
+    ]
+  },
+  "running-journal": {
+    "count": 109,
+    "sample_titles": [
+      "Running Journal (closed 1 Apr 2024)",
+      "Running Journal (closed 6 Jan 2025) 2024",
+      "MOC — Running Journal (Chronological)"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2020-11-17 - Running Journal (closed 1 Apr 2024).md",
+        "title": "Running Journal (closed 1 Apr 2024)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-04-01 - Running Journal (closed 6 Jan 2025) 2024.md",
+        "title": "Running Journal (closed 6 Jan 2025) 2024"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/Running Journal (Chronological).md",
+        "title": "MOC — Running Journal (Chronological)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-21 - Running Journal 2025 — 2025-07-21.md",
+        "title": "Running Journal 2025 — 2025-07-21"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-16 - Running Journal 2025 — 2025-07-16.md",
+        "title": "Running Journal 2025 — 2025-07-16"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-17 - Running Journal 2025 — 2025-02-17.md",
+        "title": "Running Journal 2025 — 2025-02-17"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-30 - Running Journal 2025 — 2025-04-30.md",
+        "title": "Running Journal 2025 — 2025-04-30"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-06-12 - Running Journal 2024 — 2024-06-12.md",
+        "title": "Running Journal 2024 — 2024-06-12"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-09 - Running Journal 2024 — 2024-10-09.md",
+        "title": "Running Journal 2024 — 2024-10-09"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-06-25 - Running Journal 2024 — 2024-06-25.md",
+        "title": "Running Journal 2024 — 2024-06-25"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-16 - Running Journal 2024 — 2024-10-16.md",
+        "title": "Running Journal 2024 — 2024-10-16"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-13 - Running Journal 2025 — 2025-07-13.md",
+        "title": "Running Journal 2025 — 2025-07-13"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-08 - Running Journal 2025 — 2025-04-08.md",
+        "title": "Running Journal 2025 — 2025-04-08"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-03 - Running Journal 2024 — 2024-10-03.md",
+        "title": "Running Journal 2024 — 2024-10-03"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-19 - Running Journal 2025 — 2025-07-19.md",
+        "title": "Running Journal 2025 — 2025-07-19"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-17 - Running Journal 2025 — 2025-04-17.md",
+        "title": "Running Journal 2025 — 2025-04-17"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-01-16 - Running Journal 2025 — 2025-01-16.md",
+        "title": "Running Journal 2025 — 2025-01-16"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-16 - Running Journal 2025 — 2025-07-16 (2).md",
+        "title": "Running Journal 2025 — 2025-07-16 (2)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-09-01 - Running Journal 2024 — 2024-09-01.md",
+        "title": "Running Journal 2024 — 2024-09-01"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-24 - Running Journal 2025 — 2025-03-24 (2).md",
+        "title": "Running Journal 2025 — 2025-03-24 (2)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-06-28 - Running Journal 2024 — 2024-06-28.md",
+        "title": "Running Journal 2024 — 2024-06-28"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-09-03 - Running Journal 2024 — 2024-09-03.md",
+        "title": "Running Journal 2024 — 2024-09-03"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-01 - Running Journal 2025 — 2025-05-01 (2).md",
+        "title": "Running Journal 2025 — 2025-05-01 (2)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-14 - Running Journal 2024 — 2024-10-14.md",
+        "title": "Running Journal 2024 — 2024-10-14"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-11 - Running Journal 2025 — 2025-07-11.md",
+        "title": "Running Journal 2025 — 2025-07-11"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-09-24 - Running Journal 2024 — 2024-09-24.md",
+        "title": "Running Journal 2024 — 2024-09-24"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-11 - Running Journal 2024 — 2024-10-11.md",
+        "title": "Running Journal 2024 — 2024-10-11"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-12-18 - Running Journal 2024 — 2024-12-18.md",
+        "title": "Running Journal 2024 — 2024-12-18"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-11-21 - Running Journal 2024 — 2024-11-21.md",
+        "title": "Running Journal 2024 — 2024-11-21"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-11 - Running Journal 2024 — 2024-08-11.md",
+        "title": "Running Journal 2024 — 2024-08-11"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-06-21 - Running Journal 2025 — 2025-06-21.md",
+        "title": "Running Journal 2025 — 2025-06-21"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-20 - Running Journal 2025 — 2025-03-20.md",
+        "title": "Running Journal 2025 — 2025-03-20"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-02 - Running Journal 2025 — 2025-03-02.md",
+        "title": "Running Journal 2025 — 2025-03-02"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-01 - Running Journal 2024 — 2024-08-01.md",
+        "title": "Running Journal 2024 — 2024-08-01"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-12-20 - Running Journal 2024 — 2024-12-20.md",
+        "title": "Running Journal 2024 — 2024-12-20"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-06-19 - Running Journal 2025 — 2025-06-19.md",
+        "title": "Running Journal 2025 — 2025-06-19"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-20 - Running Journal 2025 — 2025-05-20.md",
+        "title": "Running Journal 2025 — 2025-05-20"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-06 - Running Journal 2025 — 2025-05-06 (2).md",
+        "title": "Running Journal 2025 — 2025-05-06 (2)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-01-06 - Running Journal 2025 — 2025-01-06 (3).md",
+        "title": "Running Journal 2025 — 2025-01-06 (3)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-15 - Running Journal 2025 — 2025-05-15.md",
+        "title": "Running Journal 2025 — 2025-05-15"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-06 - Running Journal 2024 — 2024-08-06.md",
+        "title": "Running Journal 2024 — 2024-08-06"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-22 - Running Journal 2025 — 2025-05-22.md",
+        "title": "Running Journal 2025 — 2025-05-22"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-16 - Running Journal 2024 — 2024-10-16 (2).md",
+        "title": "Running Journal 2024 — 2024-10-16 (2)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-27 - Running Journal 2025 — 2025-05-27.md",
+        "title": "Running Journal 2025 — 2025-05-27"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-01-06 - Running Journal 2025 — 2025-01-06 (2).md",
+        "title": "Running Journal 2025 — 2025-01-06 (2)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-06-19 - Running Journal 2025 — 2025-06-19 (2).md",
+        "title": "Running Journal 2025 — 2025-06-19 (2)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-11-11 - Running Journal 2024 — 2024-11-11.md",
+        "title": "Running Journal 2024 — 2024-11-11"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-09 - Running Journal 2024 — 2024-08-09.md",
+        "title": "Running Journal 2024 — 2024-08-09"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-15 - Running Journal 2024 — 2024-07-15.md",
+        "title": "Running Journal 2024 — 2024-07-15"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-21 - Running Journal 2024 — 2024-08-21.md",
+        "title": "Running Journal 2024 — 2024-08-21"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-13 - Running Journal 2024 — 2024-08-13.md",
+        "title": "Running Journal 2024 — 2024-08-13"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-10 - Running Journal 2024 — 2024-07-10.md",
+        "title": "Running Journal 2024 — 2024-07-10"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-06-11 - Running Journal 2025 — 2025-06-11.md",
+        "title": "Running Journal 2025 — 2025-06-11"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-28 - Running Journal 2025 — 2025-05-28.md",
+        "title": "Running Journal 2025 — 2025-05-28"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-06-26 - Running Journal 2025 — 2025-06-26.md",
+        "title": "Running Journal 2025 — 2025-06-26"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-13 - Running Journal 2024 — 2024-07-13.md",
+        "title": "Running Journal 2024 — 2024-07-13"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-24 - Running Journal 2024 — 2024-07-24.md",
+        "title": "Running Journal 2024 — 2024-07-24"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-06-25 - Running Journal 2025 — 2025-06-25.md",
+        "title": "Running Journal 2025 — 2025-06-25"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-24 - Running Journal 2025 — 2025-03-24.md",
+        "title": "Running Journal 2025 — 2025-03-24"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-13 - Running Journal 2025 — 2025-03-13.md",
+        "title": "Running Journal 2025 — 2025-03-13"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-09 - Running Journal 2024 — 2024-07-09.md",
+        "title": "Running Journal 2024 — 2024-07-09"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-21 - Running Journal 2025 — 2025-03-21.md",
+        "title": "Running Journal 2025 — 2025-03-21"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-22 - Running Journal 2024 — 2024-08-22.md",
+        "title": "Running Journal 2024 — 2024-08-22"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-16 - Running Journal 2024 — 2024-07-16.md",
+        "title": "Running Journal 2024 — 2024-07-16"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-06 - Running Journal 2025 — 2025-05-06.md",
+        "title": "Running Journal 2025 — 2025-05-06"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-06-25 - Running Journal 2025 — 2025-06-25 (2).md",
+        "title": "Running Journal 2025 — 2025-06-25 (2)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-06-02 - Running Journal 2025 — 2025-06-02.md",
+        "title": "Running Journal 2025 — 2025-06-02"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-31 - Running Journal 2025 — 2025-03-31.md",
+        "title": "Running Journal 2025 — 2025-03-31"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-05 - Running Journal 2024 — 2024-08-05.md",
+        "title": "Running Journal 2024 — 2024-08-05"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-19 - Running Journal 2025 — 2025-03-19.md",
+        "title": "Running Journal 2025 — 2025-03-19"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-23 - Running Journal 2025 — 2025-05-23.md",
+        "title": "Running Journal 2025 — 2025-05-23"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-08-07 - Running Journal 2024 — 2024-08-07.md",
+        "title": "Running Journal 2024 — 2024-08-07"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-11 - Running Journal 2025 — 2025-05-11.md",
+        "title": "Running Journal 2025 — 2025-05-11"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-23 - Running Journal 2024 — 2024-07-23.md",
+        "title": "Running Journal 2024 — 2024-07-23"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-11-27 - Running Journal 2024 — 2024-11-27.md",
+        "title": "Running Journal 2024 — 2024-11-27"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-11-10 - Running Journal 2024 — 2024-11-10.md",
+        "title": "Running Journal 2024 — 2024-11-10"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-03-26 - Running Journal 2025 — 2025-03-26.md",
+        "title": "Running Journal 2025 — 2025-03-26"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-11 - Running Journal 2024 — 2024-07-11.md",
+        "title": "Running Journal 2024 — 2024-07-11"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-05-01 - Running Journal 2025 — 2025-05-01.md",
+        "title": "Running Journal 2025 — 2025-05-01"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-07-26 - Running Journal 2024 — 2024-07-26.md",
+        "title": "Running Journal 2024 — 2024-07-26"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-01-07 - Running Journal 2025 — 2025-01-07.md",
+        "title": "Running Journal 2025 — 2025-01-07"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-12 - Running Journal 2024 — 2024-10-12.md",
+        "title": "Running Journal 2024 — 2024-10-12"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-20 - Running Journal 2025 — 2025-07-20.md",
+        "title": "Running Journal 2025 — 2025-07-20"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-21 - Running Journal 2025 — 2025-02-21.md",
+        "title": "Running Journal 2025 — 2025-02-21"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-17 - Running Journal 2024 — 2024-10-17.md",
+        "title": "Running Journal 2024 — 2024-10-17"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-13 - Running Journal 2025 — 2025-02-13.md",
+        "title": "Running Journal 2025 — 2025-02-13"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-24 - Running Journal 2025 — 2025-02-24.md",
+        "title": "Running Journal 2025 — 2025-02-24"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-03 - Running Journal 2025 — 2025-04-03.md",
+        "title": "Running Journal 2025 — 2025-04-03"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-06-13 - Running Journal 2024 — 2024-06-13.md",
+        "title": "Running Journal 2024 — 2024-06-13"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-19 - Running Journal 2025 — 2025-02-19.md",
+        "title": "Running Journal 2025 — 2025-02-19"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-01-20 - Running Journal 2025 — 2025-01-20.md",
+        "title": "Running Journal 2025 — 2025-01-20"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-09 - Running Journal 2025 — 2025-04-09.md",
+        "title": "Running Journal 2025 — 2025-04-09"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-10-02 - Running Journal 2024 — 2024-10-02.md",
+        "title": "Running Journal 2024 — 2024-10-02"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-03 - Running Journal 2025 — 2025-02-03.md",
+        "title": "Running Journal 2025 — 2025-02-03"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-02 - Running Journal 2025 — 2025-07-02.md",
+        "title": "Running Journal 2025 — 2025-07-02"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-11 - Running Journal 2025 — 2025-04-11.md",
+        "title": "Running Journal 2025 — 2025-04-11"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-01-27 - Running Journal 2025 — 2025-01-27.md",
+        "title": "Running Journal 2025 — 2025-01-27"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-14 - Running Journal 2025 — 2025-04-14.md",
+        "title": "Running Journal 2025 — 2025-04-14"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-23 - Running Journal 2025 — 2025-04-23.md",
+        "title": "Running Journal 2025 — 2025-04-23"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-09-30 - Running Journal 2024 — 2024-09-30.md",
+        "title": "Running Journal 2024 — 2024-09-30"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-01 - Running Journal 2025 — 2025-04-01.md",
+        "title": "Running Journal 2025 — 2025-04-01"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2024-09-25 - Running Journal 2024 — 2024-09-25.md",
+        "title": "Running Journal 2024 — 2024-09-25"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-26 - Running Journal 2025 — 2025-02-26.md",
+        "title": "Running Journal 2025 — 2025-02-26"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-01-28 - Running Journal 2025 — 2025-01-28.md",
+        "title": "Running Journal 2025 — 2025-01-28"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-14 - Running Journal 2025 — 2025-02-14.md",
+        "title": "Running Journal 2025 — 2025-02-14"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-15 - Running Journal 2025 — 2025-07-15.md",
+        "title": "Running Journal 2025 — 2025-07-15"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-02-23 - Running Journal 2025 — 2025-02-23.md",
+        "title": "Running Journal 2025 — 2025-02-23"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-07-22 - Running Journal 2025 — 2025-07-22.md",
+        "title": "Running Journal 2025 — 2025-07-22"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/40 - Areas/Running/2025-04-04 - Running Journal 2025 — 2025-04-04.md",
+        "title": "Running Journal 2025 — 2025-04-04"
+      }
+    ]
+  },
+  "l3": {
+    "count": 1,
+    "sample_titles": [
+      "Wainlux Laser L3 Engraver Notes"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-05-28 - Wainlux Laser L3 Engraver Notes.md",
+        "title": "Wainlux Laser L3 Engraver Notes"
+      }
+    ]
+  },
+  "led": {
+    "count": 1,
+    "sample_titles": [
+      "LED Experiments"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-01-05 - LED Experiments.md",
+        "title": "LED Experiments"
+      }
+    ]
+  },
+  "codepen": {
+    "count": 5,
+    "sample_titles": [
+      "Neural Noise",
+      "Untitled Note",
+      "Rotating 3D Gallery"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-10-17 - Neural Noise.md",
+        "title": "Neural Noise"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2018-02-23 - Untitled Note.md",
+        "title": "Untitled Note"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-10-18 - Rotating 3D Gallery.md",
+        "title": "Rotating 3D Gallery"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-10-18 - Touchstone Pictures Splash Screen.md",
+        "title": "Touchstone Pictures Splash Screen"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-10-17 - https codepen.md",
+        "title": "https://codepen"
+      }
+    ]
+  },
+  "fax": {
+    "count": 1,
+    "sample_titles": [
+      "FAX testing"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2015-11-24 - FAX testing.md",
+        "title": "FAX testing"
+      }
+    ]
+  },
+  "job-search": {
+    "count": 4,
+    "sample_titles": [
+      "Thermo Fisher Scientific",
+      "Tektronix",
+      "Ann Mitchell"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-05-06 - Thermo Fisher Scientific.md",
+        "title": "Thermo Fisher Scientific"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-04-26 - Tektronix.md",
+        "title": "Tektronix"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-05-10 - Ann Mitchell.md",
+        "title": "Ann Mitchell"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-04-02 - Valident.md",
+        "title": "Valident"
+      }
+    ]
+  },
+  "woodworking": {
+    "count": 4,
+    "sample_titles": [
+      "French cleat Lumber storage rack",
+      "Dust collection in the wood shop project",
+      "Dewalt shop vac (released 2022)"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2021-12-22 - French cleat Lumber storage rack.md",
+        "title": "French cleat Lumber storage rack"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-01-31 - Dust collection in the wood shop project.md",
+        "title": "Dust collection in the wood shop project"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2022-07-28 - Dewalt shop vac (released 2022).md",
+        "title": "Dewalt shop vac (released 2022)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2020-08-01 - Woodworking Notes Mon, Aug 17, 2020 2 13.md",
+        "title": "Woodworking Notes Mon, Aug 17, 2020 2:13"
+      }
+    ]
+  },
+  "silverlight": {
+    "count": 1,
+    "sample_titles": [
+      "PHP, MySQL and Silverlight: The Complete Tutorial (Part 1)"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-05-24 - PHP, MySQL and Silverlight The Complete Tutorial (Part 1).md",
+        "title": "PHP, MySQL and Silverlight: The Complete Tutorial (Part 1)"
+      }
+    ]
+  },
+  "mysql": {
+    "count": 1,
+    "sample_titles": [
+      "PHP, MySQL and Silverlight: The Complete Tutorial (Part 1)"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-05-24 - PHP, MySQL and Silverlight The Complete Tutorial (Part 1).md",
+        "title": "PHP, MySQL and Silverlight: The Complete Tutorial (Part 1)"
+      }
+    ]
+  },
+  "software": {
+    "count": 3,
+    "sample_titles": [
+      "Caps Lock Be Gone Utility",
+      "Purchased a newer version of OxygenXML editor (v14)",
+      "ErrorProvider"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-07-13 - Caps Lock Be Gone Utility.md",
+        "title": "Caps Lock Be Gone Utility"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-03-08 - Purchased a newer version of OxygenXML editor (v14).md",
+        "title": "Purchased a newer version of OxygenXML editor (v14)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-10-01 - ErrorProvider.md",
+        "title": "ErrorProvider"
+      }
+    ]
+  },
+  "tools": {
+    "count": 2,
+    "sample_titles": [
+      "Caps Lock Be Gone Utility",
+      "Mac File Comparison"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-07-13 - Caps Lock Be Gone Utility.md",
+        "title": "Caps Lock Be Gone Utility"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-02-18 - Mac File Comparison.md",
+        "title": "Mac File Comparison"
+      }
+    ]
+  },
+  "malware-and-viruses": {
+    "count": 1,
+    "sample_titles": [
+      "Malware and Viruses"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-03-13 - Malware and Viruses.md",
+        "title": "Malware and Viruses"
+      }
+    ]
+  },
+  "array-converter": {
+    "count": 1,
+    "sample_titles": [
+      "NXP"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-09-23 - NXP.md",
+        "title": "NXP"
+      }
+    ]
+  },
+  "moving-to-arm": {
+    "count": 1,
+    "sample_titles": [
+      "NXP"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-09-23 - NXP.md",
+        "title": "NXP"
+      }
+    ]
+  },
+  "●-●-●-work-●-●-●": {
+    "count": 3,
+    "sample_titles": [
+      "NXP",
+      "Keil microVision tool",
+      "Coding and Modeling Standards"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-09-23 - NXP.md",
+        "title": "NXP"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-08-30 - Keil microVision tool.md",
+        "title": "Keil microVision tool"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-03-07 - Coding and Modeling Standards.md",
+        "title": "Coding and Modeling Standards"
+      }
+    ]
+  },
+  "zillow": {
+    "count": 1,
+    "sample_titles": [
+      "109 Waterside Ln, West Hartford, CT 06107 | MLS #170075647  | Zillow"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2018-05-04 - 109 Waterside Ln, West Hartford, CT 06107 MLS #170075647 Zillow.md",
+        "title": "109 Waterside Ln, West Hartford, CT 06107 | MLS #170075647  | Zillow"
+      }
+    ]
+  },
+  "edd": {
+    "count": 1,
+    "sample_titles": [
+      "Terese submits a query to unemployment insurance folks"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-04-15 - Terese submits a query to unemployment insurance folks.md",
+        "title": "Terese submits a query to unemployment insurance folks"
+      }
+    ]
+  },
+  "unemployment": {
+    "count": 1,
+    "sample_titles": [
+      "Terese submits a query to unemployment insurance folks"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-04-15 - Terese submits a query to unemployment insurance folks.md",
+        "title": "Terese submits a query to unemployment insurance folks"
+      }
+    ]
+  },
+  "tala": {
+    "count": 1,
+    "sample_titles": [
+      "tala’s first laugh/giggle"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2020-07-27 - tala’s first laugh giggle.md",
+        "title": "tala’s first laugh/giggle"
+      }
+    ]
+  },
+  "pelican": {
+    "count": 1,
+    "sample_titles": [
+      "Pelican Tattoo"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-09-27 - Pelican Tattoo.md",
+        "title": "Pelican Tattoo"
+      }
+    ]
+  },
+  "tattoo": {
+    "count": 1,
+    "sample_titles": [
+      "Pelican Tattoo"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-09-27 - Pelican Tattoo.md",
+        "title": "Pelican Tattoo"
+      }
+    ]
+  },
+  "3d-printing": {
+    "count": 1,
+    "sample_titles": [
+      "Gridfinity out of spec"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2025-01-11 - Gridfinity out of spec.md",
+        "title": "Gridfinity out of spec"
+      }
+    ]
+  },
+  "gridfinity": {
+    "count": 1,
+    "sample_titles": [
+      "Gridfinity out of spec"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2025-01-11 - Gridfinity out of spec.md",
+        "title": "Gridfinity out of spec"
+      }
+    ]
+  },
+  "4": {
+    "count": 2,
+    "sample_titles": [
+      "TODO",
+      "sky light bid"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-06-02 - TODO.md",
+        "title": "TODO"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-06-02 - sky light bid.md",
+        "title": "sky light bid"
+      }
+    ]
+  },
+  "git": {
+    "count": 3,
+    "sample_titles": [
+      "Git log",
+      "Unstage the latest Git commit",
+      "Untitled Note"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-08-22 - Git log.md",
+        "title": "Git log"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-08-09 - Unstage the latest Git commit.md",
+        "title": "Unstage the latest Git commit"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2018-02-08 - Untitled Note.md",
+        "title": "Untitled Note"
+      }
+    ]
+  },
+  "repo": {
+    "count": 1,
+    "sample_titles": [
+      "Untitled Note"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2018-02-08 - Untitled Note (2).md",
+        "title": "Untitled Note"
+      }
+    ]
+  },
+  "goodnotes": {
+    "count": 1,
+    "sample_titles": [
+      "GoodNotes Tips and Tricks"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2022-02-18 - GoodNotes Tips and Tricks.md",
+        "title": "GoodNotes Tips and Tricks"
+      }
+    ]
+  },
+  "woodcraft": {
+    "count": 1,
+    "sample_titles": [
+      "Dust collection in the wood shop project"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-01-31 - Dust collection in the wood shop project.md",
+        "title": "Dust collection in the wood shop project"
+      }
+    ]
+  },
+  "dust-collection": {
+    "count": 1,
+    "sample_titles": [
+      "Dust collection in the wood shop project"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-01-31 - Dust collection in the wood shop project.md",
+        "title": "Dust collection in the wood shop project"
+      }
+    ]
+  },
+  "oxygen-xml": {
+    "count": 1,
+    "sample_titles": [
+      "Purchased a newer version of OxygenXML editor (v14)"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-03-08 - Purchased a newer version of OxygenXML editor (v14).md",
+        "title": "Purchased a newer version of OxygenXML editor (v14)"
+      }
+    ]
+  },
+  "xml": {
+    "count": 1,
+    "sample_titles": [
+      "Purchased a newer version of OxygenXML editor (v14)"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-03-08 - Purchased a newer version of OxygenXML editor (v14).md",
+        "title": "Purchased a newer version of OxygenXML editor (v14)"
+      }
+    ]
+  },
+  "terese's-web-site": {
+    "count": 1,
+    "sample_titles": [
+      "Notice of Confidentiality"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-09-12 - Notice of Confidentiality.md",
+        "title": "Notice of Confidentiality"
+      }
+    ]
+  },
+  "android": {
+    "count": 1,
+    "sample_titles": [
+      "DroidX version is 2.2"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2010-10-30 - DroidX version is 2.2.md",
+        "title": "DroidX version is 2.2"
+      }
+    ]
+  },
+  "c#": {
+    "count": 2,
+    "sample_titles": [
+      "Using SQLite in C#",
+      "ErrorProvider"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2022-01-28 - Using SQLite in C#.md",
+        "title": "Using SQLite in C#"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-10-01 - ErrorProvider.md",
+        "title": "ErrorProvider"
+      }
+    ]
+  },
+  "sql": {
+    "count": 1,
+    "sample_titles": [
+      "Using SQLite in C#"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2022-01-28 - Using SQLite in C#.md",
+        "title": "Using SQLite in C#"
+      }
+    ]
+  },
+  "the-random-organization": {
+    "count": 1,
+    "sample_titles": [
+      "Business Ideas"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-03-19 - Business Ideas.md",
+        "title": "Business Ideas"
+      }
+    ]
+  },
+  "businessideas": {
+    "count": 1,
+    "sample_titles": [
+      "Business Ideas"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-03-19 - Business Ideas.md",
+        "title": "Business Ideas"
+      }
+    ]
+  },
+  "finances": {
+    "count": 1,
+    "sample_titles": [
+      "Sabin Alibrandi"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-05-10 - Sabin Alibrandi.md",
+        "title": "Sabin Alibrandi"
+      }
+    ]
+  },
+  "arm": {
+    "count": 1,
+    "sample_titles": [
+      "Keil microVision tool"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2011-08-30 - Keil microVision tool.md",
+        "title": "Keil microVision tool"
+      }
+    ]
+  },
+  "hearing-aids": {
+    "count": 1,
+    "sample_titles": [
+      "Sennheiser All-Day Clear Hearing Aid: Review & Prices"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2024-08-30 - Sennheiser All-Day Clear Hearing Aid Review & Prices.md",
+        "title": "Sennheiser All-Day Clear Hearing Aid: Review & Prices"
+      }
+    ]
+  },
+  "mac": {
+    "count": 2,
+    "sample_titles": [
+      "weird mac problems -- possible fixes",
+      "Mac File Comparison"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-10-01 - weird mac problems -- possible fixes.md",
+        "title": "weird mac problems -- possible fixes"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-02-18 - Mac File Comparison.md",
+        "title": "Mac File Comparison"
+      }
+    ]
+  },
+  "csharp": {
+    "count": 1,
+    "sample_titles": [
+      "Coding and Modeling Standards"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-03-07 - Coding and Modeling Standards.md",
+        "title": "Coding and Modeling Standards"
+      }
+    ]
+  },
+  "programming": {
+    "count": 1,
+    "sample_titles": [
+      "Coding and Modeling Standards"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2012-03-07 - Coding and Modeling Standards.md",
+        "title": "Coding and Modeling Standards"
+      }
+    ]
+  },
+  "jira-notes": {
+    "count": 1,
+    "sample_titles": [
+      "case CAMERA_BUTTON_ILLUM:"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-09-12 - case CAMERA_BUTTON_ILLUM.md",
+        "title": "case CAMERA_BUTTON_ILLUM:"
+      }
+    ]
+  },
+  "luxim": {
+    "count": 1,
+    "sample_titles": [
+      "National Instruments GPIB notes"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-08-27 - National Instruments GPIB notes.md",
+        "title": "National Instruments GPIB notes"
+      }
+    ]
+  },
+  "national-instruments": {
+    "count": 1,
+    "sample_titles": [
+      "National Instruments GPIB notes"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2013-08-27 - National Instruments GPIB notes.md",
+        "title": "National Instruments GPIB notes"
+      }
+    ]
+  },
+  "backupper": {
+    "count": 1,
+    "sample_titles": [
+      "backup NAS error message"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-02-03 - backup NAS error message.md",
+        "title": "backup NAS error message"
+      }
+    ]
+  },
+  "synology": {
+    "count": 1,
+    "sample_titles": [
+      "backup NAS error message"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2016-02-03 - backup NAS error message.md",
+        "title": "backup NAS error message"
+      }
+    ]
+  },
+  "notes": {
+    "count": 1,
+    "sample_titles": [
+      "Toilet rebate"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2010-10-06 - Toilet rebate.md",
+        "title": "Toilet rebate"
+      }
+    ]
+  },
+  "therapy": {
+    "count": 1,
+    "sample_titles": [
+      "Marty Klein"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-01-28 - Marty Klein.md",
+        "title": "Marty Klein"
+      }
+    ]
+  },
+  "birthday-party": {
+    "count": 1,
+    "sample_titles": [
+      "Terese's Birthday Party"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2014-08-13 - Terese's Birthday Party.md",
+        "title": "Terese's Birthday Party"
+      }
+    ]
+  },
+  "family-data": {
+    "count": 1,
+    "sample_titles": [
+      "Family Data"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/10 - Atomic Notes/2021-01-13 - Family Data.md",
+        "title": "Family Data"
+      }
+    ]
+  },
+  "moc": {
+    "count": 9,
+    "sample_titles": [
+      "MOC — ● ● ● Home ● ● ●",
+      "MOC — My Notes2",
+      "MOC — Running Journal (Chronological)"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/● ● ● Home ● ● ●.md",
+        "title": "MOC — ● ● ● Home ● ● ●"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/My Notes2.md",
+        "title": "MOC — My Notes2"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/Running Journal (Chronological).md",
+        "title": "MOC — Running Journal (Chronological)"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/My Notes3.md",
+        "title": "MOC — My Notes3"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/My Notes4.md",
+        "title": "MOC — My Notes4"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/Running Journal 2024.md",
+        "title": "MOC — Running Journal 2024"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/My Notes1.md",
+        "title": "MOC — My Notes1"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/My Notes5.md",
+        "title": "MOC — My Notes5"
+      },
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/Running Journal 2025.md",
+        "title": "MOC — Running Journal 2025"
+      }
+    ]
+  },
+  "● ● ● HOME ● ● ●": {
+    "count": 1,
+    "sample_titles": [
+      "MOC — ● ● ● Home ● ● ●"
+    ],
+    "notes": [
+      {
+        "path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/Notes/Evernote-Migration/20 - MOCs/● ● ● Home ● ● ●.md",
+        "title": "MOC — ● ● ● Home ● ● ●"
+      }
+    ]
+  }
+}

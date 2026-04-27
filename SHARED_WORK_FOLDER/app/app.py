@@ -1583,7 +1583,10 @@ def api_create_course():
 
     from generate_stl_3mf import course_paths
     cpaths = course_paths(course)
-    for key in ("3mfs", "egms", "images", "stls"):
+    # Scaffold only the directories that are part of the deliverable pipeline.
+    # Per the course folder convention, STLs are not deliverables and the
+    # boundary editor produces 3MFs directly — do NOT create an STLs/ folder.
+    for key in ("3mfs", "egms", "images"):
         os.makedirs(cpaths[key], exist_ok=True)
 
     slug = _slug_from_lines(line1, line2)

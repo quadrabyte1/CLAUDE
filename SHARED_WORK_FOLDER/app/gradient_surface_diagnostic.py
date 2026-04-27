@@ -974,10 +974,15 @@ def save_stl_meshes(
     inside_mask: np.ndarray,
     green_boundary_px: np.ndarray,
     egm_data: dict,
-    smooth_out: str,
-    stepped_out: str,
+    smooth_out: str | None,
+    stepped_out: str | None,
 ) -> "trimesh.Trimesh":
-    """Build and save smooth and stepped STL files. Returns the smooth mesh."""
+    """Build smooth and stepped meshes. Returns (smooth_mesh, stepped_mesh).
+
+    If ``smooth_out`` / ``stepped_out`` are None, the meshes are built but no
+    STL files are written. The pipeline only feeds the meshes into the 3MF
+    scene, so disk writes are vestigial.
+    """
     scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
     print(f"  Scale: {scale:.6f} px→mm, centroid: {centroid_px}")
 
@@ -1016,14 +1021,16 @@ def save_stl_meshes(
     print("  [stepped]")
     stepped_mesh = drill_flag_hole(stepped_mesh, diameter=3.0)
 
-    # --- Export ---
-    os.makedirs(os.path.dirname(smooth_out), exist_ok=True)
-    smooth_mesh.export(smooth_out)
-    print(f"  Saved: {smooth_out}")
+    # --- Export (optional; skipped when called from the 3MF pipeline) ---
+    if smooth_out:
+        os.makedirs(os.path.dirname(smooth_out), exist_ok=True)
+        smooth_mesh.export(smooth_out)
+        print(f"  Saved: {smooth_out}")
 
-    os.makedirs(os.path.dirname(stepped_out), exist_ok=True)
-    stepped_mesh.export(stepped_out)
-    print(f"  Saved: {stepped_out}")
+    if stepped_out:
+        os.makedirs(os.path.dirname(stepped_out), exist_ok=True)
+        stepped_mesh.export(stepped_out)
+        print(f"  Saved: {stepped_out}")
 
     return smooth_mesh, stepped_mesh
 
@@ -1665,31 +1672,37 @@ def export_trap_stls(
     slug: str,
     fringe_mesh: "trimesh.Trimesh | None" = None,
     stl_dir: str | None = None,
-) -> list[str]:
+    write_stls: bool = True,
+) -> list:
     """
-    For every polygon of type 'trap' in egm_data, build a flat inset slab
-    and export it as {stl_dir}/{slug}_trap_N.stl.
+    For every polygon of type 'trap' in egm_data, build a flat inset slab.
+
+    When ``write_stls`` is True (default), each trap is exported to
+    {stl_dir}/{slug}_trap_N.stl and a list of file paths is returned. When
+    ``write_stls`` is False, no disk I/O is performed and a list of
+    ``(node_name, trimesh.Trimesh)`` tuples is returned instead — the pipeline
+    consumes those directly for the 3MF without round-tripping through disk.
 
     stl_dir defaults to the course's STLs/ folder (via course_paths), falling
-    back to OWNER_INBOX if the course is unknown.
+    back to OWNER_INBOX if the course is unknown. It is only used when
+    ``write_stls`` is True.
 
     Uses Catmull-Rom interpolation (matching the editor), applies the same
     px→mm transform as the green, insets by PRINT_TOLERANCE_MM, and extrudes
     to a height derived from the fringe mesh at the trap centroid (falls back
     to TRAP_THICKNESS_MM if fringe_mesh is unavailable).
-
-    Returns a list of written file paths.
     """
     from scipy.spatial import cKDTree as _cKDTree
     from shapely.geometry import Point as ShapelyPoint
 
-    if stl_dir is None:
-        course = egm_data.get("course", "")
-        if course:
-            stl_dir = course_paths(course)["stls"]
-        else:
-            stl_dir = OWNER_INBOX
-    os.makedirs(stl_dir, exist_ok=True)
+    if write_stls:
+        if stl_dir is None:
+            course = egm_data.get("course", "")
+            if course:
+                stl_dir = course_paths(course)["stls"]
+            else:
+                stl_dir = OWNER_INBOX
+        os.makedirs(stl_dir, exist_ok=True)
 
     scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
 
@@ -1710,7 +1723,7 @@ def export_trap_stls(
         else:
             print("  WARNING: fringe mesh has no top-surface vertices (Z>0); trap heights will fall back to fixed.")
 
-    written: list[str] = []
+    results: list = []
     for i, trap_poly in enumerate(trap_polygons, start=1):
         try:
             # Interpolate outline with Catmull-Rom (closed spline, matching editor)
@@ -1770,22 +1783,25 @@ def export_trap_stls(
             # Apply sand grain texture to the top face
             apply_sand_texture(mesh, trap_index=i)
 
-            out_path = os.path.join(stl_dir, f"{slug}_trap_{i}.stl")
-            mesh.export(out_path)
-
             bb = mesh.bounds
             print(f"  Trap {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "
                   f"watertight={mesh.is_watertight}, "
                   f"X[{bb[0,0]:.1f},{bb[1,0]:.1f}] Y[{bb[0,1]:.1f},{bb[1,1]:.1f}] mm")
-            print(f"  Saved: {out_path}")
-            written.append(out_path)
+
+            if write_stls:
+                out_path = os.path.join(stl_dir, f"{slug}_trap_{i}.stl")
+                mesh.export(out_path)
+                print(f"  Saved: {out_path}")
+                results.append(out_path)
+            else:
+                results.append((f"trap_{i}", mesh))
 
         except Exception as exc:
             import traceback
             print(f"  ERROR exporting trap {i}: {exc}")
             traceback.print_exc()
 
-    return written
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -2384,11 +2400,12 @@ def run_pipeline(egm_path: str) -> str:
     print(f"    File slug: {slug}")
 
     # ── Resolve output directories from course_paths ─────────────────────────
+    # NOTE: per the course folder convention, the pipeline does NOT emit STLs
+    # into the course folder. STLs are not deliverables — only the final 3MF
+    # matters. All intermediate meshes stay in memory.
     _cpaths = course_paths(course) if course != "unknown" else None
-    _stl_dir  = _cpaths["stls"]   if _cpaths else OWNER_INBOX
     _3mf_dir  = _cpaths["3mfs"]   if _cpaths else OWNER_INBOX
     _img_dir  = _cpaths["images"] if _cpaths else OWNER_INBOX
-    os.makedirs(_stl_dir,  exist_ok=True)
     os.makedirs(_3mf_dir,  exist_ok=True)
     os.makedirs(_img_dir,  exist_ok=True)
 
@@ -2401,14 +2418,11 @@ def run_pipeline(egm_path: str) -> str:
     height_out = os.path.join(_img_dir, f"{slug}_height_map.png")
     save_height_map(Z, xs_grid, ys_grid, green_boundary_px, height_out)
 
-    # ── 6. Build STL meshes ─────────────────────────────────────────────────
-    print("\n[6] Building STL meshes…")
-    smooth_stl_flat = os.path.join(_stl_dir, f"{slug}_smooth_surface_flat.stl")
-    smooth_stl = os.path.join(_stl_dir, f"{slug}_smooth_surface.stl")
-    stepped_stl = os.path.join(_stl_dir, f"{slug}_stepped_surface.stl")
+    # ── 6. Build green surface meshes (smooth + stepped, in-memory) ─────────
+    print("\n[6] Building green surface meshes…")
     smooth_mesh_flat, stepped_mesh = save_stl_meshes(
         Z, xs_grid, ys_grid, inside_mask, green_boundary_px,
-        _egm_data, smooth_stl_flat, stepped_stl
+        _egm_data, None, None  # no STL writes — meshes are 3MF-bound
     )
 
     # ── 6b. Apply grass texture to smooth mesh ──────────────────────────────
@@ -2418,15 +2432,11 @@ def run_pipeline(egm_path: str) -> str:
     import copy
     smooth_mesh = copy.deepcopy(smooth_mesh_flat)
     apply_grass_texture(smooth_mesh, amplitude=grass_amplitude, bump_spacing=grass_spacing)
-    os.makedirs(os.path.dirname(smooth_stl), exist_ok=True)
-    smooth_mesh.export(smooth_stl)
-    print(f"    Saved textured smooth surface: {smooth_stl}")
 
     # ── 7. Build fringe mesh ────────────────────────────────────────────────
     print("\n[7] Building fringe mesh…")
     scale_f, centroid_f = _compute_px_to_mm(green_boundary_px, _egm_data)
     Z_mm_for_fringe = _height_to_mm(Z, inside_mask)
-    fringe_stl = os.path.join(_stl_dir, f"{slug}_fringe.stl")
     fringe_mesh = None
     fringe_mesh_flat = None   # kept for trap height sampling (no texture perturbation)
     # Compute hole position for bored cylinder in fringe.
@@ -2456,11 +2466,8 @@ def run_pipeline(egm_path: str) -> str:
             xs_grid, ys_grid, inside_mask,
             green_boundary_px, _egm_data,
         )
-        # Save untextured fringe flat copy before applying grass texture
-        fringe_flat_stl = os.path.join(_stl_dir, f"{slug}_fringe_flat.stl")
-        fringe_mesh.export(fringe_flat_stl)
-        print(f"  Saved untextured fringe flat: {fringe_flat_stl}")
-        # Keep a reference to the flat fringe for trap height sampling
+        # Keep an in-memory reference to the flat (untextured) fringe for
+        # trap height sampling, before grass texture displaces seam vertices.
         fringe_mesh_flat = copy.deepcopy(fringe_mesh)
         # Apply grass texture to fringe top surface.  IMPORTANT: the green
         # surface added to the 3MF is the untextured (flat) version, so any
@@ -2481,20 +2488,17 @@ def run_pipeline(egm_path: str) -> str:
             exclude_polyline_xy=_green_bnd_mm_for_grass,
             exclude_radius_mm=_seam_exclude_radius_mm,
         )
-        fringe_mesh.export(fringe_stl)
-        print(f"  Saved: {fringe_stl}")
     except Exception as exc:
         print(f"  ERROR building fringe mesh: {exc}")
         import traceback; traceback.print_exc()
-        fringe_stl = "(failed)"
 
-    # ── 8. Export sand trap STLs ────────────────────────────────────────────
-    print("\n[8] Exporting sand trap STLs…")
-    trap_stl_paths = export_trap_stls(_egm_data, green_boundary_px, slug,
-                                      fringe_mesh=fringe_mesh_flat,
-                                      stl_dir=_stl_dir)
-    if not trap_stl_paths:
-        print("  (no traps exported)")
+    # ── 8. Build sand trap meshes (in-memory) ───────────────────────────────
+    print("\n[8] Building sand trap meshes…")
+    trap_meshes = export_trap_stls(_egm_data, green_boundary_px, slug,
+                                   fringe_mesh=fringe_mesh_flat,
+                                   write_stls=False)
+    if not trap_meshes:
+        print("  (no traps built)")
 
     # ── 9. Contour debug image ──────────────────────────────────────────────
     print("\n[9] Saving contour lines debug image…")
@@ -2537,17 +2541,10 @@ def run_pipeline(egm_path: str) -> str:
         scene.add_geometry(fringe_mesh, node_name="fringe")
         scene_names.append("fringe")
 
-    # Trap meshes — reload from saved STL paths
-    for trap_path in trap_stl_paths:
-        trap_name = os.path.splitext(os.path.basename(trap_path))[0]
-        # Extract just the trap suffix (e.g. "trap_1") for a clean node name
-        trap_node = trap_name.replace(slug + "_", "")
-        try:
-            trap_mesh = trimesh.load(trap_path, force="mesh")
-            scene.add_geometry(trap_mesh, node_name=trap_node)
-            scene_names.append(trap_node)
-        except Exception as exc:
-            print(f"  WARNING: could not load trap mesh {trap_path}: {exc}")
+    # Trap meshes — added directly from memory (no disk round-trip)
+    for trap_node, trap_mesh in trap_meshes:
+        scene.add_geometry(trap_mesh, node_name=trap_node)
+        scene_names.append(trap_node)
 
     print(f"\n[10b] Engraving serial s/n: {serial_number} on {len(scene_names)} item(s)…")
     _engrave_scene(scene, serial_number)
@@ -2570,13 +2567,8 @@ def run_pipeline(egm_path: str) -> str:
     print(f"  Arrow directions:   {arrow_out}")
     print(f"  Height map:         {height_out}")
     print(f"  Contour debug:      {contour_out}")
-    print(f"  Smooth surface STL: {smooth_stl}  (grass-textured)")
-    print(f"  Smooth flat STL:    {smooth_stl_flat}  (untextured reference)")
-    print(f"  Stepped surface STL:{stepped_stl}")
-    print(f"  Fringe STL:         {fringe_stl}  (grass-textured, 4.7625mm hole)")
-    for p in trap_stl_paths:
-        print(f"  Trap STL:           {p}")
     print(f"  3MF assembly:       {path_3mf}")
+    print(f"  Scene objects:      {len(scene_names)} (green + fringe + {len(trap_meshes)} trap(s))")
     print("=" * 60)
 
     return path_3mf

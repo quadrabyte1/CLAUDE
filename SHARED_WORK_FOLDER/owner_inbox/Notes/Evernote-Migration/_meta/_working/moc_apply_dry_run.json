@@ -1,0 +1,624 @@
+{
+  "results": [
+    {
+      "stem": "2024-06-12 - Running Journal 2024 — 2024-06-12",
+      "mocs": [
+        "Running"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "running-journal"
+      ]
+    },
+    {
+      "stem": "2024-08-22 - Running Journal 2024 — 2024-08-22",
+      "mocs": [
+        "Running"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "running-journal"
+      ]
+    },
+    {
+      "stem": "2014-01-31 - Dust collection in the wood shop project",
+      "mocs": [
+        "Woodworking"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "woodcraft",
+        "woodworking",
+        "dust-collection"
+      ]
+    },
+    {
+      "stem": "2013-12-09 - bandsaw blades",
+      "mocs": [
+        "Woodworking"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2014-08-27 - Lumber",
+      "mocs": [
+        "Woodworking"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2025-01-11 - Gridfinity out of spec",
+      "mocs": [
+        "3D Printing"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "3d-printing",
+        "gridfinity"
+      ]
+    },
+    {
+      "stem": "2024-10-12 - Customizable Honeycomb Storage Wall (OpenSCAD) v2.1 Bambulabs od autora Edwin Ee",
+      "mocs": [
+        "3D Printing"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2024-11-12 - Cut and Tilted Text - Customizable by ccox - Thingiverse",
+      "mocs": [
+        "3D Printing"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2024-10-30 - grandchild coaster notes",
+      "mocs": [
+        "Laser Engraver"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "laser-engraver"
+      ]
+    },
+    {
+      "stem": "2024-10-09 - Laser Experiments October 2024",
+      "mocs": [
+        "Laser Engraver"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2025-01-08 - Getting a high resolution diagram image from EA",
+      "mocs": [
+        "Enterprise Architect"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "enterprise-architect"
+      ]
+    },
+    {
+      "stem": "2025-02-13 - Enterprise Architect -- Finding a command by search",
+      "mocs": [
+        "Enterprise Architect"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "enterprise-architect"
+      ]
+    },
+    {
+      "stem": "2024-08-22 - Git log",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "git"
+      ]
+    },
+    {
+      "stem": "2025-07-02 - python script--find parent directory trick",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "python"
+      ]
+    },
+    {
+      "stem": "2024-10-17 - Neural Noise",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "codepen"
+      ]
+    },
+    {
+      "stem": "2014-01-10 - Vagrant notes",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [
+        "edx",
+        "vagrant"
+      ],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "edx",
+        "vagrant"
+      ]
+    },
+    {
+      "stem": "2011-04-02 - Valident",
+      "mocs": [
+        "Job Search"
+      ],
+      "tags_retired": [
+        "●-●-●-home-●-●-●"
+      ],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "job-search",
+        "●-●-●-home-●-●-●"
+      ]
+    },
+    {
+      "stem": "2011-04-26 - Tektronix",
+      "mocs": [
+        "Job Search"
+      ],
+      "tags_retired": [
+        "●-●-●-home-●-●-●"
+      ],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "job-search",
+        "●-●-●-home-●-●-●"
+      ]
+    },
+    {
+      "stem": "2011-05-06 - Thermo Fisher Scientific",
+      "mocs": [
+        "Job Search"
+      ],
+      "tags_retired": [
+        "●-●-●-home-●-●-●"
+      ],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "job-search",
+        "●-●-●-home-●-●-●"
+      ]
+    },
+    {
+      "stem": "2011-08-30 - Keil microVision tool",
+      "mocs": [
+        "Maker & Electronics"
+      ],
+      "tags_retired": [
+        "●-●-●-work-●-●-●"
+      ],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "arm",
+        "●-●-●-work-●-●-●"
+      ]
+    },
+    {
+      "stem": "2013-08-27 - National Instruments GPIB notes",
+      "mocs": [
+        "Maker & Electronics"
+      ],
+      "tags_retired": [
+        "luxim"
+      ],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "luxim",
+        "national-instruments"
+      ]
+    },
+    {
+      "stem": "2024-08-29 - where to buy wood",
+      "mocs": [
+        "Woodworking"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2025-05-21 - Wiring the Woodshop",
+      "mocs": [
+        "Woodworking"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2024-10-12 - Honeycomb storage wall by RostaP Download free STL model Printables.com",
+      "mocs": [
+        "3D Printing"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2024-11-12 - Simple Key Hook by SerbanIustinian - Thingiverse",
+      "mocs": [
+        "3D Printing"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2025-05-08 - 3D Printing Notes",
+      "mocs": [
+        "3D Printing"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2025-06-25 - Tough Pro PLA+ Filament - Made in the USA! – American Filament",
+      "mocs": [
+        "3D Printing"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2014-07-30 - Pull Request",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2013-11-13 - making progress",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [
+        "edx"
+      ],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": [
+        "edx"
+      ]
+    },
+    {
+      "stem": "2012-02-09 - Drupal",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [
+        "andreliz-(go)",
+        "●-●-●-home-●-●-●"
+      ],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": [
+        "andreliz-(go)",
+        "●-●-●-home-●-●-●"
+      ]
+    },
+    {
+      "stem": "2013-03-14 - Untitled note",
+      "mocs": [
+        "Job Search"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2013-11-19 - Untitled Note",
+      "mocs": [],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": "MANUAL-REVIEW: ambiguous (polleverywhere.com reference, no clear MOC)",
+      "original_tags": []
+    },
+    {
+      "stem": "2014-08-18 - asthma medication",
+      "mocs": [],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": "MANUAL-REVIEW: sensitive health note, no MOC assigned",
+      "original_tags": []
+    },
+    {
+      "stem": "2012-10-01 - Mountain View Apartment",
+      "mocs": [],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": "MANUAL-REVIEW: personal/legal dispute note, no MOC",
+      "original_tags": []
+    },
+    {
+      "stem": "2024-12-05 - 3D Printing Notes",
+      "mocs": [
+        "3D Printing"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2025-06-25 - bottle cap opener",
+      "mocs": [
+        "Woodworking"
+      ],
+      "tags_retired": [],
+      "routing": "content-scan",
+      "flag": null,
+      "original_tags": []
+    },
+    {
+      "stem": "2011-09-23 - NXP",
+      "mocs": [
+        "Maker & Electronics"
+      ],
+      "tags_retired": [
+        "array-converter",
+        "moving-to-arm",
+        "●-●-●-work-●-●-●"
+      ],
+      "routing": "decorator",
+      "flag": null,
+      "original_tags": [
+        "array-converter",
+        "moving-to-arm",
+        "●-●-●-work-●-●-●"
+      ]
+    },
+    {
+      "stem": "2012-03-07 - Coding and Modeling Standards",
+      "mocs": [
+        "Software Development",
+        "Enterprise Architect"
+      ],
+      "tags_retired": [
+        "csharp",
+        "●-●-●-work-●-●-●"
+      ],
+      "routing": "decorator",
+      "flag": null,
+      "original_tags": [
+        "csharp",
+        "programming",
+        "●-●-●-work-●-●-●"
+      ]
+    },
+    {
+      "stem": "2013-06-02 - TODO",
+      "mocs": [],
+      "tags_retired": [
+        "4"
+      ],
+      "routing": "decorator",
+      "flag": "MANUAL-REVIEW: junk-tag note, household task list, no MOC. Tag 4 retired.",
+      "original_tags": [
+        "4"
+      ]
+    },
+    {
+      "stem": "2013-06-02 - sky light bid",
+      "mocs": [],
+      "tags_retired": [
+        "4"
+      ],
+      "routing": "decorator",
+      "flag": "MANUAL-REVIEW: single-line note, junk tag 4 retired.",
+      "original_tags": [
+        "4"
+      ]
+    },
+    {
+      "stem": "2014-08-18 - Note conflict Terese's Birthday Party",
+      "mocs": [],
+      "tags_retired": [
+        "gms"
+      ],
+      "routing": "decorator",
+      "flag": "MANUAL-REVIEW: party planning note, gms tag retired per boss decision. No MOC.",
+      "original_tags": [
+        "gms"
+      ]
+    },
+    {
+      "stem": "2014-08-22 - Autodesk's Fusion 360 now supports Shapeoko!",
+      "mocs": [
+        "Maker & Electronics"
+      ],
+      "tags_retired": [
+        "gms"
+      ],
+      "routing": "decorator",
+      "flag": "gms tag retired per boss decision.",
+      "original_tags": [
+        "cnc",
+        "gms"
+      ]
+    },
+    {
+      "stem": "2011-05-10 - Ann Mitchell",
+      "mocs": [
+        "Job Search"
+      ],
+      "tags_retired": [
+        "●-●-●-home-●-●-●"
+      ],
+      "routing": "decorator",
+      "flag": null,
+      "original_tags": [
+        "job-search",
+        "●-●-●-home-●-●-●"
+      ]
+    },
+    {
+      "stem": "2011-05-10 - Sabin Alibrandi",
+      "mocs": [
+        "Job Search"
+      ],
+      "tags_retired": [
+        "●-●-●-home-●-●-●"
+      ],
+      "routing": "decorator",
+      "flag": null,
+      "original_tags": [
+        "finances",
+        "●-●-●-home-●-●-●"
+      ]
+    },
+    {
+      "stem": "2012-07-13 - Caps Lock Be Gone Utility",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [],
+      "routing": "decorator",
+      "flag": null,
+      "original_tags": [
+        "software",
+        "tools"
+      ]
+    },
+    {
+      "stem": "2012-10-01 - ErrorProvider",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [
+        "c#"
+      ],
+      "routing": "decorator",
+      "flag": "c# tag retired (special char); note also keeps software tag.",
+      "original_tags": [
+        "c#",
+        "software"
+      ]
+    },
+    {
+      "stem": "2024-10-18 - Rotating 3D Gallery",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "codepen"
+      ]
+    },
+    {
+      "stem": "2013-03-08 - Purchased a newer version of OxygenXML editor (v14)",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [
+        "oxygen-xml",
+        "xml"
+      ],
+      "routing": "tagged",
+      "flag": "oxygen-xml and xml tags retired; note routes to Software Development.",
+      "original_tags": [
+        "oxygen-xml",
+        "xml",
+        "software"
+      ]
+    },
+    {
+      "stem": "2013-01-05 - LED Experiments",
+      "mocs": [
+        "Maker & Electronics"
+      ],
+      "tags_retired": [],
+      "routing": "tagged",
+      "flag": null,
+      "original_tags": [
+        "led"
+      ]
+    },
+    {
+      "stem": "2013-10-29 - python IDE",
+      "mocs": [
+        "Software Development"
+      ],
+      "tags_retired": [
+        "edx"
+      ],
+      "routing": "tagged",
+      "flag": "edx tag retired; content routes to Software Development.",
+      "original_tags": [
+        "edx"
+      ]
+    }
+  ],
+  "not_found": [],
+  "errors": []
+}

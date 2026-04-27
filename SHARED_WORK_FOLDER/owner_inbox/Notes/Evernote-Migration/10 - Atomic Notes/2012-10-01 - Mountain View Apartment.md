@@ -2,7 +2,7 @@
 title: Mountain View Apartment
 uid: 20121001T1607
 created: '2012-10-01'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags: []

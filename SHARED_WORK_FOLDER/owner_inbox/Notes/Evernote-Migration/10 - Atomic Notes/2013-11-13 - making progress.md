@@ -2,11 +2,10 @@
 title: making progress
 uid: 20131113T1919
 created: '2013-11-13'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
-tags:
-- edx
+tags: []
 aliases: []
 ---
 
@@ -305,3 +304,7 @@ and here’s a function to return draft/public/private status: compute_unit_sta
 \
 
 \
+
+## See also
+
+- [[Software Development]]

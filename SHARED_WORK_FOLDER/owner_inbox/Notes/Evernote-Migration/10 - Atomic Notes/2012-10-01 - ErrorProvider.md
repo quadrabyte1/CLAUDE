@@ -2,11 +2,10 @@
 title: ErrorProvider
 uid: 20121001T1950
 created: '2012-10-01'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags:
-- c#
 - software
 aliases: []
 source_url: http://developingfor.net/2008/01/17/a-good-practical-linq-example/
@@ -280,3 +279,7 @@ Comments (13)Trackbacks (1)[Leave a comment](http://developingfor.net/2008/01/17
     [http://webmingle.blogspot.com/2010_09_01_archive.html](http://webmingle.blogspot.com/2010_09_01_archive.html)
 
 ### Leave a Reply
+
+## See also
+
+- [[Software Development]]

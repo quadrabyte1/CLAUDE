@@ -3,7 +3,7 @@ title: Customizable Honeycomb Storage Wall (OpenSCAD) v2.1 Bambulabs od autora E
   Eefting | Stáhněte si zdarma STL model | Printables.com
 uid: 20241012T1602
 created: '2024-10-12'
-updated: '2024-10-12'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -192,3 +192,7 @@ Attribution\
 Customizable Honeycomb Storage Wall (OpenSCAD) v2.1 Bambulabs od autora Edwin Eefting \| Stáhněte si zdarma STL model \| Printables.com
 
 \
+
+## See also
+
+- [[3D Printing]]

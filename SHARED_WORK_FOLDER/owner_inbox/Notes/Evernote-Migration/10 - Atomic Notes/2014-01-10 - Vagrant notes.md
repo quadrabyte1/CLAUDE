@@ -2,12 +2,10 @@
 title: Vagrant notes
 uid: 20140110T2015
 created: '2014-01-10'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
-tags:
-- edx
-- vagrant
+tags: []
 aliases: []
 ---
 
@@ -24,3 +22,7 @@ Here’s a note about a tool to keep Vagrant Guest Additions up to date: [http:
 \
 
 \
+
+## See also
+
+- [[Software Development]]

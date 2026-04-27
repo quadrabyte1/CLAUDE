@@ -2,7 +2,7 @@
 title: Getting a high resolution diagram image from EA
 uid: 20250108T1602
 created: '2025-01-08'
-updated: '2025-01-08'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags:
@@ -17,3 +17,7 @@ Here is the path to use from Tom and Stefan:
 \
 
 \
+
+## See also
+
+- [[Enterprise Architect]]

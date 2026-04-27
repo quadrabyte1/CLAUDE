@@ -2,12 +2,11 @@
 title: Keil microVision tool
 uid: 20110830T2104
 created: '2011-08-30'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags:
 - arm
-- ●-●-●-work-●-●-●
 aliases: []
 ---
 
@@ -30,3 +29,7 @@ MAP 0x40000000,0x40003FFF READ WRITE
 Created with Microsoft OneNote 2010
 
 One place for all your notes and information
+
+## See also
+
+- [[Maker & Electronics]]

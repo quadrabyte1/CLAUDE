@@ -2,7 +2,7 @@
 title: Wiring the Woodshop
 uid: 20250521T1323
 created: '2025-05-21'
-updated: '2025-05-21'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -18,3 +18,7 @@ UF-B for underground, 18 inch trench
 10/3 looks like the choice, 100 ft is only \$160
 
 \
+
+## See also
+
+- [[Woodworking]]

@@ -2,7 +2,7 @@
 title: bottle cap opener
 uid: 20250625T2357
 created: '2025-06-25'
-updated: '2025-06-26'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -644,3 +644,7 @@ BE SOCIAL
 2005 - 2025 © Ruth Niles • All Rights Reserved. **Site by [Johnny Flash Productions](https://www.johnnyflash.com/)**
 
 \
+
+## See also
+
+- [[Woodworking]]

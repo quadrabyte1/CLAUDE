@@ -2,7 +2,7 @@
 title: Cut and Tilted Text - Customizable by ccox - Thingiverse
 uid: 20241112T1440
 created: '2024-11-12'
-updated: '2024-11-12'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -40,3 +40,7 @@ YFMV: Your Fonts May Vary.
   If you can use variable layer heights in your slicer: use large layers until you get to the start of the visible (tilted) characters, then switch to smaller layers. This greatly speeds up and improves the print.
 
 \
+
+## See also
+
+- [[3D Printing]]

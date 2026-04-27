@@ -1,11 +1,13 @@
 ---
-title: "MOC — ● ● ● Home ● ● ●"
+title: "MOC — ● ● ● Home ● ● ● [ARCHIVED]"
 uid: MOC-tag-● ● ● HOME ● ● ●
 created: 2026-04-23
-updated: 2026-04-23
+updated: 2026-04-27
+archived: 2026-04-27
+archive_reason: "Evernote UI decoration tag — not a real topic. 11 notes redistributed individually to relevant topic MOCs (Job Search, Software Development, Maker & Electronics) in step (b)."
 source: generated
 original_notebook: ""
-tags: [moc, ● ● ● HOME ● ● ●]
+tags: [moc]
 aliases: []
 ---
 

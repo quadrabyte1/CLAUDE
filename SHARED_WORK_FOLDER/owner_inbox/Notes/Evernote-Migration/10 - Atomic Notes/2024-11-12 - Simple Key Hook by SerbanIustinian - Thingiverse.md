@@ -2,7 +2,7 @@
 title: Simple Key Hook by SerbanIustinian - Thingiverse
 uid: 20241112T1440
 created: '2024-11-12'
-updated: '2024-11-12'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -42,3 +42,7 @@ Removed the top tray and reduced the hook number to 4.
   PLA
 
 \
+
+## See also
+
+- [[3D Printing]]

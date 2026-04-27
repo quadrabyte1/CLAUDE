@@ -2,7 +2,7 @@
 title: Honeycomb storage wall by RostaP | Download free STL model | Printables.com
 uid: 20241012T1602
 created: '2024-10-12'
-updated: '2024-10-12'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -112,3 +112,7 @@ And also you can use the second part (as shown in the picture) which can be used
 ####  
 
 \
+
+## See also
+
+- [[3D Printing]]

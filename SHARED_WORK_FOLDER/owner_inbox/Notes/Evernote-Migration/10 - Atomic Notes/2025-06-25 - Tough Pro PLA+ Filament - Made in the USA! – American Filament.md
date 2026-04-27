@@ -2,7 +2,7 @@
 title: Tough Pro PLA+ Filament - Made in the USA! – American Filament
 uid: 20250625T2357
 created: '2025-06-25'
-updated: '2025-06-25'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -249,3 +249,7 @@ Payment methods
 © 2025, [American Filament](https://americanfilament.us/) [Powered by Shopify](https://www.shopify.com/?utm_campaign=poweredby&utm_medium=shopify&utm_source=onlinestore)
 
 \
+
+## See also
+
+- [[3D Printing]]

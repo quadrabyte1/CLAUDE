@@ -2,13 +2,11 @@
 title: Coding and Modeling Standards
 uid: 20120307T2309
 created: '2012-03-07'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
 tags:
-- csharp
 - programming
-- ●-●-●-work-●-●-●
 aliases: []
 ---
 
@@ -147,3 +145,8 @@ Both ends of a relationship MUST have multiplicities indicated
 Created with Microsoft OneNote 2010
 
 One place for all your notes and information
+
+## See also
+
+- [[Software Development]]
+- [[Enterprise Architect]]

@@ -2,11 +2,10 @@
 title: Note conflict Terese's Birthday Party
 uid: 20140818T2149
 created: '2014-08-18'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes5
-tags:
-- gms
+tags: []
 aliases: []
 ---
 

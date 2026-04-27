@@ -2,11 +2,10 @@
 title: python IDE
 uid: 20131029T1835
 created: '2013-10-29'
-updated: '2024-04-01'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes4
-tags:
-- edx
+tags: []
 aliases: []
 ---
 
@@ -53,3 +52,7 @@ sef tells me to try 'disk' to look for a thumb drive
 \
 
 \
+
+## See also
+
+- [[Software Development]]

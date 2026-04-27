@@ -2,7 +2,7 @@
 title: 3D Printing Notes
 uid: 20250508T1625
 created: '2025-05-08'
-updated: '2025-05-08'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags: []
@@ -28,3 +28,7 @@ aliases: []
 \
 
 \
+
+## See also
+
+- [[3D Printing]]

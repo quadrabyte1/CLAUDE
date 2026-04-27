@@ -2,11 +2,10 @@
 title: National Instruments GPIB notes
 uid: 20130827T2023
 created: '2013-08-27'
-updated: '2024-04-02'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes3
 tags:
-- luxim
 - national-instruments
 aliases: []
 ---
@@ -32,3 +31,7 @@ trying to get the GPIB instruments to talk to my test system, i found these thin
         ☐
 
         that example works fine
+
+## See also
+
+- [[Maker & Electronics]]

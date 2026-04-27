@@ -2,7 +2,7 @@
 title: Laser Experiments October 2024
 uid: 20241009T1834
 created: '2024-10-09'
-updated: '2024-10-09'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes2
 tags: []
@@ -24,3 +24,7 @@ aliases: []
   - ☐
 
     power 70
+
+## See also
+
+- [[Laser Engraver]]

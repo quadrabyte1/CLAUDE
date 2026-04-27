@@ -2,7 +2,7 @@
 title: grandchild coaster notes
 uid: 20241030T1133
 created: '2024-10-30'
-updated: '2024-10-30'
+updated: '2026-04-27'
 source: evernote
 original_notebook: My Notes1
 tags:
@@ -45,3 +45,7 @@ aliases: []
     - ☐
 
       settings: 100%, 100%
+
+## See also
+
+- [[Laser Engraver]]

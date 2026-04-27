@@ -1244,6 +1244,90 @@ def build_fringe_mesh(
     valid_z = Z_fringe[fringe_mask]
     print(f"  Fringe Z range: {valid_z.min():.3f} .. {valid_z.max():.3f} mm")
 
+    # ── Seam-reseat: snap fringe's INNER boundary cells to the green mesh's ──
+    # actual top-boundary vertex ring. Without this step the fringe grid and
+    # the green grid are independent, so their seam vertices don't coincide
+    # in either XY or Z — producing a visible crease where the fringe meets
+    # the green (the defect Thomas reported around the 11 o'clock arc).
+    #
+    # The green mesh's top-boundary vertices are exactly those inside_mask
+    # cells that have at least one 4-neighbour outside inside_mask, at
+    # positions (xs_mm_green[c], ys_mm_green[r], Z_for_seam[r, c]).
+    #
+    # If the green is rendered terraced (greenStyle=="terraced" in the EGM),
+    # its boundary Z values are the quantized Z_plot from _build_heightmap_mesh,
+    # not the raw Z_mm. We replicate that quantization here so the seam
+    # exactly matches the green mesh's boundary, whichever style is used.
+    green_style = str(egm_data.get("greenStyle", "smooth")).lower()
+    if green_style == "terraced":
+        valid_vals = Z_mm[inside_mask]
+        z_min_g, z_max_g = valid_vals.min(), valid_vals.max()
+        step_g = (z_max_g - z_min_g) / N_CONTOUR_LEVELS
+        if step_g < 1e-9:
+            step_g = 1.0
+        Z_for_seam = np.copy(Z_mm)
+        Z_for_seam[inside_mask] = (
+            np.round((Z_for_seam[inside_mask] - z_min_g) / step_g) * step_g + z_min_g
+        )
+    else:
+        Z_for_seam = Z_mm
+
+    inner_boundary_rows = []
+    inner_boundary_cols = []
+    # Collect green top-boundary ring (mm space, with Z)
+    g_nrows, g_ncols = inside_mask.shape
+    g_bdry_pts = []  # (x, y, z)
+    for gr in range(g_nrows):
+        for gc in range(g_ncols):
+            if not inside_mask[gr, gc]:
+                continue
+            # has at least one 4-neighbour outside?
+            nbrs_outside = False
+            for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                nr, nc = gr + dr, gc + dc
+                if (nr < 0 or nr >= g_nrows or nc < 0 or nc >= g_ncols
+                        or not inside_mask[nr, nc]):
+                    nbrs_outside = True
+                    break
+            if nbrs_outside:
+                g_bdry_pts.append(
+                    (float(xs_mm_green[gc]), float(ys_mm_green[gr]),
+                     float(Z_for_seam[gr, gc]))
+                )
+    if g_bdry_pts:
+        g_bdry_arr = np.asarray(g_bdry_pts, dtype=np.float64)
+        g_bdry_kd = cKDTree(g_bdry_arr[:, :2])
+        # Fringe cell spacing (approx; grid may be anisotropic — take max for safety)
+        dx_fringe = float(xs_mm[1] - xs_mm[0])
+        dy_fringe = float(ys_mm[1] - ys_mm[0])
+        seam_radius = 1.5 * max(abs(dx_fringe), abs(dy_fringe))
+
+        # Pre-build a KD-tree of green boundary polyline for seam-cell detection
+        gbnd_kd_seam = cKDTree(gbnd)
+
+        # Build override map: (r, c) -> (x, y, z)
+        seam_override: dict[tuple[int, int], tuple[float, float, float]] = {}
+        for r in range(fringe_grid_res):
+            for c in range(fringe_grid_res):
+                if not fringe_mask[r, c]:
+                    continue
+                x = float(xs_mm[c]); y = float(ys_mm[r])
+                # cell is on the inner (green-adjacent) boundary if it sits
+                # within one fringe-grid-step of the green polyline
+                d_bnd, _ = gbnd_kd_seam.query([x, y], k=1)
+                if d_bnd > seam_radius:
+                    continue
+                # snap to nearest green top-boundary mesh vertex
+                _, gi = g_bdry_kd.query([x, y], k=1)
+                gx, gy, gz = g_bdry_arr[gi]
+                seam_override[(r, c)] = (float(gx), float(gy), float(gz))
+                Z_fringe[r, c] = gz  # keep the height array consistent
+        print(f"  Seam-reseat: snapped {len(seam_override)} fringe inner-boundary "
+              f"cells to green mesh's top-boundary ring "
+              f"(greenStyle={green_style})")
+    else:
+        seam_override = {}
+
     # --- Build mesh using the same grid-triangulation approach as _build_heightmap_mesh ---
     # We reuse that function by passing our fringe grid and mask.
     # We need to supply xs_grid and ys_grid in PIXEL space for _build_heightmap_mesh,
@@ -1257,7 +1341,13 @@ def build_fringe_mesh(
         for c in range(fringe_grid_res):
             if fringe_mask[r, c]:
                 vert_idx[r, c] = len(top_verts)
-                top_verts.append([float(xs_mm[c]), float(ys_mm[r]), float(Z_fringe[r, c])])
+                if (r, c) in seam_override:
+                    # Shared-seam vertex: exact (x,y,z) from green's top-boundary ring
+                    ox, oy, oz = seam_override[(r, c)]
+                    top_verts.append([ox, oy, oz])
+                else:
+                    top_verts.append([float(xs_mm[c]), float(ys_mm[r]),
+                                      float(Z_fringe[r, c])])
 
     # Top surface faces (only fully-fringe quads)
     top_faces: list[list[int]] = []
@@ -1966,6 +2056,8 @@ def apply_grass_texture(
     mesh: "trimesh.Trimesh",
     amplitude: float = 0.5,
     bump_spacing: float = 2.4,
+    exclude_polyline_xy: np.ndarray | None = None,
+    exclude_radius_mm: float = 0.0,
 ) -> "trimesh.Trimesh":
     """
     Apply paraboloid grass-bump displacement to the top surface of a mesh.
@@ -1986,6 +2078,12 @@ def apply_grass_texture(
     mesh        : trimesh.Trimesh — closed watertight mesh in mm coords.
     amplitude   : maximum Z displacement in mm (peak of each bump).
     bump_spacing: centre-to-centre distance between bumps in mm.
+    exclude_polyline_xy : optional (N, 2) polyline — any top-surface vertex
+        within ``exclude_radius_mm`` of this polyline is NOT displaced.  Used
+        by the fringe to freeze its seam vertices where it meets the green,
+        so the fringe-green seam stays flush after grass bumps are applied
+        only to one side.
+    exclude_radius_mm   : radius (mm) of the exclusion band around the polyline.
 
     Returns the mesh modified in place (also returns it for convenience).
     """
@@ -1998,6 +2096,17 @@ def apply_grass_texture(
         return mesh
 
     top_xy = verts[top_mask, :2]  # (M, 2)
+
+    # Build per-vertex protection mask for seam verts (fringe-green interface).
+    # We freeze these at their current Z so the seam stays flush between meshes.
+    protect = np.zeros(int(top_mask.sum()), dtype=bool)
+    if exclude_polyline_xy is not None and exclude_radius_mm > 0.0 and len(exclude_polyline_xy) >= 2:
+        ex_tree = cKDTree(exclude_polyline_xy)
+        d_ex, _ = ex_tree.query(top_xy, k=1)
+        protect = d_ex < exclude_radius_mm
+        if protect.any():
+            print(f"    Grass texture: protecting {protect.sum()} top-surface vertices "
+                  f"within {exclude_radius_mm:.2f} mm of seam polyline")
 
     x_min, x_max = top_xy[:, 0].min(), top_xy[:, 0].max()
     y_min, y_max = top_xy[:, 1].min(), top_xy[:, 1].max()
@@ -2030,12 +2139,17 @@ def apply_grass_texture(
     # Paraboloid displacement: amplitude * max(0, 1 - (r/R)^2)
     r_norm = dists / R
     dz = amplitude * np.maximum(0.0, 1.0 - r_norm ** 2)
+    # Freeze any protected (seam-adjacent) top verts so the fringe-green seam
+    # stays flush after grass is applied to the fringe only.
+    if protect.any():
+        dz = np.where(protect, 0.0, dz)
 
     # Apply displacement to top-surface vertices
     verts[top_mask, 2] += dz
 
     print(f"    Grass texture: {n_bumps} bumps, R={R:.3f} mm, amplitude={amplitude:.3f} mm, "
-          f"dz range [{dz.min():.3f}, {dz.max():.3f}] mm on {top_mask.sum()} vertices")
+          f"dz range [{dz.min():.3f}, {dz.max():.3f}] mm on {top_mask.sum()} vertices"
+          f"{' (+' + str(int(protect.sum())) + ' seam-frozen)' if protect.any() else ''}")
 
     return mesh
 
@@ -2348,9 +2462,25 @@ def run_pipeline(egm_path: str) -> str:
         print(f"  Saved untextured fringe flat: {fringe_flat_stl}")
         # Keep a reference to the flat fringe for trap height sampling
         fringe_mesh_flat = copy.deepcopy(fringe_mesh)
-        # Apply grass texture to fringe top surface
+        # Apply grass texture to fringe top surface.  IMPORTANT: the green
+        # surface added to the 3MF is the untextured (flat) version, so any
+        # grass bump applied to a fringe seam vertex opens a visible gap
+        # against the green's pinned boundary.  We freeze the seam verts here.
+        _green_bnd_mm_for_grass = _px_to_mm_2d(
+            green_boundary_px.copy(), scale_f, centroid_f
+        )
+        # Exclude-radius must cover the seam snap radius used in build_fringe_mesh
+        # (≈1.5 × fringe grid step).  A dense grid (200^2 over ±85 mm) gives
+        # ~0.86 mm step → ~1.3 mm radius; use 2.0 mm for safety.
+        _seam_exclude_radius_mm = 2.0
         print(f"  Applying grass texture to fringe (amplitude={grass_amplitude} mm, spacing={grass_spacing} mm)…")
-        apply_grass_texture(fringe_mesh, amplitude=grass_amplitude, bump_spacing=grass_spacing)
+        apply_grass_texture(
+            fringe_mesh,
+            amplitude=grass_amplitude,
+            bump_spacing=grass_spacing,
+            exclude_polyline_xy=_green_bnd_mm_for_grass,
+            exclude_radius_mm=_seam_exclude_radius_mm,
+        )
         fringe_mesh.export(fringe_stl)
         print(f"  Saved: {fringe_stl}")
     except Exception as exc:

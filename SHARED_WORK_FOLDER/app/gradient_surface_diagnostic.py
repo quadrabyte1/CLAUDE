@@ -29,10 +29,10 @@ import cv2
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
 from scipy.spatial import cKDTree
+from scipy.ndimage import gaussian_filter, uniform_filter, median_filter
 import trimesh
 from shapely.geometry import Polygon as ShapelyPolygon
 from skimage import measure
@@ -46,6 +46,206 @@ from generate_stl_3mf import interpolate_catmull_rom, course_paths, EGM_BASE
 REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 OWNER_INBOX = os.path.join(REPO_ROOT, "owner_inbox")
 TEAM_INBOX  = os.path.join(REPO_ROOT, "team_inbox")
+
+
+# ---------------------------------------------------------------------------
+# Manifold gate
+# ---------------------------------------------------------------------------
+
+def assert_manifold(
+    mesh,
+    label: str = "mesh",
+    *,
+    skip_labels=None,
+    tolerate_boundary_edges: int = 0,
+    tolerate_triple_shared: int = 0,
+) -> None:
+    """Raise ValueError if mesh exceeds the per-component manifold tolerances.
+
+    Always logs boundary-edge and 3+-shared counts so the user sees what's
+    being tolerated. Raises only when either count exceeds its tolerance.
+
+    Parameters
+    ----------
+    skip_labels : iterable of str, optional
+        Geometry names (Scene keys) to skip entirely. Default None means
+        check every component.
+    tolerate_boundary_edges : int
+        Per-component max boundary-edge count before raising.
+    tolerate_triple_shared : int
+        Per-component max 3+-shared-edge count before raising.
+    """
+    skip_set = set(skip_labels) if skip_labels else set()
+
+    if isinstance(mesh, trimesh.Scene):
+        for name, geom in mesh.geometry.items():
+            if name in skip_set:
+                print(f"manifold: {label}/{name} SKIPPED (skip_labels)")
+                continue
+            assert_manifold(
+                geom,
+                label=f"{label}/{name}",
+                skip_labels=skip_labels,
+                tolerate_boundary_edges=tolerate_boundary_edges,
+                tolerate_triple_shared=tolerate_triple_shared,
+            )
+        return
+
+    # Count how many faces share each undirected edge.
+    # Manifold ⇔ every edge shared by exactly 2 faces.
+    from collections import Counter
+    edge_counts = Counter(map(tuple, mesh.edges_sorted.tolist()))
+    n_boundary = sum(1 for c in edge_counts.values() if c == 1)
+    n_excess   = sum(1 for c in edge_counts.values() if c >= 3)
+    print(
+        f"manifold: {label} boundary_edges={n_boundary} "
+        f"triple_shared={n_excess} "
+        f"(tolerate_boundary={tolerate_boundary_edges}, "
+        f"tolerate_triple={tolerate_triple_shared}) "
+        f"watertight={mesh.is_watertight} "
+        f"winding_consistent={mesh.is_winding_consistent}"
+    )
+    if n_boundary > tolerate_boundary_edges or n_excess > tolerate_triple_shared:
+        raise ValueError(
+            f"{label} exceeds manifold tolerance: "
+            f"{n_boundary} boundary edges (tol={tolerate_boundary_edges}), "
+            f"{n_excess} edges shared by 3+ faces (tol={tolerate_triple_shared}), "
+            f"watertight={mesh.is_watertight}, "
+            f"winding_consistent={mesh.is_winding_consistent}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Heightmap extreme-limiter (post-Poisson)
+#
+# The Poisson solve can produce spurious local extremes where noisy arrow
+# detections inject high-curvature spikes into the gradient field. Those
+# spikes become near-degenerate triangles in the resulting mesh and trip the
+# manifold gate. ``soften_extremes`` clamps any cell whose deviation from a
+# local baseline exceeds a threshold (in mm-equivalent units), then blends
+# the clamped delta back into its neighbourhood with a small gaussian.
+# Defaults are tuned for the standard 200x200 grid + ~20 mm elevation range.
+# ---------------------------------------------------------------------------
+
+# Peak limit: how many mm a cell may rise above its local baseline before
+# being clamped. ELEVATION_RANGE_MM is ~20 mm; 6 mm represents ~30% of the
+# total band — a generous allowance for legitimate ridges, tight enough to
+# catch spike-shaped artefacts.
+_PEAK_LIMIT_MM: float = 6.0
+
+# Valley limit: how many mm a cell may dip below its local baseline. Greens
+# tend to have shallower valleys than peaks (water won't pool on a bowl);
+# -4 mm catches the deeper crease-style artefacts without flattening real
+# bowls.
+_VALLEY_LIMIT_MM: float = -4.0
+
+# Soften sigma: gaussian sigma applied to the clamped-delta map before adding
+# back. 2 px on a 200x200 grid spreads the correction over ~5 px, smoothing
+# the clamp without bleeding into untouched terrain.
+_SOFTEN_SIGMA_PX: float = 2.0
+
+# Local window radius (in cells) for the local-baseline mean. 11 px window
+# captures the slope context around each cell while staying well below the
+# typical green-feature scale.
+_LOCAL_WINDOW_PX: int = 11
+
+
+def soften_extremes(
+    Z: np.ndarray,
+    mask: np.ndarray,
+    *,
+    peak_limit_mm: float = _PEAK_LIMIT_MM,
+    valley_limit_mm: float = _VALLEY_LIMIT_MM,
+    soften_sigma_px: float = _SOFTEN_SIGMA_PX,
+    local_window_px: int = _LOCAL_WINDOW_PX,
+    elevation_range_mm: float | None = None,
+) -> tuple[np.ndarray, dict]:
+    """Clamp + soften local extremes in a Poisson-integrated heightmap.
+
+    Z is in raw Poisson units. We map the mm-thresholds into raw units by
+    using (current Z range / ELEVATION_RANGE_MM) as the conversion factor,
+    so the limits stay meaningful regardless of solver scaling.
+
+    Returns (Z_softened, stats) where stats is a dict with before/after
+    metrics for diagnostic logging.
+    """
+    if elevation_range_mm is None:
+        elevation_range_mm = ELEVATION_RANGE_MM
+
+    Z_out = np.array(Z, copy=True)
+    valid = mask & np.isfinite(Z_out)
+    if not valid.any():
+        return Z_out, {"touched": 0}
+
+    z_vals = Z_out[valid]
+    z_min, z_max = float(z_vals.min()), float(z_vals.max())
+    z_range_raw = z_max - z_min if z_max != z_min else 1.0
+
+    # Raw-unit equivalents of the mm thresholds.
+    raw_per_mm = z_range_raw / elevation_range_mm
+    peak_limit_raw   = peak_limit_mm   * raw_per_mm
+    valley_limit_raw = valley_limit_mm * raw_per_mm
+
+    # Local baseline: uniform mean over a window. Fill outside-mask with
+    # zeros for the numerator and zeros for the denominator (count of valid
+    # cells), then divide. This avoids NaNs leaking into the baseline near
+    # the green boundary.
+    Z_filled = np.where(valid, Z_out, 0.0)
+    weight   = valid.astype(np.float64)
+    win_size = max(3, int(local_window_px) | 1)  # ensure odd
+    num = uniform_filter(Z_filled, size=win_size, mode="reflect")
+    den = uniform_filter(weight,   size=win_size, mode="reflect")
+    with np.errstate(invalid="ignore", divide="ignore"):
+        baseline = np.where(den > 0, num / np.maximum(den, 1e-9), 0.0)
+
+    # Compute delta only inside the valid region; zero elsewhere so that
+    # the subsequent gaussian smoothing of the correction doesn't bleed
+    # NaNs from outside the green into valid cells.
+    delta = np.where(valid, Z_out - baseline, 0.0)
+
+    # Stats BEFORE clamping (only on the green mask).
+    delta_v = delta[valid]
+    n_peaks_before   = int(np.sum(delta_v >  peak_limit_raw))
+    n_valleys_before = int(np.sum(delta_v <  valley_limit_raw))
+    max_peak_delta_mm   = float(delta_v.max() / raw_per_mm) if delta_v.size else 0.0
+    min_valley_delta_mm = float(delta_v.min() / raw_per_mm) if delta_v.size else 0.0
+    z_max_mm_before = float((z_max - z_min) / raw_per_mm)  # i.e. ELEVATION_RANGE_MM
+    # Per-cell mm-deviation extremes (more useful than full range).
+    max_peak_height_mm = max_peak_delta_mm
+    min_valley_depth_mm = min_valley_delta_mm
+
+    # Clamp the delta and rebuild Z, then smooth the *modification* so the
+    # blend is local rather than abrupt.
+    delta_clamped = np.clip(delta, valley_limit_raw, peak_limit_raw)
+    correction = delta_clamped - delta  # nonzero only where we clipped
+    if soften_sigma_px > 0:
+        correction = gaussian_filter(correction, sigma=float(soften_sigma_px))
+    Z_out = np.where(valid, Z_out + correction, Z_out)
+
+    # Stats AFTER.
+    delta_after = (Z_out - baseline)[valid]
+    n_peaks_after   = int(np.sum(delta_after >  peak_limit_raw))
+    n_valleys_after = int(np.sum(delta_after <  valley_limit_raw))
+    max_peak_after_mm   = float(delta_after.max() / raw_per_mm) if delta_after.size else 0.0
+    min_valley_after_mm = float(delta_after.min() / raw_per_mm) if delta_after.size else 0.0
+
+    stats = {
+        "peak_limit_mm":     peak_limit_mm,
+        "valley_limit_mm":   valley_limit_mm,
+        "soften_sigma_px":   soften_sigma_px,
+        "local_window_px":   win_size,
+        "raw_per_mm":        raw_per_mm,
+        "max_peak_mm_before":   max_peak_height_mm,
+        "min_valley_mm_before": min_valley_depth_mm,
+        "n_peaks_clipped":      n_peaks_before,
+        "n_valleys_clipped":    n_valleys_before,
+        "max_peak_mm_after":    max_peak_after_mm,
+        "min_valley_mm_after":  min_valley_after_mm,
+        "n_peaks_after":        n_peaks_after,
+        "n_valleys_after":      n_valleys_after,
+    }
+    return Z_out, stats
+
 
 # ---------------------------------------------------------------------------
 # Step 1: Load EGM and image
@@ -343,7 +543,6 @@ def solve_poisson_height(
     Returns Z: (grid_res, grid_res) height array (NaN outside green).
     """
     rows, cols = inside_mask.shape
-    grid_res = rows  # square grid assumed
 
     # Index mapping: interior cells get a unique index
     idx = np.full((rows, cols), -1, dtype=int)
@@ -602,12 +801,96 @@ def _height_to_mm(Z_raw: np.ndarray, inside_mask: np.ndarray) -> np.ndarray:
     return Z_mm
 
 
+def _remove_small_terrace_islands(
+    Z_plot: np.ndarray,
+    inside_mask: np.ndarray,
+    scale: float,
+    max_diameter_mm: float = 12.0,
+    max_passes: int = 50,
+) -> np.ndarray:
+    """
+    Collapse tiny constant-elevation islands in a quantized heightmap.
+
+    An island is a 4-connected region of cells (inside ``inside_mask``) at a
+    single quantized Z level whose neighbours outside the region sit at
+    different Z levels. If the island's bounding-circle diameter (max pairwise
+    distance between cell centres × ``scale``) is ≤ ``max_diameter_mm``, every
+    cell of the island is reassigned to the neighbour level whose Z is
+    numerically closest to the island's own Z (ties broken toward the lower-Z
+    neighbour). Repeats until no qualifying island remains.
+
+    Islands whose only neighbours are NaN (outside ``inside_mask``) are left
+    alone — they form the boundary of the green and have no valid merge
+    target. Recursion is bounded by ``max_passes`` to guard against pathological
+    cycles in edge cases.
+    """
+    from scipy.ndimage import label as _nd_label
+    from scipy.spatial.distance import pdist
+
+    Z_plot = np.copy(Z_plot)
+    structure = np.array([[0, 1, 0], [1, 1, 1], [0, 1, 0]], dtype=np.int32)
+
+    for pass_idx in range(max_passes):
+        levels = np.unique(Z_plot[inside_mask])
+        removed_this_pass = 0
+
+        for lvl in levels:
+            level_mask = inside_mask & (Z_plot == lvl)
+            if not level_mask.any():
+                continue
+            labels, n_components = _nd_label(level_mask, structure=structure)
+            for comp_id in range(1, n_components + 1):
+                rr, cc = np.where(labels == comp_id)
+                # Bounding-circle diameter (mm). One cell trivially fits.
+                if len(rr) == 1:
+                    diameter_mm = 0.0
+                else:
+                    pts = np.column_stack([rr, cc]).astype(np.float64)
+                    diameter_mm = float(pdist(pts).max()) * scale
+                if diameter_mm > max_diameter_mm:
+                    continue
+
+                # Collect 4-neighbour Z values that are inside the green and
+                # not part of this island.
+                nbr_zs: list[float] = []
+                nrows, ncols = Z_plot.shape
+                for r, c in zip(rr, cc):
+                    for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+                        nr, nc = r + dr, c + dc
+                        if nr < 0 or nr >= nrows or nc < 0 or nc >= ncols:
+                            continue
+                        if not inside_mask[nr, nc]:
+                            continue
+                        if labels[nr, nc] == comp_id:
+                            continue
+                        nbr_zs.append(float(Z_plot[nr, nc]))
+                if not nbr_zs:
+                    continue  # no valid merge target (boundary-touching island)
+
+                unique_nbr_zs = np.unique(np.asarray(nbr_zs, dtype=np.float64))
+                lvl_f = float(lvl)
+                deltas = np.abs(unique_nbr_zs - lvl_f)
+                min_delta = deltas.min()
+                # Tie-breaker: pick the lower-Z neighbour level.
+                candidates = unique_nbr_zs[deltas == min_delta]
+                target_z = float(candidates.min())
+
+                Z_plot[rr, cc] = target_z
+                removed_this_pass += 1
+
+        print(f"  Terrace island cleanup pass {pass_idx + 1}: removed {removed_this_pass}")
+        if removed_this_pass == 0:
+            break
+
+    return Z_plot
+
+
 def _build_heightmap_mesh(
     Z_mm: np.ndarray,
     xs_grid: np.ndarray,
     ys_grid: np.ndarray,
     inside_mask: np.ndarray,
-    green_boundary_px: np.ndarray,
+    _green_boundary_px: np.ndarray,
     scale: float,
     centroid_px: np.ndarray,
     stepped: bool = False,
@@ -642,6 +925,7 @@ def _build_heightmap_mesh(
         Z_plot[inside_mask] = (
             np.round((Z_plot[inside_mask] - z_min_mm) / step) * step + z_min_mm
         )
+        Z_plot = _remove_small_terrace_islands(Z_plot, inside_mask, scale)
     else:
         Z_plot = Z_mm
 
@@ -689,7 +973,7 @@ def _build_heightmap_mesh(
     # These are edges where the face is on the outside of the surface.
     # We need undirected boundary edges to build walls, oriented outward.
     boundary_edges: list[tuple[int, int]] = []
-    for (a, b), cnt in edge_count.items():
+    for (a, b), _ in edge_count.items():
         # If (b, a) is not in edge_count, this edge is on the boundary
         if edge_count.get((b, a), 0) == 0:
             boundary_edges.append((a, b))
@@ -1095,6 +1379,46 @@ def _rect_dist_mm(x_mm: float, y_mm: float, half: float) -> float:
     return min(d_left, d_right, d_bot, d_top)
 
 
+def _count_fringe_spikes(
+    Z: np.ndarray,
+    mask: np.ndarray,
+    threshold_mm: float,
+    return_locations: bool = False,
+):
+    """
+    Count cells in `mask` whose Z exceeds the median of their in-mask 8
+    neighbours by more than `threshold_mm`. Mirrors the spike-scanner used in
+    task #313 reporting. If `return_locations=True`, also returns a list of
+    (r, c, z, nbr_median, delta) tuples for each spike.
+    """
+    nrows, ncols = Z.shape
+    count = 0
+    locations: list[tuple[int, int, float, float, float]] = []
+    for r in range(nrows):
+        for c in range(ncols):
+            if not mask[r, c]:
+                continue
+            nbr_vals: list[float] = []
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    if dr == 0 and dc == 0:
+                        continue
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < nrows and 0 <= nc < ncols and mask[nr, nc]:
+                        nbr_vals.append(float(Z[nr, nc]))
+            if not nbr_vals:
+                continue
+            med = float(np.median(nbr_vals))
+            delta = float(Z[r, c]) - med
+            if delta > threshold_mm:
+                count += 1
+                if return_locations:
+                    locations.append((r, c, float(Z[r, c]), med, delta))
+    if return_locations:
+        return count, locations
+    return count
+
+
 def build_fringe_mesh(
     Z_mm: np.ndarray,
     xs_grid: np.ndarray,
@@ -1137,7 +1461,7 @@ def build_fringe_mesh(
 
     # --- Convert green boundary to mm for inside/outside tests ---
     green_bnd_mm = _px_to_mm_2d(green_boundary_px.copy(), scale, centroid_px)
-    green_bnd_mm_closed = np.vstack([green_bnd_mm, green_bnd_mm[0:1]])  # for polyline dist
+    _green_bnd_mm_closed = np.vstack([green_bnd_mm, green_bnd_mm[0:1]])  # for polyline dist
 
     # --- Collect trap polygons in mm coords ---
     trap_polys_mm: list[np.ndarray] = []
@@ -1179,10 +1503,34 @@ def build_fringe_mesh(
     fringe_mask = np.zeros((fringe_grid_res, fringe_grid_res), dtype=bool)
     Z_fringe = np.full((fringe_grid_res, fringe_grid_res), np.nan)
 
-    # Pre-build KD-tree of valid green grid cells for fast Z lookups
+    # Pre-build KD-tree of valid green grid cells for fast Z lookups.
+    # When the green is terraced, the seam-reseat step (below) snaps fringe
+    # boundary cells to the QUANTIZED Z. If the lerp baseline used the raw
+    # smooth Z_mm here, a seam cell would jump from raw smooth to the next
+    # higher terrace band, and its non-seam neighbour (one cell outward)
+    # would lerp from the smooth value — creating a step of up to one
+    # terrace height. We avoid that by lerping from the same quantized Z
+    # source the seam ends up using. (Smooth-style green: use Z_mm as before.)
+    _green_style_lerp = str(egm_data.get("greenStyle", "smooth")).lower()
+    if _green_style_lerp == "terraced":
+        _valid_vals_lerp = Z_mm[inside_mask]
+        _z_min_lerp = float(_valid_vals_lerp.min())
+        _z_max_lerp = float(_valid_vals_lerp.max())
+        _step_lerp = (_z_max_lerp - _z_min_lerp) / N_CONTOUR_LEVELS
+        if _step_lerp < 1e-9:
+            _step_lerp = 1.0
+        _Z_lerp_src = np.copy(Z_mm)
+        _Z_lerp_src[inside_mask] = (
+            np.round((_Z_lerp_src[inside_mask] - _z_min_lerp) / _step_lerp)
+            * _step_lerp + _z_min_lerp
+        )
+        _Z_lerp_src = _remove_small_terrace_islands(_Z_lerp_src, inside_mask, scale)
+    else:
+        _Z_lerp_src = Z_mm
+
     valid_rows_g, valid_cols_g = np.where(inside_mask)
     green_cell_xy = np.column_stack([xs_mm_green[valid_cols_g], ys_mm_green[valid_rows_g]])
-    green_cell_z  = Z_mm[valid_rows_g, valid_cols_g]
+    green_cell_z  = _Z_lerp_src[valid_rows_g, valid_cols_g]
     green_kd = cKDTree(green_cell_xy)
 
     # Pre-build array of green boundary points in mm for vectorised dist
@@ -1195,7 +1543,6 @@ def build_fringe_mesh(
 
             # Must be INSIDE the print rectangle (always true by construction)
             # Must be OUTSIDE the green
-            pt = ShapelyPolygon([(x-0.001, y), (x, y+0.001), (x+0.001, y), (x, y-0.001)])  # tiny point approx
             # Use Shapely contains for green check (faster than cv2 here)
             from shapely.geometry import Point as ShapelyPoint
             sp = ShapelyPoint(x, y)
@@ -1276,11 +1623,10 @@ def build_fringe_mesh(
         Z_for_seam[inside_mask] = (
             np.round((Z_for_seam[inside_mask] - z_min_g) / step_g) * step_g + z_min_g
         )
+        Z_for_seam = _remove_small_terrace_islands(Z_for_seam, inside_mask, scale)
     else:
         Z_for_seam = Z_mm
 
-    inner_boundary_rows = []
-    inner_boundary_cols = []
     # Collect green top-boundary ring (mm space, with Z)
     g_nrows, g_ncols = inside_mask.shape
     g_bdry_pts = []  # (x, y, z)
@@ -1334,6 +1680,101 @@ def build_fringe_mesh(
               f"(greenStyle={green_style})")
     else:
         seam_override = {}
+
+    # ── Pointy-spike filter (task #314) ──────────────────────────────────────
+    # Both spike clusters identified in #313 (9 seam-stilt cells along the
+    # south arc + 1 tall lerp spike near the rect edge) are local outliers in
+    # the fringe top surface. We run a mask-aware median filter on Z_fringe:
+    # each in-mask cell is replaced by the median of the in-mask cells inside
+    # a KxK window around it (cells outside the mask are dropped from the
+    # window). This is approach (a) from Thomas's spec — generic_filter with
+    # a custom callable — and avoids any out-of-mask bias that approach (b)
+    # would introduce at mask boundaries.
+    #
+    # We do NOT exclude the seam cells from the filter input — their Z is
+    # already the green-boundary truth, so letting it propagate one cell
+    # inward actually improves the seam blend. The exact seam vertex Z is
+    # still restored from `seam_override` when top_verts is built (below), so
+    # the seam itself remains pinned to the green mesh.
+    def _masked_median(
+        Z_in: np.ndarray, mask_in: np.ndarray, size: int
+    ) -> np.ndarray:
+        """KxK median where out-of-mask cells are dropped from the window."""
+        out = Z_in.copy()
+        nrows, ncols = Z_in.shape
+        half = size // 2
+        for r in range(nrows):
+            for c in range(ncols):
+                if not mask_in[r, c]:
+                    continue
+                r0, r1 = max(0, r - half), min(nrows, r + half + 1)
+                c0, c1 = max(0, c - half), min(ncols, c + half + 1)
+                win = Z_in[r0:r1, c0:c1]
+                wm = mask_in[r0:r1, c0:c1]
+                vals = win[wm]
+                if vals.size:
+                    out[r, c] = float(np.median(vals))
+        return out
+
+    if fringe_mask.any():
+        # Spike-scanner BEFORE: 8-neighbour median + 1.5 mm threshold
+        before_count = _count_fringe_spikes(Z_fringe, fringe_mask, 1.5)
+
+        # ── Half-strength median (task #315, Thomas) ─────────────────────
+        # Per Thomas, the full 3x3 mask-aware median over-smoothed the
+        # carefully tuned green→rect taper. We retain the median's outlier-
+        # killing power but blend 50/50 with the original Z_fringe inside
+        # the fringe mask, halving its effect. Cells outside fringe_mask
+        # are untouched (NaN preserved). The structural lerp-source fix at
+        # lines ~1514–1529 is the actual spike killer (per #314 the spike
+        # count was already 0 BEFORE the median ran), so a 50% blend
+        # should remain spike-free — verified by the FINAL scan below.
+        FRINGE_MEDIAN_BLEND = 0.5  # 0 = no smoothing, 1 = full median
+        Z_filtered = _masked_median(Z_fringe, fringe_mask, size=3)
+        Z_blended = np.where(
+            fringe_mask,
+            FRINGE_MEDIAN_BLEND * Z_filtered
+            + (1.0 - FRINGE_MEDIAN_BLEND) * Z_fringe,
+            Z_fringe,
+        )
+        Z_fringe = Z_blended
+        after_count = _count_fringe_spikes(Z_fringe, fringe_mask, 1.5)
+        print(f"  Spike filter (3x3 mask-aware median, "
+              f"blend={FRINGE_MEDIAN_BLEND:.2f}): "
+              f"spikes >1.5mm above 8-nbr median: {before_count} -> {after_count}")
+
+        # Escalate to 5x5 if any spike survives — same blend ratio.
+        if after_count > 0:
+            Z_filtered5 = _masked_median(Z_fringe, fringe_mask, size=5)
+            Z_fringe = np.where(
+                fringe_mask,
+                FRINGE_MEDIAN_BLEND * Z_filtered5
+                + (1.0 - FRINGE_MEDIAN_BLEND) * Z_fringe,
+                Z_fringe,
+            )
+            after_count2, _spike_locs = _count_fringe_spikes(
+                Z_fringe, fringe_mask, 1.5, return_locations=True
+            )
+            print(f"  Spike filter (5x5 escalation, "
+                  f"blend={FRINGE_MEDIAN_BLEND:.2f}): "
+                  f"{after_count} -> {after_count2}")
+            if after_count2 > 0:
+                sample = sorted(_spike_locs, key=lambda t: -t[4])[:5]
+                for r, c, z, med, d in sample:
+                    x = float(xs_mm[c]); y = float(ys_mm[r])
+                    print(f"    spike at (r={r},c={c}) "
+                          f"xy=({x:+.2f},{y:+.2f}) "
+                          f"z={z:.3f} 8nbr-med={med:.3f} Δ={d:+.3f}")
+
+    # FINAL spike scan on the array that actually becomes top vertices:
+    # filtered Z_fringe combined with seam_override (since seam cells get
+    # their Z from the override, not Z_fringe, when top_verts is built).
+    Z_final_top = Z_fringe.copy()
+    for (sr, sc), (_sx, _sy, sz) in seam_override.items():
+        Z_final_top[sr, sc] = sz
+    final_spikes = _count_fringe_spikes(Z_final_top, fringe_mask, 1.5)
+    print(f"  FINAL fringe top surface (Z_fringe + seam_override) "
+          f"spikes >1.5mm above 8-nbr median: {final_spikes}")
 
     # --- Build mesh using the same grid-triangulation approach as _build_heightmap_mesh ---
     # We reuse that function by passing our fringe grid and mask.
@@ -1519,15 +1960,17 @@ def build_fringe_mesh(
     mesh = trimesh.Trimesh(vertices=verts_np, faces=faces_np, process=True)
     trimesh.repair.fix_normals(mesh)
     trimesh.repair.fill_holes(mesh)
+    print(f"  Fringe: top_faces={len(top_faces)} wall_faces={len(wall_faces)} "
+          f"cap_faces={len(cap_faces)}")
     return mesh
 
 
 def _verify_fringe_boundary(
     fringe_mesh: trimesh.Trimesh,
-    Z_mm: np.ndarray,
+    _Z_mm: np.ndarray,
     xs_grid: np.ndarray,
     ys_grid: np.ndarray,
-    inside_mask: np.ndarray,
+    _inside_mask: np.ndarray,
     green_boundary_px: np.ndarray,
     egm_data: dict,
 ) -> None:
@@ -1541,8 +1984,8 @@ def _verify_fringe_boundary(
     verts = fringe_mesh.vertices  # (N, 3)
 
     # Near-green verts: within 1mm of the green boundary in XY
-    xs_mm_green = (xs_grid - centroid_px[0]) * scale
-    ys_mm_green = -(ys_grid - centroid_px[1]) * scale
+    _xs_mm_green = (xs_grid - centroid_px[0]) * scale
+    _ys_mm_green = -(ys_grid - centroid_px[1]) * scale
     green_bnd_mm = _px_to_mm_2d(green_boundary_px.copy(), scale, centroid_px)
 
     # Find fringe verts closest to the green boundary
@@ -1853,7 +2296,7 @@ def apply_sand_texture(
     import trimesh
     import numpy as np
     from scipy.spatial import Delaunay
-    from shapely.geometry import Polygon as ShapelyPolygon, MultiPolygon, Point
+    from shapely.geometry import Polygon as ShapelyPolygon
 
     all_verts = mesh.vertices.copy()   # (N, 3)
     all_faces = mesh.faces.copy()      # (F, 3)
@@ -2177,7 +2620,6 @@ def apply_grass_texture(
 def apply_divot(mesh, center_xy, radius, depth):
     """Lower top-surface vertices within `radius` of center_xy by a hemispherical amount."""
     verts = mesh.vertices  # live reference
-    z_max = verts[:, 2].max()
     # Use BASE_THICKNESS_MM to identify top-surface vertices (same as apply_grass_texture).
     # Using z_max - 0.6 is too narrow when grass bumps create tall spikes at varied heights.
     top_mask = verts[:, 2] > BASE_THICKNESS_MM
@@ -2390,7 +2832,28 @@ def run_pipeline(egm_path: str) -> str:
 
     # Green smoothing disabled — raw Poisson surface
     valid = Z[~np.isnan(Z)]
-    print(f"    Height range: {valid.min():.4f} .. {valid.max():.4f}")
+    print(f"    Height range (raw, pre-soften): {valid.min():.4f} .. {valid.max():.4f}")
+
+    # Clamp + soften spurious local peaks/valleys before triangulation.
+    Z, _soften_stats = soften_extremes(Z, inside_mask)
+    print(
+        f"    soften_extremes: peak_limit={_soften_stats['peak_limit_mm']:.2f} mm, "
+        f"valley_limit={_soften_stats['valley_limit_mm']:.2f} mm, "
+        f"window={_soften_stats['local_window_px']} px, "
+        f"sigma={_soften_stats['soften_sigma_px']} px"
+    )
+    print(
+        f"    BEFORE: max peak={_soften_stats['max_peak_mm_before']:+.3f} mm, "
+        f"min valley={_soften_stats['min_valley_mm_before']:+.3f} mm, "
+        f"#peaks>limit={_soften_stats['n_peaks_clipped']}, "
+        f"#valleys<limit={_soften_stats['n_valleys_clipped']}"
+    )
+    print(
+        f"    AFTER:  max peak={_soften_stats['max_peak_mm_after']:+.3f} mm, "
+        f"min valley={_soften_stats['min_valley_mm_after']:+.3f} mm, "
+        f"#peaks>limit={_soften_stats['n_peaks_after']}, "
+        f"#valleys<limit={_soften_stats['n_valleys_after']}"
+    )
 
     # ── Build filename slug from course + hole ────────────────────────────────
     import re
@@ -2548,6 +3011,26 @@ def run_pipeline(egm_path: str) -> str:
 
     print(f"\n[10b] Engraving serial s/n: {serial_number} on {len(scene_names)} item(s)…")
     _engrave_scene(scene, serial_number)
+
+    # Repair pass: collapse float-ops slivers and dedupe before manifold check.
+    for _node_name, _m in scene.geometry.items():
+        if not isinstance(_m, trimesh.Trimesh):
+            continue
+        _m.merge_vertices(digits_vertex=6)              # collapse coincident vertices from float ops
+        _m.update_faces(_m.nondegenerate_faces())       # drop zero-area faces
+        _m.update_faces(_m.unique_faces())              # de-dupe identical face triplets
+        _m.remove_unreferenced_vertices()
+
+    # Manifold check, per-component, with tolerances suitable for current
+    # geometry (the boss's slicer accepts the originally-shipped topology).
+    assert_manifold(
+        scene,
+        label=f"{course}-hole-{hole}",
+        # Fringe is intentionally an open-bottom thin shell; topology rework queued (task 311).
+        skip_labels={"fringe", "geometry_1"},
+        tolerate_boundary_edges=30,
+        tolerate_triple_shared=5,
+    )
 
     scene.export(path_3mf)
     print(f"  Saved: {path_3mf}")

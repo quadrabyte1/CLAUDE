@@ -805,7 +805,7 @@ def _remove_small_terrace_islands(
     Z_plot: np.ndarray,
     inside_mask: np.ndarray,
     scale: float,
-    max_diameter_mm: float = 12.0,
+    max_diameter_mm: float = 6.3,
     max_passes: int = 50,
 ) -> np.ndarray:
     """
@@ -925,7 +925,6 @@ def _build_heightmap_mesh(
         Z_plot[inside_mask] = (
             np.round((Z_plot[inside_mask] - z_min_mm) / step) * step + z_min_mm
         )
-        Z_plot = _remove_small_terrace_islands(Z_plot, inside_mask, scale)
     else:
         Z_plot = Z_mm
 
@@ -1524,7 +1523,6 @@ def build_fringe_mesh(
             np.round((_Z_lerp_src[inside_mask] - _z_min_lerp) / _step_lerp)
             * _step_lerp + _z_min_lerp
         )
-        _Z_lerp_src = _remove_small_terrace_islands(_Z_lerp_src, inside_mask, scale)
     else:
         _Z_lerp_src = Z_mm
 
@@ -1623,7 +1621,6 @@ def build_fringe_mesh(
         Z_for_seam[inside_mask] = (
             np.round((Z_for_seam[inside_mask] - z_min_g) / step_g) * step_g + z_min_g
         )
-        Z_for_seam = _remove_small_terrace_islands(Z_for_seam, inside_mask, scale)
     else:
         Z_for_seam = Z_mm
 
@@ -2902,13 +2899,7 @@ def run_pipeline(egm_path: str) -> str:
     Z_mm_for_fringe = _height_to_mm(Z, inside_mask)
     fringe_mesh = None
     fringe_mesh_flat = None   # kept for trap height sampling (no texture perturbation)
-    # Compute hole position for bored cylinder in fringe.
-    # Use the expanded half so the stand hole stays at the correct corner offset.
-    _half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
-    stand_x = -_half + 20.0
-    stand_y = +_half - 20.0
-    HOLE_RADIUS = 2.38125  # 4.7625 mm diameter bored cylinder (3/16 in)
-    fringe_holes = [(stand_x, stand_y, HOLE_RADIUS)]
+    fringe_holes: list = []
     try:
         fringe_mesh = build_fringe_mesh(
             Z_mm_for_fringe,

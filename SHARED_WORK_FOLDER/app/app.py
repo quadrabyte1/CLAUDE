@@ -613,6 +613,12 @@ def serve_egm_image(course, filename):
     return send_from_directory(img_dir, filename)
 
 
+def _ensure_course_subfolders(course_root: str) -> None:
+    """Create 3MFs/, EGMs/, and Images/ under course_root if they don't exist."""
+    for sub in ("3MFs", "EGMs", "Images"):
+        os.makedirs(os.path.join(course_root, sub), exist_ok=True)
+
+
 @app.route("/api/boundaries", methods=["POST"])
 def save_boundaries():
     """Save polygon boundary coordinates as an .egm file."""
@@ -623,10 +629,12 @@ def save_boundaries():
     filename = f"{course} (Hole {hole}).egm"
     # Save to course EGMs/ folder; fall back to owner_inbox for unknown courses
     if course and course != "Unknown Course" and os.path.isdir(_EGM_BASE):
-        egm_dir = os.path.join(_EGM_BASE, course, "EGMs")
+        course_root = os.path.join(_EGM_BASE, course)
+        _ensure_course_subfolders(course_root)
+        egm_dir = os.path.join(course_root, "EGMs")
     else:
         egm_dir = os.path.join(os.path.dirname(__file__), "..", "owner_inbox")
-    os.makedirs(egm_dir, exist_ok=True)
+        os.makedirs(egm_dir, exist_ok=True)
     output = os.path.join(egm_dir, filename)
     with open(output, "w") as f:
         _json.dump(data, f, indent=2)
@@ -700,7 +708,22 @@ def load_boundaries():
     with open(fpath) as f:
         data = _json.load(f)
     data["status"] = "ok"
+    # Expose print constants so the editor can size the fringe-expansion zone
+    from generate_stl_3mf import PRINT_SIZE_MM, FRINGE_XY_EXPANSION_MM
+    data["print_size_mm"] = PRINT_SIZE_MM
+    data["fringe_xy_expansion_mm"] = FRINGE_XY_EXPANSION_MM
     return jsonify(data)
+
+
+@app.route("/api/print_constants")
+def print_constants():
+    """Return the print-size and fringe-expansion constants needed by the boundary editor."""
+    from generate_stl_3mf import PRINT_SIZE_MM, FRINGE_XY_EXPANSION_MM
+    return jsonify({
+        "status": "ok",
+        "print_size_mm": PRINT_SIZE_MM,
+        "fringe_xy_expansion_mm": FRINGE_XY_EXPANSION_MM,
+    })
 
 
 @app.route("/api/detect_boundaries", methods=["POST"])
@@ -785,6 +808,37 @@ def detect_boundaries():
             traps.append((i, area))
     traps.sort(key=lambda x: x[1], reverse=True)
     traps = traps[:5]  # max 5 traps
+
+    # --- Detect water hazards: royal blue regions ---
+    # Royal blue centers around HSV hue 120 in OpenCV's 0-179 scale. We allow
+    # 100-130 to tolerate cyan-leaning and violet-leaning blues. Saturation
+    # >=130 keeps pale/sky-blue UI overlays out. Value 130-220 excludes the
+    # darker dark-blue gradient arrows (V~60-90) that sit on the green and
+    # also excludes near-white reflections (V>220).
+    # Tuned against EliteGolfMoments/GolfCourses/PGA West-Arnold Palmer/
+    # Images/PGA West - Arnold Palmer.png — water samples there register as
+    # H=104-105, S~172, V=164-184. Stanford Hole 8 contains no water and
+    # produces 0 polygons after morphology + 500 px area filter.
+    water_mask = (
+        (hue >= 100) & (hue <= 130) &
+        (sat >= 130) &
+        (val >= 130) & (val <= 220)
+    ).astype(np.uint8) * 255
+    kernel_w = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
+    water_mask = cv2.morphologyEx(water_mask, cv2.MORPH_CLOSE, kernel_w, iterations=3)
+    water_mask = cv2.morphologyEx(water_mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)), iterations=2)
+    water_filled = binary_fill_holes(water_mask > 0)
+    water_mask = (water_filled.astype(np.uint8)) * 255
+
+    # Find individual water bodies
+    n_w, w_labels, w_stats, w_centroids = cv2.connectedComponentsWithStats(water_mask)
+    waters = []
+    for i in range(1, n_w):
+        area = w_stats[i, cv2.CC_STAT_AREA]
+        if area >= 500:
+            waters.append((i, area))
+    waters.sort(key=lambda x: x[1], reverse=True)
+    waters = waters[:5]  # max 5 water polygons (same cap as traps)
 
     def mask_to_polygon(mask, num_points):
         """Extract the largest contour from a mask and resample to num_points."""
@@ -1027,6 +1081,16 @@ def detect_boundaries():
         trap_pts = mask_to_polygon(t_mask, 16)
         if trap_pts:
             polygons.append({"name": f"Trap {idx+1}", "type": "trap", "points": trap_pts})
+
+    # Water polygons (16 points each — same as traps)
+    for idx, (label_id, area) in enumerate(waters):
+        w_mask = ((w_labels == label_id) * 255).astype(np.uint8)
+        # Smooth
+        w_mask = cv2.GaussianBlur(w_mask, (15, 15), 0)
+        _, w_mask = cv2.threshold(w_mask, 127, 255, cv2.THRESH_BINARY)
+        water_pts = mask_to_polygon(w_mask, 16)
+        if water_pts:
+            polygons.append({"name": f"Water {idx+1}", "type": "water", "points": water_pts})
 
     # Contour detection disabled — using arrow-gradient Poisson surface instead
     # polygons.extend(contour_lines)

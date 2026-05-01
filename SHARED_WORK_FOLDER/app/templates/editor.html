@@ -39,6 +39,13 @@
       Add Trap
     </button>
 
+    <button @click="addWater()"
+            :disabled="!imgLoaded"
+            :class="imgLoaded ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-yellow-500/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+      Add Water
+    </button>
+
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
           x-text="courseName + ' — Hole ' + holeName"></span>
 
@@ -48,6 +55,73 @@
             class="text-sm font-medium"></span>
       <span x-show="statusMsg && statusFilename" x-text="statusFilename" x-transition
             class="text-sm bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"></span>
+    </div>
+  </div>
+
+  {# ── Per-hole settings ─────────────────────────────────── #}
+  <div x-show="imgLoaded" x-cloak
+       class="bg-white border border-notion-border rounded-lg px-5 py-4 space-y-3">
+    <div class="flex flex-wrap gap-x-6 gap-y-3 items-end">
+
+      {# Green style #}
+      <div class="flex flex-col gap-1 min-w-[130px]">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Green style</label>
+        <select x-model="greenStyle" @change="autoSave()"
+                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+          <option value="terraced">Terraced</option>
+          <option value="smooth">Smooth</option>
+        </select>
+      </div>
+
+      {# Contour step #}
+      <div class="flex flex-col gap-1 min-w-[110px]">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Contour step (mm)</label>
+        <input type="number" x-model.number="contourStep" @change="autoSave()"
+               step="0.5" min="0.5"
+               class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      {# Grass amplitude #}
+      <div class="flex flex-col gap-1 min-w-[130px]">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Grass amplitude (mm)</label>
+        <input type="number" x-model.number="grassAmplitude" @change="autoSave()"
+               step="0.1" min="0"
+               class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      {# Grass spacing #}
+      <div class="flex flex-col gap-1 min-w-[120px]">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Grass spacing (mm)</label>
+        <input type="number" x-model.number="grassSpacing" @change="autoSave()"
+               step="0.1" min="0.5"
+               class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      {# Divider #}
+      <div class="hidden sm:block w-px self-stretch bg-notion-border mx-1"></div>
+
+      {# Flag offsets #}
+      <div class="flex flex-col gap-1">
+        <div class="flex items-center gap-1.5">
+          <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Flag offset</label>
+          <span class="text-xs text-notion-muted normal-case tracking-normal">Positive X = right, positive Y = up. Defaults to 0,0 = green center.</span>
+        </div>
+        <div class="flex gap-3">
+          <div class="flex flex-col gap-0.5 min-w-[110px]">
+            <label class="text-xs text-notion-muted">X offset (mm)</label>
+            <input type="number" x-model.number="flagOffsetXMm" @change="autoSave()"
+                   step="0.5"
+                   class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+          </div>
+          <div class="flex flex-col gap-0.5 min-w-[110px]">
+            <label class="text-xs text-notion-muted">Y offset (mm)</label>
+            <input type="number" x-model.number="flagOffsetYMm" @change="autoSave()"
+                   step="0.5"
+                   class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -290,6 +364,12 @@ function polygonEditor() {
     POINT_RADIUS: 8,
     EDGE_HIT_DIST: 10,
 
+    // Fringe-expansion constants (fetched from server; set after load)
+    printSizeMm: 171.45,
+    fringeXyExpansionMm: -1.057,
+    // Derived: extra padding on each side in image-pixel units (set by resizeCanvas)
+    fringePadPx: 0,
+
     // Contour lines — open polylines (type: "contour", closed: false)
     contours: [],          // [{name, direction, points:[{x,y}]}]
     contourMode: false,    // whether we are currently drawing a contour
@@ -298,6 +378,8 @@ function polygonEditor() {
     grassAmplitude: 0.5,   // grass bump height in mm
     grassSpacing: 2.4,     // distance between bump centers in mm
     greenStyle: 'terraced',  // 'smooth' or 'terraced'
+    flagOffsetXMm: 0.0,    // mm: move flag right (+) or left (-)
+    flagOffsetYMm: 0.0,    // mm: move flag up (+) or down (-)
     selectedContour: -1,   // index into contours[]
     // contour vertex drag state
     draggingContour: false,
@@ -349,7 +431,7 @@ function polygonEditor() {
           this.polygons = restored.filter(p => p.type !== 'contour').map(p => ({
             name: p.name,
             type: p.type,
-            color: p.type === 'green' ? '#22C55E' : '#EF4444',
+            color: p.type === 'green' ? '#22C55E' : p.type === 'water' ? '#EAB308' : '#EF4444',
             points: p.points.map(pt => ({ x: pt.x, y: pt.y })),
           }));
           this.contours = restored.filter(p => p.type === 'contour').map(p => ({
@@ -396,7 +478,7 @@ function polygonEditor() {
           this.polygons = regularPolygons.map(p => ({
             name: p.name,
             type: p.type,
-            color: p.type === 'green' ? '#22C55E' : '#EF4444',
+            color: p.type === 'green' ? '#22C55E' : p.type === 'water' ? '#EAB308' : '#EF4444',
             points: p.points,
           }));
 
@@ -429,17 +511,23 @@ function polygonEditor() {
           const totalRegions = this.polygons.length + this.contours.length;
           this.flash('Detected ' + this.polygons.length + ' region(s) + ' + this.contours.length + ' contour(s) — scale=' + this.scale.toFixed(3), true);
           this.autoSave();
-        } else {
+        } else if (result.status === 'error') {
+          console.warn('Detection server error:', result.msg);
           this.initPolygons();
           this.draw();
-          this.flash('Detection returned no results — using defaults', false);
+          this.flash('Detection failed: ' + (result.msg || 'unknown server error') + ' — using defaults', false);
+        } else {
+          // status === 'ok' but polygons.length === 0
+          this.initPolygons();
+          this.draw();
+          this.flash('Detection found no green or traps in this image — using defaults', false);
         }
       })
       .catch((err) => {
         console.error('Detection error:', err);
         this.initPolygons();
         this.draw();
-        this.flash('Detection failed — using defaults', false);
+        this.flash('Detection request failed (network or server crash) — using defaults', false);
       });
     },
 
@@ -467,7 +555,34 @@ function polygonEditor() {
       const container = canvas.parentElement;
       const maxW = container.clientWidth;
       const maxH = window.innerHeight * 0.7;
-      const aspect = this.imgW / this.imgH;
+
+      // Compute the fringe-zone padding in image-pixel space.
+      //
+      // The server uses:  scale_px_to_mm = PRINT_SIZE_MM / max(imgW, imgH)
+      //                   origin_px = [imgW/2, imgH/2]
+      //   mm = (px - origin_px) * scale_px_to_mm
+      //
+      // The fringe rect spans ±FRINGE_HALF_MM where:
+      //   FRINGE_HALF_MM = PRINT_SIZE_MM/2 + FRINGE_XY_EXPANSION_MM/2
+      //
+      // The left edge of the fringe rect in image-pixel space is:
+      //   fringe_left_px = imgW/2 - FRINGE_HALF_MM / scale_px_to_mm
+      //                  = imgW/2 - FRINGE_HALF_MM * maxDim / PRINT_SIZE_MM
+      // fringePadPx = how many pixels left of x=0 (or above y=0) the fringe reaches.
+      //             = -fringe_left_px  (positive when fringe extends beyond image)
+      const maxDim = Math.max(this.imgW, this.imgH);
+      const fringeHalfMm = this.printSizeMm / 2.0 + this.fringeXyExpansionMm / 2.0;
+      const fringeReachPx = fringeHalfMm * maxDim / this.printSizeMm; // half-extent in px
+      // Per-axis pad (may differ because image may not be square):
+      const fringePadX = Math.max(0, fringeReachPx - this.imgW / 2);
+      const fringePadY = Math.max(0, fringeReachPx - this.imgH / 2);
+      // Store a single fringePadPx (used for drag clamping) — use the larger of x/y
+      this.fringePadPx = Math.max(fringePadX, fringePadY);
+
+      // Expanded canvas dimensions in image-pixel units
+      const expandedImgW = this.imgW + 2 * fringePadX;
+      const expandedImgH = this.imgH + 2 * fringePadY;
+      const aspect = expandedImgW / expandedImgH;
 
       let cw, ch;
       if (maxW / aspect <= maxH) {
@@ -478,16 +593,18 @@ function polygonEditor() {
         cw = maxH * aspect;
       }
 
+      // scale maps image pixels → canvas CSS pixels
+      this.scale = cw / expandedImgW;
+      // offsetX/Y: where the top-left corner of the image sits in canvas CSS pixels
+      this.offsetX = fringePadX * this.scale;
+      this.offsetY = fringePadY * this.scale;
+
       // Use devicePixelRatio for crisp rendering
       const dpr = window.devicePixelRatio || 1;
       canvas.width = cw * dpr;
       canvas.height = ch * dpr;
       canvas.style.width = cw + 'px';
       canvas.style.height = ch + 'px';
-
-      this.scale = cw / this.imgW;
-      this.offsetX = 0;
-      this.offsetY = 0;
 
       this.draw();
     },
@@ -564,9 +681,37 @@ function polygonEditor() {
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Draw image
+      // Draw fringe-expansion zone background (entire canvas = fringe rect)
+      // Then draw the image centered inside it.
       if (this.imgLoaded && this.img) {
-        ctx.drawImage(this.img, 0, 0, canvas.width, canvas.height);
+        // Fringe ring: fill whole canvas with a light neutral tone
+        ctx.fillStyle = '#E8E8E8';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Subtle hatching to indicate "fringe-only, no image data here"
+        ctx.save();
+        ctx.strokeStyle = 'rgba(180,180,180,0.45)';
+        ctx.lineWidth = 1;
+        const step = 12 * dpr;
+        for (let hx = -canvas.height; hx < canvas.width + canvas.height; hx += step) {
+          ctx.beginPath();
+          ctx.moveTo(hx, 0);
+          ctx.lineTo(hx + canvas.height, canvas.height);
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // Draw the image at its offset position (inside the fringe ring)
+        const ix = this.offsetX * dpr;
+        const iy = this.offsetY * dpr;
+        const iw = this.imgW * this.scale * dpr;
+        const ih = this.imgH * this.scale * dpr;
+        ctx.drawImage(this.img, ix, iy, iw, ih);
+
+        // Thin border around the image to mark the image boundary
+        ctx.strokeStyle = 'rgba(100,100,100,0.5)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(ix, iy, iw, ih);
       }
 
       // Draw polygons
@@ -926,10 +1071,21 @@ function polygonEditor() {
         this.$refs.canvas.style.cursor = 'crosshair';
         this.draw();
       }
+
+      // Attach a global mouseup listener so releasing outside the canvas still commits the drag.
+      // Stored as _globalMouseUp so we can remove the exact same reference in onMouseUp.
+      if (!this._globalMouseUp) {
+        this._globalMouseUp = (ev) => this.onMouseUp(ev);
+        window.addEventListener('mouseup', this._globalMouseUp);
+      }
     },
 
     onMouseMove(e) {
       const { x, y } = this.canvasToImg(e);
+
+      // Soft clamp: allow vertices to reach the fringe-zone boundary (fringePadPx beyond image edge)
+      const clampX = (v) => Math.max(-this.fringePadPx, Math.min(this.imgW + this.fringePadPx, Math.round(v)));
+      const clampY = (v) => Math.max(-this.fringePadPx, Math.min(this.imgH + this.fringePadPx, Math.round(v)));
 
       if (this.draggingContour) {
         const dx = x - this.dragStartX;
@@ -937,8 +1093,8 @@ function polygonEditor() {
         this.dragStartX = x;
         this.dragStartY = y;
         const pt = this.contours[this.dragContourIdx].points[this.dragContourPtIdx];
-        pt.x = Math.max(0, Math.min(this.imgW, Math.round(pt.x + dx)));
-        pt.y = Math.max(0, Math.min(this.imgH, Math.round(pt.y + dy)));
+        pt.x = clampX(pt.x + dx);
+        pt.y = clampY(pt.y + dy);
         this.draw();
         return;
       }
@@ -949,11 +1105,11 @@ function polygonEditor() {
         this.dragStartX = x;
         this.dragStartY = y;
 
-        // Move all selected vertices by the delta
+        // Move all selected vertices by the delta; clamp to fringe-rect boundary
         for (const sv of this.selectedVerts) {
           const pt = this.polygons[sv.poly].points[sv.idx];
-          pt.x = Math.max(0, Math.min(this.imgW, Math.round(pt.x + dx)));
-          pt.y = Math.max(0, Math.min(this.imgH, Math.round(pt.y + dy)));
+          pt.x = clampX(pt.x + dx);
+          pt.y = clampY(pt.y + dy);
         }
         this.draw();
         return;
@@ -998,6 +1154,11 @@ function polygonEditor() {
     },
 
     onMouseUp(e) {
+      // Remove the global window listener attached during mousedown (handles out-of-canvas releases).
+      if (this._globalMouseUp) {
+        window.removeEventListener('mouseup', this._globalMouseUp);
+        this._globalMouseUp = null;
+      }
       if (this.draggingContour) {
         this.draggingContour = false;
         this.$refs.canvas.style.cursor = 'default';
@@ -1077,6 +1238,10 @@ function polygonEditor() {
           this.draw();
           this.flash('Vertex removed', true);
           this.autoSave();
+        } else if (this.polygons[hit.polyIdx].type === 'trap' || this.polygons[hit.polyIdx].type === 'water') {
+          // 3-vertex trap/water — delete the whole polygon rather than erroring
+          this.selectedVerts = [];
+          this.removePoly(hit.polyIdx);
         } else {
           this.flash('Minimum 3 vertices required', false);
         }
@@ -1290,23 +1455,44 @@ function polygonEditor() {
       this.autoSave();
     },
 
+    addWater() {
+      this.pushUndo();
+      const waterCount = this.polygons.filter(p => p.type === 'water').length;
+      const cx = this.imgW / 2;
+      const cy = this.imgH / 2;
+      const r = Math.min(this.imgW, this.imgH) * 0.08;
+      const pts = [];
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8 - Math.PI / 2;
+        pts.push({ x: Math.round(cx + r * Math.cos(a)), y: Math.round(cy + r * Math.sin(a)) });
+      }
+      this.polygons.push({
+        name: 'Water ' + (waterCount + 1),
+        type: 'water',
+        color: '#EAB308',
+        points: pts,
+      });
+      this.selectedPoly = this.polygons.length - 1;
+      this.draw();
+      this.flash('Water trap added - drag to position', true);
+      this.autoSave();
+    },
+
     removePoly(idx) {
-      if (this.polygons[idx].type !== 'trap') return;
+      if (this.polygons[idx].type !== 'trap' && this.polygons[idx].type !== 'water') return;
       this.pushUndo();
       this.polygons.splice(idx, 1);
       if (this.selectedPoly >= this.polygons.length) {
         this.selectedPoly = this.polygons.length - 1;
       }
-      // Rename traps
-      let tc = 0;
+      // Rename traps and water traps
+      let tc = 0, wc = 0;
       for (const p of this.polygons) {
-        if (p.type === 'trap') {
-          tc++;
-          p.name = 'Trap ' + tc;
-        }
+        if (p.type === 'trap') { tc++; p.name = 'Trap ' + tc; }
+        if (p.type === 'water') { wc++; p.name = 'Water ' + wc; }
       }
       this.draw();
-      this.flash('Trap removed', true);
+      this.flash('Polygon removed', true);
       this.autoSave();
     },
 
@@ -1338,6 +1524,8 @@ function polygonEditor() {
         grassAmplitude: this.grassAmplitude,
         grassSpacing: this.grassSpacing,
         greenStyle: this.greenStyle,
+        flagOffsetXMm: this.flagOffsetXMm,
+        flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
       };
       try {
@@ -1450,6 +1638,11 @@ function polygonEditor() {
         this.grassAmplitude = data.grassAmplitude != null ? data.grassAmplitude : 0.5;
         this.grassSpacing = data.grassSpacing != null ? data.grassSpacing : 2.4;
         this.greenStyle = data.greenStyle || 'terraced';
+        this.flagOffsetXMm = data.flagOffsetXMm != null ? data.flagOffsetXMm : 0.0;
+        this.flagOffsetYMm = data.flagOffsetYMm != null ? data.flagOffsetYMm : 0.0;
+        // Absorb print constants from server (avoids hardcoding in JS)
+        if (data.print_size_mm != null) this.printSizeMm = data.print_size_mm;
+        if (data.fringe_xy_expansion_mm != null) this.fringeXyExpansionMm = data.fringe_xy_expansion_mm;
         this.undoStack = [];
         this.redoStack = [];
         this.selectedVerts = [];
@@ -1463,7 +1656,7 @@ function polygonEditor() {
       }
     },
 
-    startNewProject() {
+    async startNewProject() {
       if (!this.dlgImage || !this.dlgCourse.trim() || !this.dlgHole.trim()) return;
       this.courseName = this.dlgCourse.trim();
       this.holeName = this.dlgHole.trim();
@@ -1471,6 +1664,15 @@ function polygonEditor() {
       const matchedImg = this.dlgImages.find(i => i.filename === this.dlgImage);
       this.selectedImageUrl = matchedImg ? matchedImg.url : '';
       this.showNewDialog = false;
+      // Fetch print constants so the fringe-expansion zone is correctly sized
+      try {
+        const cr = await fetch('/api/print_constants');
+        const cd = await cr.json();
+        if (cd.status === 'ok') {
+          this.printSizeMm = cd.print_size_mm;
+          this.fringeXyExpansionMm = cd.fringe_xy_expansion_mm;
+        }
+      } catch (_) { /* use defaults */ }
       this.undoStack = [];
       this.redoStack = [];
       this.selectedVerts = [];
@@ -1568,6 +1770,8 @@ function polygonEditor() {
         grassAmplitude: this.grassAmplitude,
         grassSpacing: this.grassSpacing,
         greenStyle: this.greenStyle,
+        flagOffsetXMm: this.flagOffsetXMm,
+        flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
       };
       this.generating = true;
@@ -1626,12 +1830,14 @@ function polygonEditor() {
         this.draw();
         return;
       }
-      // Cmd+Delete / Ctrl+Delete: remove the selected polygon if it is a trap
+      // Cmd+Delete / Ctrl+Delete: remove the selected polygon if it is a trap or water
       if ((e.metaKey || e.ctrlKey) && (e.key === 'Delete' || e.key === 'Backspace')) {
-        if (this.selectedPoly >= 0 && this.selectedPoly < this.polygons.length &&
-            this.polygons[this.selectedPoly].type === 'trap') {
-          e.preventDefault();
-          this.removePoly(this.selectedPoly);
+        if (this.selectedPoly >= 0 && this.selectedPoly < this.polygons.length) {
+          const selType = this.polygons[this.selectedPoly].type;
+          if (selType === 'trap' || selType === 'water') {
+            e.preventDefault();
+            this.removePoly(this.selectedPoly);
+          }
         }
         return;
       }
@@ -1642,21 +1848,58 @@ function polygonEditor() {
           if (a.poly !== b.poly) return b.poly - a.poly;
           return b.idx - a.idx;
         });
-        let removed = 0;
+        // Count how many verts are being removed per polygon
+        const removesPerPoly = {};
         for (const sv of sorted) {
+          removesPerPoly[sv.poly] = (removesPerPoly[sv.poly] || 0) + 1;
+        }
+        // Identify trap/water polys that would drop to < 3 — delete the whole polygon
+        const trapPolysToRemove = new Set();
+        for (const [polyIdxStr, count] of Object.entries(removesPerPoly)) {
+          const polyIdx = Number(polyIdxStr);
+          const poly = this.polygons[polyIdx];
+          if ((poly.type === 'trap' || poly.type === 'water') && poly.points.length - count < 3) {
+            trapPolysToRemove.add(polyIdx);
+          }
+        }
+        let removed = 0;
+        let greenBlocked = false;
+        for (const sv of sorted) {
+          if (trapPolysToRemove.has(sv.poly)) continue; // whole trap/water will be removed below
           const pts = this.polygons[sv.poly].points;
           if (pts.length > 3) {
             pts.splice(sv.idx, 1);
             removed++;
+          } else {
+            greenBlocked = true; // green polygon at minimum
           }
         }
         this.selectedVerts = [];
+        // Remove whole traps (in descending index order to keep indices stable)
+        for (const polyIdx of [...trapPolysToRemove].sort((a, b) => b - a)) {
+          this.polygons.splice(polyIdx, 1);
+          if (this.selectedPoly >= this.polygons.length) {
+            this.selectedPoly = this.polygons.length - 1;
+          }
+        }
+        if (trapPolysToRemove.size > 0) {
+          // Renumber remaining traps and water traps
+          let tc = 0, wc = 0;
+          for (const p of this.polygons) {
+            if (p.type === 'trap') { tc++; p.name = 'Trap ' + tc; }
+            if (p.type === 'water') { wc++; p.name = 'Water ' + wc; }
+          }
+        }
         this.draw();
-        if (removed > 0) {
-          this.flash(removed + ' vertex(es) removed', true);
+        if (trapPolysToRemove.size > 0 || removed > 0) {
           this.autoSave();
-        } else {
+        }
+        if (greenBlocked) {
           this.flash('Minimum 3 vertices required', false);
+        } else if (trapPolysToRemove.size > 0 && removed === 0) {
+          this.flash('Polygon removed', true);
+        } else if (removed > 0) {
+          this.flash(removed + ' vertex(es) removed', true);
         }
       }
     },

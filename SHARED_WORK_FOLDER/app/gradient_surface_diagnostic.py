@@ -34,7 +34,7 @@ from scipy.sparse.linalg import spsolve
 from scipy.spatial import cKDTree
 from scipy.ndimage import gaussian_filter, uniform_filter, median_filter
 import trimesh
-from shapely.geometry import Polygon as ShapelyPolygon
+from shapely.geometry import Polygon as ShapelyPolygon, box as shapely_box, MultiPolygon as ShapelyMultiPolygon
 from skimage import measure
 
 from generate_stl_3mf import interpolate_catmull_rom, course_paths, EGM_BASE
@@ -748,6 +748,22 @@ N_CONTOUR_LEVELS: int = 27        # steps for quantized surface
 # = -1.057 mm total.  v3.16 (Topo, 2026-04-23).
 FRINGE_XY_EXPANSION_MM: float = -1.057  # signed total XY offset per axis (negative = shrink); -1.057 mm = prior 0.2mm inset + 0.5% shrink
 
+# Designed structural wall thickness for printed features that need a guaranteed
+# solid wall regardless of slicer interpretation (e.g. the upper-left mounting-
+# bore "pipe" that hosts the optional ball stand). 4 perimeters × 0.4 mm nozzle =
+# 1.6 mm, which is the standard FDM-perimeter-derived wall in this project.
+# Distinct from BASE_THICKNESS_MM (build-plate slab thickness) and
+# TRAP_THICKNESS_MM (trap slab thickness). Topo, task #335 (2026-04-28).
+WALL_THICKNESS_MM: float = 1.6
+
+# Upper-left mounting-bore pipe geometry (task #335 — restored from #318 with an
+# explicit annular wall instead of a bare void through the fringe).
+# Inner bore = 3/16" = 4.7625 mm; outer = inner + 2 × WALL_THICKNESS_MM.
+MOUNT_BORE_INNER_DIAMETER_MM: float = 4.7625      # 3/16 inch
+MOUNT_BORE_INNER_RADIUS_MM: float = MOUNT_BORE_INNER_DIAMETER_MM / 2.0
+MOUNT_BORE_OUTER_RADIUS_MM: float = MOUNT_BORE_INNER_RADIUS_MM + WALL_THICKNESS_MM
+MOUNT_BORE_INSET_MM: float = 20.0                 # distance from print rect corner
+
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
     """
@@ -799,6 +815,86 @@ def _height_to_mm(Z_raw: np.ndarray, inside_mask: np.ndarray) -> np.ndarray:
         + (Z_raw[inside_mask] - z_min) / z_range * ELEVATION_RANGE_MM
     )
     return Z_mm
+
+
+def _perimeter_median_filter(
+    Z: np.ndarray,
+    inside_mask: np.ndarray,
+    window: int = 5,
+) -> np.ndarray:
+    """
+    In-place 1D sequential median around the inside_mask perimeter loop.
+
+    Walks the ordered closed perimeter of ``inside_mask`` (4-connected boundary
+    cells) and at each cell replaces ``Z[r,c]`` with the median of a length-
+    ``window`` (default 5) symmetric window centred on the cell. The center
+    sample is the cell's INITIAL value at iteration time, while the two-left
+    and one-left positions in the window have already been updated by their
+    own medians on this single pass — i.e. the filter is causal/sequential
+    (one direction around the loop), not parallel.
+
+    Loop construction uses ``cv2.findContours`` with ``RETR_EXTERNAL`` and
+    ``CHAIN_APPROX_NONE`` on ``inside_mask.astype(uint8)``, giving a closed
+    sequence of (col, row) pixel coords in order. Wraparound at the seam is
+    handled by ``(i ± k) % N`` indexing.
+
+    Returns a copy of ``Z`` with the perimeter cells modified. Cells that are
+    not on the perimeter (interior or out-of-mask) are unchanged.
+    """
+    if window < 3 or window % 2 == 0:
+        raise ValueError("window must be odd and >= 3")
+    half = window // 2
+
+    Z_out = np.copy(Z)
+    mask_u8 = inside_mask.astype(np.uint8)
+    contours, _ = cv2.findContours(
+        mask_u8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+    )
+    if not contours:
+        return Z_out
+
+    # Use the longest contour (the green proper). Smaller external contours
+    # would only appear if inside_mask had disjoint components.
+    contour = max(contours, key=lambda c: len(c))
+    # contour shape (N, 1, 2) with (x=col, y=row)
+    pts = contour.reshape(-1, 2)
+    # Drop duplicate-consecutive points (CHAIN_APPROX_NONE can repeat at
+    # corners) so the window is over distinct cells.
+    rc_seq: list[tuple[int, int]] = []
+    last = None
+    for x, y in pts:
+        rc = (int(y), int(x))
+        if rc != last:
+            rc_seq.append(rc)
+            last = rc
+    # Also drop the closing duplicate if findContours appended it.
+    if len(rc_seq) > 1 and rc_seq[0] == rc_seq[-1]:
+        rc_seq.pop()
+    n = len(rc_seq)
+    if n < window:
+        return Z_out
+
+    # Snapshot of original Z values along the loop (the "initial value" for
+    # each cell's window center). The left-side neighbours are read live from
+    # Z_out (already updated this pass); right-side neighbours come from the
+    # snapshot so they remain at their initial value until their own turn.
+    Z_init = np.array([Z[r, c] for (r, c) in rc_seq], dtype=np.float64)
+
+    for i in range(n):
+        r, c = rc_seq[i]
+        samples: list[float] = []
+        # Already-updated left neighbours (from Z_out)
+        for k in range(half, 0, -1):
+            lr, lc = rc_seq[(i - k) % n]
+            samples.append(float(Z_out[lr, lc]))
+        # The center cell's INITIAL value for this iteration
+        samples.append(float(Z_init[i]))
+        # Still-original right neighbours (from snapshot)
+        for k in range(1, half + 1):
+            samples.append(float(Z_init[(i + k) % n]))
+        Z_out[r, c] = float(np.median(samples))
+
+    return Z_out
 
 
 def _remove_small_terrace_islands(
@@ -927,6 +1023,16 @@ def _build_heightmap_mesh(
         )
     else:
         Z_plot = Z_mm
+
+    # --- Perimeter median filter (task #325, Thomas) ─────────────────────
+    # Walk the green's ordered perimeter loop and replace each boundary
+    # cell's Z with the median of a 5-cell window [two-left, one-left,
+    # this-cell-INITIAL, one-right, two-right]. Sequential/causal: by the
+    # time cell i is processed, cells i-1 and i-2 already hold their medians
+    # while i+1 and i+2 are still original. Targets the 12:00 north pointy
+    # spike cluster identified in [135] without re-introducing the south
+    # arc spike cluster (Cluster A).
+    Z_plot = _perimeter_median_filter(Z_plot, inside_mask, window=7)
 
     # --- Grid px → mm ---
     xs_mm = (xs_grid - centroid_px[0]) * scale   # shape (grid_res,)
@@ -1104,7 +1210,12 @@ def _build_heightmap_mesh(
     return mesh
 
 
-def drill_flag_hole(mesh: "trimesh.Trimesh", diameter: float = 2.5) -> "trimesh.Trimesh":
+def drill_flag_hole(
+    mesh: "trimesh.Trimesh",
+    diameter: float = 2.5,
+    x_offset_mm: float = 0.0,
+    y_offset_mm: float = 0.0,
+) -> "trimesh.Trimesh":
     """
     Subtract a vertical cylindrical hole through the XY center of the mesh.
 
@@ -1113,8 +1224,14 @@ def drill_flag_hole(mesh: "trimesh.Trimesh", diameter: float = 2.5) -> "trimesh.
 
     Parameters
     ----------
-    mesh     : watertight trimesh.Trimesh in mm coordinates
-    diameter : hole diameter in mm (default 2.5 mm for a standard flag pin)
+    mesh         : watertight trimesh.Trimesh in mm coordinates
+    diameter     : hole diameter in mm (default 2.5 mm for a standard flag pin)
+    x_offset_mm  : shift the hole center to the right by this many mm
+                   (positive = right, negative = left). Default 0.0.
+    y_offset_mm  : shift the hole center up by this many mm
+                   (positive = up in the slicer view, negative = down).
+                   Default 0.0. The mm space here is post Y-flip from
+                   _px_to_mm_2d, so +Y is "up" as seen in Bambu Studio.
 
     Returns
     -------
@@ -1123,11 +1240,14 @@ def drill_flag_hole(mesh: "trimesh.Trimesh", diameter: float = 2.5) -> "trimesh.
     import trimesh.creation
     import trimesh.boolean
 
-    # --- Find XY center of the mesh bounding box ---
+    # --- Find XY center of the mesh bounding box, then apply per-hole offsets ---
     bb = mesh.bounds  # shape (2, 3): [[xmin,ymin,zmin],[xmax,ymax,zmax]]
-    cx = (bb[0, 0] + bb[1, 0]) / 2.0
-    cy = (bb[0, 1] + bb[1, 1]) / 2.0
+    cx = (bb[0, 0] + bb[1, 0]) / 2.0 + float(x_offset_mm)
+    cy = (bb[0, 1] + bb[1, 1]) / 2.0 + float(y_offset_mm)
     z_max = bb[1, 2]
+    if x_offset_mm or y_offset_mm:
+        print(f"  Flag hole offset: ({x_offset_mm:+.2f}, {y_offset_mm:+.2f}) mm "
+              f"→ center ({cx:.2f}, {cy:.2f}) mm")
 
     # Cylinder extends 1 mm below base (z=-1) and 1 mm above top
     cyl_height = z_max + 2.0   # total height: from -1 to z_max+1
@@ -1298,11 +1418,21 @@ def save_stl_meshes(
           f"Y [{bb[0,1]:.1f}, {bb[1,1]:.1f}] Z [{bb[0,2]:.1f}, {bb[1,2]:.1f}] mm")
 
     # --- Drill flag-pin hole through both meshes ---
-    print("  Drilling 3.0mm flag hole at green center…")
+    # Per-hole offset (mm) read from EGM; default 0,0 = green-center (legacy behavior).
+    x_off = float(egm_data.get('flagOffsetXMm', 0.0) or 0.0)
+    y_off = float(egm_data.get('flagOffsetYMm', 0.0) or 0.0)
+    print(f"  Drilling 3.0mm flag hole at green center "
+          f"(flagOffset = {x_off:+.2f}, {y_off:+.2f} mm)…")
     print("  [smooth]")
-    smooth_mesh = drill_flag_hole(smooth_mesh, diameter=3.0)
+    smooth_mesh = drill_flag_hole(
+        smooth_mesh, diameter=3.0,
+        x_offset_mm=x_off, y_offset_mm=y_off,
+    )
     print("  [stepped]")
-    stepped_mesh = drill_flag_hole(stepped_mesh, diameter=3.0)
+    stepped_mesh = drill_flag_hole(
+        stepped_mesh, diameter=3.0,
+        x_offset_mm=x_off, y_offset_mm=y_off,
+    )
 
     # --- Export (optional; skipped when called from the 3MF pipeline) ---
     if smooth_out:
@@ -1432,7 +1562,8 @@ def build_fringe_mesh(
     Build a tapered fringe mesh that:
     - Surrounds the green polygon
     - Is bounded by the PRINT_SIZE_MM square centred at origin (mm coords)
-    - Excludes sand trap polygons
+    - Excludes sand trap and water polygons (so their inset slabs sit in a
+      true recess in the fringe rather than overlapping a flush surface)
     - Tapers from green-edge height down to BASE_THICKNESS_MM at the rectangle
 
     Parameters
@@ -1462,38 +1593,92 @@ def build_fringe_mesh(
     green_bnd_mm = _px_to_mm_2d(green_boundary_px.copy(), scale, centroid_px)
     _green_bnd_mm_closed = np.vstack([green_bnd_mm, green_bnd_mm[0:1]])  # for polyline dist
 
-    # --- Collect trap polygons in mm coords ---
+    # --- Collect trap + water polygons in mm coords ---
+    # Water polygons get the same fringe carve-out treatment as sand traps so
+    # their inset slabs (export_water_meshes) sit in a real void rather than on
+    # top of an unbroken fringe — overlapping slabs were the source of the
+    # 1,129 non-manifold edges Thomas reported on PGA West-Arnold Palmer #5.
+    #
+    # #347: subtract the mount-pipe footprint from each trap/water shapely
+    # polygon BEFORE the union → traps_union. Otherwise the fringe carve-out
+    # would remove material under the pipe where there's no longer any
+    # trap/water material to host the slab — the pipe would sit on a hole.
     trap_polys_mm: list[np.ndarray] = []
     trap_shapely: list[ShapelyPolygon] = []
+    water_polys_mm: list[np.ndarray] = []
+    water_shapely: list[ShapelyPolygon] = []
+
+    # Build pipe-footprint Shapely circles from the holes list. Each hole is
+    # (cx, cy, radius). We subtract these from the trap/water shapely polygons
+    # used for the carve-out union so the void only spans where slab material
+    # actually lives.
+    _hole_circles: list[ShapelyPolygon] = []
+    if holes:
+        from shapely.geometry import Point as _ShapelyPoint
+        for _hcx, _hcy, _hr in holes:
+            _hole_circles.append(_ShapelyPoint(_hcx, _hcy).buffer(_hr))
+
     for poly in egm_data.get("polygons", []):
-        if poly.get("type") == "trap":
-            # poly["points"] is a list of {"x": float, "y": float} dicts
-            try:
-                pts_px = interpolate_catmull_rom(poly["points"])
-            except Exception:
-                pts_px = np.array([[p["x"], p["y"]] for p in poly["points"]], dtype=np.float64)
-            pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
+        ptype = poly.get("type")
+        if ptype not in ("trap", "water"):
+            continue
+        # poly["points"] is a list of {"x": float, "y": float} dicts
+        try:
+            pts_px = interpolate_catmull_rom(poly["points"])
+        except Exception:
+            pts_px = np.array([[p["x"], p["y"]] for p in poly["points"]], dtype=np.float64)
+        pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
+        try:
+            sp = ShapelyPolygon(pts_mm)
+            if not sp.is_valid:
+                sp = sp.buffer(0)
+            # Subtract every pipe-hole circle from the carve-out polygon.
+            for _hc in _hole_circles:
+                if sp.intersects(_hc):
+                    sp_diff = sp.difference(_hc)
+                    if not sp_diff.is_empty:
+                        sp = sp_diff if not isinstance(sp_diff, ShapelyMultiPolygon) \
+                            else max(sp_diff.geoms, key=lambda g: g.area)
+        except Exception:
+            sp = None
+        if ptype == "trap":
             trap_polys_mm.append(pts_mm)
-            try:
-                trap_shapely.append(ShapelyPolygon(pts_mm))
-            except Exception:
-                pass
+            if sp is not None:
+                trap_shapely.append(sp)
+        else:  # water
+            water_polys_mm.append(pts_mm)
+            if sp is not None:
+                water_shapely.append(sp)
 
     # --- Build Shapely green polygon for point-in-polygon tests ---
     green_shapely = ShapelyPolygon(green_bnd_mm)
     if not green_shapely.is_valid:
         green_shapely = green_shapely.buffer(0)
 
-    # Union all traps
-    if trap_shapely:
+    # Union all traps + water polygons. They share the same carve-out role:
+    # any cell falling inside either type must be excluded from the fringe so
+    # the corresponding slab can drop into a real recess.
+    #
+    # Fringe-rectangle clip note (#343): the trap/water mesh path clips each
+    # polygon to the fringe rectangle (see _clip_polygon_to_fringe_rect, used
+    # in export_trap_stls / export_water_meshes). We do NOT need to clip
+    # `traps_union` here because the fringe builder loops over a grid spanning
+    # exactly [-half, +half] on each axis (xs_mm / ys_mm above), so the
+    # `traps_union.contains(sp)` test is only ever consulted for points inside
+    # the fringe rectangle. Any portion of a trap/water polygon outside the
+    # rectangle simply has no fringe cells to carve out — the implicit clip
+    # by the iteration domain matches the explicit clip applied to the slab.
+    _carve_shapely = trap_shapely + water_shapely
+    if _carve_shapely:
         from shapely.ops import unary_union
-        traps_union = unary_union(trap_shapely)
+        traps_union = unary_union(_carve_shapely)
     else:
         traps_union = None
 
     print(f"  Fringe grid: {fringe_grid_res}x{fringe_grid_res} over ±{half:.2f} mm")
     print(f"  Green boundary: {len(green_bnd_mm)} mm-space points")
     print(f"  Trap polygons: {len(trap_polys_mm)}")
+    print(f"  Water polygons: {len(water_polys_mm)}")
     if holes:
         print(f"  Baked holes: {holes}")
 
@@ -1526,6 +1711,13 @@ def build_fringe_mesh(
     else:
         _Z_lerp_src = Z_mm
 
+    # Apply perimeter median filter to the lerp source so it matches the
+    # filtered Z_for_seam below (built with the same recipe + filter). This
+    # keeps the lerp baseline at the green edge and the seam-reseat snap
+    # targets in lockstep — no step at the seam between the lerp source and
+    # the seam vertices.
+    _Z_lerp_src = _perimeter_median_filter(_Z_lerp_src, inside_mask, window=7)
+
     valid_rows_g, valid_cols_g = np.where(inside_mask)
     green_cell_xy = np.column_stack([xs_mm_green[valid_cols_g], ys_mm_green[valid_rows_g]])
     green_cell_z  = _Z_lerp_src[valid_rows_g, valid_cols_g]
@@ -1547,7 +1739,7 @@ def build_fringe_mesh(
             if green_shapely.contains(sp):
                 continue  # inside green → skip
 
-            # Must be OUTSIDE all traps
+            # Must be OUTSIDE all traps and water polygons (carve-out region)
             if traps_union is not None and traps_union.contains(sp):
                 continue
 
@@ -1623,6 +1815,15 @@ def build_fringe_mesh(
         )
     else:
         Z_for_seam = Z_mm
+
+    # Apply perimeter median filter to Z_for_seam so the seam Z values match
+    # the green mesh's filtered top-boundary vertices (which had the same
+    # filter applied inside _build_heightmap_mesh). Without this the seam
+    # snap-targets here would not coincide with the green mesh's actual
+    # boundary Z, re-opening the seam crease. Same filter also runs over
+    # the lerp source (since Z_for_seam == _Z_lerp_src after #314 alignment
+    # for terraced style — the smooth case lerp source still tracks Z_mm).
+    Z_for_seam = _perimeter_median_filter(Z_for_seam, inside_mask, window=7)
 
     # Collect green top-boundary ring (mm space, with Z)
     g_nrows, g_ncols = inside_mask.shape
@@ -2021,6 +2222,93 @@ def _verify_fringe_boundary(
         print("  No fringe top-surface verts near rect boundary found")
 
 
+def build_mount_pipe_mesh(
+    cx: float,
+    cy: float,
+    inner_radius: float,
+    outer_radius: float,
+    z_top: float,
+    n_seg: int = 64,
+) -> trimesh.Trimesh:
+    """
+    Build a watertight hollow cylinder ("pipe") for the upper-left mounting
+    bore: a vertical annulus extruded from z=0 to z=z_top, with a clean
+    through-bore at radius `inner_radius` and an outer wall at `outer_radius`.
+
+    The mesh has four surfaces, all closed and CCW-outward:
+      - outer cylinder wall (radius=outer_radius, z in [0, z_top])
+      - inner cylinder wall (radius=inner_radius, z in [0, z_top])
+      - top annulus cap at z=z_top (between inner and outer radius)
+      - bottom annulus cap at z=0 (between inner and outer radius)
+
+    The bore (radius < inner_radius) is open from top to bottom, exactly as a
+    pipe should be. Designed for task #335: a structural wall around a 3/16"
+    mounting bore in the upper-left fringe corner.
+    """
+    if z_top <= 0.0:
+        raise ValueError(f"build_mount_pipe_mesh: z_top must be > 0 (got {z_top})")
+    if inner_radius >= outer_radius:
+        raise ValueError(
+            f"build_mount_pipe_mesh: inner_radius ({inner_radius}) must be < "
+            f"outer_radius ({outer_radius})"
+        )
+
+    angles = np.linspace(0.0, 2.0 * np.pi, n_seg, endpoint=False)
+    cos_a = np.cos(angles)
+    sin_a = np.sin(angles)
+
+    # Vertex layout: 4 rings of n_seg vertices each.
+    # Ring 0: outer-bottom (radius=outer_radius, z=0)
+    # Ring 1: outer-top    (radius=outer_radius, z=z_top)
+    # Ring 2: inner-bottom (radius=inner_radius, z=0)
+    # Ring 3: inner-top    (radius=inner_radius, z=z_top)
+    verts: list[list[float]] = []
+    for j in range(n_seg):
+        verts.append([cx + outer_radius * cos_a[j], cy + outer_radius * sin_a[j], 0.0])
+    for j in range(n_seg):
+        verts.append([cx + outer_radius * cos_a[j], cy + outer_radius * sin_a[j], z_top])
+    for j in range(n_seg):
+        verts.append([cx + inner_radius * cos_a[j], cy + inner_radius * sin_a[j], 0.0])
+    for j in range(n_seg):
+        verts.append([cx + inner_radius * cos_a[j], cy + inner_radius * sin_a[j], z_top])
+
+    def ob(j): return j                    # outer-bottom index
+    def ot(j): return n_seg + j            # outer-top index
+    def ib(j): return 2 * n_seg + j        # inner-bottom index
+    def it(j): return 3 * n_seg + j        # inner-top index
+
+    faces: list[list[int]] = []
+    for j in range(n_seg):
+        j1 = (j + 1) % n_seg
+
+        # Outer wall — outward normal points away from axis (+radial).
+        # Quad (ob[j], ob[j1], ot[j1], ot[j]) → 2 CCW tris when viewed from +radial.
+        faces.append([ob(j),  ob(j1), ot(j1)])
+        faces.append([ob(j),  ot(j1), ot(j)])
+
+        # Inner wall — outward normal points TOWARD axis (−radial), since the
+        # bore is a void inside the pipe. Reverse winding vs outer wall.
+        faces.append([ib(j),  it(j1), ib(j1)])
+        faces.append([ib(j),  it(j),  it(j1)])
+
+        # Top annulus cap at z=z_top — outward normal is +Z.
+        # Quad outer-top j → outer-top j1 → inner-top j1 → inner-top j.
+        faces.append([ot(j),  it(j1), ot(j1)])
+        faces.append([ot(j),  it(j),  it(j1)])
+
+        # Bottom annulus cap at z=0 — outward normal is −Z (reverse winding).
+        faces.append([ob(j),  ob(j1), ib(j1)])
+        faces.append([ob(j),  ib(j1), ib(j)])
+
+    mesh = trimesh.Trimesh(
+        vertices=np.asarray(verts, dtype=np.float64),
+        faces=np.asarray(faces, dtype=np.int64),
+        process=True,
+    )
+    trimesh.repair.fix_normals(mesh)
+    return mesh
+
+
 # ---------------------------------------------------------------------------
 # Step 9: Contour lines debug image
 # ---------------------------------------------------------------------------
@@ -2106,6 +2394,64 @@ TRAP_THICKNESS_MM: float = 10.0     # flat slab thickness for traps
 PRINT_TOLERANCE_MM: float = 0.03125  # inset each piece for easier fit
 
 
+def _clip_polygon_to_fringe_rect(
+    poly: ShapelyPolygon,
+    label: str,
+) -> "ShapelyPolygon | None":
+    """
+    Clip a trap or water polygon to the fringe rectangle bounding the
+    printable assembly. Thomas's rule: any trap or water shape that crosses
+    the fringe rectangle's straight edges must be cut at the rectangle so
+    nothing pokes past the frame.
+
+    The rectangle is centred at the origin in mm space and uses the same
+    half-extent as the fringe builder:
+
+        _half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+
+    Returns:
+      * The clipped Polygon if the input intersects the rectangle (possibly
+        equal to the input if it was already entirely inside).
+      * None if the input lies entirely outside the rectangle (caller should
+        skip emitting any mesh for it). A skip log is printed here.
+
+    If the intersection produces a MultiPolygon (rare — only if a thin
+    trap/water shape is sliced in two by the rectangle), the largest piece
+    by area is returned and the discarded pieces are logged.
+    """
+    _half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+    fringe_rect = shapely_box(-_half, -_half, +_half, +_half)
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+    clipped = poly.intersection(fringe_rect)
+    if clipped.is_empty:
+        print(f"  skipped {label}: entirely outside fringe rectangle")
+        return None
+    if isinstance(clipped, ShapelyMultiPolygon):
+        parts = sorted(list(clipped.geoms), key=lambda g: g.area, reverse=True)
+        kept = parts[0]
+        dropped = parts[1:]
+        if dropped:
+            dropped_areas = ", ".join(f"{p.area:.2f}" for p in dropped)
+            print(f"  {label}: clip produced MultiPolygon — kept largest "
+                  f"({kept.area:.2f} mm^2), discarded {len(dropped)} part(s) "
+                  f"with areas [{dropped_areas}] mm^2")
+        return kept
+    if isinstance(clipped, ShapelyPolygon):
+        return clipped
+    # Fallback: GeometryCollection or other — try to extract polygon area
+    try:
+        polys = [g for g in clipped.geoms if isinstance(g, ShapelyPolygon) and not g.is_empty]
+        if not polys:
+            print(f"  skipped {label}: clip yielded no polygon geometry")
+            return None
+        polys.sort(key=lambda g: g.area, reverse=True)
+        return polys[0]
+    except Exception:
+        print(f"  skipped {label}: unrecognised clip geometry {type(clipped).__name__}")
+        return None
+
+
 def export_trap_stls(
     egm_data: dict,
     green_boundary_px: np.ndarray,
@@ -2113,6 +2459,7 @@ def export_trap_stls(
     fringe_mesh: "trimesh.Trimesh | None" = None,
     stl_dir: str | None = None,
     write_stls: bool = True,
+    pipe_circle: "ShapelyPolygon | None" = None,
 ) -> list:
     """
     For every polygon of type 'trap' in egm_data, build a flat inset slab.
@@ -2172,8 +2519,25 @@ def export_trap_stls(
             # Convert pixel coords → mm, Y-flipped
             pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
 
-            # Apply tolerance inset using Shapely
             shapely_trap = ShapelyPolygon(pts_mm)
+
+            # #347: subtract the mount-pipe footprint BEFORE the fringe-rect
+            # clip so the rectangle clip sees the post-subtraction shape and
+            # the trap mesh doesn't overlap the pipe column.
+            if pipe_circle is not None:
+                shapely_trap = _subtract_pipe_from_polygon(
+                    shapely_trap, pipe_circle, f"Trap {i}"
+                )
+                if shapely_trap is None:
+                    continue
+
+            # Clip to fringe rectangle so the trap never extends past the
+            # printable frame edges (Thomas's rule, see #343).
+            shapely_trap = _clip_polygon_to_fringe_rect(shapely_trap, f"Trap {i}")
+            if shapely_trap is None:
+                continue
+
+            # Apply tolerance inset using Shapely
             if not shapely_trap.is_valid:
                 shapely_trap = shapely_trap.buffer(0)
             shapely_inset = shapely_trap.buffer(-PRINT_TOLERANCE_MM)
@@ -2239,6 +2603,143 @@ def export_trap_stls(
         except Exception as exc:
             import traceback
             print(f"  ERROR exporting trap {i}: {exc}")
+            traceback.print_exc()
+
+    return results
+
+
+def export_water_meshes(
+    egm_data: dict,
+    green_boundary_px: np.ndarray,
+    slug: str,
+    fringe_mesh: "trimesh.Trimesh | None" = None,
+    stl_dir: str | None = None,
+    write_stls: bool = True,
+    pipe_circle: "ShapelyPolygon | None" = None,
+) -> list:
+    """
+    Build flat slab meshes for every polygon of type 'water' in egm_data.
+
+    Mirrors export_trap_stls: same px→mm transform, same Catmull-Rom interp,
+    same PRINT_TOLERANCE_MM inset, same fringe-Z minimum sampling for the
+    deck height. The only differences:
+      * Skips the sand-grain rake texture (water is a smooth flat slab).
+      * Scene node name uses ``water_N`` so _filament_for_scene_name routes
+        the geometry to extruder 4.
+      * STL files (when written) use ``{slug}_water_N.stl``.
+
+    Returns the same shape as export_trap_stls: list of file paths when
+    ``write_stls`` is True, else list of (node_name, trimesh.Trimesh).
+    """
+    from scipy.spatial import cKDTree as _cKDTree
+    from shapely.geometry import Point as ShapelyPoint
+
+    if write_stls:
+        if stl_dir is None:
+            course = egm_data.get("course", "")
+            if course:
+                stl_dir = course_paths(course)["stls"]
+            else:
+                stl_dir = OWNER_INBOX
+        os.makedirs(stl_dir, exist_ok=True)
+
+    scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
+
+    water_polygons = [p for p in egm_data.get("polygons", []) if p.get("type") == "water"]
+    if not water_polygons:
+        print("  No water polygons found in EGM data.")
+        return []
+
+    fringe_kd = None
+    fringe_verts_top = None
+    if fringe_mesh is not None:
+        all_verts = fringe_mesh.vertices
+        top_mask = all_verts[:, 2] > 0.0
+        fringe_verts_top = all_verts[top_mask]
+        if len(fringe_verts_top) > 0:
+            fringe_kd = _cKDTree(fringe_verts_top[:, :2])
+        else:
+            print("  WARNING: fringe mesh has no top-surface vertices (Z>0); water heights will fall back to fixed.")
+
+    results: list = []
+    for i, water_poly in enumerate(water_polygons, start=1):
+        try:
+            pts_px = interpolate_catmull_rom(water_poly["points"])
+            pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
+
+            shapely_water = ShapelyPolygon(pts_mm)
+
+            # #347: subtract the mount-pipe footprint BEFORE the fringe-rect
+            # clip so the rectangle clip sees the post-subtraction shape and
+            # the water mesh doesn't overlap the pipe column. PGA West-Arnold
+            # Palmer #5 — water polygon spans the upper-left fringe corner.
+            if pipe_circle is not None:
+                shapely_water = _subtract_pipe_from_polygon(
+                    shapely_water, pipe_circle, f"Water {i}"
+                )
+                if shapely_water is None:
+                    continue
+
+            # Clip to fringe rectangle (#343) — water hazards on hole 5 of
+            # PGA West-Arnold Palmer were leaking past the frame edge.
+            shapely_water = _clip_polygon_to_fringe_rect(shapely_water, f"Water {i}")
+            if shapely_water is None:
+                continue
+
+            if not shapely_water.is_valid:
+                shapely_water = shapely_water.buffer(0)
+            shapely_inset = shapely_water.buffer(-PRINT_TOLERANCE_MM)
+
+            if shapely_inset.is_empty:
+                print(f"  Water {i}: inset produced empty polygon — skipping.")
+                continue
+
+            # Sample fringe Z over the water footprint, take the minimum so the
+            # slab never pokes above the surrounding surface.
+            if fringe_kd is not None:
+                minx, miny, maxx, maxy = shapely_inset.bounds
+                n_sample = 12
+                xs_s = np.linspace(minx, maxx, n_sample)
+                ys_s = np.linspace(miny, maxy, n_sample)
+                sample_pts = []
+                for sx in xs_s:
+                    for sy in ys_s:
+                        if shapely_inset.contains(ShapelyPoint(sx, sy)):
+                            sample_pts.append([sx, sy])
+                cx, cy = shapely_inset.centroid.x, shapely_inset.centroid.y
+                if not sample_pts:
+                    sample_pts = [[cx, cy]]
+                sample_pts = np.array(sample_pts)
+                _, idxs = fringe_kd.query(sample_pts)
+                sampled_z = fringe_verts_top[idxs, 2]
+                water_height = float(sampled_z.min())
+                print(f"  Water {i}: fringe Z min over {len(sample_pts)} samples = {water_height:.2f} mm")
+            else:
+                water_height = TRAP_THICKNESS_MM
+                print(f"  Water {i}: no fringe mesh — using fixed height {water_height} mm")
+
+            from generate_stl_3mf import _build_slab_from_shapely
+            mesh = _build_slab_from_shapely(shapely_inset, water_height)
+            # No sand-grain texture — water is a smooth slab.
+
+            bb = mesh.bounds
+            print(f"  Water {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "
+                  f"watertight={mesh.is_watertight}, "
+                  f"X[{bb[0,0]:.1f},{bb[1,0]:.1f}] Y[{bb[0,1]:.1f},{bb[1,1]:.1f}] mm")
+
+            if write_stls:
+                out_path = os.path.join(stl_dir, f"{slug}_water_{i}.stl")
+                mesh.export(out_path)
+                print(f"  Saved: {out_path}")
+                results.append(out_path)
+            else:
+                # Scene name MUST start with "water" so _filament_for_scene_name
+                # routes it to extruder 4 (per the convention in #329).
+                results.append((f"water_{i}", mesh))
+
+        except Exception as exc:
+            import traceback
+            print(f"  ERROR exporting water {i}: {exc}")
             traceback.print_exc()
 
     return results
@@ -2370,9 +2871,25 @@ def apply_sand_texture(
     grid_xy = np.column_stack([gx.ravel(), gy.ravel()])  # (G, 2)
 
     # Vectorised point-in-polygon using shapely prepared geometry.
+    #
+    # Inset the polygon by one grid_step before filtering: interior grid points
+    # that land on or very close to the rim (especially along long near-straight
+    # edges) cause Delaunay to bridge consecutive rim verts with thin triangles
+    # that skip ahead, leaving rim edges (i, i+1) without a matching top face
+    # and producing a non-manifold seam after wall merge. Buffering the
+    # filter-polygon inward keeps grid points clear of the rim, so Delaunay
+    # mates rim points directly to nearby interior verts and every rim edge
+    # is preserved. (Topo, task #339 — fixes PGA West Hole 5 Trap 1: 141 → 15
+    # boundary edges, well below the tol=30 manifold gate.)
     from shapely import prepare, contains_xy
-    prepare(shapely_poly)
-    inside_mask = contains_xy(shapely_poly, grid_xy[:, 0], grid_xy[:, 1])
+    SAND_GRID_BOUNDARY_INSET_FACTOR = 1.0  # in units of grid_step
+    shapely_inner = shapely_poly.buffer(-grid_step * SAND_GRID_BOUNDARY_INSET_FACTOR)
+    if shapely_inner.is_empty:
+        # Polygon too thin for the inset — fall back to the un-inset polygon.
+        # Better to risk a few boundary edges than skip the texture entirely.
+        shapely_inner = shapely_poly
+    prepare(shapely_inner)
+    inside_mask = contains_xy(shapely_inner, grid_xy[:, 0], grid_xy[:, 1])
     grid_xy_in  = grid_xy[inside_mask]                # (M, 2) — interior grid pts
 
     if len(grid_xy_in) < 3:
@@ -2382,7 +2899,8 @@ def apply_sand_texture(
     n_grid = len(grid_xy_in)
     print(f"    Sand texture grid: step={grid_step:.3f} mm, "
           f"bbox {x_max-x_min:.1f}×{y_max-y_min:.1f} mm → "
-          f"{len(xs)}×{len(ys)} candidates → {n_grid} inside polygon")
+          f"{len(xs)}×{len(ys)} candidates → {n_grid} inside polygon "
+          f"(boundary inset = {grid_step * SAND_GRID_BOUNDARY_INSET_FACTOR:.3f} mm)")
 
     # Enforce vertex budget: 150 K per trap.
     MAX_GRID_PTS = 150_000
@@ -2392,11 +2910,16 @@ def apply_sand_texture(
         print(f"    Sand texture: grid too large ({n_grid} pts); "
               f"increasing step {grid_step:.3f} → {new_step:.3f} mm")
         grid_step = new_step
+        # Re-inset with the new grid_step so the boundary clearance scales with it.
+        shapely_inner = shapely_poly.buffer(-grid_step * SAND_GRID_BOUNDARY_INSET_FACTOR)
+        if shapely_inner.is_empty:
+            shapely_inner = shapely_poly
+        prepare(shapely_inner)
         xs = np.arange(x_min, x_max + grid_step, grid_step)
         ys = np.arange(y_min, y_max + grid_step, grid_step)
         gx, gy = np.meshgrid(xs, ys)
         grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
-        inside_mask = contains_xy(shapely_poly, grid_xy[:, 0], grid_xy[:, 1])
+        inside_mask = contains_xy(shapely_inner, grid_xy[:, 0], grid_xy[:, 1])
         grid_xy_in  = grid_xy[inside_mask]
         n_grid = len(grid_xy_in)
         print(f"    Sand texture: after step increase → {n_grid} grid points")
@@ -2783,6 +3306,221 @@ def build_ball_stand(
 
 
 # ---------------------------------------------------------------------------
+# 3MF post-processing — per-object filament/extruder metadata (Bambu Studio)
+# ---------------------------------------------------------------------------
+
+def _filament_for_scene_name(name: str) -> int:
+    """
+    Map a scene node name to a Bambu Studio extruder/filament index.
+
+    Convention:
+        green*  → 1
+        fringe* → 2
+        trap*   → 3   (sand traps; "sand_trap*" also matches)
+        water*  → 4   (water traps; placeholder until EGM gains type='water')
+
+    Default for anything unrecognised is 1, so unknown geometries don't
+    silently land on a high extruder slot the user has nothing loaded into.
+    """
+    n = (name or "").lower()
+    if n.startswith("water"):
+        return 4
+    if n.startswith("sand_trap") or n.startswith("trap"):
+        return 3
+    if n.startswith("fringe"):
+        return 2
+    if n.startswith("green"):
+        return 1
+    return 1
+
+
+def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
+    """
+    Post-process a trimesh-written 3MF to add per-object extruder assignments
+    that Bambu Studio / OrcaSlicer understand.
+
+    trimesh.Scene.export writes a single ``3D/3dmodel.model`` file with one
+    ``<object id="N" name="geometry_K" ...>`` per scene geometry, in the same
+    order they were added to the Scene. Bambu reads extruder assignments out
+    of ``Metadata/model_settings.config`` (one ``<object id="N">`` block per
+    model object, with a ``<metadata key="extruder" value="M"/>`` child and
+    a matching ``<part>`` block).
+
+    This function:
+      1. Opens ``path_3mf`` as a zip and parses ``3D/3dmodel.model``.
+      2. Reads each ``<object>``'s id (and name attribute, e.g. "geometry_0").
+      3. Pairs that ordered list with ``scene_names`` (same order — both come
+         from Scene.geometry insertion order) to derive the extruder via
+         ``_filament_for_scene_name``.
+      4. Writes a fresh ``Metadata/model_settings.config`` into the zip.
+
+    If counts don't line up, falls back to extruder=1 for everything and
+    prints a warning rather than silently mis-tagging.
+    """
+    import zipfile
+    import shutil
+    import re as _re
+    import xml.etree.ElementTree as _ET
+
+    # --- 1. Read 3D/3dmodel.model out of the existing zip ---
+    with zipfile.ZipFile(path_3mf, "r") as zin:
+        try:
+            model_xml = zin.read("3D/3dmodel.model").decode("utf-8")
+        except KeyError:
+            print(f"  WARNING: 3D/3dmodel.model missing from {path_3mf}; "
+                  f"cannot inject extruder metadata.")
+            return
+        existing_names = set(zin.namelist())
+
+    # --- 2. Pull (object_id, object_name) in document order ---
+    # ElementTree handles namespaces but we only need the attributes.
+    ns = "{http://schemas.microsoft.com/3dmanufacturing/core/2015/02}"
+    try:
+        root = _ET.fromstring(model_xml)
+    except _ET.ParseError as exc:
+        print(f"  WARNING: failed to parse 3dmodel.model ({exc}); "
+              f"skipping extruder metadata.")
+        return
+
+    object_entries: list[tuple[str, str]] = []  # (object_id, name)
+    for obj in root.iter(f"{ns}object"):
+        oid = obj.attrib.get("id", "")
+        oname = obj.attrib.get("name", "")
+        if oid:
+            object_entries.append((oid, oname))
+
+    if len(object_entries) != len(scene_names):
+        print(f"  WARNING: 3dmodel.model has {len(object_entries)} objects but "
+              f"scene_names has {len(scene_names)}; falling back to extruder=1 "
+              f"for every object.")
+        mapping = [(oid, oname, 1) for (oid, oname) in object_entries]
+    else:
+        mapping = [
+            (oid, oname, _filament_for_scene_name(scene_names[i]))
+            for i, (oid, oname) in enumerate(object_entries)
+        ]
+
+    # --- 3. Build Metadata/model_settings.config ---
+    # Bambu's <part id> values must be unique across the whole config. We
+    # allocate a part id per object using object_id + a fixed offset so the
+    # part ids do not collide with object ids. (This matches the layout
+    # observed in Bambu-Studio-saved 3MFs.)
+    cfg_lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<config>']
+    for oid, oname, extruder in mapping:
+        try:
+            part_id = int(oid) + 1000
+        except ValueError:
+            part_id = 1000
+        display_name = oname or f"object_{oid}"
+        cfg_lines.append(f'  <object id="{oid}">')
+        cfg_lines.append(f'    <metadata key="name" value="{display_name}"/>')
+        cfg_lines.append(f'    <metadata key="extruder" value="{extruder}"/>')
+        cfg_lines.append(f'    <part id="{part_id}" subtype="normal_part">')
+        cfg_lines.append(f'      <metadata key="name" value="{display_name}"/>')
+        cfg_lines.append(f'      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>')
+        cfg_lines.append(f'      <metadata key="extruder" value="{extruder}"/>')
+        cfg_lines.append(f'    </part>')
+        cfg_lines.append(f'  </object>')
+    cfg_lines.append('</config>')
+    cfg_lines.append('')
+    cfg_xml = "\n".join(cfg_lines)
+
+    # --- 4. Rewrite zip with the new Metadata/model_settings.config ---
+    # zipfile cannot edit in place; copy entries to a sibling temp file then
+    # atomically replace the original.
+    tmp_path = path_3mf + ".tmp"
+    with zipfile.ZipFile(path_3mf, "r") as zin, \
+         zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
+        for item in zin.infolist():
+            if item.filename == "Metadata/model_settings.config":
+                # Skip — we'll write a fresh one below.
+                continue
+            zout.writestr(item, zin.read(item.filename))
+        zout.writestr("Metadata/model_settings.config", cfg_xml)
+
+    shutil.move(tmp_path, path_3mf)
+
+    summary = ", ".join(
+        f"{oname or oid}=ext{ext}" for oid, oname, ext in mapping
+    )
+    print(f"  Extruder metadata injected → {summary}")
+
+
+# ---------------------------------------------------------------------------
+# Mount-pipe footprint subtraction (task #347 — replaces #346 corner search)
+# ---------------------------------------------------------------------------
+#
+# Thomas's correction (#347): the mount pipe stays at the fixed upper-left
+# corner regardless of what's underneath it. Instead of moving the pipe to
+# avoid traps/water, every other surface (trap polygon, water polygon, fringe
+# carve-out union) gets the pipe footprint subtracted out so the surfaces
+# don't overlap the pipe. The pipe is allowed to land on the boundary of, or
+# straddle the interface between, multiple obstacle polygons.
+# ---------------------------------------------------------------------------
+
+def _subtract_pipe_from_polygon(
+    poly: ShapelyPolygon,
+    pipe_circle: ShapelyPolygon,
+    label: str,
+) -> "ShapelyPolygon | None":
+    """
+    Subtract the mount-pipe circular footprint from a trap/water polygon.
+
+    No-op when the polygon does not intersect the pipe footprint (returns
+    the input polygon unchanged).
+
+    If the difference splits the polygon into multiple pieces (the pipe
+    straddles a thin neck in the original polygon), the largest piece by
+    area is returned and the others are logged + discarded — same pattern
+    as ``_clip_polygon_to_fringe_rect``.
+
+    Returns None if the polygon is fully consumed by the pipe footprint
+    (caller should skip emitting any mesh for it).
+    """
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+    if not pipe_circle.intersects(poly):
+        return poly
+    notched = poly.difference(pipe_circle)
+    if notched.is_empty:
+        print(f"  {label}: pipe footprint fully covers polygon — skipping")
+        return None
+    # Log a notch event so Topo / Thomas can see which polygons were affected.
+    overlap_area = float(poly.intersection(pipe_circle).area)
+    print(f"  {label}: notched by mount-pipe footprint (overlap={overlap_area:.2f} mm^2)")
+    if isinstance(notched, ShapelyMultiPolygon):
+        parts = sorted(list(notched.geoms), key=lambda g: g.area, reverse=True)
+        kept = parts[0]
+        dropped = parts[1:]
+        if dropped:
+            dropped_areas = ", ".join(f"{p.area:.2f}" for p in dropped)
+            print(f"  {label}: pipe-subtract produced MultiPolygon — kept "
+                  f"largest ({kept.area:.2f} mm^2), discarded {len(dropped)} "
+                  f"part(s) with areas [{dropped_areas}] mm^2")
+        return kept
+    if isinstance(notched, ShapelyPolygon):
+        return notched
+    # GeometryCollection or other — try to recover the largest polygonal piece.
+    try:
+        polys = [g for g in notched.geoms if isinstance(g, ShapelyPolygon) and not g.is_empty]
+        if not polys:
+            print(f"  {label}: pipe-subtract yielded no polygon geometry — skipping")
+            return None
+        polys.sort(key=lambda g: g.area, reverse=True)
+        return polys[0]
+    except Exception:
+        print(f"  {label}: unrecognised pipe-subtract geometry "
+              f"{type(notched).__name__} — keeping input")
+        return poly
+
+
+def _build_pipe_circle(cx: float, cy: float) -> ShapelyPolygon:
+    """Return the mount-pipe outer-wall circular footprint at (cx, cy)."""
+    from shapely.geometry import Point as _ShapelyPoint
+    return _ShapelyPoint(cx, cy).buffer(MOUNT_BORE_OUTER_RADIUS_MM)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -2870,13 +3608,15 @@ def run_pipeline(egm_path: str) -> str:
     os.makedirs(_img_dir,  exist_ok=True)
 
     # ── 5. Save diagnostic images ───────────────────────────────────────────
-    print("\n[5] Saving diagnostic images…")
-
-    arrow_out = os.path.join(_img_dir, f"{slug}_arrow_directions.png")
-    save_arrow_directions(img, arrows, green_boundary_px, arrow_out)
-
-    height_out = os.path.join(_img_dir, f"{slug}_height_map.png")
-    save_height_map(Z, xs_grid, ys_grid, green_boundary_px, height_out)
+    # Diagnostic PNG writes (arrow_directions, height_map) disabled to keep
+    # course Images/ folders clean. Helpers `save_arrow_directions` and
+    # `save_height_map` remain defined for one-off debugging — re-enable by
+    # uncommenting the calls below.
+    # print("\n[5] Saving diagnostic images…")
+    # arrow_out = os.path.join(_img_dir, f"{slug}_arrow_directions.png")
+    # save_arrow_directions(img, arrows, green_boundary_px, arrow_out)
+    # height_out = os.path.join(_img_dir, f"{slug}_height_map.png")
+    # save_height_map(Z, xs_grid, ys_grid, green_boundary_px, height_out)
 
     # ── 6. Build green surface meshes (smooth + stepped, in-memory) ─────────
     print("\n[6] Building green surface meshes…")
@@ -2899,7 +3639,45 @@ def run_pipeline(egm_path: str) -> str:
     Z_mm_for_fringe = _height_to_mm(Z, inside_mask)
     fringe_mesh = None
     fringe_mesh_flat = None   # kept for trap height sampling (no texture perturbation)
-    fringe_holes: list = []
+
+    # Mounting-bore "pipe" footprint (task #335). The fringe is hollowed out
+    # for the FULL pipe outer diameter so we can drop in an explicit
+    # annular-walled cylinder afterwards. Inner bore = 3/16", wall =
+    # WALL_THICKNESS_MM (1.6 mm) → outer Ø = 4.7625 + 2×1.6 = 7.9625 mm.
+    #
+    # Task #347: the pipe stays at the fixed upper-left corner regardless of
+    # what's underneath it. The earlier collision-aware corner search (#346)
+    # was the wrong design — Thomas wants the pipe in a known fixed position
+    # and the OTHER surfaces (traps, water, fringe) carved to match. The
+    # `pipe_circle` Shapely polygon below is what those subtractions use.
+    _half_for_bore = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+    _bore_cx = -_half_for_bore + MOUNT_BORE_INSET_MM
+    _bore_cy = +_half_for_bore - MOUNT_BORE_INSET_MM
+    pipe_circle = _build_pipe_circle(_bore_cx, _bore_cy)
+    print(f"  Mount pipe: fixed upper-left at ({_bore_cx:.2f}, {_bore_cy:.2f}), "
+          f"r_outer={MOUNT_BORE_OUTER_RADIUS_MM:.4f} mm")
+
+    # Green-overlap warning (#347 step 2.4): the pipe lives ~20 mm from the
+    # rect edge so it should never land inside the green polygon, but log a
+    # warning if it ever does so Thomas can flag the case. We do NOT carve
+    # the green raster mask — see #347 step 2.4 for the rationale.
+    try:
+        _green_bnd_mm_warn = _px_to_mm_2d(
+            green_boundary_px.copy(), scale_f, centroid_f
+        )
+        _green_sp_warn = ShapelyPolygon(_green_bnd_mm_warn)
+        if not _green_sp_warn.is_valid:
+            _green_sp_warn = _green_sp_warn.buffer(0)
+        if pipe_circle.intersects(_green_sp_warn):
+            _green_overlap = float(_green_sp_warn.intersection(pipe_circle).area)
+            if _green_overlap > 1e-3:
+                print(f"  Mount pipe: WARNING — pipe footprint intersects green "
+                      f"polygon (overlap={_green_overlap:.2f} mm^2). The green "
+                      f"raster mask is NOT carved; flag this hole for review.")
+    except Exception as _exc_green_warn:
+        print(f"  Mount pipe: green-overlap check failed: {_exc_green_warn}")
+
+    fringe_holes: list = [(_bore_cx, _bore_cy, MOUNT_BORE_OUTER_RADIUS_MM)]
     try:
         fringe_mesh = build_fringe_mesh(
             Z_mm_for_fringe,
@@ -2942,6 +3720,68 @@ def run_pipeline(egm_path: str) -> str:
             exclude_polyline_xy=_green_bnd_mm_for_grass,
             exclude_radius_mm=_seam_exclude_radius_mm,
         )
+
+        # ── 7b. Build the upper-left mounting-bore PIPE (task #335) ──────────
+        # The fringe was already hollowed out at (_bore_cx, _bore_cy) with
+        # outer-pipe radius. Now we drop a watertight hollow cylinder into
+        # that void: outer wall = MOUNT_BORE_OUTER_RADIUS_MM, inner bore =
+        # MOUNT_BORE_INNER_RADIUS_MM (3/16"), height = fringe top Z at the
+        # bore boundary (no stub above fringe).
+        try:
+            _flat_verts = fringe_mesh_flat.vertices
+            _dx = _flat_verts[:, 0] - _bore_cx
+            _dy = _flat_verts[:, 1] - _bore_cy
+            _r = np.sqrt(_dx * _dx + _dy * _dy)
+            _grid_step_mm = (PRINT_SIZE_MM + abs(FRINGE_XY_EXPANSION_MM)) / 200.0
+            _ring_inner = MOUNT_BORE_OUTER_RADIUS_MM
+            _ring_outer = MOUNT_BORE_OUTER_RADIUS_MM + 2.0 * _grid_step_mm
+            _ring_mask = (
+                (_r >= _ring_inner)
+                & (_r <= _ring_outer)
+                & (_flat_verts[:, 2] > BASE_THICKNESS_MM * 0.5)
+            )
+            if _ring_mask.any():
+                _ring_z = _flat_verts[_ring_mask, 2]
+                _pipe_top_z = float(np.max(_ring_z))
+                print(f"  Bore-rim fringe Z: count={int(_ring_mask.sum())} "
+                      f"range=[{_ring_z.min():.3f}, {_ring_z.max():.3f}] mm "
+                      f"→ pipe top z = {_pipe_top_z:.3f} mm")
+            else:
+                _pipe_top_z = float(BASE_THICKNESS_MM + 0.5)
+                print(f"  WARN: no fringe verts found near bore rim, "
+                      f"falling back to pipe top z = {_pipe_top_z:.3f} mm")
+
+            _pipe_mesh = build_mount_pipe_mesh(
+                cx=_bore_cx,
+                cy=_bore_cy,
+                inner_radius=MOUNT_BORE_INNER_RADIUS_MM,
+                outer_radius=MOUNT_BORE_OUTER_RADIUS_MM,
+                z_top=_pipe_top_z,
+                n_seg=64,
+            )
+            print(f"  Mount pipe: cx={_bore_cx:.2f} cy={_bore_cy:.2f} "
+                  f"r_in={MOUNT_BORE_INNER_RADIUS_MM:.4f} "
+                  f"r_out={MOUNT_BORE_OUTER_RADIUS_MM:.4f} "
+                  f"z=[0, {_pipe_top_z:.3f}] mm "
+                  f"({len(_pipe_mesh.vertices)} verts, {len(_pipe_mesh.faces)} faces)")
+
+            # Concatenate pipe with the (textured) fringe so the result is a
+            # single Trimesh that travels through the rest of the pipeline as
+            # one body. Per task #335 the pipe must read as part of the fringe
+            # (filament 2 in the per-object metadata) — keeping it inside the
+            # `fringe` scene node achieves that without touching the filament
+            # mapping in _filament_for_scene_name.
+            fringe_mesh = trimesh.util.concatenate([fringe_mesh, _pipe_mesh])
+            fringe_mesh.merge_vertices(digits_vertex=6)
+            fringe_mesh.update_faces(fringe_mesh.nondegenerate_faces())
+            fringe_mesh.update_faces(fringe_mesh.unique_faces())
+            fringe_mesh.remove_unreferenced_vertices()
+            print(f"  Fringe + pipe (merged): {len(fringe_mesh.vertices)} verts, "
+                  f"{len(fringe_mesh.faces)} faces, "
+                  f"watertight={fringe_mesh.is_watertight}")
+        except Exception as exc_pipe:
+            print(f"  ERROR building/merging mount pipe: {exc_pipe}")
+            import traceback; traceback.print_exc()
     except Exception as exc:
         print(f"  ERROR building fringe mesh: {exc}")
         import traceback; traceback.print_exc()
@@ -2950,16 +3790,29 @@ def run_pipeline(egm_path: str) -> str:
     print("\n[8] Building sand trap meshes…")
     trap_meshes = export_trap_stls(_egm_data, green_boundary_px, slug,
                                    fringe_mesh=fringe_mesh_flat,
+                                   pipe_circle=pipe_circle,
                                    write_stls=False)
     if not trap_meshes:
         print("  (no traps built)")
 
+    # ── 8b. Build water trap meshes (in-memory) ─────────────────────────────
+    print("\n[8b] Building water trap meshes…")
+    water_meshes = export_water_meshes(_egm_data, green_boundary_px, slug,
+                                       fringe_mesh=fringe_mesh_flat,
+                                       pipe_circle=pipe_circle,
+                                       write_stls=False)
+    if not water_meshes:
+        print("  (no water built)")
+
     # ── 9. Contour debug image ──────────────────────────────────────────────
-    print("\n[9] Saving contour lines debug image…")
-    contour_out = os.path.join(_img_dir, f"{slug}_gradient_contours.png")
-    save_contour_debug_image(
-        Z, xs_grid, ys_grid, inside_mask, img, green_boundary_px, contour_out
-    )
+    # Diagnostic gradient_contours.png write disabled to keep course Images/
+    # folders clean. Helper `save_contour_debug_image` remains defined for
+    # one-off debugging — re-enable by uncommenting the call below.
+    # print("\n[9] Saving contour lines debug image…")
+    # contour_out = os.path.join(_img_dir, f"{slug}_gradient_contours.png")
+    # save_contour_debug_image(
+    #     Z, xs_grid, ys_grid, inside_mask, img, green_boundary_px, contour_out
+    # )
 
     # ── 10. Assemble 3MF ────────────────────────────────────────────────────
     print("\n[10] Assembling 3MF…")
@@ -3000,6 +3853,12 @@ def run_pipeline(egm_path: str) -> str:
         scene.add_geometry(trap_mesh, node_name=trap_node)
         scene_names.append(trap_node)
 
+    # Water meshes — names start with "water" so _filament_for_scene_name
+    # routes each one to extruder 4 (royal blue filament).
+    for water_node, water_mesh in water_meshes:
+        scene.add_geometry(water_mesh, node_name=water_node)
+        scene_names.append(water_node)
+
     print(f"\n[10b] Engraving serial s/n: {serial_number} on {len(scene_names)} item(s)…")
     _engrave_scene(scene, serial_number)
 
@@ -3029,6 +3888,13 @@ def run_pipeline(egm_path: str) -> str:
     for name in scene_names:
         print(f"    - {name}")
 
+    # Inject Bambu/Orca per-object extruder metadata so the slicer prints each
+    # geometry on the correct filament (green=1, fringe=2, traps=3, water=4).
+    try:
+        _inject_bambu_extruder_metadata(path_3mf, scene_names)
+    except Exception as exc:
+        print(f"  WARNING: failed to inject extruder metadata: {exc}")
+
     # ── 10c. Export succeeded → advance the course's serial counter ──
     try:
         used = _commit_serial(course)
@@ -3038,11 +3904,9 @@ def run_pipeline(egm_path: str) -> str:
 
     print("\n" + "=" * 60)
     print("Done.")
-    print(f"  Arrow directions:   {arrow_out}")
-    print(f"  Height map:         {height_out}")
-    print(f"  Contour debug:      {contour_out}")
+    # Diagnostic PNG paths suppressed — those writes are disabled (see steps 5 and 9).
     print(f"  3MF assembly:       {path_3mf}")
-    print(f"  Scene objects:      {len(scene_names)} (green + fringe + {len(trap_meshes)} trap(s))")
+    print(f"  Scene objects:      {len(scene_names)} (green + fringe + {len(trap_meshes)} trap(s) + {len(water_meshes)} water)")
     print("=" * 60)
 
     return path_3mf

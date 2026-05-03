@@ -2393,6 +2393,37 @@ def save_contour_debug_image(
 TRAP_THICKNESS_MM: float = 10.0     # flat slab thickness for traps
 PRINT_TOLERANCE_MM: float = 0.03125  # inset each piece for easier fit
 
+# ---------------------------------------------------------------------------
+# Water hazard ripple texture — sinusoidal "wind chop" displacement
+# ---------------------------------------------------------------------------
+#
+# Approach A from owner_inbox/golf_water_ripple_proposal.md, tuned for
+# medium-blue PLA filament (between translucent — where ripples read
+# beautifully at low amplitude — and opaque deep blue, which swallows
+# subtle texture).  Two superposed sine waves at near-perpendicular angles
+# produce an interference pattern that reads as choppy water at print scale.
+#
+# Per-pond seeding: angles + phases are derived from a hash of the water
+# polygon's control-point coordinates so the same pond regenerates the same
+# ripple every build (reproducibility) but adjacent ponds look different.
+#
+# Print constraint: top of the ripple is clamped at the unrippled water
+# height — displacement is **downward only** so peaks never poke above the
+# surrounding fringe terrain (which would create overhangs and make the
+# water slab visually float above its socket).
+WATER_RIPPLE_ENABLED: bool = True   # master toggle for water ripple texture
+WATER_RIPPLE_A1: float = 0.20       # primary wave amplitude, mm
+                                    #   (was 0.25 default; bumped down a touch
+                                    #   for medium-blue filament — still visible
+                                    #   but doesn't fight the colour)
+WATER_RIPPLE_A2: float = 0.08       # secondary wave amplitude, mm (interference detail)
+WATER_RIPPLE_LAMBDA1: float = 4.0   # primary wavelength, mm — choppy end of the 3–5 mm range
+WATER_RIPPLE_LAMBDA2: float = 2.5   # secondary wavelength, mm — high-frequency cross-chop
+WATER_RIPPLE_GRID_STEP: float = 0.5 # XY sampling step, mm
+                                    #   (~5 samples per primary period; one nozzle
+                                    #   width-ish.  Vertex budget ≈ 60×172/0.5² ≈
+                                    #   41 K verts per pond — well under 150 K cap.)
+
 
 def _clip_polygon_to_fringe_rect(
     poly: ShapelyPolygon,
@@ -2720,7 +2751,17 @@ def export_water_meshes(
 
             from generate_stl_3mf import _build_slab_from_shapely
             mesh = _build_slab_from_shapely(shapely_inset, water_height)
-            # No sand-grain texture — water is a smooth slab.
+
+            # Sinusoidal "wind chop" ripple displacement on the top face.
+            # Gated by WATER_RIPPLE_ENABLED for easy on/off.  Per-pond seed
+            # comes from the polygon's control points so the same pond always
+            # regenerates the same ripple but different ponds look different.
+            if WATER_RIPPLE_ENABLED:
+                apply_water_ripple_texture(
+                    mesh,
+                    water_index=i,
+                    control_points_px=water_poly.get("points", []),
+                )
 
             bb = mesh.bounds
             print(f"  Water {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "
@@ -2835,27 +2876,71 @@ def apply_sand_texture(
     # Rebuild directed boundary edges (original orientation, not sorted).
     boundary_edges = [e for e in edges if tuple(sorted(e)) in boundary_set]
 
-    # Chain boundary edges into an ordered polygon ring.
-    adjacency: dict = {}
+    # ------------------------------------------------------------------
+    # Multi-loop boundary walker (mirrors apply_water_ripple_texture).
+    #
+    # A trap polygon could in principle have interior holes (e.g. a future
+    # trap with a pipe footprint subtracted from its interior).  The old
+    # single-loop walker would drop every ring after the first, leaving
+    # dangling boundary verts and a non-manifold mesh.  Walk an UNDIRECTED
+    # adjacency (also fixes a latent secondary bug: directed-edge dead-ends
+    # mid-loop), collect ALL closed loops, sort by |signed area|: largest
+    # = outer ring, rest = holes.  Build ShapelyPolygon(outer, holes=[...])
+    # so prepared-geometry containment correctly excludes hole interiors.
+    # ------------------------------------------------------------------
+    undirected: dict = {}
     for a, b in boundary_edges:
-        adjacency.setdefault(a, []).append(b)
+        undirected.setdefault(int(a), set()).add(int(b))
+        undirected.setdefault(int(b), set()).add(int(a))
 
-    ring: list = []
-    start = boundary_edges[0][0]
-    current = start
-    visited = set()
-    while True:
-        ring.append(current)
-        visited.add(current)
-        neighbors = [n for n in adjacency.get(current, []) if n not in visited]
-        if not neighbors:
-            break
-        current = neighbors[0]
+    loops: list[list[int]] = []
+    seen: set[int] = set()
+    for seed_vert in undirected.keys():
+        if seed_vert in seen:
+            continue
+        loop: list[int] = []
+        current = seed_vert
+        prev = -1
+        while True:
+            loop.append(current)
+            seen.add(current)
+            nbrs = [n for n in undirected.get(current, ()) if n != prev]
+            unvisited = [n for n in nbrs if n not in seen]
+            if unvisited:
+                nxt = unvisited[0]
+            elif nbrs and nbrs[0] == seed_vert and len(loop) > 2:
+                break
+            else:
+                break
+            prev = current
+            current = nxt
+        if len(loop) >= 3:
+            loops.append(loop)
 
-    ring_xy = all_verts[ring, :2]                     # (R, 2) — XY of boundary
-    shapely_poly = ShapelyPolygon(ring_xy)
+    if not loops:
+        print(f"    apply_sand_texture: no closed boundary loops found, skipping.")
+        return mesh
+
+    def _signed_area(idx_list: list[int]) -> float:
+        pts = all_verts[idx_list, :2]
+        x = pts[:, 0]; y = pts[:, 1]
+        return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+    loops.sort(key=lambda lp: abs(_signed_area(lp)), reverse=True)
+    outer_loop = loops[0]
+    hole_loops = loops[1:]
+    ring = outer_loop  # legacy name retained downstream
+    all_loops = [outer_loop] + hole_loops
+
+    ring_xy   = all_verts[outer_loop, :2]             # (R, 2) — XY of outer boundary
+    holes_xy  = [all_verts[lp, :2] for lp in hole_loops]
+    shapely_poly = ShapelyPolygon(ring_xy, holes=holes_xy)
     if not shapely_poly.is_valid:
         shapely_poly = shapely_poly.buffer(0)         # fix self-intersections
+    if len(hole_loops) > 0:
+        print(f"    Sand boundary: 1 outer ring ({len(outer_loop)} verts) "
+              f"+ {len(hole_loops)} hole(s) "
+              f"({', '.join(str(len(lp)) for lp in hole_loops)} verts)")
 
     # ------------------------------------------------------------------
     # 3. Build a regular grid over the bounding box; filter inside polygon
@@ -2938,7 +3023,10 @@ def apply_sand_texture(
 
     # Boundary ring points: include in Delaunay so the triangulation
     # reaches the polygon edge exactly, sharing XY with the wall rim.
-    ring_xy_arr = all_verts[ring, :2]                 # (R, 2)
+    # Concatenate outer ring + every interior hole ring so EVERY boundary
+    # vertex is represented (multi-loop walker output).
+    all_ring_idx = [int(v) for lp in all_loops for v in lp]
+    ring_xy_arr = all_verts[all_ring_idx, :2]         # (R, 2)
     ring_z      = z_max + sine_dz(ring_xy_arr[:, 0]) # (R,)
 
     # Combined point set for Delaunay: boundary ring first, then interior.
@@ -2985,7 +3073,7 @@ def apply_sand_texture(
     # displaced Z as the corresponding boundary ring grid_pts rows.
     #
     # Build a lookup: global_index → displaced Z for every boundary ring vertex.
-    ring_global   = np.array(ring)                             # (R,) global indices
+    ring_global   = np.array(all_ring_idx)                     # (R,) global indices (all loops)
     ring_disp_z   = ring_z                                     # (R,) displaced Z
     rim_z_lookup  = dict(zip(ring_global.tolist(), ring_disp_z.tolist()))
 
@@ -3021,6 +3109,345 @@ def apply_sand_texture(
           f"watertight={new_mesh.is_watertight}")
 
     # Copy rebuilt geometry back into the caller's mesh object.
+    mesh.vertices = new_mesh.vertices
+    mesh.faces    = new_mesh.faces
+
+    return mesh
+
+
+# ---------------------------------------------------------------------------
+# Water ripple texture
+# ---------------------------------------------------------------------------
+
+def apply_water_ripple_texture(
+    mesh: "trimesh.Trimesh",
+    water_index: int = 0,
+    control_points_px: list | None = None,
+    A1: float | None = None,
+    A2: float | None = None,
+    lambda1: float | None = None,
+    lambda2: float | None = None,
+    grid_step: float | None = None,
+) -> "trimesh.Trimesh":
+    """
+    Apply two-superposed-sine "wind chop" displacement to a water slab top face.
+
+    Cloned from :func:`apply_sand_texture` (same 6-stage pipeline: rebuild top
+    as a regular grid → displace Z → Delaunay re-triangulate → stitch boundary
+    ring → reassemble + watertight repair).  Two changes vs. sand:
+
+      * **Displacement formula** — sum of two sine waves at near-perpendicular
+        angles with per-pond random phases:
+
+            dz(x,y) = A1 * sin(2π * (x·cosθ1 + y·sinθ1) / λ1 + φ1)
+                    + A2 * sin(2π * (x·cosθ2 + y·sinθ2) / λ2 + φ2)
+
+        Then **clamped to dz ≤ 0** so peaks never poke above the unrippled
+        water height (which would create overhangs and let the slab visually
+        float above its fringe socket).  Net displacement is downward only,
+        with the original water_z as the calm-water "high tide" line.
+
+      * **Per-pond seed** — derived from a hash of the polygon's control-point
+        coordinates so the same pond regenerates the same ripple every build,
+        but adjacent ponds in the same hole look different.  θ1 ∈ [0, 2π),
+        θ2 ≈ θ1 + π/2 with small jitter, φ1, φ2 ∈ [0, 2π).
+
+    Parameters
+    ----------
+    mesh             : trimesh.Trimesh — closed watertight water slab in mm coords.
+    water_index      : 1-based pond index (used as a fallback seed if no
+                       control points are provided).
+    control_points_px: optional list of {"x","y"} dicts from the EGM polygon.
+                       Hashed to seed the per-pond RNG.  Falls back to
+                       water_index if missing/empty.
+    A1, A2           : peak amplitudes in mm (defaults: WATER_RIPPLE_A1/A2).
+    lambda1, lambda2 : wavelengths in mm (defaults: WATER_RIPPLE_LAMBDA1/2).
+    grid_step        : XY sampling step in mm (default WATER_RIPPLE_GRID_STEP).
+
+    Returns the mesh modified in place (also returns it for convenience).
+    """
+    import hashlib
+    import trimesh
+    import numpy as np
+    from scipy.spatial import Delaunay
+    from shapely.geometry import Polygon as ShapelyPolygon
+
+    # Resolve parameters from module-level constants if caller didn't override.
+    A1        = WATER_RIPPLE_A1       if A1        is None else A1
+    A2        = WATER_RIPPLE_A2       if A2        is None else A2
+    lambda1   = WATER_RIPPLE_LAMBDA1  if lambda1   is None else lambda1
+    lambda2   = WATER_RIPPLE_LAMBDA2  if lambda2   is None else lambda2
+    grid_step = WATER_RIPPLE_GRID_STEP if grid_step is None else grid_step
+
+    # ------------------------------------------------------------------
+    # 0. Per-pond deterministic seed: hash control-point coords (fallback
+    #    to water_index if EGM didn't pass them through).
+    # ------------------------------------------------------------------
+    if control_points_px:
+        coord_bytes = b",".join(
+            f"{p.get('x', 0):.4f},{p.get('y', 0):.4f}".encode("ascii")
+            for p in control_points_px
+        )
+        seed = int(hashlib.md5(coord_bytes).hexdigest()[:8], 16)
+    else:
+        seed = 0xA17EB10B + water_index  # deterministic fallback (no control pts)
+    rng = np.random.default_rng(seed)
+
+    theta1 = float(rng.uniform(0.0, 2.0 * math.pi))
+    # θ2 roughly perpendicular to θ1, with ±15° jitter so the cross-chop
+    # doesn't look stamped from a template.
+    theta2 = theta1 + math.pi / 2.0 + float(rng.uniform(-math.pi / 12.0, math.pi / 12.0))
+    phi1   = float(rng.uniform(0.0, 2.0 * math.pi))
+    phi2   = float(rng.uniform(0.0, 2.0 * math.pi))
+
+    all_verts = mesh.vertices.copy()
+    all_faces = mesh.faces.copy()
+
+    # ------------------------------------------------------------------
+    # 1. Identify top faces and wall/base faces (same as sand)
+    # ------------------------------------------------------------------
+    z_max    = all_verts[:, 2].max()
+    z_thresh = z_max - 0.1
+
+    face_v_z      = all_verts[all_faces, 2]
+    top_face_mask = (face_v_z >= z_thresh).all(axis=1)
+
+    top_faces_global   = all_faces[top_face_mask]
+    other_faces_global = all_faces[~top_face_mask]
+
+    if top_faces_global.shape[0] == 0:
+        print(f"    apply_water_ripple_texture: no top-surface faces found "
+              f"(Z near {z_max:.2f} mm), skipping.")
+        return mesh
+
+    # ------------------------------------------------------------------
+    # 2. Recover the top-face boundary as a Shapely polygon
+    # ------------------------------------------------------------------
+    edges = np.vstack([
+        top_faces_global[:, [0, 1]],
+        top_faces_global[:, [1, 2]],
+        top_faces_global[:, [2, 0]],
+    ])
+    edges_sorted = np.sort(edges, axis=1)
+    edge_tuples  = [tuple(e) for e in edges_sorted]
+    from collections import Counter
+    edge_counts  = Counter(edge_tuples)
+    boundary_set = {e for e, cnt in edge_counts.items() if cnt == 1}
+
+    boundary_edges = [e for e in edges if tuple(sorted(e)) in boundary_set]
+
+    # ------------------------------------------------------------------
+    # Multi-loop boundary walker.
+    #
+    # Pipe-subtract on a moat-style water polygon (e.g. PGA West Stadium
+    # Clubhouse Hole 17) produces a top face that is a polygon-with-holes:
+    # one outer ring + N interior rings around each pipe footprint.  A
+    # single-loop walker silently drops every ring after the first, leaving
+    # all the unwalked boundary verts dangling and the manifold post-check
+    # fails (424 boundary edges on Hole 17).
+    #
+    # We walk an UNDIRECTED adjacency (also fixes a latent secondary bug:
+    # `boundary_edges` were directed, so the original walker could dead-end
+    # mid-loop on the wrong-direction edge).  Each iteration picks an
+    # unvisited boundary vertex, walks its loop, marks all its verts
+    # visited, and records the loop.  Loops are then sorted by absolute
+    # signed area: the largest is the outer ring, the rest are holes.
+    # ------------------------------------------------------------------
+    undirected: dict = {}
+    for a, b in boundary_edges:
+        undirected.setdefault(int(a), set()).add(int(b))
+        undirected.setdefault(int(b), set()).add(int(a))
+
+    loops: list[list[int]] = []
+    seen: set[int] = set()
+    for seed_vert in undirected.keys():
+        if seed_vert in seen:
+            continue
+        loop: list[int] = []
+        current = seed_vert
+        prev = -1
+        while True:
+            loop.append(current)
+            seen.add(current)
+            nbrs = [n for n in undirected.get(current, ()) if n != prev]
+            unvisited = [n for n in nbrs if n not in seen]
+            if unvisited:
+                nxt = unvisited[0]
+            elif nbrs and nbrs[0] == seed_vert and len(loop) > 2:
+                # Closed back to seed — loop complete.
+                break
+            else:
+                # Dead end (shouldn't happen on a clean boundary).
+                break
+            prev = current
+            current = nxt
+        if len(loop) >= 3:
+            loops.append(loop)
+
+    if not loops:
+        print(f"    apply_water_ripple_texture: no closed boundary loops found, skipping.")
+        return mesh
+
+    def _signed_area(idx_list: list[int]) -> float:
+        pts = all_verts[idx_list, :2]
+        x = pts[:, 0]; y = pts[:, 1]
+        return 0.5 * float(np.sum(x * np.roll(y, -1) - np.roll(x, -1) * y))
+
+    loops.sort(key=lambda lp: abs(_signed_area(lp)), reverse=True)
+    outer_loop = loops[0]
+    hole_loops = loops[1:]
+    ring = outer_loop  # legacy name retained downstream
+    all_loops = [outer_loop] + hole_loops
+
+    ring_xy   = all_verts[outer_loop, :2]
+    holes_xy  = [all_verts[lp, :2] for lp in hole_loops]
+    shapely_poly = ShapelyPolygon(ring_xy, holes=holes_xy)
+    if not shapely_poly.is_valid:
+        shapely_poly = shapely_poly.buffer(0)
+    if len(hole_loops) > 0:
+        print(f"    Water ripple boundary: 1 outer ring ({len(outer_loop)} verts) "
+              f"+ {len(hole_loops)} hole(s) "
+              f"({', '.join(str(len(lp)) for lp in hole_loops)} verts)")
+
+    # ------------------------------------------------------------------
+    # 3. Regular grid over bbox; filter inside (with boundary inset to
+    #    keep Delaunay from skipping rim edges — same fix as sand #339).
+    # ------------------------------------------------------------------
+    x_min, x_max = ring_xy[:, 0].min(), ring_xy[:, 0].max()
+    y_min, y_max = ring_xy[:, 1].min(), ring_xy[:, 1].max()
+
+    xs = np.arange(x_min, x_max + grid_step, grid_step)
+    ys = np.arange(y_min, y_max + grid_step, grid_step)
+    gx, gy = np.meshgrid(xs, ys)
+    grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+
+    from shapely import prepare, contains_xy
+    WATER_GRID_BOUNDARY_INSET_FACTOR = 1.0  # in units of grid_step
+    shapely_inner = shapely_poly.buffer(-grid_step * WATER_GRID_BOUNDARY_INSET_FACTOR)
+    if shapely_inner.is_empty:
+        shapely_inner = shapely_poly
+    prepare(shapely_inner)
+    inside_mask = contains_xy(shapely_inner, grid_xy[:, 0], grid_xy[:, 1])
+    grid_xy_in  = grid_xy[inside_mask]
+
+    if len(grid_xy_in) < 3:
+        print(f"    apply_water_ripple_texture: too few grid points inside polygon "
+              f"({len(grid_xy_in)}), skipping.")
+        return mesh
+
+    n_grid = len(grid_xy_in)
+    print(f"    Water ripple grid: step={grid_step:.3f} mm, "
+          f"bbox {x_max-x_min:.1f}×{y_max-y_min:.1f} mm → "
+          f"{len(xs)}×{len(ys)} candidates → {n_grid} inside polygon "
+          f"(seed=0x{seed:08x}, θ1={math.degrees(theta1):.1f}°, "
+          f"θ2={math.degrees(theta2):.1f}°)")
+
+    # Vertex budget — same 150 K cap as sand.
+    MAX_GRID_PTS = 150_000
+    if n_grid > MAX_GRID_PTS:
+        scale_up = math.sqrt(n_grid / MAX_GRID_PTS)
+        new_step = grid_step * scale_up
+        print(f"    Water ripple: grid too large ({n_grid} pts); "
+              f"increasing step {grid_step:.3f} → {new_step:.3f} mm")
+        grid_step = new_step
+        shapely_inner = shapely_poly.buffer(-grid_step * WATER_GRID_BOUNDARY_INSET_FACTOR)
+        if shapely_inner.is_empty:
+            shapely_inner = shapely_poly
+        prepare(shapely_inner)
+        xs = np.arange(x_min, x_max + grid_step, grid_step)
+        ys = np.arange(y_min, y_max + grid_step, grid_step)
+        gx, gy = np.meshgrid(xs, ys)
+        grid_xy = np.column_stack([gx.ravel(), gy.ravel()])
+        inside_mask = contains_xy(shapely_inner, grid_xy[:, 0], grid_xy[:, 1])
+        grid_xy_in  = grid_xy[inside_mask]
+        n_grid = len(grid_xy_in)
+        print(f"    Water ripple: after step increase → {n_grid} grid points")
+
+    # ------------------------------------------------------------------
+    # 4. Two-sine displacement, clamped ≤ 0 (downward only).
+    # ------------------------------------------------------------------
+    cos_t1, sin_t1 = math.cos(theta1), math.sin(theta1)
+    cos_t2, sin_t2 = math.cos(theta2), math.sin(theta2)
+    two_pi = 2.0 * math.pi
+
+    def ripple_dz(xy: np.ndarray) -> np.ndarray:
+        """Sum of two sines, then clamp to ≤ 0 so peaks don't poke above
+        the unrippled water surface (no overhangs vs. surrounding fringe)."""
+        u1 = (xy[:, 0] * cos_t1 + xy[:, 1] * sin_t1) / lambda1
+        u2 = (xy[:, 0] * cos_t2 + xy[:, 1] * sin_t2) / lambda2
+        dz = A1 * np.sin(two_pi * u1 + phi1) + A2 * np.sin(two_pi * u2 + phi2)
+        return np.minimum(dz, 0.0)
+
+    dz     = ripple_dz(grid_xy_in)
+    grid_z = z_max + dz
+
+    # Concatenate outer ring + every interior hole ring so EVERY boundary
+    # vertex is represented in the Delaunay input and rim-Z snap step.
+    all_ring_idx = [int(v) for lp in all_loops for v in lp]
+    ring_xy_arr  = all_verts[all_ring_idx, :2]
+    ring_z       = z_max + ripple_dz(ring_xy_arr)
+
+    n_ring   = len(ring_xy_arr)
+    all_xy   = np.vstack([ring_xy_arr, grid_xy_in])
+    all_z    = np.concatenate([ring_z, grid_z])
+    grid_pts = np.column_stack([all_xy, all_z])
+
+    print(f"    Water ripple: A1={A1:.3f}/λ1={lambda1:.2f}, "
+          f"A2={A2:.3f}/λ2={lambda2:.2f} mm, "
+          f"dz range [{dz.min():.3f}, {dz.max():.3f}] mm (clamped ≤0) "
+          f"on {n_grid} grid + {n_ring} ring verts")
+
+    # ------------------------------------------------------------------
+    # 5. Delaunay-triangulate; clip triangles whose centroid falls outside
+    # ------------------------------------------------------------------
+    tri = Delaunay(all_xy)
+    tri_faces = tri.simplices
+    centroids = all_xy[tri_faces].mean(axis=1)
+    cent_inside = contains_xy(shapely_poly, centroids[:, 0], centroids[:, 1])
+    top_new_faces = tri_faces[cent_inside]
+
+    print(f"    Water ripple: Delaunay → {len(tri_faces)} triangles, "
+          f"{cent_inside.sum()} kept after centroid clipping")
+
+    # ------------------------------------------------------------------
+    # 6. Reassemble + snap rim Z to merge cleanly with walls
+    # ------------------------------------------------------------------
+    other_vert_indices, other_faces_local = np.unique(
+        other_faces_global, return_inverse=True
+    )
+    other_faces_local = other_faces_local.reshape(-1, 3)
+    other_verts_arr   = all_verts[other_vert_indices].copy()
+
+    ring_global  = np.array(all_ring_idx)
+    ring_disp_z  = ring_z
+    rim_z_lookup = dict(zip(ring_global.tolist(), ring_disp_z.tolist()))
+
+    for local_i, global_i in enumerate(other_vert_indices):
+        if global_i in rim_z_lookup:
+            other_verts_arr[local_i, 2] = rim_z_lookup[global_i]
+
+    n_top = len(grid_pts)
+    combined_verts = np.vstack([grid_pts, other_verts_arr])
+    combined_faces = np.vstack([
+        top_new_faces,
+        other_faces_local + n_top,
+    ])
+
+    new_mesh = trimesh.Trimesh(
+        vertices=combined_verts,
+        faces=combined_faces,
+        process=True,
+    )
+    if not new_mesh.is_watertight:
+        new_mesh.merge_vertices(digits_vertex=3)
+        trimesh.repair.fix_normals(new_mesh)
+        trimesh.repair.fill_holes(new_mesh)
+        trimesh.repair.fix_winding(new_mesh)
+
+    print(f"    Water ripple: reassembled mesh — "
+          f"{len(new_mesh.vertices)} verts, {len(new_mesh.faces)} faces, "
+          f"watertight={new_mesh.is_watertight}")
+
     mesh.vertices = new_mesh.vertices
     mesh.faces    = new_mesh.faces
 

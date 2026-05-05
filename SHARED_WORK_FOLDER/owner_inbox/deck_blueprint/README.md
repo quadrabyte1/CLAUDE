@@ -1,10 +1,14 @@
-# Deck Blueprint — 23'-6" × 16'-6" Attached Deck  (v10)
+# Deck Blueprint — 23'-6" × 16'-6" Attached Deck  (v12)
 
 Produced by Gemma (Technical Diagramming Specialist) on 2026-05-01.
 
+**v12 = v11 + single 42" wide step on L edge starting 6' from house, open risers, gravel + paver landing.** The step assembly sits on the LEFT edge of the deck (negative-x direction from the left girder), with the opening spanning y=6'-0" to y=9'-6" from the house wall. Left PF and fascia are interrupted at those cut joints. Three 2×10 PT cut stringers attach to the left girder outer face via Simpson LSCZ hangers. Middle tread is 2 MoistureShield Vision 5.4" planks running parallel to the left edge at 6" AG. Open risers throughout (no riser boards). Stringer ends bear on 12"×12" precast pavers over a #57 compacted gravel pad. A side-elevation inset detail on both pages shows the step profile with annotated elevations (0", 6", 12" AG).
+
+**v11 = v10 + MoistureShield Vision brand swap (was Trex Transcend). Surgical change: decking brand, fastener system, and plank width updated; framing footprint unchanged.**
+
 **v10 = v9 + outside-corner mitered joint correctly rendered at lower-left and lower-right (fixed open-square artifact); no other changes.** In v9 the left-side and right-side PF boards were drawn as full rectangles that overlapped the far-side PF band at the two outside corners, creating a visible open square gap where the miter should have been a clean diagonal seam. v10 clips the side PF bands at the far PF inner edge and draws the 45° miter seam explicitly, so each outside corner now shows a tight filled diagonal joint with no empty wedge.
 
-**v9 = v8 + version badge in upper-left corner of every page (no other changes).** The badge shows "v10" in large bold text with a page sub-label ("Page 1 of 2 — Framing" / "Page 2 of 2 — Decking"), making it immediately obvious which version is open regardless of caching or file naming.
+**v9 = v8 + version badge in upper-left corner of every page (no other changes).** The badge shows "v9" in large bold text with a page sub-label ("Page 1 of 2 — Framing" / "Page 2 of 2 — Decking"), making it immediately obvious which version is open regardless of caching or file naming.
 
 **v8 adds the Trex decking layer.** No structural changes from v7. The framing is locked. v8 converts the drawio file from single-page to two-page:
 
@@ -19,9 +23,11 @@ Produced by Gemma (Technical Diagramming Specialist) on 2026-05-01.
 
 | File | Description |
 |------|-------------|
-| `deck_plan.drawio` | Editable draw.io source **(v10, two pages)**. Open in [draw.io desktop](https://www.drawio.com/) or [app.diagrams.net](https://app.diagrams.net). Page 1 = Framing; Page 2 = Decking. Version badge in upper-left of both pages. Outside corner miters fixed. |
-| `deck_plan.png` | Raster render of **Page 2 (Decking Plan)**, 2563 × 1885 px. Produced by `render_v10.py`. Version badge "v10" visible top-left. Outside corner miter clean at lower-left and lower-right. |
-| `render_v10.py` | matplotlib render script for v10 Page 2 (Decking Plan). Corner miter fix applied. |
+| `deck_plan.drawio` | Editable draw.io source **(v12, two pages)**. Open in [draw.io desktop](https://www.drawio.com/) or [app.diagrams.net](https://app.diagrams.net). Page 1 = Framing; Page 2 = Decking. Version badge "v12" in upper-left of both pages. MoistureShield Vision throughout. Step on L edge on both pages. |
+| `deck_plan.png` | Raster render of **Page 2 (Decking Plan)**, 2701 × 1958 px. Produced by `render_v12.py`. Version badge "v12" visible top-left. 49 field planks + step assembly visible. Outside corner miters preserved. Side-elevation step inset in legend area. |
+| `render_v12.py` | matplotlib render script for v12 Page 2 (Decking Plan). Step on L edge, gravel+paver pad, side-elevation inset, cut joints in L PF at y=6' and y=9'-6". |
+| `render_v11.py` | v11 render script (kept for reference). |
+| `render_v10.py` | v10 render script (kept for reference). |
 | `render_v9.py` | v9 render script (kept for reference). |
 | `render_v8.py` | v8 render script (kept for reference). |
 | `render_v7.py` | v7 render script (kept for reference — framing plan only). |
@@ -37,23 +43,23 @@ Produced by Gemma (Technical Diagramming Specialist) on 2026-05-01.
 
 ---
 
-## Decking — v8 additions (Page 2)
+## Decking — v11 (Page 2)
 
 ### Field planks
 
 | Attribute | Value |
 |-----------|-------|
-| Species / product | Trex Transcend 5.5" (or equivalent composite) |
-| Board width | 5.5" actual face |
+| Species / product | **MoistureShield Vision** (composite, capped, DiamondDefense scratch coat, 50-yr fade & stain warranty) |
+| Board width | **5.4"** actual face |
 | Gap between planks | 1/8" typical |
-| Effective spacing (c-c) | 5.625" |
+| Effective spacing (c-c) | **5.525"** |
 | Run direction | Perpendicular to house (in the 16' depth direction) |
-| Cut length | 15'-7" (187") — from inner edge of house-side PF to inner edge of far-side PF |
+| Cut length | **15'-7.2" (187.2")** — from inner edge of house-side PF to inner edge of far-side PF |
 | Practical lumber | 16-ft boards, field-cut |
-| Waste per board | ~5" |
-| Count | **48 field planks** |
+| Waste per board | ~4.8" |
+| Count | **49 field planks** |
 
-**How 48 is derived:** Field width = framing 23'-0" minus 2 × 2.5" (PF inboard overlap on each side) = 22'-7" = 271". 271" ÷ 5.625" = 48.18 → 48 planks. The remaining ~1.1" gap sits at the right-side PF edge (absorbed as a slightly wider gap; within Trex installation tolerances).
+**How 49 is derived:** Field width = framing 23'-0" minus 2 × 2.4" (PF inboard overlap on each side) = 22'-7.2" = 271.2". 271.2" ÷ 5.525" = 49.09 → 49 planks. The remaining ~0.5" gap sits at the right-side PF edge (absorbed as a slightly wider gap; within MoistureShield installation tolerances).
 
 ### Picture-frame boards (4 sides)
 
@@ -64,7 +70,7 @@ Produced by Gemma (Technical Diagramming Specialist) on 2026-05-01.
 | Left-side | 16'-6" overall | Mitered at bottom (outside); butted at top (against house) |
 | Right-side | 16'-6" overall | Mitered at bottom (outside); butted at top (against house) |
 
-All PF boards: 5.5" wide × 1" thick (Trex composite). Single-board PF, not doubled.
+All PF boards: **5.4"** wide × **1.0"** thick (MoistureShield Vision composite). Single-board PF, not doubled.
 
 **2 mitered corners, 2 butted corners:**
 - Outside corners (far-left, far-right): 45° miter — both boards cut at 22.5° compound angle
@@ -74,27 +80,29 @@ All PF boards: 5.5" wide × 1" thick (Trex composite). Single-board PF, not doub
 
 | Item | Count |
 |------|-------|
-| Field planks (16-ft boards) | 48 |
+| Field planks (16-ft boards) | **49** |
 | PF house-side (order 24-ft, or splice 2× 12-ft over a joist/girder) | 1 |
 | PF far-side (same) | 1 |
 | PF left-side (16-ft board, field-cut to 16'-6") | 1 |
 | PF right-side (same) | 1 |
-| **Board subtotal** | **52** |
+| **Board subtotal** | **53** |
 | +10% waste factor | +5 |
-| **Total order estimate** | **~57 boards** |
+| **Total order estimate** | **~58 boards** |
 
 > This is a planning estimate. **Hollis** will produce the precise BOM with an exact cut list.
 
 ---
 
-## Deck spec summary (v8 / v7)
+## Deck spec summary (v11)
 
-- **Overall finished surface (PF outer edge to outer edge):** 23'-6" × 16'-6"
-- **Framing footprint (rim outer edge):** 23'-0" × 16'-3"
+- **Overall finished surface (PF outer edge to outer edge):** 23'-6" × 16'-6" — UNCHANGED
+- **Framing footprint (rim outer edge):** 23'-0" × 16'-3" — UNCHANGED
 - **Height:** 12" max above grade (hard ceiling, non-negotiable)
 - **Existing concrete patio:** 23'-6" × 16'-6" — matches deck footprint exactly; punched for piers
-- **Deck boards:** Trex composite, perpendicular to house (16'-3" direction)
-- **Picture-frame border:** 5.5" Trex on all 4 sides (house side butts wall; 3 exposed sides overhang fascia 2.25")
+- **Deck boards:** **MoistureShield Vision** composite, perpendicular to house (16'-3" direction)
+- **Fastener system:** **Tiger Claw TC-G + Cortex** (color-matched plugs) for field planks; face-screwed PF boards
+- **Picture-frame border:** **5.4"** MoistureShield Vision on all 4 sides (house side butts wall; 3 exposed sides overhang fascia **2.33"**)
+- **Available at:** Home Depot, Lowe's, Richards Building Supply (Hartford metro)
 
 ---
 
@@ -102,8 +110,8 @@ All PF boards: 5.5" wide × 1" thick (Trex composite). Single-board PF, not doub
 
 | Layer | Thickness | Elevation |
 |-------|-----------|-----------|
-| Top of Trex decking | — | **12.0" AG** |
-| Trex composite board | 1.0" | top → bottom |
+| Top of MoistureShield Vision decking | — | **12.0" AG** |
+| MoistureShield Vision board | **1.0"** (actual) | top → bottom |
 | Top of joist / girder | — | **11.0" AG** |
 | 2×10 actual depth | 9.25" | top → bottom |
 | Bottom of joist / girder | — | **1.75" AG** |
@@ -196,10 +204,10 @@ All PF boards: 5.5" wide × 1" thick (Trex composite). Single-board PF, not doub
 
 | Side | Member | Fascia | Overhang |
 |------|--------|--------|----------|
-| House side | 5.5" Trex PF board | None (wall is boundary) | None past wall; 1/4" thermal gap to siding |
-| Far side | 5.5" Trex PF board | 0.75" Trex Universal Fascia | 2.25" past fascia (3" past rim outer face) |
-| Left side | 5.5" Trex PF board | 0.75" Trex Universal Fascia | 2.25" past fascia (3" past rim outer face) |
-| Right side | 5.5" Trex PF board | 0.75" Trex Universal Fascia | 2.25" past fascia (3" past rim outer face) |
+| House side | **5.4"** MoistureShield Vision PF board | None (wall is boundary) | None past wall; 1/4" thermal gap to siding |
+| Far side | **5.4"** MoistureShield Vision PF board | **0.67"** MoistureShield Vision Fascia | **2.33"** past fascia (3" past rim outer face) |
+| Left side | **5.4"** MoistureShield Vision PF board | **0.67"** MoistureShield Vision Fascia | **2.33"** past fascia (3" past rim outer face) |
+| Right side | **5.4"** MoistureShield Vision PF board | **0.67"** MoistureShield Vision Fascia | **2.33"** past fascia (3" past rim outer face) |
 
 - Mitered joints at the 3 outside corners (far-left, far-right, and at house-side left/right corners)
 - House-side PF board backed by ledger + new house-side 2×10 blocking
@@ -218,6 +226,7 @@ All PF boards: 5.5" wide × 1" thick (Trex composite). Single-board PF, not doub
 | Joist segment to girder (face-hung) | Simpson LUS210Z hot-dip galv (~68 total in field) |
 | Doubled rim segments (face-hung) | Simpson LUS210-2Z hot-dip galv |
 | Drop-board to girder/rim | Structural screws or lag bolts |
+| Field plank hidden fastener | **Tiger Claw TC-G + Cortex** (color-matched plugs) |
 | Fascia to rim | Stainless trim screws |
 | 2-ply rim | ½" carriage bolts per AWC specs |
 | Joist tape | Zip System or equivalent on every joist top surface |
@@ -244,6 +253,55 @@ Color-coded (see legend in drawing):
 | **Warm tan hatched background** | Existing concrete patio (23'-6" × 16'-6") |
 | **Amber callout** | MTWDeck lateral-tie requirement |
 | **Red/orange box** | Vertical budget + "EVERY ELEVATION VERIFIED" callout |
+
+---
+
+## Version history (v11 → v12 diff)
+
+| Element | v11 | **v12** | Notes |
+|---------|-----|---------|-------|
+| **Step assembly** | Not present | **Single step on LEFT edge** | 42" wide opening at y=6'-0" to y=9'-6" from house wall |
+| **Step projection** | — | **16" outward** (negative-x from deck) | Stringer footprint + tread depth |
+| **Step top tread** | — | **12" AG** (flush with deck surface) | Deck itself is the top landing |
+| **Step middle tread** | — | **6" AG, 10.8" deep** | 2 × MoistureShield Vision 5.4" planks side-by-side, running parallel to L edge |
+| **Risers** | — | **OPEN** (no riser board) | Stringers visible; 2 risers @ 6" each |
+| **Stringers** | — | **3 × 2×10 PT cut stringers** | At y=6', y=7'-9", y=9'-6"; Simpson LSCZ hangers to left girder outer face |
+| **Stringer base** | — | **12"×12" precast pavers** | Metal stringer-to-paver anchors; pavers on #57 compacted gravel base |
+| **Gravel pad** | — | **48"×18" stippled rectangle** | Extends slightly beyond step footprint; shown in plan view on both pages |
+| **Left PF** | Continuous y=0 to 16'-6" | **Interrupted at y=6'-0" and y=9'-6"** | Cut joints shown explicitly in red; PF resumes on both sides of step opening |
+| **Left fascia** | Continuous | **Interrupted at step opening** | Same cut joints as PF |
+| **Side-elevation inset** | Corner detail only | **Step profile added** | Shows 12" AG → 6" riser → 6" AG tread → 6" riser → grade → gravel + paver; open risers labeled |
+| **Legend** | 6 entries | **+ stringer, paver, gravel, cut joint, open riser entries** | All new step symbols documented |
+| **Fastener notes** | — | **+ Simpson LSCZ, metal stringer-to-paver anchors** | Added to Page 1 fastener schedule |
+| **PNG dimensions** | 2570 × 1882 px | **2701 × 1958 px** | Wider canvas to show step projecting left |
+| **Version badge** | v11 | **v12** | Both drawio pages + PNG |
+| **All framing** | Unchanged | **Unchanged** | Left girder is stringer attachment point; no framing modifications needed |
+
+---
+
+## Version history (v10 → v11 diff)
+
+| Element | v10 (Trex) | **v11 (MoistureShield Vision)** | Notes |
+|---------|------------|----------------------------------|-------|
+| **Decking brand** | Trex Transcend | **MoistureShield Vision** | Composite, capped, DiamondDefense scratch coat, 50-yr fade & stain warranty |
+| **Fastener system** | Trex Hideaway hidden fasteners | **Tiger Claw TC-G + Cortex** (color-matched plugs) | — |
+| **Field plank width** | 5.5" | **5.4"** | Per MoistureShield spec |
+| **Field plank thickness** | 0.94" (nominal) | **1.0"** (actual) | Shows in section detail |
+| **Field plank spacing c-c** | 5.625" | **5.525"** | 5.4 + 0.125" gap |
+| **Field plank cut length** | 15'-7" (187") | **15'-7.2" (187.2")** | Minor change |
+| **Field plank count** | 48 | **49** | Tighter board width fits one more |
+| **PF board width** | 5.5" | **5.4"** | All 4 sides |
+| **PF inboard overlap** | 2.5" | **2.4"** | Half of 5.4" less gap |
+| **Fascia thickness** | 0.75" | **0.67"** | MoistureShield Vision composite fascia |
+| **PF overhang past fascia** | 2.25" | **2.33"** | Bumped to keep 3" PF-past-rim unchanged |
+| **PF cantilever past rim** | 3" | **3"** | **UNCHANGED** — that's the whole point |
+| **Framing footprint** | 23'-0" × 16'-3" | **23'-0" × 16'-3"** | **UNCHANGED** |
+| **Overall finished surface** | 23'-6" × 16'-6" | **23'-6" × 16'-6"** | **UNCHANGED** |
+| **Board order estimate** | ~57 boards (48+4+5) | **~58 boards (49+4+5)** | Hollis owns precise BOM |
+| **Version badge** | v10 | **v11** | Both drawio pages + PNG |
+| **Availability** | — | **Home Depot, Lowe's, Richards Building Supply (Hartford metro)** | — |
+
+All structural framing (ledger, girders, joists, piers, blocking, drop-board sub-fascia), the 4-side picture-frame layout, and the v10 outside-corner mitered joint fix are **preserved unchanged**.
 
 ---
 

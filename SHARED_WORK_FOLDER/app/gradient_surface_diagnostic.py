@@ -764,6 +764,31 @@ MOUNT_BORE_INNER_RADIUS_MM: float = MOUNT_BORE_INNER_DIAMETER_MM / 2.0
 MOUNT_BORE_OUTER_RADIUS_MM: float = MOUNT_BORE_INNER_RADIUS_MM + WALL_THICKNESS_MM
 MOUNT_BORE_INSET_MM: float = 20.0                 # distance from print rect corner
 
+# ---------------------------------------------------------------------------
+# Water-containing-hole rule (Topo, 2026-05-01) — task per Thomas/Larry.
+#
+# When an EGM contains one or more polygons of type "water", the printable
+# pieces — green, fringe, sand traps — are LIFTED by WATER_HOLE_LIFT_MM so a
+# 2 mm filament base sits underneath each. The original terrain shape on top
+# is preserved (just sitting 2 mm higher). Water polygons themselves are NOT
+# lifted (water sits at the bottom of the basin).
+#
+# In addition, any green / fringe / sand-trap element that touches the frame
+# at the boundary of the hole is CAPPED at BOUNDARY_HEIGHT_CAP_MM total
+# height (including the 2 mm base). Two cap modes:
+#   - "hard"     : clip Z values above cap flat to cap exactly (default).
+#   - "compress" : linearly squash terrain Z so max = cap (proportional).
+#
+# Boundary-touching = polygon has any vertex within BOUNDARY_TOUCH_TOL_MM of
+# the fringe rectangle perimeter (±_half = ±(PRINT_SIZE/2 + FRINGE_XY_EXP/2)).
+# The fringe itself ALWAYS touches by construction. The green is interior to
+# the fringe and never touches the frame.
+WATER_HOLE_LIFT_ENABLED: bool  = True
+WATER_HOLE_LIFT_MM:      float = 2.0     # base-slab thickness inserted under lifted pieces
+BOUNDARY_HEIGHT_CAP_MM:  float = 9.0     # absolute Z ceiling for boundary-touching pieces
+BOUNDARY_HEIGHT_CAP_MODE: str  = "hard"  # one of: "hard", "compress"
+BOUNDARY_TOUCH_TOL_MM:   float = 0.5     # XY tolerance for "vertex touches frame edge"
+
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
     """
@@ -2483,6 +2508,125 @@ def _clip_polygon_to_fringe_rect(
         return None
 
 
+# ---------------------------------------------------------------------------
+# Water-containing-hole helpers (Topo, 2026-05-01)
+# ---------------------------------------------------------------------------
+
+def _hole_has_water(egm_data: dict) -> bool:
+    """True iff the EGM defines one or more polygons of type 'water'."""
+    return any(p.get("type") == "water" for p in egm_data.get("polygons", []))
+
+
+def _polygon_touches_frame_boundary(
+    poly: ShapelyPolygon,
+    tol_mm: float = BOUNDARY_TOUCH_TOL_MM,
+) -> bool:
+    """
+    Return True iff *poly* has any exterior vertex within ``tol_mm`` of the
+    fringe rectangle perimeter (±_half per axis). The fringe rectangle is the
+    same one used by ``_clip_polygon_to_fringe_rect``.
+    """
+    _half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+    coords = np.asarray(poly.exterior.coords, dtype=np.float64)
+    if coords.size == 0:
+        return False
+    near_x = (np.abs(np.abs(coords[:, 0]) - _half) <= tol_mm)
+    near_y = (np.abs(np.abs(coords[:, 1]) - _half) <= tol_mm)
+    return bool(np.any(near_x | near_y))
+
+
+def _apply_lift_and_cap(
+    mesh: "trimesh.Trimesh",
+    lift_mm: float,
+    cap_mm: float | None,
+    cap_mode: str = BOUNDARY_HEIGHT_CAP_MODE,
+    label: str = "",
+) -> dict:
+    """
+    Lift the *top-surface* vertices of ``mesh`` by ``lift_mm`` mm and
+    optionally cap them at ``cap_mm`` mm.
+
+    "Top-surface vertex" = any vertex with z > 0 in the input mesh. Bottom
+    vertices (z == 0) stay pinned to z=0 so the wall stretches by ``lift_mm``,
+    materialising the new 2 mm base. Mesh topology and watertight-ness are
+    unchanged because the wall stitch is preserved.
+
+    Cap modes (only applied when ``cap_mm`` is not None):
+      - "hard"     : top z values above cap_mm are clipped to cap_mm.
+      - "compress" : top z values are linearly squashed so max(z) == cap_mm.
+        If max(z) <= cap_mm, no compression is applied.
+
+    Returns a small stats dict: {applied, cap_triggered, vertices_clipped,
+    max_clip_mm, z_top_before, z_top_after}.
+    """
+    verts = mesh.vertices  # live reference
+    top_mask = verts[:, 2] > 1e-6
+    if not top_mask.any():
+        return {
+            "applied": False,
+            "cap_triggered": False,
+            "vertices_clipped": 0,
+            "max_clip_mm": 0.0,
+            "z_top_before": (0.0, 0.0),
+            "z_top_after":  (0.0, 0.0),
+        }
+
+    z_before_min = float(verts[top_mask, 2].min())
+    z_before_max = float(verts[top_mask, 2].max())
+
+    # Lift top surface uniformly. Bottom (z==0) stays at z=0; walls stretch.
+    if lift_mm:
+        verts[top_mask, 2] += lift_mm
+
+    cap_triggered = False
+    n_clipped = 0
+    max_clip = 0.0
+    if cap_mm is not None:
+        z_top = verts[top_mask, 2]
+        if cap_mode == "hard":
+            over = z_top > cap_mm
+            n_clipped = int(over.sum())
+            if n_clipped:
+                cap_triggered = True
+                max_clip = float((z_top[over] - cap_mm).max())
+                z_top = np.minimum(z_top, cap_mm)
+                verts[top_mask, 2] = z_top
+        elif cap_mode == "compress":
+            zmax = float(z_top.max())
+            if zmax > cap_mm:
+                cap_triggered = True
+                # Compress around the bottom (z=0): scale top z's by cap/zmax.
+                scale = cap_mm / zmax
+                # "Vertices clipped" here = vertices whose z was lowered.
+                lowered = z_top * scale
+                n_clipped = int((z_top - lowered > 1e-6).sum())
+                max_clip = float((z_top - lowered).max())
+                verts[top_mask, 2] = lowered
+        else:
+            raise ValueError(
+                f"BOUNDARY_HEIGHT_CAP_MODE={cap_mode!r} not in {{'hard','compress'}}"
+            )
+
+    z_after_min = float(verts[top_mask, 2].min())
+    z_after_max = float(verts[top_mask, 2].max())
+
+    if label:
+        print(f"    lift+cap [{label}]: lift={lift_mm:.2f} mm, "
+              f"cap={'-' if cap_mm is None else f'{cap_mm:.1f} mm ({cap_mode})'}, "
+              f"z_top {z_before_min:.2f}-{z_before_max:.2f} → "
+              f"{z_after_min:.2f}-{z_after_max:.2f}, "
+              f"clipped {n_clipped} vert(s), max_clip {max_clip:.2f} mm")
+
+    return {
+        "applied": True,
+        "cap_triggered": cap_triggered,
+        "vertices_clipped": n_clipped,
+        "max_clip_mm": max_clip,
+        "z_top_before": (z_before_min, z_before_max),
+        "z_top_after":  (z_after_min, z_after_max),
+    }
+
+
 def export_trap_stls(
     egm_data: dict,
     green_boundary_px: np.ndarray,
@@ -2528,6 +2672,16 @@ def export_trap_stls(
     if not trap_polygons:
         print("  No trap polygons found in EGM data.")
         return []
+
+    # Water-containing-hole rule (Topo 2026-05-01): if the EGM contains any
+    # water polygon, every trap is lifted by WATER_HOLE_LIFT_MM and any trap
+    # whose footprint touches the fringe rectangle perimeter is capped at
+    # BOUNDARY_HEIGHT_CAP_MM total height.
+    _hole_water = WATER_HOLE_LIFT_ENABLED and _hole_has_water(egm_data)
+    if _hole_water:
+        print(f"  Water-hole rule active: lift={WATER_HOLE_LIFT_MM} mm, "
+              f"boundary cap={BOUNDARY_HEIGHT_CAP_MM} mm "
+              f"(mode={BOUNDARY_HEIGHT_CAP_MODE})")
 
     # Pre-build fringe KD-tree for fast Z lookups (top-surface vertices only, Z > 0)
     fringe_kd = None
@@ -2615,13 +2769,29 @@ def export_trap_stls(
             from generate_stl_3mf import _build_slab_from_shapely
             mesh = _build_slab_from_shapely(shapely_inset, trap_height)
 
-            # Apply sand grain texture to the top face
+            # Apply sand grain texture to the top face (must precede lift; the
+            # texture detects the top via z_max-relative threshold so it works
+            # at any base height, but applying it first means the lift moves a
+            # finished textured surface as one block).
             apply_sand_texture(mesh, trap_index=i)
+
+            # Water-hole rule: lift this trap and (if it touches the boundary)
+            # cap it at BOUNDARY_HEIGHT_CAP_MM. Otherwise leave untouched.
+            if _hole_water:
+                touches = _polygon_touches_frame_boundary(shapely_inset)
+                cap_mm = BOUNDARY_HEIGHT_CAP_MM if touches else None
+                _apply_lift_and_cap(
+                    mesh,
+                    lift_mm=WATER_HOLE_LIFT_MM,
+                    cap_mm=cap_mm,
+                    label=f"trap_{i}{' (boundary)' if touches else ''}",
+                )
 
             bb = mesh.bounds
             print(f"  Trap {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "
                   f"watertight={mesh.is_watertight}, "
-                  f"X[{bb[0,0]:.1f},{bb[1,0]:.1f}] Y[{bb[0,1]:.1f},{bb[1,1]:.1f}] mm")
+                  f"X[{bb[0,0]:.1f},{bb[1,0]:.1f}] Y[{bb[0,1]:.1f},{bb[1,1]:.1f}] "
+                  f"Z[{bb[0,2]:.2f},{bb[1,2]:.2f}] mm")
 
             if write_stls:
                 out_path = os.path.join(stl_dir, f"{slug}_trap_{i}.stl")
@@ -4212,6 +4382,47 @@ def run_pipeline(egm_path: str) -> str:
     except Exception as exc:
         print(f"  ERROR building fringe mesh: {exc}")
         import traceback; traceback.print_exc()
+
+    # ── 7c. Water-hole rule: lift green + fringe (+ optional cap) ───────────
+    #
+    # When the EGM contains any water polygon, lift green and fringe by
+    # WATER_HOLE_LIFT_MM so a 2 mm filament base sits underneath. The fringe
+    # touches the frame boundary by construction, so its top is also capped
+    # at BOUNDARY_HEIGHT_CAP_MM (mode = BOUNDARY_HEIGHT_CAP_MODE). The green
+    # is interior to the fringe and never touches the frame, so it is lifted
+    # only — no cap. Traps and water are handled inside their export_*
+    # functions (see export_trap_stls / export_water_meshes).
+    #
+    # Sampling note: trap and water heights were computed earlier from
+    # `fringe_mesh_flat` (an unlifted reference). After we lift `fringe_mesh`
+    # here, that reference still holds the un-lifted fringe Z, so trap and
+    # water slabs are sized against the original surface; their own lift is
+    # then applied on top of that, producing a consistent +2 mm shift for
+    # every printable piece in the assembly.
+    _hole_water_active = WATER_HOLE_LIFT_ENABLED and _hole_has_water(_egm_data)
+    if _hole_water_active:
+        print(f"\n[7c] Water-hole rule: lift={WATER_HOLE_LIFT_MM} mm, "
+              f"boundary cap={BOUNDARY_HEIGHT_CAP_MM} mm "
+              f"(mode={BOUNDARY_HEIGHT_CAP_MODE})")
+        # Green: smooth + stepped variants — never touches the frame, so no cap.
+        if isinstance(smooth_mesh_flat, trimesh.Trimesh):
+            _apply_lift_and_cap(
+                smooth_mesh_flat, lift_mm=WATER_HOLE_LIFT_MM,
+                cap_mm=None, label="green_smooth",
+            )
+        if isinstance(stepped_mesh, trimesh.Trimesh):
+            _apply_lift_and_cap(
+                stepped_mesh, lift_mm=WATER_HOLE_LIFT_MM,
+                cap_mm=None, label="green_stepped",
+            )
+        # Fringe: ALWAYS touches the frame by construction → lift + cap.
+        if isinstance(fringe_mesh, trimesh.Trimesh):
+            _apply_lift_and_cap(
+                fringe_mesh, lift_mm=WATER_HOLE_LIFT_MM,
+                cap_mm=BOUNDARY_HEIGHT_CAP_MM, label="fringe",
+            )
+    else:
+        print("\n[7c] Water-hole rule: SKIPPED (no water polygons in EGM)")
 
     # ── 8. Build sand trap meshes (in-memory) ───────────────────────────────
     print("\n[8] Building sand trap meshes…")

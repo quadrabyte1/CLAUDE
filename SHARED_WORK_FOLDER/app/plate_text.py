@@ -308,24 +308,44 @@ _BORDER_DEPTH       = 1.0      # mm — border extrusion depth
 # bottom margin.  Layout is built by pinning the TOP line and stepping
 # downward by _LINE_SPACING per line — this keeps the top margin unchanged
 # for plaques with any number of lines (2-line, 3-line, 4-line, etc.).
+#
+# v3.1 (Topo, 2026-05-01): per-line shift for the 3-line layout. Bottom line
+# (line 3) is now the fixed anchor; lines 1 and 2 are nudged DOWN to pull the
+# text block tighter to the bottom edge:
+#     Line 1 (top)   : DOWN 1.0 mm  (+10.8893 → +9.8893)
+#     Line 2 (middle): DOWN 0.5 mm  (+0.5     →  0.0)
+#     Line 3 (bottom): UNCHANGED    (-9.8893)
+# Net effect: total text-block height shrinks by 1 mm; spacing L1↔L2 and
+# L2↔L3 each shrinks by 0.5 mm so the block sits visually higher off the
+# bottom of the plate (Thomas's design rule). The shift is applied as a
+# per-line delta vector so it's trivial to retune later.
 _LINE_SPACING       = 10.3893  # mm — uniform gap between adjacent lines
 _TOP_LINE_Y         = 10.8893  # mm — y-offset of the topmost line (pins top margin)
+
+# Per-line additive y-shift (mm). Applied AFTER the uniform _line_y_offsets
+# layout. NEGATIVE = move that line DOWN. Indexed by line number (0 = top).
+# Length must be ≥ n_lines requested. v3.1 — 3-line tuning per Thomas.
+_LINE_Y_DELTA_3     = [-1.0, -0.5, 0.0]  # 3-line plaque: [top, middle, bottom]
 
 
 def _line_y_offsets(n_lines: int) -> list:
     """
     Return the local-plate y-offsets for *n_lines* lines of text, starting at
-    the top line pinned to _TOP_LINE_Y and stepping downward by _LINE_SPACING.
+    the top line pinned to _TOP_LINE_Y and stepping downward by _LINE_SPACING,
+    with the v3.1 per-line delta applied for the 3-line layout.
 
-    For the canonical 3-line plaque this yields:
-        [+10.8893, +0.5, -9.8893]
-    with uniform inter-line gap of _LINE_SPACING (10.3893 mm).
+    For the canonical 3-line plaque (v3.1) this yields:
+        [+9.8893, 0.0, -9.8893]
+    (line 1 down 1.0, line 2 down 0.5, line 3 unchanged).
 
-    For a 2-line plaque: [+10.8893, +0.5].
+    For a 2-line plaque (no per-line delta): [+10.8893, +0.5].
     For a 4-line plaque: [+10.8893, +0.5, -9.8893, -20.2786] (would exceed
     plate in practice — callers must sanity-check vs plate half-height).
     """
-    return [_TOP_LINE_Y - i * _LINE_SPACING for i in range(n_lines)]
+    base = [_TOP_LINE_Y - i * _LINE_SPACING for i in range(n_lines)]
+    if n_lines == 3:
+        return [b + d for b, d in zip(base, _LINE_Y_DELTA_3)]
+    return base
 
 
 def _stadium_polygon(straight_half: float, arc_radius: float, n_arc: int = 64):

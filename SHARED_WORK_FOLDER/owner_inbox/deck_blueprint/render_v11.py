@@ -1,0 +1,645 @@
+"""
+render_v11.py  —  Gemma's matplotlib render of deck_plan v11  (Page 2: Decking Plan)
+Produces deck_plan.png at >=2000 px wide, white background.
+
+v11 = v10 + MoistureShield Vision brand swap + updated dimensions.
+Changes from v10:
+  - Decking brand: Trex Transcend → MoistureShield Vision (composite, capped,
+    DiamondDefense scratch coat, 50-yr fade & stain warranty)
+  - Hidden fastener system: Trex Hideaway → Tiger Claw TC-G + Cortex (color-matched plugs)
+  - Field plank width: 5.5\" → 5.4\" (per MoistureShield spec)
+  - Field plank thickness (section detail label): 0.94\" → 1.0\"
+  - Field plank spacing c-c: 5.625\" → 5.525\" (5.4 + 0.125 gap)
+  - Field plank cut length: 15'-7\" → 15'-7.2\" (187.2\")
+  - Fascia thickness: 0.75\" → 0.67\" (MoistureShield Vision composite fascia)
+  - Fascia overhang past fascia: 2.25\" → 2.33\" (keeps PF cantilever past rim at 3\")
+  - PF board width: 5.5\" → 5.4\"
+  - Field plank count: 48 → 49 (tighter board width fits one more)
+  - Order estimate: ~57 → ~58 boards (49 field + 4 PF + 10% waste)
+  - PF_INBOARD overlap: 2.5\" → 2.4\"
+  - Version badge: \"v10\" → \"v11\"
+  - All Trex references replaced with MoistureShield Vision
+
+What is UNCHANGED:
+  - Overall finished surface: 23'-6\" x 16'-6\"
+  - Framing footprint: 23'-0\" x 16'-3\"
+  - PF cantilever past rim: 3\"
+  - All structural framing elements (girders, joists, piers, ledger, etc.)
+  - 4-side picture-frame layout
+  - Outside-corner mitered joints (v10 fix preserved)
+  - Multi-page structure: Page 1 = Framing, Page 2 = Decking
+
+Coordinate system (unchanged from v7):
+  - X axis = 23 ft direction (along house wall, left→right)
+  - Y axis = 16.25 ft direction (out from house, top→bottom)
+  - House wall along the TOP of the drawing.
+  - Y is inverted (ax.invert_yaxis) so y=0 plots at top.
+All measurements in feet unless noted.
+
+Plank math (v11 verified):
+  Field planks:
+    Width: 5.4\" = 0.45 ft (MoistureShield Vision spec)
+    Gap: 1/8\" = 0.01042 ft
+    Effective spacing center-to-center: 5.525\" = 0.46042 ft
+    Length: 15'-7.2\" = 187.2\" (house-side PF outer edge y=5.4\" to far-side PF inner edge)
+    Field area width: 22'-7.2\" = 271.2\" (framing 23'-0\" minus 2 × 2.4\" PF inboard overlap)
+    Count: 271.2\" / 5.525\" = 49.09 → 49 planks
+  PF planks (all 5.4\" wide = 0.45 ft):
+    House-side: 23'-6\" long, y=0..5.4\" from wall
+    Far-side: 23'-6\" long, y=16'-0.6\"..16'-6\" (3\" cantilever past rim)
+    Left-side: 16'-6\" long, mitered at far corner, butted at house corner
+    Right-side: symmetric
+"""
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import matplotlib.lines as mlines
+import numpy as np
+from matplotlib.patches import Polygon as MplPolygon, FancyBboxPatch, Rectangle
+
+# ── Key dimensions ─────────────────────────────────────────────────────────────
+FRAME_W    = 23.0           # framing width (along house), ft
+FRAME_D    = 16.25          # framing depth (out from house) = 16'-3", ft
+PF_W       = 5.4 / 12      # PF board width in ft = 0.45 ft  (v11: was 5.5/12)
+FASCIA_T   = 0.67 / 12     # fascia thickness, ft  (v11: was 0.75/12)
+PF_OVR     = 3.0 / 12      # PF overhang past rim outer face (3" = 0.25 ft) — UNCHANGED
+OVERALL_W  = FRAME_W + 2 * PF_OVR    # 23.5 ft = 23'-6"  — UNCHANGED
+OVERALL_D  = FRAME_D + PF_OVR        # 16.5 ft = 16'-6"  — UNCHANGED
+
+# Girder positions
+GIRDER_X   = [0.0, 11.5, 23.0]
+GIRDER_W   = 0.38
+
+# Joist rows
+JOIST_SPACING = 1.0
+RIM_Y         = FRAME_D
+JOIST_H       = 0.085
+
+# Pier positions
+PIER_Y     = [1.0, 8.125, FRAME_D]
+
+# ── Plank dimensions (all in feet) ────────────────────────────────────────────
+PLANK_W    = 5.4 / 12       # 0.45 ft (MoistureShield Vision actual face width; v11 was 5.5/12)
+PLANK_GAP  = (1.0/8) / 12   # 0.01042 ft
+PLANK_STEP = PLANK_W + PLANK_GAP  # 0.46042 ft (5.525" center-to-center)
+
+# PF inboard overlap on each side = 2.4" = 0.20 ft  (v11: was 2.5")
+PF_INBOARD = 2.4 / 12
+
+# Field plank X range (inside of PF boards on both sides)
+FIELD_X0   = PF_INBOARD              # 2.4" = 0.20 ft
+FIELD_X1   = FRAME_W - PF_INBOARD    # 22'-9.6" = 22.80 ft
+FIELD_WIDTH_FT = FIELD_X1 - FIELD_X0   # 22'-7.2" = 22.60 ft = 271.2"
+NUM_PLANKS = 49                       # v11: was 48
+
+# Field plank Y range: from house-side PF outer edge (y=PF_W) to far-side PF inner edge
+FIELD_Y0   = PF_W                           # 5.4" = 0.45 ft
+FIELD_Y1   = FRAME_D + PF_OVR - PF_W       # far-side PF inner edge
+FIELD_LEN  = FIELD_Y1 - FIELD_Y0           # 15'-7.2" in ft
+
+# ── Canvas setup ───────────────────────────────────────────────────────────────
+FIG_W_IN = 34
+FIG_H_IN = 24
+DPI = 100
+
+fig, ax = plt.subplots(figsize=(FIG_W_IN, FIG_H_IN), dpi=DPI)
+fig.patch.set_facecolor("white")
+ax.set_facecolor("white")
+
+ax.set_xlim(-4.5, 34.5)
+ax.set_ylim(-4.5, 24.0)
+ax.invert_yaxis()
+ax.set_aspect("equal")
+ax.axis("off")
+
+# ── Color palette ──────────────────────────────────────────────────────────────
+C_HOUSE     = "#cccccc"
+C_PATIO     = "#e8e0d4"
+EC_PATIO    = "#a09080"
+C_LEDGER    = "#f8cecc";  EC_LEDGER  = "#b85450"
+C_GIRDER    = "#dae8fc";  EC_GIRDER  = "#6c8ebf"
+C_JOIST     = "#d5e8d4";  EC_JOIST   = "#82b366"
+C_RIM       = "#fff2cc";  EC_RIM     = "#d6b656"
+C_FASCIA    = "#c8a0e8";  EC_FASCIA  = "#7030a0"
+C_PIER      = "#5a4030";  EC_PIER    = "#2a1808"
+C_PIER_HOLE = "#b0a898";  EC_HOLE    = "#706050"
+C_DROP      = "#c0d8b0";  EC_DROP    = "#507040"
+C_BLOCK     = "#888888"
+
+# MoistureShield Vision decking colors (slightly cooler/greyer brown vs Trex warm gold)
+C_FIELD     = "#b89a68"   # slightly cooler than v10 Trex warm tan
+EC_FIELD    = "#6a4a2a"
+C_PF_TREX   = "#8a6a3a"   # PF boards — same hue family, distinguishable
+EC_PF_TREX  = "#4a2a0a"
+C_NOTE      = "#ffffee";  EC_NOTE    = "#888800"
+C_CALLOUT   = "#fff9e6";  EC_CALLOUT = "#cc8800"
+
+# Framing background alpha (page 2 — muted)
+FRAME_ALPHA = 0.38
+
+# ── Helper functions ───────────────────────────────────────────────────────────
+def rect(x, y, w, h, fc, ec, lw=1.0, zorder=2, alpha=1.0):
+    p = FancyBboxPatch((x, y), w, h,
+                       boxstyle="square,pad=0",
+                       facecolor=fc, edgecolor=ec,
+                       linewidth=lw, zorder=zorder, alpha=alpha)
+    ax.add_patch(p)
+    return p
+
+def label(x, y, text, fs=7, ha="center", va="center", bold=False, color="black",
+          rotation=0, zorder=5, alpha=1.0):
+    fw = "bold" if bold else "normal"
+    ax.text(x, y, text, fontsize=fs, ha=ha, va=va, fontweight=fw,
+            color=color, rotation=rotation, zorder=zorder, clip_on=False, alpha=alpha)
+
+def panel_box(y0, h, fc="#f5f5f5", ec="#444444", lw=1.5):
+    rect(PX, y0, PW, h, fc, ec, lw=lw, zorder=2)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ══ VERSION BADGE — upper-left corner (v11) ══════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════════
+BADGE_X = -4.4
+BADGE_Y = -4.4
+BADGE_W = 3.6
+BADGE_H = 1.8
+
+badge = FancyBboxPatch((BADGE_X, BADGE_Y), BADGE_W, BADGE_H,
+                       boxstyle="round,pad=0.05",
+                       facecolor="#1a1a1a", edgecolor="#1a1a1a",
+                       linewidth=2, zorder=50)
+ax.add_patch(badge)
+
+ax.text(BADGE_X + BADGE_W / 2, BADGE_Y + BADGE_H * 0.38,
+        "v11",
+        fontsize=36, fontweight="bold",
+        ha="center", va="center",
+        color="white", zorder=51, clip_on=False)
+
+ax.text(BADGE_X + BADGE_W / 2, BADGE_Y + BADGE_H * 0.78,
+        "Page 2 of 2 — Decking",
+        fontsize=8, fontweight="normal",
+        ha="center", va="center",
+        color="#cccccc", zorder=51, clip_on=False)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ══ BACKGROUND: FRAMING LAYER (all v7 elements at FRAME_ALPHA opacity) ══════
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Patio background ──────────────────────────────────────────────────────────
+rect(-PF_OVR, 0.0, OVERALL_W, OVERALL_D - PF_OVR,
+     C_PATIO, EC_PATIO, lw=2.5, zorder=1, alpha=0.40)
+hatch_rect = Rectangle((-PF_OVR, 0.0), OVERALL_W, FRAME_D + PF_OVR,
+                        hatch='....', fill=False, edgecolor="#c0b090",
+                        linewidth=0, zorder=1, alpha=0.18)
+ax.add_patch(hatch_rect)
+
+label(-PF_OVR + OVERALL_W/2, FRAME_D/2 + 1.5,
+      "EXISTING CONCRETE PATIO  (background — framing layer @ 40% opacity)",
+      fs=6.5, bold=False, color="#9b7050", zorder=2, alpha=FRAME_ALPHA)
+
+# ── House wall (background) ───────────────────────────────────────────────────
+rect(-PF_OVR, -1.2, OVERALL_W, 1.1, C_HOUSE, "#444444", lw=2, zorder=3, alpha=FRAME_ALPHA)
+label(FRAME_W/2, -0.65,
+      "HOUSE WALL  ▲ NORTH  (23'-6\" overall edge)",
+      fs=10, bold=True, alpha=FRAME_ALPHA)
+
+# ── Girders (background) ──────────────────────────────────────────────────────
+GHW = GIRDER_W / 2
+for gx in GIRDER_X:
+    x0 = max(0.0, gx - GHW)
+    x0 = min(x0, FRAME_W - GIRDER_W)
+    rect(x0, 0.0, GIRDER_W, FRAME_D, C_GIRDER, EC_GIRDER, lw=2, zorder=4, alpha=FRAME_ALPHA)
+
+# ── Ledger (background) ───────────────────────────────────────────────────────
+LEDGER_H = 0.18
+rect(0.0, 0.0, FRAME_W, LEDGER_H, C_LEDGER, EC_LEDGER, lw=2.5, zorder=5, alpha=FRAME_ALPHA)
+
+# ── Joist segments (background) ───────────────────────────────────────────────
+SEG_A_X0 = GIRDER_X[0] + GHW
+SEG_A_X1 = GIRDER_X[1] - GHW
+SEG_B_X0 = GIRDER_X[1] + GHW
+SEG_B_X1 = GIRDER_X[2] - GHW
+
+all_rows = [(i * JOIST_SPACING, False) for i in range(1, 17)]
+all_rows.append((RIM_Y, True))
+
+for y_pos, is_rim in all_rows:
+    h = JOIST_H * 2 if is_rim else JOIST_H
+    fc = C_RIM if is_rim else C_JOIST
+    ec = EC_RIM if is_rim else EC_JOIST
+    lw = 2.0 if is_rim else 1.0
+    rect(SEG_A_X0, y_pos - h/2, SEG_A_X1 - SEG_A_X0, h,
+         fc, ec, lw=lw, zorder=3, alpha=FRAME_ALPHA)
+    rect(SEG_B_X0, y_pos - h/2, SEG_B_X1 - SEG_B_X0, h,
+         fc, ec, lw=lw, zorder=3, alpha=FRAME_ALPHA)
+
+# ── Drop-board sub-fascia (background) ───────────────────────────────────────
+DROP_T = 0.085
+left_drop_x = -GHW - DROP_T
+right_drop_x = GIRDER_X[2] + GHW
+far_drop_y = RIM_Y + JOIST_H
+
+rect(left_drop_x, 0.0, DROP_T, FRAME_D, C_DROP, EC_DROP, lw=2, zorder=5, alpha=FRAME_ALPHA)
+rect(right_drop_x, 0.0, DROP_T, FRAME_D, C_DROP, EC_DROP, lw=2, zorder=5, alpha=FRAME_ALPHA)
+rect(0.0, far_drop_y, FRAME_W, DROP_T, C_DROP, EC_DROP, lw=2, zorder=5, alpha=FRAME_ALPHA)
+
+# ── Fascia (background) — v11: FASCIA_T = 0.67" ───────────────────────────────
+# v10 fix preserved: extend left/right fascia strips to include the far fascia height
+fas_y = far_drop_y + DROP_T
+fas_y_end = fas_y + FASCIA_T   # bottom edge of far fascia band
+
+# Far fascia: full width
+rect(0.0, fas_y, FRAME_W, FASCIA_T, C_FASCIA, EC_FASCIA, lw=2, zorder=6, alpha=FRAME_ALPHA)
+# Left fascia: extended to fas_y_end (flush butt join with far fascia bottom)
+rect(-FASCIA_T, 0.0, FASCIA_T, fas_y_end, C_FASCIA, EC_FASCIA, lw=2, zorder=6, alpha=FRAME_ALPHA)
+# Right fascia: same extension
+rect(FRAME_W, 0.0, FASCIA_T, fas_y_end, C_FASCIA, EC_FASCIA, lw=2, zorder=6, alpha=FRAME_ALPHA)
+
+# ── Piers (background) ────────────────────────────────────────────────────────
+PIER_R  = 0.22
+HOLE_R  = 0.35
+for i, gx in enumerate(GIRDER_X):
+    for j, py in enumerate(PIER_Y):
+        hole = plt.Circle((gx, py), HOLE_R, fc=C_PIER_HOLE, ec=EC_HOLE,
+                          lw=1.0, zorder=5, alpha=FRAME_ALPHA * 0.7)
+        ax.add_patch(hole)
+        pier = plt.Circle((gx, py), PIER_R, fc=C_PIER, ec=EC_PIER,
+                          lw=1.5, zorder=8, alpha=FRAME_ALPHA)
+        ax.add_patch(pier)
+
+# ── Field blocking dashed lines (background) ──────────────────────────────────
+for bx in [5.75, 17.25]:
+    ax.plot([bx, bx], [1.0, FRAME_D],
+            color=C_BLOCK, linewidth=2.0, linestyle="--",
+            zorder=3, alpha=FRAME_ALPHA * 0.8)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ══ FOREGROUND: MOISTURESHIELD VISION DECK PLANKS ═══════════════════════════
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── 49 field planks ──────────────────────────────────────────────────────────
+for i in range(NUM_PLANKS):
+    x_left = FIELD_X0 + i * PLANK_STEP
+    rect(x_left, FIELD_Y0, PLANK_W, FIELD_LEN,
+         C_FIELD, EC_FIELD, lw=0.5, zorder=7)
+
+# Count labels: field plank 1, 13, 25, 37, 49
+labeled_planks = [0, 12, 24, 36, 48]  # 0-indexed
+for i in labeled_planks:
+    x_ctr = FIELD_X0 + i * PLANK_STEP + PLANK_W / 2
+    y_ctr = FIELD_Y0 + FIELD_LEN / 2
+    label(x_ctr, y_ctr,
+          f"{i+1}\nof 49",
+          fs=4.8, bold=True, color="#4a2a08", rotation=90, zorder=10)
+
+# Overall field count callout (left of field area)
+label(FIELD_X0 - 0.35, FIELD_Y0 + FIELD_LEN/2,
+      "← 49 field planks →\n5.4\" ea. + 1/8\" gap\n16-ft MoistureShield, cut 15'-7.2\"\nrunning ⊥ house",
+      fs=6.5, ha="right", bold=True, color="#4a2a08", zorder=10)
+
+# ── Picture-frame boards ──────────────────────────────────────────────────────
+# Key coordinates for all four PF planks.
+HOUSE_PF_X0 = -PF_OVR
+HOUSE_PF_X1 = OVERALL_W - PF_OVR   # 23.25 ft
+HOUSE_PF_Y0 = 0.0
+HOUSE_PF_Y1 = PF_W
+
+FAR_PF_X0 = -PF_OVR
+FAR_PF_X1 = OVERALL_W - PF_OVR
+FAR_PF_Y0 = FRAME_D + PF_OVR - PF_W   # inner edge of far PF
+FAR_PF_Y1 = FRAME_D + PF_OVR          # outer edge of far PF (= 16.5 ft)
+
+# Left PF outer/inner x-edges
+lx = -PF_OVR - FASCIA_T
+LEFT_PF_X0 = lx - PF_W   # outer (leftmost) edge
+LEFT_PF_X1 = lx           # inner edge
+
+# Right PF outer/inner x-edges
+rx = FRAME_W + FASCIA_T
+RIGHT_PF_X0 = rx
+RIGHT_PF_X1 = rx + PF_W
+
+# ── House-side PF (full width rectangle, butted at both top corners) ──────────
+rect(HOUSE_PF_X0, HOUSE_PF_Y0, HOUSE_PF_X1 - HOUSE_PF_X0, PF_W,
+     C_PF_TREX, EC_PF_TREX, lw=1.5, zorder=8)
+label((HOUSE_PF_X0 + HOUSE_PF_X1)/2, HOUSE_PF_Y0 + PF_W/2,
+      "HOUSE-SIDE PF — 5.4\" MoistureShield Vision  |  23'-6\" long  |  Butted at house wall  |  Butted corners (inside)",
+      fs=5.8, bold=True, color="#3a1a00", zorder=11)
+
+# ── Far-side PF (full width rectangle) ───────────────────────────────────────
+rect(FAR_PF_X0, FAR_PF_Y0, FAR_PF_X1 - FAR_PF_X0, PF_W,
+     C_PF_TREX, EC_PF_TREX, lw=1.5, zorder=8)
+label((FAR_PF_X0 + FAR_PF_X1)/2, FAR_PF_Y0 + PF_W/2,
+      "FAR-SIDE PF — 5.4\" MoistureShield Vision  |  23'-6\" long  |  MITERED corners (outside) ← 45°",
+      fs=5.8, bold=True, color="#3a1a00", zorder=11)
+
+# ── LEFT PF — v10 fix preserved: draw as mitered polygon, NOT a full rectangle ─
+# The left PF plank extends from y=0 (house wall) down to FAR_PF_Y1 (outer edge
+# of far PF), BUT at the outside corner (lower-left) it is mitered at 45°.
+# The miter cuts from (LEFT_PF_X1, FAR_PF_Y0) to (LEFT_PF_X0, FAR_PF_Y1).
+# This gives a 4-vertex polygon that covers the full left PF band including the
+# miter triangle — no separate gap, no overlapping rectangle.
+left_pf_verts = np.array([
+    [LEFT_PF_X0, 0.0       ],  # top-left  (house corner, outside)
+    [LEFT_PF_X1, 0.0       ],  # top-right (house corner, inside)
+    [LEFT_PF_X1, FAR_PF_Y0 ],  # bottom of straight section (inner edge meets far PF inner edge)
+    [LEFT_PF_X0, FAR_PF_Y1 ],  # miter point: outer edge goes all the way to far PF outer edge
+])
+left_pf_poly = MplPolygon(left_pf_verts,
+                           closed=True,
+                           facecolor=C_PF_TREX, edgecolor=EC_PF_TREX,
+                           linewidth=1.5, zorder=8)
+ax.add_patch(left_pf_poly)
+label(LEFT_PF_X0 + PF_W/2, (0.0 + FAR_PF_Y0)/2,
+      "LEFT PF\n5.4\" MoistureShield\n16'-6\" long",
+      fs=5.3, bold=True, color="#3a1a00", rotation=90, zorder=11)
+
+# ── RIGHT PF — v10 fix preserved: mirrored 4-vertex polygon ──────────────────
+right_pf_verts = np.array([
+    [RIGHT_PF_X1, 0.0       ],  # top-right (house corner, outside)
+    [RIGHT_PF_X0, 0.0       ],  # top-left  (house corner, inside)
+    [RIGHT_PF_X0, FAR_PF_Y0 ],  # bottom of straight section
+    [RIGHT_PF_X1, FAR_PF_Y1 ],  # miter point
+])
+right_pf_poly = MplPolygon(right_pf_verts,
+                            closed=True,
+                            facecolor=C_PF_TREX, edgecolor=EC_PF_TREX,
+                            linewidth=1.5, zorder=8)
+ax.add_patch(right_pf_poly)
+label(RIGHT_PF_X0 + PF_W/2, (0.0 + FAR_PF_Y0)/2,
+      "RIGHT PF\n5.4\" MoistureShield\n16'-6\" long",
+      fs=5.3, bold=True, color="#3a1a00", rotation=90, zorder=11)
+
+# ── Miter seam lines — draw explicitly at 45° across each outside corner ─────
+miter_lw = 2.5
+miter_color = EC_PF_TREX
+
+# Lower-left miter: from (LEFT_PF_X1, FAR_PF_Y0) to (LEFT_PF_X0, FAR_PF_Y1)
+ax.plot([LEFT_PF_X1, LEFT_PF_X0],
+        [FAR_PF_Y0,  FAR_PF_Y1],
+        color=miter_color, lw=miter_lw, zorder=12, solid_capstyle='round')
+
+# Lower-right miter: from (RIGHT_PF_X0, FAR_PF_Y0) to (RIGHT_PF_X1, FAR_PF_Y1)
+ax.plot([RIGHT_PF_X0, RIGHT_PF_X1],
+        [FAR_PF_Y0,   FAR_PF_Y1],
+        color=miter_color, lw=miter_lw, zorder=12, solid_capstyle='round')
+
+# ── Miter corner label annotations ───────────────────────────────────────────
+label(LEFT_PF_X0 - 0.25, FAR_PF_Y1 + 0.20,
+      "Outside corner\n45° miter",
+      fs=5.5, bold=True, color="#5a1a00", ha="center", zorder=12)
+ax.annotate("", xy=(LEFT_PF_X0 + 0.05, FAR_PF_Y1 - 0.08),
+            xytext=(LEFT_PF_X0 - 0.25, FAR_PF_Y1 + 0.12),
+            arrowprops=dict(arrowstyle="->", color="#5a1a00", lw=0.9))
+
+label(RIGHT_PF_X1 + 0.25, FAR_PF_Y1 + 0.20,
+      "Outside corner\n45° miter",
+      fs=5.5, bold=True, color="#5a1a00", ha="center", zorder=12)
+ax.annotate("", xy=(RIGHT_PF_X1 - 0.05, FAR_PF_Y1 - 0.08),
+            xytext=(RIGHT_PF_X1 + 0.25, FAR_PF_Y1 + 0.12),
+            arrowprops=dict(arrowstyle="->", color="#5a1a00", lw=0.9))
+
+# Inside corner labels (top-left, top-right against house)
+label(LEFT_PF_X1 - 0.05, HOUSE_PF_Y1 + 0.12,
+      "Inside corner\n(butted)",
+      fs=5.0, color="#777777", ha="center", zorder=10)
+label(RIGHT_PF_X0 + 0.05, HOUSE_PF_Y1 + 0.12,
+      "Inside corner\n(butted)",
+      fs=5.0, color="#777777", ha="center", zorder=10)
+
+# ── Mitered corner inset / zoom detail (bottom of drawing) ───────────────────
+INSET_CX = -1.5
+INSET_CY = 21.0
+INSET_SCALE = 4.0
+INSET_BOX_W = 3.8
+INSET_BOX_H = 2.8
+
+rect(INSET_CX - INSET_BOX_W/2, INSET_CY - 0.2,
+     INSET_BOX_W, INSET_BOX_H, "#fdf8f0", "#5a3a1a", lw=2.0, zorder=15)
+
+label(INSET_CX, INSET_CY + 0.12,
+      "OUTSIDE CORNER DETAIL (bottom-left, approx. 4× scale)",
+      fs=7.5, bold=True, color="#3a1a00", zorder=16)
+
+INS_PFW = PF_W * INSET_SCALE
+INS_X_LEFT = INSET_CX - INSET_BOX_W/2 + 0.15
+INS_Y_TOP  = INSET_CY + 0.45
+
+rect(INS_X_LEFT, INS_Y_TOP + INS_PFW, INSET_BOX_W - 0.3, INS_PFW,
+     C_PF_TREX, EC_PF_TREX, lw=1.5, zorder=16)
+label(INS_X_LEFT + (INSET_BOX_W - 0.3)/2, INS_Y_TOP + INS_PFW + INS_PFW/2,
+      "Far-side PF (5.4\")", fs=6.0, bold=True, color="#3a1a00", zorder=17)
+
+rect(INS_X_LEFT, INS_Y_TOP, INS_PFW, INS_PFW,
+     C_PF_TREX, EC_PF_TREX, lw=1.5, zorder=16)
+label(INS_X_LEFT + INS_PFW/2, INS_Y_TOP + INS_PFW/2,
+      "Left\nPF\n(5.4\")", fs=6.0, bold=True, color="#3a1a00", rotation=0, zorder=17)
+
+ax.plot([INS_X_LEFT, INS_X_LEFT + INS_PFW],
+        [INS_Y_TOP + INS_PFW, INS_Y_TOP],
+        color=EC_PF_TREX, lw=3.0, zorder=18)
+
+theta = np.linspace(np.pi, 1.25 * np.pi, 30)
+arc_r = INS_PFW * 0.35
+ax.plot(INS_X_LEFT + arc_r * np.cos(theta),
+        INS_Y_TOP + INS_PFW + arc_r * np.sin(theta),
+        color="#aa3300", lw=1.5, zorder=18)
+label(INS_X_LEFT + INS_PFW * 0.55, INS_Y_TOP + INS_PFW * 0.55,
+      "45°", fs=7.5, bold=True, color="#aa3300", zorder=19)
+
+label(INS_X_LEFT + INS_PFW + 0.05, INS_Y_TOP + INS_PFW + 0.15,
+      "← outer corner", fs=5.5, color="#5a1a00", ha="left", zorder=17)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DIMENSION ANNOTATIONS
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Overall 23'-6" (top)
+ax.annotate("", xy=(-PF_OVR, -2.5), xytext=(OVERALL_W - PF_OVR, -2.5),
+            arrowprops=dict(arrowstyle="<->", color="#000099", lw=1.6))
+label(FRAME_W/2, -2.85, "23'-6\"  OVERALL FINISHED SURFACE  (PF outer edge to outer edge)",
+      fs=10, bold=True, color="#000099")
+
+# Framing 23'-0" (just below overall)
+ax.annotate("", xy=(0.0, -2.0), xytext=(FRAME_W, -2.0),
+            arrowprops=dict(arrowstyle="<->", color="#444444", lw=1.2))
+label(FRAME_W/2, -1.75, "23'-0\"  framing footprint (rim outer edge)  — UNCHANGED",
+      fs=8, bold=False, color="#444444")
+
+# Overall 16'-6" (right side)
+right_ann = RIGHT_PF_X1 + 0.9
+ax.annotate("", xy=(right_ann, 0.0), xytext=(right_ann, OVERALL_D),
+            arrowprops=dict(arrowstyle="<->", color="#000099", lw=1.6))
+label(right_ann + 0.6, OVERALL_D/2,
+      "16'-6\"\nOVERALL\n(PF outer\nto wall)",
+      fs=8.5, bold=True, color="#000099", rotation=90)
+
+# Field width annotation
+ax.annotate("", xy=(FIELD_X0, -1.4), xytext=(FIELD_X1, -1.4),
+            arrowprops=dict(arrowstyle="<->", color="#7a3a00", lw=1.2))
+label((FIELD_X0 + FIELD_X1)/2, -1.15,
+      "22'-7.2\"  field plank area (271.2\")",
+      fs=7.5, bold=True, color="#7a3a00")
+
+# Field length annotation (right side)
+field_ann_x = FIELD_X1 + 0.6
+ax.annotate("", xy=(field_ann_x, FIELD_Y0), xytext=(field_ann_x, FIELD_Y1),
+            arrowprops=dict(arrowstyle="<->", color="#7a3a00", lw=1.2))
+label(field_ann_x + 0.7, (FIELD_Y0 + FIELD_Y1)/2,
+      "15'-7.2\"\nfield\nplank\nlength\n(187.2\")",
+      fs=7.5, bold=True, color="#7a3a00", rotation=90)
+
+# Plank width callout (between planks 1 and 2)
+ax.annotate("", xy=(FIELD_X0, -0.9), xytext=(FIELD_X0 + PLANK_W, -0.9),
+            arrowprops=dict(arrowstyle="<->", color="#5a3010", lw=1.0))
+label(FIELD_X0 + PLANK_W/2, -0.65, "5.4\"", fs=6.5, bold=True, color="#5a3010")
+ax.annotate("", xy=(FIELD_X0 + PLANK_W, -0.9),
+            xytext=(FIELD_X0 + PLANK_STEP, -0.9),
+            arrowprops=dict(arrowstyle="<->", color="#5a3010", lw=0.8))
+label(FIELD_X0 + PLANK_W + PLANK_GAP/2, -0.65, "⅛\"", fs=6.0, color="#5a3010")
+
+# PF width callout (far-side PF)
+ax.annotate("", xy=(-PF_OVR, OVERALL_D + 0.25),
+            xytext=(-PF_OVR + PF_W, OVERALL_D + 0.25),
+            arrowprops=dict(arrowstyle="<->", color="#5a3a1a", lw=1.0))
+label(-PF_OVR + PF_W/2, OVERALL_D + 0.55, "5.4\"\nPF", fs=6.5, bold=True, color="#5a3a1a")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RIGHT-SIDE PANEL — Title block and legend for Page 2
+# ══════════════════════════════════════════════════════════════════════════════
+PX = 28.5
+PW = 5.5
+
+# ── Title block ────────────────────────────────────────────────────────────────
+panel_box(-4.2, 6.5, fc="#f5f5f5")
+title_lines = [
+    "DECK PLAN v11 — PAGE 2: DECKING",
+    "23'-6\" × 16'-6\"  Overall Finished Surface",
+    "MoistureShield Vision  |  ⊥ House  |  4-Side Picture Frame",
+    "Framing shown at 40% opacity (background)",
+    "House on 23'-6\" Edge  ▲ NORTH",
+    "",
+    "Scale: 1\" ≈ 1 ft (plot units = ft)",
+    "HOUSE = top edge",
+    "",
+    "Date: 2026-05-01",
+    "Gemma — Technical Diagramming Specialist",
+    "(v11: MoistureShield Vision brand swap; 49 field planks; 5.4\" board width)",
+]
+for i, line in enumerate(title_lines):
+    fw = "bold" if i < 5 else "normal"
+    fs = 9.0 if i == 0 else 7.5
+    label(PX + PW/2, -4.0 + i * 0.50, line, fs=fs, bold=(fw == "bold"))
+
+# ── Section detail panel ───────────────────────────────────────────────────────
+# Shows vertical stack: grade → pier → saddle → joist top → decking → 12.0" AG
+# v11 updates: plank thickness 1.0", fascia thickness 0.67", overhang label 2.33"
+panel_box(23.2, 1.0, fc="#fffef0", ec="#aa8800", lw=1.5)  # placeholder y — will reuse main panel space below
+
+# ── Plank count summary box ────────────────────────────────────────────────────
+panel_box(2.5, 5.5, fc="#fdf5e8", ec="#8a6a3a", lw=2.5)
+label(PX + PW/2, 2.75, "PLANK COUNT SUMMARY", fs=9.5, bold=True, color="#4a2a08")
+count_lines = [
+    ("Field planks:", "49 × 16-ft MoistureShield Vision"),
+    ("", "  cut to 15'-7.2\" | waste ~4.8\"/board"),
+    ("PF — house side:", "1 board, 23'-6\" length"),
+    ("PF — far side:", "1 board, 23'-6\" length"),
+    ("", "  (use 24-ft or splice 2× 12-ft over joist)"),
+    ("PF — left side:", "1 board, 16'-6\" length"),
+    ("PF — right side:", "1 board, 16'-6\" length"),
+    ("", "  (16-ft boards, field-cut)"),
+    ("Board subtotal:", "53 boards"),
+    ("+10% waste:", "~5 boards"),
+    ("TOTAL ORDER:", "~58 boards (planning est.)"),
+    ("", "  Hollis will produce precise BOM."),
+]
+for i, (lbl_a, lbl_b) in enumerate(count_lines):
+    y_row = 3.2 + i * 0.35
+    bold_row = lbl_a in ("Board subtotal:", "+10% waste:", "TOTAL ORDER:")
+    color_a = "#8B0000" if bold_row else "#333333"
+    label(PX + 0.08, y_row, lbl_a, fs=6.2, bold=bold_row, ha="left", color=color_a)
+    label(PX + 2.0, y_row, lbl_b, fs=6.2, bold=bold_row, ha="left",
+          color="#4a2a08" if bold_row else "#444444")
+
+# ── Legend ─────────────────────────────────────────────────────────────────────
+panel_box(8.2, 13.0, fc="white")
+label(PX + PW/2, 8.45, "LEGEND — PAGE 2: DECKING", fs=10.0, bold=True)
+
+# MoistureShield Vision field plank
+y_leg = 9.05
+rect(PX + 0.08, y_leg, 0.60, 0.40, C_FIELD, EC_FIELD, lw=1.0, zorder=3)
+label(PX + 0.78, y_leg + 0.09, "Field plank — 5.4\" MoistureShield Vision (composite, capped)", fs=6.8, bold=True, ha="left")
+label(PX + 0.78, y_leg + 0.26, "49 planks, 16-ft cut to 15'-7.2\", running ⊥ house @ 5.525\" c-c", fs=5.8, ha="left", color="#444444")
+
+# MoistureShield Vision PF plank
+y_leg = 9.85
+rect(PX + 0.08, y_leg, 0.60, 0.40, C_PF_TREX, EC_PF_TREX, lw=1.5, zorder=3)
+label(PX + 0.78, y_leg + 0.09, "Picture-frame (PF) — 5.4\" MoistureShield Vision, all 4 sides", fs=6.8, bold=True, ha="left")
+label(PX + 0.78, y_leg + 0.26, "House & far sides: 23'-6\"; left & right sides: 16'-6\"", fs=5.8, ha="left", color="#444444")
+
+# Gap callout
+y_leg = 10.65
+ax.plot([PX + 0.08, PX + 0.68], [y_leg + 0.20, y_leg + 0.20],
+        color=EC_FIELD, lw=0.8, linestyle="--", zorder=4)
+label(PX + 0.78, y_leg + 0.09, "Plank gap — 1/8\" typ. between field planks", fs=6.8, bold=True, ha="left")
+label(PX + 0.78, y_leg + 0.26, "No gap between PF and field (PF butts field edge)", fs=5.8, ha="left", color="#444444")
+
+# Miter corner
+y_leg = 11.45
+ax.plot([PX + 0.08, PX + 0.68], [y_leg + 0.38, y_leg + 0.00],
+        color=EC_PF_TREX, lw=2.5, zorder=4)
+label(PX + 0.78, y_leg + 0.09, "45° miter joint — 2 OUTSIDE corners (far-left, far-right)", fs=6.8, bold=True, ha="left")
+label(PX + 0.78, y_leg + 0.26, "2 INSIDE corners (against house wall) are butted — not mitered", fs=5.8, ha="left", color="#444444")
+
+# Framing background swatches
+y_leg = 12.35
+rect(PX + 0.08, y_leg, 0.60, 0.40, C_GIRDER, EC_GIRDER, lw=2, zorder=3, alpha=FRAME_ALPHA)
+label(PX + 0.78, y_leg + 0.09, "Framing (background, 40% opacity) — girders, ledger, joists", fs=6.8, bold=True, ha="left")
+label(PX + 0.78, y_leg + 0.26, "Framing is unchanged from Page 1 — structural reference only", fs=5.8, ha="left", color="#444444")
+
+# Deck thickness / fascia note (v11 updated)
+y_leg = 13.25
+rect(PX + 0.08, y_leg, 0.60, 0.40, "#dddddd", "#888888", lw=1.0, zorder=3)
+label(PX + 0.78, y_leg + 0.09, "Plank top = 12.0\" AG  (plank 1.0\" actual thick on 11.0\" AG framing)", fs=6.8, bold=True, ha="left")
+label(PX + 0.78, y_leg + 0.26, "MoistureShield Vision 1.0\" actual; fascia 0.67\"; overhang 2.33\" past fascia", fs=5.8, ha="left", color="#444444")
+
+# ── Fastener / ordering notes ──────────────────────────────────────────────────
+panel_box(17.5, 5.5, fc="#fdf9f0", ec="#8a6a3a", lw=1.5)
+order_notes = [
+    "DECKING ORDERING NOTES (planning est. — v11)",
+    "Brand: MoistureShield Vision (composite, capped, DiamondDefense scratch coat)",
+    "  50-yr fade & stain warranty",
+    "Field planks: 49 × 16-ft Vision 5.4\" — cut to 15'-7.2\" on site",
+    "  each ~4.8\" waste per board",
+    "PF long sides: 2 × 24-ft preferred (house + far PF, 23'-6\" each)",
+    "  If 24-ft unavailable: splice 2× 12-ft boards over a joist/girder",
+    "PF short sides: 2 × 16-ft (left + right PF, 16'-6\" each, field-cut)",
+    "Hidden fasteners: Tiger Claw TC-G + Cortex (color-matched plugs)",
+    "  for field planks; perimeter PF boards face-screwed w/ color-matched screws",
+    "Available: Home Depot, Lowe's, Richards Building Supply (Hartford metro)",
+    "TOTAL ORDER (planning): ~58 boards (53 + 10% waste).  Hollis → precise BOM.",
+]
+for i, note in enumerate(order_notes):
+    fw = "bold" if i == 0 else "normal"
+    fs_n = 6.5 if i == 0 else 5.8
+    label(PX + 0.08, 17.72 + i * 0.29, note, fs=fs_n, bold=(i == 0), ha="left",
+          color="#3a1a00" if i == 0 else "#333333")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SAVE
+# ══════════════════════════════════════════════════════════════════════════════
+out_path = "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/owner_inbox/deck_blueprint/deck_plan.png"
+fig.savefig(out_path, dpi=DPI, bbox_inches="tight", facecolor="white")
+print(f"Saved: {out_path}")
+print(f"Field plank count: {NUM_PLANKS}")
+print(f"Field width: {FIELD_WIDTH_FT*12:.2f}\" = {FIELD_WIDTH_FT:.4f} ft")
+print(f"Field plank length: {FIELD_LEN*12:.2f}\" = {FIELD_LEN:.4f} ft")
+print(f"Plank step: {PLANK_STEP*12:.4f}\" (5.525\" target)")
+print(f"Last plank right edge: {(FIELD_X0 + (NUM_PLANKS-1)*PLANK_STEP + PLANK_W)*12:.3f}\"  (field ends at {FIELD_X1*12:.3f}\")")
+print(f"LEFT_PF_X0={LEFT_PF_X0:.4f}  LEFT_PF_X1={LEFT_PF_X1:.4f}")
+print(f"FAR_PF_Y0={FAR_PF_Y0:.4f}  FAR_PF_Y1={FAR_PF_Y1:.4f}")
+print(f"Miter line BL: ({LEFT_PF_X1:.4f},{FAR_PF_Y0:.4f}) → ({LEFT_PF_X0:.4f},{FAR_PF_Y1:.4f})")
+print(f"PF overhang past fascia: {(PF_OVR - FASCIA_T)*12:.3f}\" (target 2.33\")")
+print(f"Fascia thickness: {FASCIA_T*12:.3f}\" (target 0.67\")")

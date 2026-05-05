@@ -788,6 +788,12 @@ WATER_HOLE_LIFT_MM:      float = 2.0     # base-slab thickness inserted under li
 BOUNDARY_HEIGHT_CAP_MM:  float = 9.0     # absolute Z ceiling for boundary-touching pieces
 BOUNDARY_HEIGHT_CAP_MODE: str  = "hard"  # one of: "hard", "compress"
 BOUNDARY_TOUCH_TOL_MM:   float = 0.5     # XY tolerance for "vertex touches frame edge"
+# Edge-band cap (Topo, 2026-05-05): in "hard" mode, the 9 mm cap applies only
+# to top-surface vertices within BOUNDARY_CAP_BAND_MM (XY distance) of the
+# plaque frame perimeter. Interior vertices keep their natural relief, even if
+# it exceeds BOUNDARY_HEIGHT_CAP_MM. The cap exists only to keep the picture
+# frame edge clean — interior height was never the problem.
+BOUNDARY_CAP_BAND_MM:    float = 1.0     # XY width of edge band where cap applies (hard mode only)
 
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
@@ -2552,12 +2558,16 @@ def _apply_lift_and_cap(
     unchanged because the wall stitch is preserved.
 
     Cap modes (only applied when ``cap_mm`` is not None):
-      - "hard"     : top z values above cap_mm are clipped to cap_mm.
+      - "hard"     : per-vertex EDGE-BAND cap. Only top-surface vertices within
+        BOUNDARY_CAP_BAND_MM (XY distance) of the plaque frame perimeter and
+        whose z exceeds cap_mm are clipped to cap_mm. Interior vertices keep
+        their natural relief regardless of height. (Topo, 2026-05-05.)
       - "compress" : top z values are linearly squashed so max(z) == cap_mm.
+        Whole-element behaviour preserved here (no homeowner request to revisit).
         If max(z) <= cap_mm, no compression is applied.
 
     Returns a small stats dict: {applied, cap_triggered, vertices_clipped,
-    max_clip_mm, z_top_before, z_top_after}.
+    max_clip_mm, z_top_before, z_top_after, band_verts, uncapped_above_cap}.
     """
     verts = mesh.vertices  # live reference
     top_mask = verts[:, 2] > 1e-6
@@ -2569,6 +2579,8 @@ def _apply_lift_and_cap(
             "max_clip_mm": 0.0,
             "z_top_before": (0.0, 0.0),
             "z_top_after":  (0.0, 0.0),
+            "band_verts": 0,
+            "uncapped_above_cap": 0,
         }
 
     z_before_min = float(verts[top_mask, 2].min())
@@ -2581,16 +2593,33 @@ def _apply_lift_and_cap(
     cap_triggered = False
     n_clipped = 0
     max_clip = 0.0
+    band_verts = 0
+    uncapped_above_cap = 0
     if cap_mm is not None:
         z_top = verts[top_mask, 2]
         if cap_mode == "hard":
-            over = z_top > cap_mm
+            # Per-vertex edge-band cap (Topo, 2026-05-05). Compute each top
+            # vertex's XY distance to the nearest edge of the plaque frame
+            # rectangle (axis-aligned, centred at origin, ±_half per axis).
+            # For an interior point: dist = min(x - x_min, x_max - x,
+            #                                   y - y_min, y_max - y)
+            _half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+            xy_top = verts[top_mask, :2]
+            dx = np.minimum(xy_top[:, 0] - (-_half), _half - xy_top[:, 0])
+            dy = np.minimum(xy_top[:, 1] - (-_half), _half - xy_top[:, 1])
+            dist_to_edge = np.minimum(dx, dy)
+            in_band = dist_to_edge <= BOUNDARY_CAP_BAND_MM
+            above_cap = z_top > cap_mm
+            band_verts = int(in_band.sum())
+            uncapped_above_cap = int((above_cap & ~in_band).sum())
+            over = above_cap & in_band
             n_clipped = int(over.sum())
             if n_clipped:
                 cap_triggered = True
                 max_clip = float((z_top[over] - cap_mm).max())
-                z_top = np.minimum(z_top, cap_mm)
-                verts[top_mask, 2] = z_top
+                z_top_new = z_top.copy()
+                z_top_new[over] = cap_mm
+                verts[top_mask, 2] = z_top_new
         elif cap_mode == "compress":
             zmax = float(z_top.max())
             if zmax > cap_mm:
@@ -2611,11 +2640,17 @@ def _apply_lift_and_cap(
     z_after_max = float(verts[top_mask, 2].max())
 
     if label:
+        extra = ""
+        if cap_mm is not None and cap_mode == "hard":
+            n_top = int(top_mask.sum())
+            extra = (f", band_verts={band_verts}/{n_top} "
+                     f"(width={BOUNDARY_CAP_BAND_MM:.2f}mm), "
+                     f"uncapped_above_cap={uncapped_above_cap}")
         print(f"    lift+cap [{label}]: lift={lift_mm:.2f} mm, "
               f"cap={'-' if cap_mm is None else f'{cap_mm:.1f} mm ({cap_mode})'}, "
               f"z_top {z_before_min:.2f}-{z_before_max:.2f} → "
               f"{z_after_min:.2f}-{z_after_max:.2f}, "
-              f"clipped {n_clipped} vert(s), max_clip {max_clip:.2f} mm")
+              f"clipped {n_clipped} vert(s), max_clip {max_clip:.2f} mm" + extra)
 
     return {
         "applied": True,
@@ -2624,6 +2659,8 @@ def _apply_lift_and_cap(
         "max_clip_mm": max_clip,
         "z_top_before": (z_before_min, z_before_max),
         "z_top_after":  (z_after_min, z_after_max),
+        "band_verts": band_verts,
+        "uncapped_above_cap": uncapped_above_cap,
     }
 
 
@@ -2775,15 +2812,17 @@ def export_trap_stls(
             # finished textured surface as one block).
             apply_sand_texture(mesh, trap_index=i)
 
-            # Water-hole rule: lift this trap and (if it touches the boundary)
-            # cap it at BOUNDARY_HEIGHT_CAP_MM. Otherwise leave untouched.
+            # Water-hole rule (Topo, 2026-05-05): lift this trap and apply the
+            # per-vertex edge-band cap inside _apply_lift_and_cap. The cap only
+            # affects vertices within BOUNDARY_CAP_BAND_MM of the plaque frame
+            # perimeter; interior traps (no vertex in the band) are a no-op for
+            # the cap, so we pass the cap unconditionally.
             if _hole_water:
                 touches = _polygon_touches_frame_boundary(shapely_inset)
-                cap_mm = BOUNDARY_HEIGHT_CAP_MM if touches else None
                 _apply_lift_and_cap(
                     mesh,
                     lift_mm=WATER_HOLE_LIFT_MM,
-                    cap_mm=cap_mm,
+                    cap_mm=BOUNDARY_HEIGHT_CAP_MM,
                     label=f"trap_{i}{' (boundary)' if touches else ''}",
                 )
 
@@ -4387,11 +4426,13 @@ def run_pipeline(egm_path: str) -> str:
     #
     # When the EGM contains any water polygon, lift green and fringe by
     # WATER_HOLE_LIFT_MM so a 2 mm filament base sits underneath. The fringe
-    # touches the frame boundary by construction, so its top is also capped
-    # at BOUNDARY_HEIGHT_CAP_MM (mode = BOUNDARY_HEIGHT_CAP_MODE). The green
-    # is interior to the fringe and never touches the frame, so it is lifted
-    # only — no cap. Traps and water are handled inside their export_*
-    # functions (see export_trap_stls / export_water_meshes).
+    # gets the per-vertex edge-band cap (Topo 2026-05-05): only fringe top
+    # vertices within BOUNDARY_CAP_BAND_MM of the plaque frame perimeter are
+    # clipped to BOUNDARY_HEIGHT_CAP_MM; interior fringe relief is preserved
+    # regardless of height. The green is *explicitly* skipped — even if a
+    # course's green were ever drawn touching the frame, it should never be
+    # capped per homeowner spec. Traps and water are handled inside their
+    # export_* functions (see export_trap_stls / export_water_meshes).
     #
     # Sampling note: trap and water heights were computed earlier from
     # `fringe_mesh_flat` (an unlifted reference). After we lift `fringe_mesh`

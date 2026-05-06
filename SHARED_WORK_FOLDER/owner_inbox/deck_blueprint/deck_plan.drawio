@@ -1,20 +1,19 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<mxfile host="app.diagrams.net" type="device" version="24.7.5">
-<diagram id="deck-plan-v12-p1" name="Page 1 — Framing Plan (v12)">
-    <mxGraphModel dx="3953" dy="1286" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+<mxfile host="Electron" pages="2">
+  <diagram id="deck-plan-v13-p1" name="Page 1 — Framing Plan (v13)">
+    <mxGraphModel dx="5576" dy="2194" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-501" parent="0" value="Piers" />
         <mxCell id="h06" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1">
           <mxGeometry height="34" width="34" x="663" y="813" as="geometry" />
         </mxCell>
-        <mxCell id="p07" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=8;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;P7&lt;/b&gt;" vertex="1">
+        <mxCell id="p07" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=8;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;P7&lt;/b&gt;" vertex="1" visible="0">
           <mxGeometry height="26" width="26" x="1120" y="207" as="geometry" />
         </mxCell>
-        <mxCell id="p04" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=8;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;P4&lt;/b&gt;" vertex="1">
+        <mxCell id="p04" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=8;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;P4&lt;/b&gt;" vertex="1" visible="0">
           <mxGeometry height="26" width="26" x="667" y="207" as="geometry" />
         </mxCell>
-        <mxCell id="p01" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=8;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;P1&lt;/b&gt;" vertex="1">
+        <mxCell id="p01" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=8;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;P1&lt;/b&gt;" vertex="1" visible="0">
           <mxGeometry height="26" width="26" x="214" y="207" as="geometry" />
         </mxCell>
         <mxCell id="p02" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=8;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;P2&lt;/b&gt;" vertex="1">
@@ -35,10 +34,10 @@
         <mxCell id="p03" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=8;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;P3&lt;/b&gt;" vertex="1">
           <mxGeometry height="26" width="26" x="214" y="817" as="geometry" />
         </mxCell>
-        <mxCell id="h04" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1">
+        <mxCell id="h04" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1" visible="0">
           <mxGeometry height="34" width="34" x="663" y="203" as="geometry" />
         </mxCell>
-        <mxCell id="h07" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1">
+        <mxCell id="h07" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1" visible="0">
           <mxGeometry height="34" width="34" x="1116" y="203" as="geometry" />
         </mxCell>
         <mxCell id="h08" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1">
@@ -47,7 +46,7 @@
         <mxCell id="h05" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1">
           <mxGeometry height="34" width="34" x="663" y="488" as="geometry" />
         </mxCell>
-        <mxCell id="h01" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1">
+        <mxCell id="h01" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1" visible="0">
           <mxGeometry height="34" width="34" x="210" y="203" as="geometry" />
         </mxCell>
         <mxCell id="h02" parent="Z8O4pT-hFiafL0M5wHAX-501" style="ellipse;strokeColor=#706050;fillColor=#b0a898;strokeWidth=1;opacity=50;" value="" vertex="1">
@@ -60,8 +59,8 @@
           <mxGeometry height="34" width="34" x="1116" y="813" as="geometry" />
         </mxCell>
         <mxCell id="1" parent="0" />
-        <mxCell id="v10-badge-p1" parent="1" style="text;html=1;strokeColor=#1a1a1a;fillColor=#1a1a1a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;arcSize=15;fontColor=#ffffff;fontSize=36;fontStyle=1;" value="&lt;b&gt;v12&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;Page 1 of 2 — Framing&lt;/font&gt;" vertex="1">
-          <mxGeometry x="10" y="10" width="160" height="90" as="geometry" />
+        <mxCell id="v10-badge-p1" parent="1" style="text;html=1;strokeColor=#1a1a1a;fillColor=#1a1a1a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;arcSize=15;fontColor=#ffffff;fontSize=36;fontStyle=1;" value="&lt;b&gt;v13.1&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;Page 1 of 2 — Framing&lt;/font&gt;" vertex="1">
+          <mxGeometry height="90" width="160" x="10" y="10" as="geometry" />
         </mxCell>
         <mxCell id="20" parent="1" style="text;html=1;strokeColor=#444444;fillColor=#cccccc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#222222;" value="&lt;b&gt;HOUSE WALL  up  NORTH  (attached 23&#39;-6&quot; overall edge)&lt;/b&gt;" vertex="1">
           <mxGeometry height="45" width="940" x="205" y="135" as="geometry" />
@@ -175,7 +174,7 @@
           <mxGeometry height="9" width="439" x="687" y="826" as="geometry" />
         </mxCell>
         <mxCell id="95" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=8;fontColor=#c05000;" value="&lt;b&gt;LUS210Z face-mount hangers at every segment end — approx. 68 total in field (4 per row x 17 rows)&lt;/b&gt;" vertex="1">
-          <mxGeometry height="20" width="920" x="220" y="850" as="geometry" />
+          <mxGeometry height="20" width="920" x="-20" y="850" as="geometry" />
         </mxCell>
         <mxCell id="130" parent="1" style="text;html=1;strokeColor=#60a040;fillColor=#d0e8c0;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#3a6020;" value="House-side PF blocking — 2x10 PT @ 12in o.c. between ledger and first joist row (backs house-side PF board)" vertex="1">
           <mxGeometry height="14" width="920" x="220" y="195" as="geometry" />
@@ -231,6 +230,102 @@
         <mxCell id="188" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontStyle=1;" value="12in o.c. typical" vertex="1">
           <mxGeometry height="30" width="100" x="1150" y="500" as="geometry" />
         </mxCell>
+        <mxCell id="v12-p1-gravel" parent="1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;opacity=70;" value="" vertex="1">
+          <mxGeometry height="160" width="60" x="147.8" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-gravel-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#6a5a48;" value="gravel pad #57&lt;br/&gt;48in x 18in" vertex="1">
+          <mxGeometry height="160" width="60" x="147.8" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-paver-0" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="147.8" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-paver-1" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="147.8" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-paver-2" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="147.8" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-stringer-0" parent="1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="6.7" width="58" x="154.4" y="416.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-stringer-1" parent="1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="6.7" width="58" x="154.4" y="486.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-stringer-2" parent="1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="6.7" width="58" x="154.4" y="556.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-stringer-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#2a5a1a;fontStyle=1;" value="3× 2x10 PT stringer&lt;br/&gt;Simpson LSCZ to L girder" vertex="1">
+          <mxGeometry height="25" width="58" x="154.4" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-cutjoint-0" edge="1" parent="1" style="endArrow=none;startArrow=none;strokeColor=#cc2200;strokeWidth=2.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150.4" y="420" as="sourcePoint" />
+            <mxPoint x="211.8" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v12-p1-cutjoint-1" edge="1" parent="1" style="endArrow=none;startArrow=none;strokeColor=#cc2200;strokeWidth=2.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150.4" y="560" as="sourcePoint" />
+            <mxPoint x="211.8" y="560" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v12-p1-mtread-block" parent="1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;opacity=60;" value="&lt;b&gt;mid tread blocking&lt;br/&gt;2x 5.4in MoistureShield&lt;br/&gt;6in AG&lt;/b&gt;" vertex="1">
+          <mxGeometry height="140" width="36" x="171.8" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-cj-lbl-0" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#cc2200;fontStyle=1;" value="CUT JOINT y=6ft-0in — PF &amp; fascia interrupted" vertex="1">
+          <mxGeometry height="14" width="140" x="150.4" y="405" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-cj-lbl-1" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#cc2200;fontStyle=1;" value="CUT JOINT y=9ft-6in — PF &amp; fascia interrupted" vertex="1">
+          <mxGeometry height="14" width="140" x="150.4" y="565" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p1-step-callout" parent="1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;SINGLE STEP v12 (unchanged) -- L EDGE&lt;/b&gt;&lt;br/&gt;y=6ft to 9ft-6in from house wall&lt;br/&gt;42in wide | 16in projection&lt;br/&gt;3x 2x10 PT cut stringers via LSCZ hangers&lt;br/&gt;Mid tread: 2x 5.4in MoistureShield @ 6in AG&lt;br/&gt;OPEN risers | pavers on #57 gravel" vertex="1">
+          <mxGeometry height="100" width="155" x="-13.6" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-hanger-0" parent="1" style="text;html=1;strokeColor=#882200;fillColor=#cc4400;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;HU&lt;br/&gt;210-3&lt;/b&gt;" vertex="1">
+          <mxGeometry height="18" width="18" x="211" y="175.5" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-hanger-1" parent="1" style="text;html=1;strokeColor=#882200;fillColor=#cc4400;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;HU&lt;br/&gt;210-3&lt;/b&gt;" vertex="1">
+          <mxGeometry height="18" width="18" x="671" y="175.5" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-hanger-2" parent="1" style="text;html=1;strokeColor=#882200;fillColor=#cc4400;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;HU&lt;br/&gt;210-3&lt;/b&gt;" vertex="1">
+          <mxGeometry height="18" width="18" x="1131" y="175.5" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-hanger-callout" parent="1" style="text;html=1;strokeColor=#882200;fillColor=#fff0e0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=7;fontColor=#882200;strokeWidth=1.5;" value="&lt;b&gt;Simpson HU210-3 (or eq.)&lt;br/&gt;at each girder-ledger connection&lt;br/&gt;— typ. 3 places&lt;/b&gt;" vertex="1">
+          <mxGeometry height="55" width="240" x="1100" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-ledger-note" parent="1" style="text;html=1;strokeColor=#cc8800;fillColor=#fff9e6;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=6.5;fontColor=#663300;strokeWidth=1.5;" value="&lt;b&gt;v13 LEDGER: ½in HDG carriage bolts back-blocked from basement,&lt;br/&gt;clustered at girder connections; ½in HDG lag @ 18in OC two-row&lt;br/&gt;staggered between connections (IRC R507.9.1.3).&lt;br/&gt;Wall = wood-frame. Peel-and-stick + Z-flashing retained.&lt;/b&gt;" vertex="1">
+          <mxGeometry height="65" width="380" x="1210" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-gravel" parent="1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;opacity=70;dashed=1;" value="" vertex="1">
+          <mxGeometry height="93.2" width="486" x="672" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-gravel-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#6a5a48;" value="4in #57 gravel pad&lt;br/&gt;(outside deck footprint)" vertex="1">
+          <mxGeometry height="30" width="486" x="672" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-ribbon" parent="1" style="strokeColor=#2a5a2a;fillColor=#5a8a5a;strokeWidth=2;opacity=85;" value="&lt;b&gt;Dbl 2x6 PT ribbon&lt;/b&gt;" vertex="1">
+          <mxGeometry height="10" width="470" x="680" y="836.8" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-block-0" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="1110" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-block-1" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="996.7" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-block-2" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="883.3" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-block-3" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="770" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-block-4" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="660" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-far-step-callout" parent="1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;FAR-EDGE STEP — v13 NEW&lt;/b&gt;&lt;br/&gt;11ft-9in long | right corner to midpoint&lt;br/&gt;Single 6in rise | 10.9in tread depth&lt;br/&gt;Doubled 2x6 PT ribbon to outer rim&lt;br/&gt;5x precast blocks @ ~28in OC&lt;br/&gt;4in #57 gravel pad (outside footprint)&lt;br/&gt;HEAVE: ¼-½in seasonal (accepted)" vertex="1">
+          <mxGeometry height="120" width="155" x="470" y="880" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p1-pier-note" parent="1" style="text;html=1;strokeColor=#5a3010;fillColor=#f5ede0;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#5a3010;strokeWidth=1.5;" value="&lt;b&gt;v13: 6 PIERS (was 9)&lt;/b&gt;&lt;br/&gt;House-side row (P1,P4,P7) removed.&lt;br/&gt;Ledger carries those reactions&lt;br/&gt;via HU210-3 hangers (3 places).&lt;br/&gt;Middle row (y=8ft-1.5in) +&lt;br/&gt;Outer row (y=16ft-3in) remain." vertex="1">
+          <mxGeometry height="90" width="170" x="-30" y="530" as="geometry" />
+        </mxCell>
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-500" parent="0" value="Picture Frame" />
         <mxCell id="160" parent="Z8O4pT-hFiafL0M5wHAX-500" style="text;html=1;strokeColor=#b8860b;fillColor=#ffe680;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#6b4400;strokeWidth=2.5;opacity=75;" value="&lt;b&gt;HOUSE-SIDE PF — 5.5in Trex | Butts wall (1/4in thermal gap) | Backed by ledger + house-side 2x10 blocking&lt;/b&gt;" vertex="1">
           <mxGeometry height="18" width="980" x="190" y="180" as="geometry" />
@@ -244,31 +339,27 @@
         <mxCell id="161" parent="Z8O4pT-hFiafL0M5wHAX-500" style="text;html=1;strokeColor=#b8860b;fillColor=#ffe680;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#6b4400;strokeWidth=2.5;" value="&lt;b&gt;FAR PICTURE-FRAME BOARD — 5.5in Trex | 2.25in overhang past fascia | 3in past rim&lt;/b&gt;" vertex="1">
           <mxGeometry height="18" width="980" x="190" y="848" as="geometry" />
         </mxCell>
-        <!-- v10: outside-corner miter fill triangles (lower-left and lower-right) -->
-        <!-- Lower-left: left PF top triangle of overlap square (x=172..190, y=848..866) -->
         <mxCell id="v10-miter-fill-ll" parent="Z8O4pT-hFiafL0M5wHAX-500" style="shape=mxgraph.basic.right_triangle;fillColor=#ffe680;strokeColor=#b8860b;strokeWidth=2;direction=south;flipH=1;flipV=0;" value="" vertex="1">
           <mxGeometry height="18" width="18" x="172" y="848" as="geometry" />
         </mxCell>
-        <!-- Lower-right: right PF top triangle of overlap square (x=1170..1188, y=848..866) -->
         <mxCell id="v10-miter-fill-lr" parent="Z8O4pT-hFiafL0M5wHAX-500" style="shape=mxgraph.basic.right_triangle;fillColor=#ffe680;strokeColor=#b8860b;strokeWidth=2;direction=south;flipH=0;flipV=0;" value="" vertex="1">
           <mxGeometry height="18" width="18" x="1170" y="848" as="geometry" />
         </mxCell>
-        <!-- v10: miter seam diagonal lines -->
-        <mxCell id="v10-miter-line-ll" parent="Z8O4pT-hFiafL0M5wHAX-500" style="endArrow=none;startArrow=none;strokeColor=#b8860b;strokeWidth=2.5;exitX=1;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;" value="" edge="1">
+        <mxCell id="v10-miter-line-ll" edge="1" parent="Z8O4pT-hFiafL0M5wHAX-500" style="endArrow=none;startArrow=none;strokeColor=#b8860b;strokeWidth=2.5;exitX=1;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;" value="">
           <mxGeometry relative="1" as="geometry">
             <Array as="points" />
-            <mxPoint as="sourcePoint" x="190" y="848" />
-            <mxPoint as="targetPoint" x="172" y="866" />
+            <mxPoint x="190" y="848" as="sourcePoint" />
+            <mxPoint x="172" y="866" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="v10-miter-line-lr" parent="Z8O4pT-hFiafL0M5wHAX-500" style="endArrow=none;startArrow=none;strokeColor=#b8860b;strokeWidth=2.5;exitX=0;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=1;entryDx=0;entryDy=0;" value="" edge="1">
+        <mxCell id="v10-miter-line-lr" edge="1" parent="Z8O4pT-hFiafL0M5wHAX-500" style="endArrow=none;startArrow=none;strokeColor=#b8860b;strokeWidth=2.5;exitX=0;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=1;entryDx=0;entryDy=0;" value="">
           <mxGeometry relative="1" as="geometry">
             <Array as="points" />
-            <mxPoint as="sourcePoint" x="1170" y="848" />
-            <mxPoint as="targetPoint" x="1188" y="866" />
+            <mxPoint x="1170" y="848" as="sourcePoint" />
+            <mxPoint x="1188" y="866" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="Z8O4pT-hFiafL0M5wHAX-502" parent="0" value="Girders" />
+        <mxCell id="Z8O4pT-hFiafL0M5wHAX-502" parent="0" value="Girders" visible="0" />
         <mxCell id="41" parent="Z8O4pT-hFiafL0M5wHAX-502" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a3a6b;strokeWidth=3;" value="&lt;b&gt;MID GIRDER&lt;br/&gt;(3) 2x10 PT&lt;br/&gt;@ x=11&#39;-6&quot;&lt;br/&gt;TOP-FLUSH&lt;br/&gt;@ 11in AG&lt;/b&gt;" vertex="1">
           <mxGeometry height="650" width="14" x="673" y="180" as="geometry" />
         </mxCell>
@@ -283,7 +374,7 @@
           <mxGeometry height="650" width="940" x="100" y="140" as="geometry" />
         </mxCell>
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-504" parent="0" value="Notes" />
-        <mxCell id="2" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#222222;" value="&lt;b&gt;DECK PLAN v12 — PAGE 1: FRAMING PLAN&lt;/b&gt;&lt;br/&gt;23&#39;-6&quot; x 16&#39;-6&quot; Overall Finished Surface, 12&quot; Max AG&lt;br/&gt;Pylex 50 Spiral Piers Through Patio, Face-Hung Joists Top-Flush&lt;br/&gt;House on 23&#39;-6&quot; Edge | Date: 2026-05-01 | Gemma" vertex="1">
+        <mxCell id="2" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#222222;" value="&lt;b&gt;DECK PLAN v13 — PAGE 1: FRAMING PLAN&lt;/b&gt;&lt;br/&gt;23&#39;-6&quot; x 16&#39;-6&quot; Overall Finished Surface, 12&quot; Max AG&lt;br/&gt;Pylex 50 Spiral Piers Through Patio, Face-Hung Joists Top-Flush&lt;br/&gt;House on 23&#39;-6&quot; Edge | Date: 2026-05-01 | Gemma" vertex="1">
           <mxGeometry height="100" width="500" x="-610" y="60" as="geometry" />
         </mxCell>
         <mxCell id="129" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#2a1808;fillColor=#f5ede0;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#2a1808;" value="&lt;b&gt;Pylex 50 spiral pier legend: filled dark circle = pier shaft; outer lighter circle = punched patio hole (~3-4in dia). Pier positions: 12in / 8&#39;-1.5&quot; / 16&#39;-3&quot; out from house. ALL 9 piers within patio footprint.&lt;/b&gt;" vertex="1">
@@ -340,7 +431,7 @@
         <mxCell id="225" parent="Z8O4pT-hFiafL0M5wHAX-504" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;fontColor=white;fontSize=10;fontStyle=1;strokeWidth=2;" value="P?" vertex="1">
           <mxGeometry height="18" width="30" x="-580" y="464" as="geometry" />
         </mxCell>
-        <mxCell id="226" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=7;" value="&lt;b&gt;Pylex 50 spiral pier (P1-P9) — 9 total (3 per girder)&lt;/b&gt;&lt;br/&gt;50in galv. helical shaft through punched patio hole (~3-4in dia). Tip ~49in below patio (past 42in frost). Saddle bracket bolts to shaft top; 1/2in galv bolts up into girder bottom. No post, no sonotube." vertex="1">
+        <mxCell id="226" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=7;" value="&lt;b&gt;Pylex 50 spiral pier (P2,P3,P5,P6,P8,P9) — 6 total in v13 (house-side row P1,P4,P7 dropped)&lt;/b&gt;&lt;br/&gt;50in galv. helical shaft through punched patio hole (~3-4in dia). Tip ~49in below patio (past 42in frost). Saddle bracket bolts to shaft top; 1/2in galv bolts up into girder bottom. No post, no sonotube." vertex="1">
           <mxGeometry height="40" width="440" x="-542" y="464" as="geometry" />
         </mxCell>
         <mxCell id="229" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=10;fontColor=#888888;" value="- - -" vertex="1">
@@ -415,509 +506,511 @@
         <mxCell id="405" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=7;fontStyle=1;fontColor=#2a1808;" value="pier shaft (patch around)" vertex="1">
           <mxGeometry height="30" width="110" x="-550" y="932" as="geometry" />
         </mxCell>
-        <mxCell id="500" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#888800;fillColor=#ffffee;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#333300;" value="&lt;b&gt;FASTENER / MATERIAL NOTES (v7)&lt;/b&gt;&lt;br/&gt;Ledger: 1/2in hot-dip galv lag bolts or LedgerLOK, 16in o.c. staggered; Z-flashing above&lt;br/&gt;Lateral ties: min. 2x Simpson MTWDeck per IRC R507.9 / DCA-6&lt;br/&gt;Face-hung joists: Simpson LUS210Z hot-dip galv; LUS210-2Z for doubled rim&lt;br/&gt;Helical pier saddles: Pylex saddle plate, 1/2in hot-dip galv bolts to pier shaft top; 1/2in galv lag bolts up into girder&lt;br/&gt;Drop-board sub-fascia: 2x outboard of each exposed edge at joist elevation&lt;br/&gt;Framing: 2x10 PT UC4B ground-contact throughout. No posts, no sonotubes.&lt;br/&gt;Trex Universal Fascia: 0.75in, stainless trim screws to rim outer face&lt;br/&gt;Piers: Pylex 50 helical pier, 50in galvanized shaft, screwed to refusal through punched patio holes&lt;br/&gt;Hardware: hot-dip galvanized or stainless throughout (ACQ-compatible)" vertex="1">
+        <mxCell id="500" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#888800;fillColor=#ffffee;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#333300;" value="&lt;b&gt;FASTENER / MATERIAL NOTES (v7)&lt;/b&gt;&lt;br/&gt;Ledger: 1/2in hot-dip galv lag bolts or LedgerLOK, 16in o.c. staggered; Z-flashing above&lt;br/&gt;Lateral ties: min. 2x Simpson MTWDeck per IRC R507.9 / DCA-6&lt;br/&gt;Face-hung joists: Simpson LUS210Z hot-dip galv; LUS210-2Z for doubled rim&lt;br/&gt;Helical pier saddles: Pylex saddle plate, 1/2in hot-dip galv bolts to pier shaft top; 1/2in galv lag bolts up into girder&lt;br/&gt;Drop-board sub-fascia: 2x outboard of each exposed edge at joist elevation&lt;br/&gt;Framing: 2x10 PT UC4B ground-contact throughout. No posts, no sonotubes.&lt;br/&gt;Trex Universal Fascia: 0.75in, stainless trim screws to rim outer face&lt;br/&gt;Piers: Pylex 50 helical pier, 50in galvanized shaft, screwed to refusal through punched patio holes&lt;br/&gt;v13 Ledger: Simpson HU210-3 (or eq.) at each girder-ledger connection (3 places)&lt;br/&gt;½in HDG carriage bolts back-blocked from basement clustered at girder connections; ½in HDG lag @ 18in OC two-row staggered between connections (IRC R507.9.1.3)&lt;br/&gt;Hardware: hot-dip galvanized or stainless throughout (ACQ-compatible)" vertex="1">
           <mxGeometry height="180" width="480" x="-590" y="980" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-gravel" parent="1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;opacity=70;" value="" vertex="1">
-          <mxGeometry x="147.8" y="410.0" width="60.0" height="160.0" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-gravel-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#6a5a48;" value="gravel pad #57&lt;br/&gt;48in x 18in" vertex="1">
-          <mxGeometry x="147.8" y="410.0" width="60.0" height="160.0" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-paver-0" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry x="147.8" y="400.0" width="40.0" height="40.0" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-paver-1" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry x="147.8" y="470.0" width="40.0" height="40.0" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-paver-2" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry x="147.8" y="540.0" width="40.0" height="40.0" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-stringer-0" parent="1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
-          <mxGeometry x="154.4" y="416.7" width="58.0" height="6.7" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-stringer-1" parent="1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
-          <mxGeometry x="154.4" y="486.7" width="58.0" height="6.7" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-stringer-2" parent="1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
-          <mxGeometry x="154.4" y="556.7" width="58.0" height="6.7" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-stringer-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#2a5a1a;fontStyle=1;" value="3× 2x10 PT stringer&lt;br/&gt;Simpson LSCZ to L girder" vertex="1">
-          <mxGeometry x="154.4" y="470.0" width="58.0" height="25" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-cutjoint-0" parent="1" style="endArrow=none;startArrow=none;strokeColor=#cc2200;strokeWidth=2.5;" value="" edge="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint as="sourcePoint" x="150.4" y="420.0" />
-            <mxPoint as="targetPoint" x="211.8" y="420.0" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="v12-p1-cutjoint-1" parent="1" style="endArrow=none;startArrow=none;strokeColor=#cc2200;strokeWidth=2.5;" value="" edge="1">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint as="sourcePoint" x="150.4" y="560.0" />
-            <mxPoint as="targetPoint" x="211.8" y="560.0" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="v12-p1-mtread-block" parent="1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;opacity=60;" value="&lt;b&gt;mid tread blocking&lt;br/&gt;2x 5.4in MoistureShield&lt;br/&gt;6in AG&lt;/b&gt;" vertex="1">
-          <mxGeometry x="171.8" y="420.0" width="36.0" height="140.0" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-cj-lbl-0" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#cc2200;fontStyle=1;" value="CUT JOINT y=6ft-0in — PF &amp; fascia interrupted" vertex="1">
-          <mxGeometry x="150.4" y="405.0" width="140" height="14" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-cj-lbl-1" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#cc2200;fontStyle=1;" value="CUT JOINT y=9ft-6in — PF &amp; fascia interrupted" vertex="1">
-          <mxGeometry x="150.4" y="565.0" width="140" height="14" as="geometry" />
-        </mxCell>
-        <mxCell id="v12-p1-step-callout" parent="1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;SINGLE STEP v12 -- L EDGE&lt;/b&gt;&lt;br/&gt;y=6ft to 9ft-6in from house wall&lt;br/&gt;42in wide | 16in projection&lt;br/&gt;3x 2x10 PT cut stringers via LSCZ hangers&lt;br/&gt;Mid tread: 2x 5.4in MoistureShield @ 6in AG&lt;br/&gt;OPEN risers | pavers on #57 gravel" vertex="1">
-          <mxGeometry x="-13.6" y="420.0" width="155" height="100" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>
   </diagram>
-  <diagram id="deck-plan-v12-p2" name="Page 2 — Decking Plan (v12)">
-    <mxGraphModel dx="3953" dy="1286" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <diagram id="deck-plan-v13-p2" name="Page 2 — Decking Plan (v13)">
+    <mxGraphModel dx="4988" dy="1865" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="p2-0" />
         <mxCell id="p2-1" parent="p2-0" />
-        <mxCell id="v10-badge-p2" parent="p2-1" style="text;html=1;strokeColor=#1a1a1a;fillColor=#1a1a1a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;arcSize=15;fontColor=#ffffff;fontSize=36;fontStyle=1;" value="&lt;b&gt;v12&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;Page 2 of 2 — Decking&lt;/font&gt;" vertex="1">
-          <mxGeometry x="10" y="10" width="160" height="90" as="geometry" />
+        <mxCell id="v10-badge-p2" parent="p2-1" style="text;html=1;strokeColor=#1a1a1a;fillColor=#1a1a1a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;arcSize=15;fontColor=#ffffff;fontSize=36;fontStyle=1;" value="&lt;b&gt;v13.1&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;Page 2 of 2 — Decking&lt;/font&gt;" vertex="1">
+          <mxGeometry height="90" width="160" x="10" y="10" as="geometry" />
         </mxCell>
-    <mxCell id="p2-2001" parent="p2-1" style="strokeColor=#a09080;fillColor=#e8e0d4;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#9b7050;opacity=40;" value="EXISTING CONCRETE PATIO (background)" vertex="1">
-      <mxGeometry x="210.0" y="90.0" width="940.0" height="750.0" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2002" parent="p2-1" style="text;html=1;strokeColor=#444444;fillColor=#cccccc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#222222;opacity=40;" value="&lt;b&gt;HOUSE WALL  &#8593;  NORTH  (23&apos;-6&quot; overall edge)&lt;/b&gt;" vertex="1">
-      <mxGeometry x="210.0" y="90.0" width="940.0" height="45" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2003" parent="p2-1" style="text;html=1;strokeColor=#b85450;fillColor=#f8cecc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#5a0000;strokeWidth=2;opacity=40;" value="LEDGER" vertex="1">
-      <mxGeometry x="220.0" y="180.0" width="920.0" height="7.2" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2004" parent="p2-1" style="strokeColor=#6c8ebf;fillColor=#dae8fc;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="220.0" y="180.0" width="15.2" height="650.0" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2005" parent="p2-1" style="strokeColor=#6c8ebf;fillColor=#dae8fc;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="672.4" y="180.0" width="15.2" height="650.0" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2006" parent="p2-1" style="strokeColor=#6c8ebf;fillColor=#dae8fc;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="1124.8" y="180.0" width="15.2" height="650.0" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2007" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="218.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2008" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="218.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2009" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="258.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2010" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="258.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2011" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="298.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2012" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="298.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2013" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="338.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2014" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="338.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2015" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="378.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2016" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="378.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2017" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="418.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2018" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="418.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2019" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="458.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2020" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="458.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2021" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="498.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2022" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="498.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2023" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="538.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2024" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="538.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2025" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="578.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2026" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="578.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2027" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="618.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2028" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="618.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2029" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="658.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2030" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="658.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2031" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="698.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2032" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="698.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2033" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="738.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2034" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="738.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2035" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="778.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2036" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="778.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2037" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="818.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2038" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="818.3" width="444.8" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2039" parent="p2-1" style="strokeColor=#d6b656;fillColor=#fff2cc;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="227.6" y="826.6" width="444.8" height="6.8" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2040" parent="p2-1" style="strokeColor=#d6b656;fillColor=#fff2cc;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="687.6" y="826.6" width="444.8" height="6.8" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2041" parent="p2-1" style="strokeColor=#507040;fillColor=#c0d8b0;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="209.0" y="180.0" width="3.4" height="650.0" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2042" parent="p2-1" style="strokeColor=#507040;fillColor=#c0d8b0;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="1147.6" y="180.0" width="3.4" height="650.0" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2043" parent="p2-1" style="strokeColor=#507040;fillColor=#c0d8b0;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="220.0" y="833.4" width="920.0" height="3.4" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2044" parent="p2-1" style="strokeColor=#7030a0;fillColor=#c8a0e8;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="220.0" y="836.8" width="920.0" height="2.5" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2045" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="211.2" y="211.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2046" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="211.2" y="496.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2047" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="211.2" y="821.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2048" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="671.2" y="211.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2049" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="671.2" y="496.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2050" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="671.2" y="821.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2051" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="1131.2" y="211.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2052" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="1131.2" y="496.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2053" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
-      <mxGeometry x="1131.2" y="821.2" width="17.6" height="17.6" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2054" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="228.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2055" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="247.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2056" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="265.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2057" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="284.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2058" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="303.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2059" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="322.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2060" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="340.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2061" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="359.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2062" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="378.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2063" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="397.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2064" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="415.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2065" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="434.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2066" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="453.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2067" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="472.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2068" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="490.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2069" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="509.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2070" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="528.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2071" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="547.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2072" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="565.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2073" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="584.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2074" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="603.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2075" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="622.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2076" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="640.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2077" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="659.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2078" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="678.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2079" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="697.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2080" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="715.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2081" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="734.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2082" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="753.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2083" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="772.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2084" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="790.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2085" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="809.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2086" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="828.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2087" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="847.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2088" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="865.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2089" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="884.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2090" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="903.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2091" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="922.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2092" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="940.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2093" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="959.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2094" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="978.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2095" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="997.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2096" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="1015.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2097" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="1034.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2098" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="1053.3" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2099" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="1072.1" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2100" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="1090.8" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2101" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
-      <mxGeometry x="1109.6" y="198.3" width="18.3" height="623.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2102" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="1&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
-      <mxGeometry x="228.3" y="475.0" width="18.3" height="70" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2103" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="12&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
-      <mxGeometry x="434.6" y="475.0" width="18.3" height="70" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2104" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="24&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
-      <mxGeometry x="659.6" y="475.0" width="18.3" height="70" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2105" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="36&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
-      <mxGeometry x="884.6" y="475.0" width="18.3" height="70" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2106" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="48&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
-      <mxGeometry x="1109.6" y="475.0" width="18.3" height="70" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2107" parent="p2-1" style="text;html=1;strokeColor=#5a3a1a;fillColor=#a07a4a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6;fontColor=#3a1a00;strokeWidth=1.5;" value="&lt;b&gt;HOUSE-SIDE PF — 5.5in Trex | 23&apos;-6&quot; | Butted corners (inside, against house)&lt;/b&gt;" vertex="1">
-      <mxGeometry x="210.0" y="180.0" width="940.0" height="18.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2108" parent="p2-1" style="text;html=1;strokeColor=#5a3a1a;fillColor=#a07a4a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6;fontColor=#3a1a00;strokeWidth=1.5;" value="&lt;b&gt;FAR-SIDE PF — 5.5in Trex | 23&apos;-6&quot; | MITERED corners (outside, 45&#176;)&lt;/b&gt;" vertex="1">
-      <mxGeometry x="210.0" y="821.7" width="940.0" height="18.3" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2109" parent="p2-1" style="text;html=1;strokeColor=#5a3a1a;fillColor=#a07a4a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6;fontColor=#3a1a00;strokeWidth=1.5;" value="&lt;b&gt;LEFT PF&lt;br/&gt;5.5in Trex&lt;br/&gt;16&apos;-6&quot;&lt;/b&gt;" vertex="1">
-      <mxGeometry x="189.2" y="180.0" width="18.3" height="641.7" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2110" parent="p2-1" style="text;html=1;strokeColor=#5a3a1a;fillColor=#a07a4a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6;fontColor=#3a1a00;strokeWidth=1.5;" value="&lt;b&gt;RIGHT PF&lt;br/&gt;5.5in Trex&lt;br/&gt;16&apos;-6&quot;&lt;/b&gt;" vertex="1">
-      <mxGeometry x="1142.5" y="180.0" width="18.3" height="641.7" as="geometry" />
-    </mxCell>
-    <!-- v10: outside-corner miter fill triangles and seam lines (lower-left and lower-right, Page 2) -->
-    <mxCell id="v10-p2-miter-fill-ll" parent="p2-1" style="shape=mxgraph.basic.right_triangle;fillColor=#a07a4a;strokeColor=#5a3a1a;strokeWidth=1.5;direction=south;flipH=1;flipV=0;" value="" vertex="1">
-      <mxGeometry x="189.2" y="821.7" width="18.3" height="18.3" as="geometry" />
-    </mxCell>
-    <mxCell id="v10-p2-miter-fill-lr" parent="p2-1" style="shape=mxgraph.basic.right_triangle;fillColor=#a07a4a;strokeColor=#5a3a1a;strokeWidth=1.5;direction=south;flipH=0;flipV=0;" value="" vertex="1">
-      <mxGeometry x="1142.5" y="821.7" width="18.3" height="18.3" as="geometry" />
-    </mxCell>
-    <mxCell id="v10-p2-miter-line-ll" parent="p2-1" style="endArrow=none;startArrow=none;strokeColor=#5a3a1a;strokeWidth=2.5;" value="" edge="1">
-      <mxGeometry relative="1" as="geometry">
-        <mxPoint as="sourcePoint" x="207.5" y="821.7" />
-        <mxPoint as="targetPoint" x="189.2" y="840.0" />
-      </mxGeometry>
-    </mxCell>
-    <mxCell id="v10-p2-miter-line-lr" parent="p2-1" style="endArrow=none;startArrow=none;strokeColor=#5a3a1a;strokeWidth=2.5;" value="" edge="1">
-      <mxGeometry relative="1" as="geometry">
-        <mxPoint as="sourcePoint" x="1142.5" y="821.7" />
-        <mxPoint as="targetPoint" x="1160.8" y="840.0" />
-      </mxGeometry>
-    </mxCell>
-    <mxCell id="p2-2111" parent="p2-1" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;" value="&lt;b&gt;DECK PLAN v12 — PAGE 2: DECKING&lt;/b&gt;&lt;br/&gt;23&apos;-6&quot; x 16&apos;-6&quot; Overall Finished Surface&lt;br/&gt;Trex Transcend 5.5&quot; | Running &#x22A5; house | 4-Side Picture Frame&lt;br/&gt;Framing at 40% opacity (structural unchanged from Page 1 / v7)&lt;br/&gt;v12: +single step L-edge 42in wide @ 6ft from house; open risers; gravel+paver landing&lt;br/&gt;Date: 2026-05-01 | Gemma — Technical Diagramming Specialist" vertex="1">
-      <mxGeometry x="1210" y="60" width="420" height="110" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2112" parent="p2-1" style="text;html=1;strokeColor=#a07a4a;fillColor=#fdf5e8;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#3a1a00;strokeWidth=2;" value="&lt;b&gt;PLANK COUNT SUMMARY (planning est.)&lt;/b&gt;&lt;br/&gt;Field planks: 48 &#215; 16-ft Trex 5.5&quot; (cut to 15&apos;-7&quot;, ~5&quot; waste ea.)&lt;br/&gt;PF house-side: 23&apos;-6&quot; (order 24-ft or splice from 16-ft)&lt;br/&gt;PF far-side: 23&apos;-6&quot; (same)&lt;br/&gt;PF left-side: 16&apos;-6&quot; (16-ft board, field-cut)&lt;br/&gt;PF right-side: 16&apos;-6&quot; (16-ft board, field-cut)&lt;br/&gt;Board subtotal: 52&lt;br/&gt;+10% waste: ~5 boards&lt;br/&gt;&lt;b&gt;TOTAL ORDER: ~57 boards (planning est.)&lt;/b&gt;&lt;br/&gt;Hollis will produce precise BOM with cut list." vertex="1">
-      <mxGeometry x="1210" y="180" width="420" height="240" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2113" parent="p2-1" style="text;html=1;strokeColor=#444444;fillColor=white;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#222222;" value="&lt;b&gt;LEGEND — PAGE 2: DECKING&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Field plank (tan #c9a778):&lt;/b&gt;&lt;br/&gt;5.5&quot; Trex Transcend, 48 planks @ 5.625&quot; c-c (5.5&quot; + 1/8&quot; gap), &#x22A5; house&lt;br/&gt;16-ft boards cut to 15&apos;-7&quot;&lt;br/&gt;&lt;br/&gt;&lt;b&gt;PF board (dark tan #a07a4a):&lt;/b&gt;&lt;br/&gt;5.5&quot; Trex, all 4 sides. House + far = 23&apos;-6&quot; | L + R = 16&apos;-6&quot;&lt;br/&gt;&lt;br/&gt;&lt;b&gt;CORNER JOINTS:&lt;/b&gt;&lt;br/&gt;Top corners (against house): BUTTED — not mitered&lt;br/&gt;Bottom corners (exposed): 45&#176; MITER&lt;br/&gt;&lt;br/&gt;&lt;b&gt;FRAMING (background @ 40% opacity):&lt;/b&gt;&lt;br/&gt;Unchanged from Page 1. All tops at 11&quot; AG. Deck top at 12&quot; AG.&lt;br/&gt;&lt;br/&gt;&lt;b&gt;ORDERING NOTES:&lt;/b&gt;&lt;br/&gt;48 &#215; 16-ft field boards + 4 PF boards = 52 + 10% = ~57 total&lt;br/&gt;PF long sides: prefer 24-ft; else splice from 16-ft over joist&lt;br/&gt;Trex Transcend 5.5&quot; Grooved or Solid Edge (match species/color)&lt;br/&gt;Hidden fasteners: Trex Hideaway for field; face-screw PF w/ Trex screws&lt;br/&gt;Carbide blade; cut from back face; 1/8&quot; spacers during install" vertex="1">
-      <mxGeometry x="1210" y="435" width="420" height="420" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2114" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontStyle=1;fontColor=#000099;" value="23&apos;-6&quot;  OVERALL FINISHED SURFACE  (PF outer edge to outer edge)" vertex="1">
-      <mxGeometry x="210.0" y="120.0" width="940.0" height="20" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2115" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=8;fontColor=#444444;" value="23&apos;-0&quot;  framing footprint (rim outer edge)" vertex="1">
-      <mxGeometry x="220.0" y="140.0" width="920.0" height="16" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2116" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=8;fontStyle=1;fontColor=#7a3a00;" value="22&apos;-7&quot;  field plank area (271&quot; | 48 planks &#215; 5.5&quot; + 47 gaps @ 1/8&quot;)" vertex="1">
-      <mxGeometry x="228.3" y="158.0" width="840.0" height="14" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2117" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=7;fontStyle=1;fontColor=#aa3300;" value="Outside corner&lt;br/&gt;45&#176; miter" vertex="1">
-      <mxGeometry x="109.2" y="836.7" width="90" height="30" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2118" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=7;fontStyle=1;fontColor=#aa3300;" value="Outside corner&lt;br/&gt;45&#176; miter" vertex="1">
-      <mxGeometry x="1160.8" y="836.7" width="90" height="30" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2119" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#777777;" value="Inside corner&lt;br/&gt;(butted)" vertex="1">
-      <mxGeometry x="109.2" y="203.3" width="90" height="25" as="geometry" />
-    </mxCell>
-    <mxCell id="p2-2120" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#777777;" value="Inside corner&lt;br/&gt;(butted)" vertex="1">
-      <mxGeometry x="1160.8" y="203.3" width="90" height="25" as="geometry" />
-    </mxCell>
-        <mxCell id="v12-p2-gravel" parent="p2-1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry x="147.8" y="410.0" width="60.0" height="160.0" as="geometry" />
+        <mxCell id="p2-2001" parent="p2-1" style="strokeColor=#a09080;fillColor=#e8e0d4;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#9b7050;opacity=40;" value="EXISTING CONCRETE PATIO (background)" vertex="1">
+          <mxGeometry height="750" width="940" x="210" y="90" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-gravel-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#6a5a48;" value="#57 gravel pad 48in x 18in" vertex="1">
-          <mxGeometry x="147.8" y="410.0" width="60.0" height="25" as="geometry" />
+        <mxCell id="p2-2002" parent="p2-1" style="text;html=1;strokeColor=#444444;fillColor=#cccccc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=11;fontColor=#222222;opacity=40;" value="&lt;b&gt;HOUSE WALL  ↑  NORTH  (23&#39;-6&quot; overall edge)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="45" width="940" x="210" y="90" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-paver-0" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry x="147.8" y="400.0" width="40.0" height="40.0" as="geometry" />
+        <mxCell id="p2-2003" parent="p2-1" style="text;html=1;strokeColor=#b85450;fillColor=#f8cecc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#5a0000;strokeWidth=2;opacity=40;" value="LEDGER" vertex="1">
+          <mxGeometry height="7.2" width="920" x="220" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-paver-1" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry x="147.8" y="470.0" width="40.0" height="40.0" as="geometry" />
+        <mxCell id="p2-2004" parent="p2-1" style="strokeColor=#6c8ebf;fillColor=#dae8fc;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="650" width="15.2" x="220" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-paver-2" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry x="147.8" y="540.0" width="40.0" height="40.0" as="geometry" />
+        <mxCell id="p2-2005" parent="p2-1" style="strokeColor=#6c8ebf;fillColor=#dae8fc;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="650" width="15.2" x="672.4" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-stringer-0" parent="p2-1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
-          <mxGeometry x="154.4" y="416.7" width="58.0" height="6.7" as="geometry" />
+        <mxCell id="p2-2006" parent="p2-1" style="strokeColor=#6c8ebf;fillColor=#dae8fc;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="650" width="15.2" x="1124.8" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-stringer-1" parent="p2-1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
-          <mxGeometry x="154.4" y="486.7" width="58.0" height="6.7" as="geometry" />
+        <mxCell id="p2-2007" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="218.3" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-stringer-2" parent="p2-1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
-          <mxGeometry x="154.4" y="556.7" width="58.0" height="6.7" as="geometry" />
+        <mxCell id="p2-2008" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="218.3" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-tread-plank-0" parent="p2-1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;" value="" vertex="1">
-          <mxGeometry x="171.8" y="420.0" width="18.0" height="140.0" as="geometry" />
+        <mxCell id="p2-2009" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="258.3" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-tread-plank-1" parent="p2-1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;" value="" vertex="1">
-          <mxGeometry x="189.8" y="420.0" width="18.0" height="140.0" as="geometry" />
+        <mxCell id="p2-2010" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="258.3" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-tread-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5.5;fontColor=#7a5030;fontStyle=1;" value="Mid tread&lt;br/&gt;2x 5.4in MoistureShield&lt;br/&gt;6in AG | OPEN risers" vertex="1">
-          <mxGeometry x="159.8" y="465.0" width="60" height="50" as="geometry" />
+        <mxCell id="p2-2011" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="298.3" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-cutjoint-0" parent="p2-1" style="endArrow=none;startArrow=none;strokeColor=#cc2200;strokeWidth=2.5;" value="" edge="1">
+        <mxCell id="p2-2012" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="298.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2013" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="338.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2014" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="338.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2015" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="378.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2016" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="378.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2017" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="418.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2018" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="418.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2019" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="458.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2020" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="458.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2021" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="498.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2022" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="498.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2023" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="538.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2024" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="538.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2025" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="578.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2026" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="578.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2027" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="618.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2028" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="618.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2029" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="658.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2030" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="658.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2031" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="698.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2032" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="698.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2033" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="738.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2034" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="738.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2035" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="778.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2036" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="778.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2037" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="227.6" y="818.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2038" parent="p2-1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="444.8" x="687.6" y="818.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2039" parent="p2-1" style="strokeColor=#d6b656;fillColor=#fff2cc;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="6.8" width="444.8" x="227.6" y="826.6" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2040" parent="p2-1" style="strokeColor=#d6b656;fillColor=#fff2cc;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="6.8" width="444.8" x="687.6" y="826.6" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2041" parent="p2-1" style="strokeColor=#507040;fillColor=#c0d8b0;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="650" width="3.4" x="209" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2042" parent="p2-1" style="strokeColor=#507040;fillColor=#c0d8b0;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="650" width="3.4" x="1147.6" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2043" parent="p2-1" style="strokeColor=#507040;fillColor=#c0d8b0;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="3.4" width="920" x="220" y="833.4" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2044" parent="p2-1" style="strokeColor=#7030a0;fillColor=#c8a0e8;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="2.5" width="920" x="220" y="836.8" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2045" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="211.2" y="211.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2046" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="211.2" y="496.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2047" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="211.2" y="821.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2048" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="671.2" y="211.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2049" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="671.2" y="496.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2050" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="671.2" y="821.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2051" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="1131.2" y="211.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2052" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="1131.2" y="496.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2053" parent="p2-1" style="ellipse;whiteSpace=wrap;html=1;fillColor=#5a4030;strokeColor=#2a1808;strokeWidth=2;opacity=40;" value="" vertex="1">
+          <mxGeometry height="17.6" width="17.6" x="1131.2" y="821.2" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2054" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="228.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2055" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="247.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2056" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="265.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2057" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="284.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2058" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="303.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2059" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="322.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2060" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="340.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2061" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="359.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2062" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="378.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2063" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="397.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2064" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="415.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2065" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="434.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2066" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="453.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2067" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="472.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2068" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="490.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2069" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="509.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2070" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="528.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2071" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="547.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2072" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="565.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2073" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="584.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2074" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="603.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2075" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="622.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2076" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="640.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2077" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="659.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2078" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="678.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2079" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="697.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2080" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="715.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2081" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="734.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2082" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="753.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2083" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="772.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2084" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="790.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2085" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="809.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2086" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="828.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2087" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="847.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2088" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="865.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2089" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="884.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2090" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="903.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2091" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="922.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2092" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="940.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2093" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="959.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2094" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="978.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2095" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="997.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2096" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="1015.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2097" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="1034.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2098" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="1053.3" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2099" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="1072.1" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2100" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="1090.8" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2101" parent="p2-1" style="strokeColor=#7a5a3a;fillColor=#c9a778;strokeWidth=0.5;" value="" vertex="1">
+          <mxGeometry height="623.3" width="18.3" x="1109.6" y="198.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2102" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="1&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
+          <mxGeometry height="70" width="18.3" x="228.3" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2103" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="12&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
+          <mxGeometry height="70" width="18.3" x="434.6" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2104" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="24&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
+          <mxGeometry height="70" width="18.3" x="659.6" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2105" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="36&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
+          <mxGeometry height="70" width="18.3" x="884.6" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2106" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontStyle=1;fontColor=#5a3010;" value="48&lt;br/&gt;of&lt;br/&gt;48" vertex="1">
+          <mxGeometry height="70" width="18.3" x="1109.6" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2107" parent="p2-1" style="text;html=1;strokeColor=#5a3a1a;fillColor=#a07a4a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6;fontColor=#3a1a00;strokeWidth=1.5;" value="&lt;b&gt;HOUSE-SIDE PF — 5.5in Trex | 23&#39;-6&quot; | Butted corners (inside, against house)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="18.3" width="940" x="210" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2108" parent="p2-1" style="text;html=1;strokeColor=#5a3a1a;fillColor=#a07a4a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6;fontColor=#3a1a00;strokeWidth=1.5;" value="&lt;b&gt;FAR-SIDE PF — 5.5in Trex | 23&#39;-6&quot; | MITERED corners (outside, 45°)&lt;/b&gt;" vertex="1">
+          <mxGeometry height="18.3" width="940" x="210" y="821.7" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2109" parent="p2-1" style="text;html=1;strokeColor=#5a3a1a;fillColor=#a07a4a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6;fontColor=#3a1a00;strokeWidth=1.5;" value="&lt;b&gt;LEFT PF&lt;br/&gt;5.5in Trex&lt;br/&gt;16&#39;-6&quot;&lt;/b&gt;" vertex="1">
+          <mxGeometry height="641.7" width="18.3" x="189.2" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2110" parent="p2-1" style="text;html=1;strokeColor=#5a3a1a;fillColor=#a07a4a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6;fontColor=#3a1a00;strokeWidth=1.5;" value="&lt;b&gt;RIGHT PF&lt;br/&gt;5.5in Trex&lt;br/&gt;16&#39;-6&quot;&lt;/b&gt;" vertex="1">
+          <mxGeometry height="641.7" width="18.3" x="1142.5" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="v10-p2-miter-fill-ll" parent="p2-1" style="shape=mxgraph.basic.right_triangle;fillColor=#a07a4a;strokeColor=#5a3a1a;strokeWidth=1.5;direction=south;flipH=1;flipV=0;" value="" vertex="1">
+          <mxGeometry height="18.3" width="18.3" x="189.2" y="821.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v10-p2-miter-fill-lr" parent="p2-1" style="shape=mxgraph.basic.right_triangle;fillColor=#a07a4a;strokeColor=#5a3a1a;strokeWidth=1.5;direction=south;flipH=0;flipV=0;" value="" vertex="1">
+          <mxGeometry height="18.3" width="18.3" x="1142.5" y="821.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v10-p2-miter-line-ll" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;strokeColor=#5a3a1a;strokeWidth=2.5;" value="">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint as="sourcePoint" x="150.4" y="420.0" />
-            <mxPoint as="targetPoint" x="209.8" y="420.0" />
+            <mxPoint x="207.5" y="821.7" as="sourcePoint" />
+            <mxPoint x="189.2" y="840" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="v12-p2-cutjoint-1" parent="p2-1" style="endArrow=none;startArrow=none;strokeColor=#cc2200;strokeWidth=2.5;" value="" edge="1">
+        <mxCell id="v10-p2-miter-line-lr" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;strokeColor=#5a3a1a;strokeWidth=2.5;" value="">
           <mxGeometry relative="1" as="geometry">
-            <mxPoint as="sourcePoint" x="150.4" y="560.0" />
-            <mxPoint as="targetPoint" x="209.8" y="560.0" />
+            <mxPoint x="1142.5" y="821.7" as="sourcePoint" />
+            <mxPoint x="1160.8" y="840" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p2-2111" parent="p2-1" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;" value="&lt;b&gt;DECK PLAN v13 — PAGE 2: DECKING&lt;/b&gt;&lt;br/&gt;23&#39;-6&quot; x 16&#39;-6&quot; Overall Finished Surface&lt;br/&gt;Trex Transcend 5.5&quot; | Running ⊥ house | 4-Side Picture Frame&lt;br/&gt;Framing at 40% opacity (structural unchanged from Page 1 / v7)&lt;br/&gt;v13: 9→6 piers (house-side row dropped); HU210-3 hangers at girder-ledger connections; far-edge step 11ft-9in right corner to midpoint&lt;br/&gt;Date: 2026-05-01 | Gemma — Technical Diagramming Specialist" vertex="1">
+          <mxGeometry height="110" width="420" x="1234" y="57.5" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2112" parent="p2-1" style="text;html=1;strokeColor=#a07a4a;fillColor=#fdf5e8;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#3a1a00;strokeWidth=2;" value="&lt;b&gt;PLANK COUNT SUMMARY (planning est.)&lt;/b&gt;&lt;br/&gt;Field planks: 48 × 16-ft Trex 5.5&quot; (cut to 15&#39;-7&quot;, ~5&quot; waste ea.)&lt;br/&gt;PF house-side: 23&#39;-6&quot; (order 24-ft or splice from 16-ft)&lt;br/&gt;PF far-side: 23&#39;-6&quot; (same)&lt;br/&gt;PF left-side: 16&#39;-6&quot; (16-ft board, field-cut)&lt;br/&gt;PF right-side: 16&#39;-6&quot; (16-ft board, field-cut)&lt;br/&gt;Board subtotal: 52&lt;br/&gt;+10% waste: ~5 boards&lt;br/&gt;&lt;b&gt;TOTAL ORDER: ~57 boards (planning est.)&lt;/b&gt;&lt;br/&gt;Hollis will produce precise BOM with cut list." vertex="1">
+          <mxGeometry height="138.3" width="420" x="1234" y="181.7" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2113" parent="p2-1" style="text;html=1;strokeColor=#444444;fillColor=white;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#222222;" value="&lt;b&gt;LEGEND — PAGE 2: DECKING&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;&lt;b&gt;Field plank (tan #c9a778):&lt;/b&gt;&lt;br/&gt;5.5&quot; Trex Transcend, 48 planks @ 5.625&quot; c-c (5.5&quot; + 1/8&quot; gap), ⊥ house&lt;br/&gt;16-ft boards cut to 15&#39;-7&quot;&lt;br/&gt;&lt;br/&gt;&lt;b&gt;PF board (dark tan #a07a4a):&lt;/b&gt;&lt;br/&gt;5.5&quot; Trex, all 4 sides. House + far = 23&#39;-6&quot; | L + R = 16&#39;-6&quot;&lt;br/&gt;&lt;br/&gt;&lt;b&gt;CORNER JOINTS:&lt;/b&gt;&lt;br/&gt;Top corners (against house): BUTTED — not mitered&lt;br/&gt;Bottom corners (exposed): 45° MITER&lt;br/&gt;&lt;br/&gt;&lt;b&gt;FRAMING (background @ 40% opacity):&lt;/b&gt;&lt;br/&gt;Unchanged from Page 1. All tops at 11&quot; AG. Deck top at 12&quot; AG.&lt;br/&gt;&lt;br/&gt;&lt;b&gt;ORDERING NOTES:&lt;/b&gt;&lt;br/&gt;48 × 16-ft field boards + 4 PF boards = 52 + 10% = ~57 total&lt;br/&gt;PF long sides: prefer 24-ft; else splice from 16-ft over joist&lt;br/&gt;Trex Transcend 5.5&quot; Grooved or Solid Edge (match species/color)&lt;br/&gt;Hidden fasteners: Trex Hideaway for field; face-screw PF w/ Trex screws&lt;br/&gt;Carbide blade; cut from back face; 1/8&quot; spacers during install" vertex="1">
+          <mxGeometry height="223.3" width="420" x="1234" y="341.7" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2114" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontStyle=1;fontColor=#000099;" value="23&#39;-6&quot;  OVERALL FINISHED SURFACE  (PF outer edge to outer edge)" vertex="1">
+          <mxGeometry height="20" width="940" x="210" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2115" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=8;fontColor=#444444;" value="23&#39;-0&quot;  framing footprint (rim outer edge)" vertex="1">
+          <mxGeometry height="16" width="920" x="220" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2116" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=8;fontStyle=1;fontColor=#7a3a00;" value="22&#39;-7&quot;  field plank area (271&quot; | 48 planks × 5.5&quot; + 47 gaps @ 1/8&quot;)" vertex="1">
+          <mxGeometry height="14" width="840" x="228.3" y="158" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2117" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=7;fontStyle=1;fontColor=#aa3300;" value="Outside corner&lt;br/&gt;45° miter" vertex="1">
+          <mxGeometry height="30" width="90" x="109.2" y="836.7" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2118" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=7;fontStyle=1;fontColor=#aa3300;" value="Outside corner&lt;br/&gt;45° miter" vertex="1">
+          <mxGeometry height="30" width="90" x="1160.8" y="836.7" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2119" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#777777;" value="Inside corner&lt;br/&gt;(butted)" vertex="1">
+          <mxGeometry height="25" width="90" x="109.2" y="203.3" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-2120" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#777777;" value="Inside corner&lt;br/&gt;(butted)" vertex="1">
+          <mxGeometry height="25" width="90" x="1160.8" y="203.3" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-gravel" parent="p2-1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="160" width="60" x="147.8" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-gravel-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#6a5a48;" value="#57 gravel pad 48in x 18in" vertex="1">
+          <mxGeometry height="25" width="60" x="147.8" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-paver-0" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="147.8" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-paver-1" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="147.8" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-paver-2" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="147.8" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-stringer-0" parent="p2-1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="6.7" width="58" x="154.4" y="416.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-stringer-1" parent="p2-1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="6.7" width="58" x="154.4" y="486.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-stringer-2" parent="p2-1" style="strokeColor=#2a5a1a;fillColor=#6a8a5a;strokeWidth=2;" value="" vertex="1">
+          <mxGeometry height="6.7" width="58" x="154.4" y="556.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-tread-plank-0" parent="p2-1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;" value="" vertex="1">
+          <mxGeometry height="140" width="18" x="171.8" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-tread-plank-1" parent="p2-1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;" value="" vertex="1">
+          <mxGeometry height="140" width="18" x="189.8" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-tread-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5.5;fontColor=#7a5030;fontStyle=1;" value="Mid tread&lt;br/&gt;2x 5.4in MoistureShield&lt;br/&gt;6in AG | OPEN risers" vertex="1">
+          <mxGeometry height="50" width="60" x="159.8" y="465" as="geometry" />
+        </mxCell>
+        <mxCell id="v12-p2-cutjoint-0" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;strokeColor=#cc2200;strokeWidth=2.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150.4" y="420" as="sourcePoint" />
+            <mxPoint x="209.8" y="420" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v12-p2-cutjoint-1" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;strokeColor=#cc2200;strokeWidth=2.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150.4" y="560" as="sourcePoint" />
+            <mxPoint x="209.8" y="560" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="v12-p2-cj-lbl-0" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#cc2200;fontStyle=1;" value="CUT JOINT y=6ft-0in" vertex="1">
-          <mxGeometry x="150.4" y="404.0" width="130" height="14" as="geometry" />
+          <mxGeometry height="14" width="130" x="150.4" y="404" as="geometry" />
         </mxCell>
         <mxCell id="v12-p2-cj-lbl-1" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#cc2200;fontStyle=1;" value="CUT JOINT y=9ft-6in" vertex="1">
-          <mxGeometry x="150.4" y="563.0" width="130" height="14" as="geometry" />
+          <mxGeometry height="14" width="130" x="150.4" y="563" as="geometry" />
         </mxCell>
         <mxCell id="v12-p2-elev-box" parent="p2-1" style="text;html=1;strokeColor=#446688;fillColor=#f8f8f0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#2244aa;strokeWidth=2;" value="&lt;b&gt;STEP SIDE ELEVATION&lt;/b&gt;&lt;br/&gt;Open risers -- no riser board&lt;br/&gt;&lt;br/&gt;12in AG --------- (deck top)&lt;br/&gt;OPEN RISER (no board)&lt;br/&gt;6in AG -- [tread 10.8in deep] --&lt;br/&gt;OPEN RISER (no board)&lt;br/&gt;0in AG ----------- (grade)&lt;br/&gt;[gravel pad + 12in x 12in pavers]&lt;br/&gt;&lt;br/&gt;2 risers @ 6in each&lt;br/&gt;3x 2x10 PT stringers" vertex="1">
-          <mxGeometry x="-29.6" y="580.0" width="155" height="160" as="geometry" />
+          <mxGeometry height="160" width="155" x="-46.5" y="461.7" as="geometry" />
         </mxCell>
         <mxCell id="v12-p2-pf-gap" parent="p2-1" style="strokeColor=#cc2200;fillColor=white;strokeWidth=1.5;dashed=1;dashPattern=6 3;" value="STEP&lt;br/&gt;OPENING" vertex="1">
-          <mxGeometry x="189.8" y="420.0" width="18.0" height="140.0" as="geometry" />
+          <mxGeometry height="140" width="18" x="189.8" y="420" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-step-callout" parent="p2-1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;SINGLE STEP — L EDGE (v12)&lt;/b&gt;&lt;br/&gt;y=6ft-0in to 9ft-6in from house wall&lt;br/&gt;42in wide | 16in projection&lt;br/&gt;3x 2x10 PT stringers (LSCZ)&lt;br/&gt;Mid tread: 2x5.4in MoistureShield @ 6in AG&lt;br/&gt;OPEN risers | pavers on #57 gravel" vertex="1">
-          <mxGeometry x="-18.6" y="410.0" width="162" height="95" as="geometry" />
+        <mxCell id="v12-p2-step-callout" parent="p2-1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;SINGLE STEP — L EDGE (v12, unchanged in v13)&lt;/b&gt;&lt;br/&gt;y=6ft-0in to 9ft-6in from house wall&lt;br/&gt;42in wide | 16in projection&lt;br/&gt;3x 2x10 PT stringers (LSCZ)&lt;br/&gt;Mid tread: 2x5.4in MoistureShield @ 6in AG&lt;br/&gt;OPEN risers | pavers on #57 gravel" vertex="1">
+          <mxGeometry height="95" width="162" x="-50" y="326.7" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-hanger-0" parent="p2-1" style="text;html=1;strokeColor=#882200;fillColor=#cc4400;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;opacity=60;" value="&lt;b&gt;HU210-3&lt;/b&gt;" vertex="1">
+          <mxGeometry height="18" width="18" x="211" y="175.5" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-hanger-1" parent="p2-1" style="text;html=1;strokeColor=#882200;fillColor=#cc4400;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;opacity=60;" value="&lt;b&gt;HU210-3&lt;/b&gt;" vertex="1">
+          <mxGeometry height="18" width="18" x="671" y="175.5" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-hanger-2" parent="p2-1" style="text;html=1;strokeColor=#882200;fillColor=#cc4400;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;opacity=60;" value="&lt;b&gt;HU210-3&lt;/b&gt;" vertex="1">
+          <mxGeometry height="18" width="18" x="1131" y="175.5" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-gravel" parent="p2-1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="93.2" width="486" x="672" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-gravel-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;fontSize=6;fontColor=#6a5a48;" value="4in compacted #57 gravel pad (outside deck footprint)" vertex="1">
+          <mxGeometry height="20" width="486" x="672" y="933.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-ribbon" parent="p2-1" style="text;html=1;strokeColor=#2a5a2a;fillColor=#5a8a5a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6.5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;" value="Doubled 2x6 PT SYP ribbon — lag-bolted to outer rim" vertex="1">
+          <mxGeometry height="10" width="470" x="680" y="836.8" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-tread-0" parent="p2-1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;" value="" vertex="1">
+          <mxGeometry height="18" width="470" x="680" y="846.8" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-tread-1" parent="p2-1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;" value="" vertex="1">
+          <mxGeometry height="18" width="470" x="680" y="865.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-tread-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6.5;fontColor=#7a5030;fontStyle=1;" value="2x 5.4in MoistureShield Vision | 10.9in tread | 6in AG | Open riser | Tiger Claw TC-G or Cortex" vertex="1">
+          <mxGeometry height="24" width="470" x="680" y="853" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-block-0" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="1110" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-block-1" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="996.7" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-block-2" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="883.3" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-block-3" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="770" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-block-4" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
+          <mxGeometry height="40" width="40" x="660" y="885.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-block-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;fontSize=6.5;fontColor=#444444;fontStyle=1;" value="5x precast concrete deck blocks (12in x 12in) @ ≈28in OC" vertex="1">
+          <mxGeometry height="20" width="470" x="680" y="925.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-heave-callout" parent="p2-1" style="text;html=1;strokeColor=#cc4400;fillColor=#fff0e0;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=7;fontColor=#8B0000;strokeWidth=1.8;" value="&lt;b&gt;⚠ SEASONAL HEAVE (Hollis): shallow blocks WILL heave ¼-½in per cycle.&lt;/b&gt;&lt;br/&gt;Decorative convenience step — NOT frost-depth founded.&lt;br/&gt;Homeowner has accepted this trade-off.&lt;br/&gt;Separate from left-edge stair; does not affect deck structure." vertex="1">
+          <mxGeometry height="75" width="330" x="415.8" y="957.5" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-step-callout" parent="p2-1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;FAR-EDGE STEP — v13 NEW&lt;/b&gt;&lt;br/&gt;11ft-9in along outer 23ft-6in edge&lt;br/&gt;Right corner to midpoint (x=23ft-6in to x=11ft-9in)&lt;br/&gt;Single 6in rise | 10.9in tread (2x 5.4in MoistureShield)&lt;br/&gt;Doubled 2x6 PT ribbon to outer rim face&lt;br/&gt;5x precast blocks @ ~28in OC on 4in #57 gravel&lt;br/&gt;Open riser | TC-G or Cortex fasteners" vertex="1">
+          <mxGeometry height="110" width="330" x="1410" y="823.2" as="geometry" />
+        </mxCell>
+        <mxCell id="v13-p2-far-elev-box" parent="p2-1" style="text;html=1;strokeColor=#2a6a2a;fillColor=#f8f8f0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#2a6a2a;strokeWidth=2;" value="&lt;b&gt;FAR-EDGE STEP — SIDE ELEVATION (v13)&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;12in AG -------- (deck top)&lt;br/&gt;OPEN RISER (6in drop, no board)&lt;br/&gt;6in AG ---- [tread 10.9in deep] ----&lt;br/&gt;(grade / block top)&lt;br/&gt;[4in #57 gravel pad + precast blocks]&lt;br/&gt;&lt;br/&gt;1 riser @ 6in&lt;br/&gt;Doubled 2x6 PT ribbon to deck rim&lt;br/&gt;5x blocks @ ~28in OC" vertex="1">
+          <mxGeometry height="150" width="150" x="1250.8" y="807.5" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

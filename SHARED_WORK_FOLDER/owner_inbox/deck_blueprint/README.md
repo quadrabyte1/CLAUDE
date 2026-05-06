@@ -1,6 +1,12 @@
-# Deck Blueprint — 23'-6" × 16'-6" Attached Deck  (v12)
+# Deck Blueprint — 23'-6" × 16'-6" Attached Deck  (v13)
 
-Produced by Gemma (Technical Diagramming Specialist) on 2026-05-01.
+Produced by Gemma (Technical Diagramming Specialist) on 2026-05-05.
+
+**v13 = v12 + TWO structural changes only:**
+
+**Change 1 — House-side pier row dropped (9 → 6 piers).** Piers P1, P4, P7 at y=12" from house removed. Ledger now carries the three perpendicular-girder house-end reactions as point loads. Simpson HU210-3 (or equivalent) hanger at each of the three girder-to-ledger intersections (x=0', x=11'-6", x=23'-0"). Ledger fastener spec upgraded to ½" HDG carriage bolts back-blocked from basement (confirmed accessible) clustered at each girder connection, plus ½" HDG lag at 18" OC two-row staggered between girder connections per IRC R507.9.1.3. Wall confirmed wood-frame, no masonry. Peel-and-stick + Z-flashing retained from v12.
+
+**Change 2 — Far-edge step added (v13 new).** Single low wide step along the outer (far) 23'-6" edge, right half only. Runs 11'-9" from the right corner (x=23'-6") back to the midpoint (x=11'-9"). Single 6" rise; tread top at 6" AG. Tread = 2× MoistureShield Vision 5.4" planks (10.9" total depth) running perpendicular to the house. Doubled 2×6 PT SYP ribbon lag-bolted to outer rim/drop-board face. Five precast concrete deck blocks (~28" OC) on a 4" compacted #57 gravel pad outside the deck footprint. Block positions (from left): x=23'-0", 20'-2", 17'-4", 14'-6", 11'-9". Open riser. Tiger Claw TC-G or Cortex fasteners matching main deck. Seasonal heave callout: ¼–½" per Hollis; homeowner has accepted. Does not conflict with v12 left-edge stair (separate and independent).
 
 **v12 = v11 + single 42" wide step on L edge starting 6' from house, open risers, gravel + paver landing.** The step assembly sits on the LEFT edge of the deck (negative-x direction from the left girder), with the opening spanning y=6'-0" to y=9'-6" from the house wall. Left PF and fascia are interrupted at those cut joints. Three 2×10 PT cut stringers attach to the left girder outer face via Simpson LSCZ hangers. Middle tread is 2 MoistureShield Vision 5.4" planks running parallel to the left edge at 6" AG. Open risers throughout (no riser boards). Stringer ends bear on 12"×12" precast pavers over a #57 compacted gravel pad. A side-elevation inset detail on both pages shows the step profile with annotated elevations (0", 6", 12" AG).
 
@@ -23,9 +29,11 @@ Produced by Gemma (Technical Diagramming Specialist) on 2026-05-01.
 
 | File | Description |
 |------|-------------|
-| `deck_plan.drawio` | Editable draw.io source **(v12, two pages)**. Open in [draw.io desktop](https://www.drawio.com/) or [app.diagrams.net](https://app.diagrams.net). Page 1 = Framing; Page 2 = Decking. Version badge "v12" in upper-left of both pages. MoistureShield Vision throughout. Step on L edge on both pages. |
-| `deck_plan.png` | Raster render of **Page 2 (Decking Plan)**, 2701 × 1958 px. Produced by `render_v12.py`. Version badge "v12" visible top-left. 49 field planks + step assembly visible. Outside corner miters preserved. Side-elevation step inset in legend area. |
-| `render_v12.py` | matplotlib render script for v12 Page 2 (Decking Plan). Step on L edge, gravel+paver pad, side-elevation inset, cut joints in L PF at y=6' and y=9'-6". |
+| `deck_plan.drawio` | Editable draw.io source **(v13, two pages)**. Open in [draw.io desktop](https://www.drawio.com/) or [app.diagrams.net](https://app.diagrams.net). Page 1 = Framing; Page 2 = Decking. Version badge "v13" in upper-left of both pages. MoistureShield Vision throughout. 6 piers (house-side row dropped), HU210-3 hangers, far-edge step and left-edge stair both shown. |
+| `deck_plan.png` | Raster render of **Page 2 (Decking Plan)**. Produced by `render_v13.py`. Version badge "v13" visible top-left. 49 field planks, left-edge stair (v12), far-edge step (v13), 6 piers (house-side row absent), HU210-3 hanger callouts, side-elevation insets for both steps. |
+| `render_v13.py` | matplotlib render script for v13 Page 2 (Decking Plan). 6 piers, HU210-3 hangers at ledger, far-edge step (11'-9", right corner to midpoint), left-edge stair unchanged. |
+| `gen_drawio_v13.py` | Python script to generate v13 drawio from v12. Hides house-side pier row, adds hanger cells, injects far-edge step cells on both pages, sweeps v12→v13 in all badges/titles. |
+| `render_v12.py` | v12 render script (kept for reference). |
 | `render_v11.py` | v11 render script (kept for reference). |
 | `render_v10.py` | v10 render script (kept for reference). |
 | `render_v9.py` | v9 render script (kept for reference). |

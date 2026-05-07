@@ -1709,6 +1709,7 @@ function polygonEditor() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             image: this.selectedImage,
+            course: this.courseName,
             green_points: greenPoints,
             imageSize: { width: this.imgW, height: this.imgH },
           }),

@@ -1,0 +1,56 @@
+{
+  "course": "Augusta Ranch",
+  "hole": "quadrabyte@protonmail.com",
+  "image": "PGA West - Arnold Palmer.png",
+  "imageSize": {
+    "width": 1074,
+    "height": 1197
+  },
+  "contourStep": 10,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 376,
+          "y": 419
+        },
+        {
+          "x": 546,
+          "y": 419
+        },
+        {
+          "x": 698,
+          "y": 437
+        },
+        {
+          "x": 698,
+          "y": 608
+        },
+        {
+          "x": 698,
+          "y": 778
+        },
+        {
+          "x": 528,
+          "y": 778
+        },
+        {
+          "x": 376,
+          "y": 760
+        },
+        {
+          "x": 376,
+          "y": 589
+        }
+      ]
+    }
+  ]
+}

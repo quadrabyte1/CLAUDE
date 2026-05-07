@@ -1124,12 +1124,25 @@ def find_contours():
 
     data = request.get_json()
     image_name = data.get("image", "")
+    course = data.get("course", "")
     green_points = data.get("green_points", [])
 
     if not image_name or not green_points:
         return jsonify({"status": "error", "msg": "Need image and green_points"}), 400
 
-    img_path = os.path.join(os.path.dirname(__file__), "..", "team_inbox", image_name)
+    # Search course Images/ folder first, then team_inbox as fallback
+    img_path = None
+    search_dirs = []
+    if course and os.path.isdir(_EGM_BASE):
+        search_dirs.append(os.path.join(_EGM_BASE, course, "Images"))
+    search_dirs.append(os.path.abspath(_TEAM_INBOX))
+    for _search_dir in search_dirs:
+        _candidate = os.path.join(_search_dir, image_name)
+        if os.path.isfile(_candidate):
+            img_path = _candidate
+            break
+    if img_path is None:
+        return jsonify({"status": "error", "msg": f"Image not found: {image_name}"}), 400
 
     # The editor sends dense spline-sampled points — use them directly as the
     # green boundary polygon (Nx2 float64 array of (x, y) pixel coords).

@@ -1,0 +1,56 @@
+{
+  "course": "Augusta Ranch",
+  "hole": "x",
+  "image": "Untitled Diagram.drawio1.png",
+  "imageSize": {
+    "width": 1180,
+    "height": 1300
+  },
+  "contourStep": 10,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 413,
+          "y": 455
+        },
+        {
+          "x": 593,
+          "y": 192
+        },
+        {
+          "x": 767,
+          "y": 473
+        },
+        {
+          "x": 767,
+          "y": 659
+        },
+        {
+          "x": 767,
+          "y": 845
+        },
+        {
+          "x": 581,
+          "y": 845
+        },
+        {
+          "x": 413,
+          "y": 827
+        },
+        {
+          "x": 413,
+          "y": 641
+        }
+      ]
+    }
+  ]
+}

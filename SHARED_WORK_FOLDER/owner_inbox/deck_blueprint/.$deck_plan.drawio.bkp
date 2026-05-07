@@ -228,7 +228,7 @@
           <mxGeometry height="16" width="100" x="60" y="824" as="geometry" />
         </mxCell>
         <mxCell id="188" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=9;fontStyle=1;" value="12in o.c. typical" vertex="1">
-          <mxGeometry height="30" width="100" x="1150" y="500" as="geometry" />
+          <mxGeometry height="30" width="100" x="1200" y="500" as="geometry" />
         </mxCell>
         <mxCell id="v12-p1-gravel" parent="1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;opacity=70;" value="" vertex="1">
           <mxGeometry height="160" width="60" x="147.8" y="410" as="geometry" />

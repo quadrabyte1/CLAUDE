@@ -14,6 +14,36 @@ spline the editor draws on screen).  We:
 
 Dependencies (all already installed):
     numpy, trimesh, shapely, mapbox-earcut, lxml
+
+------------------------------------------------------------------------------
+DEPRECATION NOTICE — Topo, 2026-05-07 (per homeowner decision)
+------------------------------------------------------------------------------
+The arrow-detection / gradient-field / Poisson / no-arrows-fallback code paths
+that previously lived in this file were superseded by `gradient_surface_diagnostic.py`
+(its `run_pipeline()` is the live pipeline called by `app.py`).
+
+Stripped sections (do NOT re-introduce here — edit `gradient_surface_diagnostic.py`):
+  - `_grad_build_dark_mask`
+  - `_grad_pca_orientation`
+  - `_grad_resolve_direction`
+  - `_grad_detect_arrows`
+  - `_grad_build_gradient_field`
+  - `_grad_solve_poisson`
+  - `_grad_height_to_mm`
+  - `_grad_build_heightmap_mesh`
+  - `_build_gradient_green` (and its in-`generate_from_egm` callsite)
+  - The local `FLAT_FALLBACK_Z_RAW` no-arrows fallback inside `_build_gradient_green`
+
+Retained because they are still imported elsewhere (NOT duplicates of the
+survivor pipeline):
+  - `course_paths`, `EGM_BASE`, `OWNER_INBOX`, `PRINT_SIZE_MM`, `FRINGE_XY_EXPANSION_MM`
+  - `interpolate_catmull_rom`, `_catmull_rom_point`
+  - `_build_flat_slab`, `_build_slab_from_shapely`, `_build_stepped_green`, `_build_fringe`
+  - `_compute_scale_and_offset`, `_to_mm`, `_interpolate_open_polyline`
+  - `remove_arrows_from_green`, `extract_contour_polylines_from_mask`
+  - `_slugify`, `_3mf_filename`, `generate_from_egm`, `generate_from_egm_file`
+    (the gradient-surface block inside `generate_from_egm` was neutralized;
+     the rest still builds flat slabs, fringe, traps, etc.)
 """
 
 from __future__ import annotations
@@ -508,514 +538,14 @@ def _build_fringe(
 
 
 # ---------------------------------------------------------------------------
-# Gradient surface — arrow detection + Poisson height reconstruction
-# (ported from gradient_surface_diagnostic.py)
+# Gradient surface (DEPRECATED 2026-05-07)
+#
+# The arrow-detection + Poisson reconstruction pipeline that previously lived
+# here has been removed per the homeowner's deprecation decision. The live
+# pipeline is now `gradient_surface_diagnostic.run_pipeline()`. See the file
+# header for the full list of stripped symbols.
 # ---------------------------------------------------------------------------
 
-# Physical constants for the Poisson surface mesh
-_GRAD_ELEVATION_RANGE_MM: float = 12.0   # total Z variation on top surface
-_GRAD_BASE_THICKNESS_MM:  float = 3.0    # flat base below lowest point
-_GRAD_N_LEVELS:           int   = 10     # quantisation steps for stepped mesh
-
-
-def _grad_build_dark_mask(
-    img: np.ndarray,
-    green_boundary_px: np.ndarray,
-    dark_threshold: int = 50,
-) -> np.ndarray:
-    """Return uint8 binary mask: 255 where dark pixels lie inside the green."""
-    import cv2
-    h, w = img.shape[:2]
-    boundary_i = green_boundary_px.astype(np.int32)
-    green_mask = np.zeros((h, w), dtype=np.uint8)
-    cv2.fillPoly(green_mask, [boundary_i], 255)
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    value = hsv[:, :, 2]
-    dark_mask = np.zeros((h, w), dtype=np.uint8)
-    dark_mask[(value < dark_threshold) & (green_mask == 255)] = 255
-    return dark_mask
-
-
-def _grad_pca_orientation(
-    ys: np.ndarray,
-    xs: np.ndarray,
-) -> tuple[float, float, float, float]:
-    """PCA principal axis of pixel coords. Returns (cx, cy, dx, dy)."""
-    coords = np.stack([xs, ys], axis=1).astype(np.float64)
-    centroid = coords.mean(axis=0)
-    centered = coords - centroid
-    cov = centered.T @ centered / max(len(coords) - 1, 1)
-    eigenvalues, eigenvectors = np.linalg.eigh(cov)
-    principal = eigenvectors[:, np.argmax(eigenvalues)]
-    return float(centroid[0]), float(centroid[1]), float(principal[0]), float(principal[1])
-
-
-def _grad_resolve_direction(
-    ys: np.ndarray,
-    xs: np.ndarray,
-    cx: float,
-    cy: float,
-    dx: float,
-    dy: float,
-) -> tuple[float, float]:
-    """Resolve 180° PCA ambiguity: head is narrower → returns downhill unit vector."""
-    coords = np.stack([xs - cx, ys - cy], axis=1).astype(np.float64)
-    proj_along = coords @ np.array([dx, dy])
-    perp = coords - np.outer(proj_along, np.array([dx, dy]))
-    perp_std = np.sqrt((perp ** 2).sum(axis=1))
-    pos_mask = proj_along >= 0
-    neg_mask = ~pos_mask
-    std_pos = perp_std[pos_mask].std() if pos_mask.sum() > 1 else 1e9
-    std_neg = perp_std[neg_mask].std() if neg_mask.sum() > 1 else 1e9
-    if std_pos <= std_neg:
-        return -dx, -dy
-    else:
-        return dx, dy
-
-
-def _grad_detect_arrows(
-    img: np.ndarray,
-    green_boundary_px: np.ndarray,
-    dark_threshold: int = 50,
-    max_arrow_area: int = 600,
-) -> list[dict]:
-    """Find arrow blobs inside the green; return list of {cx, cy, dx, dy}."""
-    import cv2
-    dark_mask = _grad_build_dark_mask(img, green_boundary_px, dark_threshold)
-    n_labels, labels, stats, _ = cv2.connectedComponentsWithStats(
-        dark_mask, connectivity=8
-    )
-    arrows = []
-    for lbl in range(1, n_labels):
-        area = int(stats[lbl, cv2.CC_STAT_AREA])
-        if area > max_arrow_area or area < 5:
-            continue
-        ys, xs = np.where(labels == lbl)
-        cx, cy, dx, dy = _grad_pca_orientation(ys, xs)
-        gdx, gdy = _grad_resolve_direction(ys, xs, cx, cy, dx, dy)
-        mag = math.hypot(gdx, gdy)
-        if mag < 1e-9:
-            continue
-        arrows.append({"cx": cx, "cy": cy, "dx": gdx / mag, "dy": gdy / mag})
-    print(f"[gradient_surface] Detected {len(arrows)} arrow(s).")
-    return arrows
-
-
-def _grad_build_gradient_field(
-    arrows: list[dict],
-    green_boundary_px: np.ndarray,
-    grid_res: int = 100,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """IDW-interpolate arrow gradients onto a regular grid.
-
-    Returns (xs_grid, ys_grid, inside_mask, Gx, Gy).
-    """
-    import cv2
-    bx = green_boundary_px[:, 0]
-    by = green_boundary_px[:, 1]
-    x0, x1 = bx.min(), bx.max()
-    y0, y1 = by.min(), by.max()
-    xs_grid = np.linspace(x0, x1, grid_res)
-    ys_grid = np.linspace(y0, y1, grid_res)
-
-    boundary_i = green_boundary_px.astype(np.int32)
-    inside_mask = np.zeros((grid_res, grid_res), dtype=bool)
-    for row in range(grid_res):
-        for col in range(grid_res):
-            pt = (float(xs_grid[col]), float(ys_grid[row]))
-            result = cv2.pointPolygonTest(boundary_i, pt, measureDist=False)
-            inside_mask[row, col] = result >= 0
-
-    print(f"[gradient_surface] Grid {grid_res}x{grid_res}, inside cells: {inside_mask.sum()}")
-
-    if not arrows:
-        return xs_grid, ys_grid, inside_mask, np.zeros((grid_res, grid_res)), np.zeros((grid_res, grid_res))
-
-    arrow_cx = np.array([a["cx"] for a in arrows])
-    arrow_cy = np.array([a["cy"] for a in arrows])
-    arrow_dx = np.array([a["dx"] for a in arrows])
-    arrow_dy = np.array([a["dy"] for a in arrows])
-
-    Gx = np.zeros((grid_res, grid_res))
-    Gy = np.zeros((grid_res, grid_res))
-    IDW_POWER = 2
-    IDW_EPS = 1e-6
-
-    for row in range(grid_res):
-        for col in range(grid_res):
-            if not inside_mask[row, col]:
-                continue
-            gx = xs_grid[col]
-            gy = ys_grid[row]
-            dist2 = (arrow_cx - gx) ** 2 + (arrow_cy - gy) ** 2
-            weights = 1.0 / (dist2 ** (IDW_POWER / 2) + IDW_EPS)
-            w_sum = weights.sum()
-            if w_sum < 1e-12:
-                continue
-            Gx[row, col] = (weights * arrow_dx).sum() / w_sum
-            Gy[row, col] = (weights * arrow_dy).sum() / w_sum
-
-    return xs_grid, ys_grid, inside_mask, Gx, Gy
-
-
-def _grad_solve_poisson(
-    inside_mask: np.ndarray,
-    Gx: np.ndarray,
-    Gy: np.ndarray,
-) -> np.ndarray:
-    """Solve ∇²Z = div(G) inside the green mask. Returns Z with NaN outside."""
-    from scipy.sparse import lil_matrix
-    from scipy.sparse.linalg import spsolve
-
-    rows, cols = inside_mask.shape
-
-    idx = np.full((rows, cols), -1, dtype=int)
-    n_cells = 0
-    for r in range(rows):
-        for c in range(cols):
-            if inside_mask[r, c]:
-                idx[r, c] = n_cells
-                n_cells += 1
-
-    print(f"[gradient_surface] Poisson solve: {n_cells} unknowns")
-
-    # Compute divergence of G
-    div = np.zeros((rows, cols))
-    for r in range(rows):
-        for c in range(cols):
-            if not inside_mask[r, c]:
-                continue
-            if c > 0 and c < cols - 1:
-                dGx_dx = (Gx[r, c+1] - Gx[r, c-1]) / 2.0
-            elif c < cols - 1:
-                dGx_dx = Gx[r, c+1] - Gx[r, c]
-            else:
-                dGx_dx = Gx[r, c] - Gx[r, c-1]
-            if r > 0 and r < rows - 1:
-                dGy_dy = (Gy[r+1, c] - Gy[r-1, c]) / 2.0
-            elif r < rows - 1:
-                dGy_dy = Gy[r+1, c] - Gy[r, c]
-            else:
-                dGy_dy = Gy[r, c] - Gy[r-1, c]
-            div[r, c] = dGx_dx + dGy_dy
-
-    A = lil_matrix((n_cells, n_cells))
-    b = np.zeros(n_cells)
-
-    pin_cell = -1
-    for r in range(rows):
-        for c in range(cols):
-            if inside_mask[r, c]:
-                pin_cell = idx[r, c]
-                break
-        if pin_cell >= 0:
-            break
-
-    for r in range(rows):
-        for c in range(cols):
-            if not inside_mask[r, c]:
-                continue
-            i = idx[r, c]
-            if i == pin_cell:
-                A[i, i] = 1.0
-                b[i] = 0.0
-                continue
-            n_nbrs = 0
-            for nr, nc in [(r-1, c), (r+1, c), (r, c-1), (r, c+1)]:
-                if 0 <= nr < rows and 0 <= nc < cols and inside_mask[nr, nc]:
-                    A[i, idx[nr, nc]] = 1.0
-                    n_nbrs += 1
-            A[i, i] = -max(n_nbrs, 1)
-            b[i] = div[r, c]
-
-    print("[gradient_surface] Solving sparse system…")
-    z_vals = spsolve(A.tocsr(), b)
-
-    Z = np.full((rows, cols), np.nan)
-    for r in range(rows):
-        for c in range(cols):
-            if inside_mask[r, c]:
-                Z[r, c] = z_vals[idx[r, c]]
-    return Z
-
-
-def _grad_height_to_mm(Z_raw: np.ndarray, inside_mask: np.ndarray,
-                        base_mm: float = _GRAD_BASE_THICKNESS_MM,
-                        range_mm: float = _GRAD_ELEVATION_RANGE_MM) -> np.ndarray:
-    """Normalise raw Poisson heights to mm. Maps [z_min,z_max] → [base, base+range]."""
-    valid = Z_raw[inside_mask]
-    z_min, z_max = valid.min(), valid.max()
-    z_range = z_max - z_min if z_max != z_min else 1.0
-    Z_mm = np.full_like(Z_raw, np.nan)
-    Z_mm[inside_mask] = base_mm + (Z_raw[inside_mask] - z_min) / z_range * range_mm
-    return Z_mm
-
-
-def _grad_build_heightmap_mesh(
-    Z_mm: np.ndarray,
-    xs_grid: np.ndarray,
-    ys_grid: np.ndarray,
-    inside_mask: np.ndarray,
-    scale: float,
-    offset: np.ndarray,
-    stepped: bool = False,
-) -> trimesh.Trimesh:
-    """
-    Build a watertight trimesh from the height-map grid.
-
-    xs_grid / ys_grid are in *pixel* coordinates.  scale and offset are the same
-    values produced by _compute_scale_and_offset() so the green aligns with traps.
-
-    If stepped=True the heights are quantised into _GRAD_N_LEVELS discrete levels.
-    """
-    from collections import defaultdict
-
-    grid_res = Z_mm.shape[0]
-
-    if stepped:
-        valid_vals = Z_mm[inside_mask]
-        z_min_mm, z_max_mm = valid_vals.min(), valid_vals.max()
-        step = (z_max_mm - z_min_mm) / _GRAD_N_LEVELS
-        if step < 1e-9:
-            step = 1.0
-        Z_plot = np.copy(Z_mm)
-        Z_plot[inside_mask] = (
-            np.round((Z_plot[inside_mask] - z_min_mm) / step) * step + z_min_mm
-        )
-    else:
-        Z_plot = Z_mm
-
-    # Convert grid pixel coords → mm using the global coordinate system
-    # xs_grid and ys_grid are 1-D arrays covering the green bounding box in px.
-    xs_mm = (xs_grid - offset[0]) * scale           # shape (grid_res,)
-    ys_mm = -(ys_grid - offset[1]) * scale          # Y flipped
-
-    # --- Top surface vertices ---
-    vert_idx = np.full((grid_res, grid_res), -1, dtype=int)
-    top_verts: list[list[float]] = []
-
-    for r in range(grid_res):
-        for c in range(grid_res):
-            if inside_mask[r, c]:
-                vert_idx[r, c] = len(top_verts)
-                top_verts.append([xs_mm[c], ys_mm[r], float(Z_plot[r, c])])
-
-    # --- Top surface faces (fully-inside quads only) ---
-    top_faces: list[list[int]] = []
-    for r in range(grid_res - 1):
-        for c in range(grid_res - 1):
-            v00 = vert_idx[r,   c]
-            v01 = vert_idx[r,   c+1]
-            v10 = vert_idx[r+1, c]
-            v11 = vert_idx[r+1, c+1]
-            if v00 < 0 or v01 < 0 or v10 < 0 or v11 < 0:
-                continue
-            top_faces.append([v00, v10, v11])
-            top_faces.append([v00, v11, v01])
-
-    if not top_faces:
-        raise ValueError("Height-map mesh: no interior quad cells — cannot build mesh.")
-
-    # --- Find boundary edges of the top surface ---
-    edge_count: dict[tuple[int, int], int] = defaultdict(int)
-    for f in top_faces:
-        a, b, c_ = f
-        edge_count[(a, b)] += 1
-        edge_count[(b, c_)] += 1
-        edge_count[(c_, a)] += 1
-
-    boundary_edges: list[tuple[int, int]] = []
-    for (a, b), cnt in edge_count.items():
-        if edge_count.get((b, a), 0) == 0:
-            boundary_edges.append((a, b))
-
-    # --- Wall vertices and faces ---
-    top_verts_arr = np.array(top_verts, dtype=np.float64)
-    n_top = len(top_verts_arr)
-    top_to_bot: dict[int, int] = {}
-    bot_verts: list[list[float]] = []
-
-    def get_bot(vi: int) -> int:
-        if vi not in top_to_bot:
-            top_to_bot[vi] = n_top + len(bot_verts)
-            bot_verts.append([top_verts_arr[vi, 0], top_verts_arr[vi, 1], 0.0])
-        return top_to_bot[vi]
-
-    wall_faces: list[list[int]] = []
-    for va, vb in boundary_edges:
-        ba = get_bot(va)
-        bb = get_bot(vb)
-        wall_faces.append([va, vb, bb])
-        wall_faces.append([va, bb, ba])
-
-    # --- Bottom cap ---
-    # Build a successor map for the bottom boundary loop walk.  Use a list of
-    # successors rather than a scalar to handle T-junction vertices (branching
-    # nodes) that arise when the inside_mask has narrow peninsulas.  Each bottom
-    # vertex should have exactly one outgoing boundary edge in a well-formed mesh;
-    # if it has more (overwrite bug), we take the first and discard extras.
-    bot_next_multi: dict[int, list[int]] = defaultdict(list)
-    for va, vb in boundary_edges:
-        ba = top_to_bot[va]
-        bb = top_to_bot[vb]
-        bot_next_multi[bb].append(ba)
-
-    # Collapse to a single-successor map, preferring the first entry.
-    # Any vertex with >1 successor is a T-junction; the extra edges are skipped.
-    bot_next: dict[int, int] = {bb: nexts[0] for bb, nexts in bot_next_multi.items()}
-
-    visited: set[int] = set()
-    loops: list[list[int]] = []
-    for start in list(bot_next.keys()):
-        if start in visited:
-            continue
-        loop: list[int] = []
-        cur = start
-        for _ in range(len(bot_next) + 1):
-            if cur in visited:
-                break
-            visited.add(cur)
-            loop.append(cur)
-            cur = bot_next.get(cur, -1)
-            if cur == start or cur < 0:
-                break
-        if len(loop) >= 3:
-            loops.append(loop)
-
-    cap_faces: list[list[int]] = []
-    for loop in loops:
-        if len(loop) < 3:
-            continue
-        loop_xy = np.array([[bot_verts[vi - n_top][0], bot_verts[vi - n_top][1]]
-                             for vi in loop], dtype=np.float64)
-        poly2d = ShapelyPolygon(loop_xy)
-        if not poly2d.is_valid:
-            poly2d = poly2d.buffer(0)
-        if poly2d.is_empty:
-            continue
-        try:
-            from scipy.spatial import cKDTree
-            cap_mesh = trimesh.creation.extrude_polygon(poly2d, height=0.0001)
-            cap_verts_arr = np.array(cap_mesh.vertices)
-            cap_faces_arr = np.array(cap_mesh.faces)
-            z_bot = cap_verts_arr[:, 2] < 0.00005
-            f_bot = z_bot[cap_faces_arr].all(axis=1)
-            cap_v_sel = cap_verts_arr[z_bot, :2]
-            tree = cKDTree(loop_xy)
-            dists, idxs = tree.query(cap_v_sel)
-            old2new_cap = np.full(len(cap_verts_arr), -1, dtype=int)
-            z_bot_indices = np.where(z_bot)[0]
-            for local_i, (dist, li) in enumerate(zip(dists, idxs)):
-                old2new_cap[z_bot_indices[local_i]] = loop[li]
-            for f in cap_faces_arr[f_bot]:
-                fn0, fn1, fn2 = old2new_cap[f[0]], old2new_cap[f[1]], old2new_cap[f[2]]
-                if fn0 >= 0 and fn1 >= 0 and fn2 >= 0 and fn0 != fn1 and fn1 != fn2 and fn0 != fn2:
-                    cap_faces.append([fn0, fn2, fn1])
-        except Exception:
-            v0 = loop[0]
-            for i in range(1, len(loop) - 1):
-                cap_faces.append([v0, loop[i+1], loop[i]])
-
-    # --- Assemble ---
-    all_verts = top_verts + bot_verts
-    all_faces = top_faces + wall_faces + cap_faces
-    verts_np = np.array(all_verts, dtype=np.float64)
-    faces_np = np.array(all_faces, dtype=np.int64)
-    mesh = trimesh.Trimesh(vertices=verts_np, faces=faces_np, process=True)
-    trimesh.repair.fix_normals(mesh)
-    trimesh.repair.fill_holes(mesh)
-    if not mesh.is_watertight:
-        # Defensive post-assembly check.  Log the problem for diagnosis; the
-        # mesh is still returned (slicer may auto-repair minor issues).
-        from collections import Counter as _Counter
-        _all_edges = []
-        for _f in mesh.faces:
-            _a, _b, _c = _f
-            for _u, _v in [(_a, _b), (_b, _c), (_c, _a)]:
-                _all_edges.append((min(_u, _v), max(_u, _v)))
-        _ec = _Counter(_all_edges)
-        _boundary = sum(1 for _cnt in _ec.values() if _cnt == 1)
-        _nm = sum(1 for _cnt in _ec.values() if _cnt > 2)
-        print(
-            f"[generate_stl_3mf] WARNING: heightmap mesh is NOT watertight "
-            f"(boundary_edges={_boundary}, non_manifold_edges={_nm}, "
-            f"faces={len(mesh.faces)}). "
-            f"Check inside_mask for thin peninsulas or T-junctions."
-        )
-    return mesh
-
-
-def _build_gradient_green(
-    image_path: str,
-    green_spline_px: np.ndarray,
-    scale: float,
-    offset: np.ndarray,
-    base_thickness_mm: float = 15.0,
-) -> tuple[trimesh.Trimesh, trimesh.Trimesh]:
-    """
-    Build smooth and stepped green meshes from the arrow-gradient Poisson surface.
-
-    The returned meshes use the same coordinate system as the rest of the scene
-    (scale/offset from _compute_scale_and_offset).
-
-    Parameters
-    ----------
-    image_path        : absolute path to the source PNG/JPG
-    green_spline_px   : Nx2 float array of green boundary in pixel coords
-    scale             : pixels → mm scale factor
-    offset            : 2D centroid offset (same as used for traps/fringe)
-    base_thickness_mm : THICKNESS_BY_TYPE["green"] (default 15 mm)
-
-    Returns
-    -------
-    (smooth_mesh, stepped_mesh)
-    """
-    import cv2
-
-    print(f"[gradient_surface] Loading image: {image_path}")
-    img = cv2.imread(image_path)
-    if img is None:
-        raise FileNotFoundError(f"Cannot read image: {image_path}")
-
-    print("[gradient_surface] Detecting arrows…")
-    arrows = _grad_detect_arrows(img, green_spline_px)
-
-    print("[gradient_surface] Building gradient field (IDW)…")
-    xs_grid, ys_grid, inside_mask, Gx, Gy = _grad_build_gradient_field(
-        arrows, green_spline_px
-    )
-
-    print("[gradient_surface] Solving Poisson equation…")
-    Z_raw = _grad_solve_poisson(inside_mask, Gx, Gy)
-
-    # Scale the height values so they sit on top of the existing base thickness.
-    # The gradient surface adds _GRAD_ELEVATION_RANGE_MM of variation on a
-    # _GRAD_BASE_THICKNESS_MM base.  We shift so the *bottom* of the gradient
-    # surface starts at z=0 (same as all other pieces) and the total height
-    # matches base_thickness_mm + elevation range.
-    extra_elev = base_thickness_mm - _GRAD_BASE_THICKNESS_MM   # shift to match green thickness
-    Z_mm = _grad_height_to_mm(Z_raw, inside_mask,
-                               base_mm=_GRAD_BASE_THICKNESS_MM + extra_elev,
-                               range_mm=_GRAD_ELEVATION_RANGE_MM)
-
-    valid_mm = Z_mm[inside_mask]
-    print(f"[gradient_surface] Z_mm range: {valid_mm.min():.2f} .. {valid_mm.max():.2f} mm")
-
-    print("[gradient_surface] Building smooth surface mesh…")
-    smooth_mesh = _grad_build_heightmap_mesh(
-        Z_mm, xs_grid, ys_grid, inside_mask, scale, offset, stepped=False
-    )
-    print(f"[gradient_surface] Smooth mesh: {len(smooth_mesh.vertices)} verts, "
-          f"{len(smooth_mesh.faces)} faces, watertight={smooth_mesh.is_watertight}")
-
-    print("[gradient_surface] Building stepped surface mesh…")
-    stepped_mesh = _grad_build_heightmap_mesh(
-        Z_mm, xs_grid, ys_grid, inside_mask, scale, offset, stepped=True
-    )
-    print(f"[gradient_surface] Stepped mesh: {len(stepped_mesh.vertices)} verts, "
-          f"{len(stepped_mesh.faces)} faces, watertight={stepped_mesh.is_watertight}")
-
-    return smooth_mesh, stepped_mesh
 
 
 # ---------------------------------------------------------------------------
@@ -1501,34 +1031,13 @@ def generate_from_egm(
         print(f"[generate_stl_3mf]   Added '{obj_label}': "
               f"{bb[0]:.1f} x {bb[1]:.1f} x {bb[2]:.1f} mm, {wt}")
 
-    # Gradient surface state: built once if we have an image and a green polygon
+    # Gradient surface (DEPRECATED 2026-05-07): the arrow-detection + Poisson
+    # build that previously ran here has been removed; the live pipeline is
+    # now `gradient_surface_diagnostic.run_pipeline()`. The state vars are
+    # kept set to None so the downstream conditionals naturally fall through
+    # to the flat-slab / stepped-contour code paths.
     _gradient_smooth_mesh: trimesh.Trimesh | None = None
     _gradient_stepped_mesh: trimesh.Trimesh | None = None
-    _gradient_green_spline_px: np.ndarray | None = None
-
-    # Find the green spline in pixel coords (needed for arrow detection)
-    for poly, sp_px in zip(regular_polys, splines_px):
-        if poly.get("type", "").lower() == "green":
-            _gradient_green_spline_px = sp_px
-            break
-
-    # Attempt gradient surface build if we have an image and a green polygon
-    if image_path is not None and _gradient_green_spline_px is not None:
-        green_thickness = thickness_map.get("green", THICKNESS_BY_TYPE["green"])
-        try:
-            print(f"[generate_stl_3mf] Building gradient (Poisson) green surface…")
-            _gradient_smooth_mesh, _gradient_stepped_mesh = _build_gradient_green(
-                image_path,
-                _gradient_green_spline_px,
-                scale,
-                offset,
-                base_thickness_mm=green_thickness,
-            )
-        except Exception as exc:
-            print(f"[generate_stl_3mf] WARNING: gradient surface failed ({exc}); "
-                  f"falling back to flat slab.")
-            _gradient_smooth_mesh = None
-            _gradient_stepped_mesh = None
 
     # Build and add each polygon mesh
     for poly, sp_px, outline_mm in zip(regular_polys, splines_px, splines_mm):
@@ -1544,11 +1053,10 @@ def generate_from_egm(
         outline_mm_inset = np.array(inset_poly.exterior.coords, dtype=np.float64)
 
         try:
-            if poly_type == "green" and _gradient_smooth_mesh is not None:
-                # Use the Poisson gradient surface (smooth variant) in the 3MF scene
-                mesh_tm = _gradient_smooth_mesh
-                print(f"[generate_stl_3mf] Using gradient smooth mesh for '{poly_name}'")
-            elif poly_type == "green" and contour_lines_mm:
+            # NOTE: gradient (Poisson) green surface branch removed 2026-05-07.
+            # Green-surface generation is now handled by
+            # `gradient_surface_diagnostic.run_pipeline()`.
+            if poly_type == "green" and contour_lines_mm:
                 # Legacy: stepped surface from drawn contour lines
                 print(f"[generate_stl_3mf] Building stepped green with "
                       f"{len(contour_lines_mm)} contour line(s), step={contour_step_mm}mm")
@@ -1605,22 +1113,13 @@ def generate_from_egm(
         print(f"[generate_stl_3mf] Scene contains {len(scene.geometry)} object(s): "
               f"{', '.join(scene.geometry.keys())}")
 
-    # --- 8b. Export separate green smooth + stepped STLs (gradient surface) ---
-    if _gradient_smooth_mesh is not None:
-        smooth_stl_name = f"{base_slug}_green_smooth.stl"
-        smooth_stl_path = os.path.join(output_dir_stl, smooth_stl_name)
-        _gradient_smooth_mesh.export(smooth_stl_path)
-        generated.append({"name": smooth_stl_name, "path": smooth_stl_path, "type": "stl"})
-        wt = "watertight" if _gradient_smooth_mesh.is_watertight else "NOT watertight"
-        print(f"[generate_stl_3mf] Green smooth STL ({wt}): {smooth_stl_path}")
-
-    if _gradient_stepped_mesh is not None:
-        stepped_stl_name = f"{base_slug}_green_stepped.stl"
-        stepped_stl_path = os.path.join(output_dir_stl, stepped_stl_name)
-        _gradient_stepped_mesh.export(stepped_stl_path)
-        generated.append({"name": stepped_stl_name, "path": stepped_stl_path, "type": "stl"})
-        wt = "watertight" if _gradient_stepped_mesh.is_watertight else "NOT watertight"
-        print(f"[generate_stl_3mf] Green stepped STL ({wt}): {stepped_stl_path}")
+    # --- 8b. Gradient-surface STL exports (DEPRECATED 2026-05-07) ---
+    # The smooth/stepped green STL exports that previously lived here required
+    # `_build_gradient_green`, which was stripped. Green-surface generation is
+    # now owned by `gradient_surface_diagnostic.run_pipeline()`. The branch is
+    # left as a no-op so the rest of the function (flat slabs, fringe, traps,
+    # 3MF assembly) continues to work for any non-pipeline callers.
+    _ = (_gradient_smooth_mesh, _gradient_stepped_mesh)  # silence unused-var
 
     return generated
 

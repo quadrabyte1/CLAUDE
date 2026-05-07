@@ -150,6 +150,48 @@ _SOFTEN_SIGMA_PX: float = 2.0
 _LOCAL_WINDOW_PX: int = 11
 
 
+# ---------------------------------------------------------------------------
+# No-arrows fallback (topology rule)
+#
+# When the topology-analysis stage detects ZERO slope/elevation arrows on the
+# green image, we have no information to drive a non-flat surface. Per the
+# homeowner's rule (see project_golf_render_rules.md → "No-arrows fallback"),
+# the pipeline must NOT fail or guess — it must produce a flat, horizontal
+# green surface at a known elevation.
+#
+# 0.0 mm matches the Poisson solver's pin-cell baseline, so a fallback Z of 0
+# yields the same "flat at the natural ground level" result that the Poisson
+# path would produce on an all-zero gradient field, just without the wasted
+# sparse solve.
+#
+# Water-aware variant (homeowner refinement, 2026-05-07): when the hole
+# contains one or more water polygons, the flat green is lifted to 5 mm so
+# it sits 3 mm above the 2 mm-thick water slab (per
+# project_golf_render_rules.md → "No-arrows fallback (topology)"). The
+# branch is selected via _hole_has_water(egm_data) inside run_pipeline.
+# ---------------------------------------------------------------------------
+FLAT_FALLBACK_Z_MM: float = 0.0
+FLAT_FALLBACK_Z_WATER_MM: float = 5.0  # 2 mm water + 3 mm clearance
+
+
+# ---------------------------------------------------------------------------
+# Arrow detection — boundary-proximity reject
+#
+# Real slope arrows live in the *interior* of a green. Dark blobs whose
+# centroids cling to the green polygon boundary are almost always something
+# else: yardage labels (e.g. the "78" counters on PGA West Stadium 17),
+# bunker-rim shading bleeding past the trace, or paint annotations from the
+# v-update overlays. Empirically these false-positive blobs sit within
+# ~1–2 px of the polygon edge, so we reject any candidate whose interior
+# distance from the boundary is at or below this tolerance.
+#
+# Diagnostic: see SC 17 post-paint case where 3 boundary-hugging blobs were
+# masquerading as arrows and forcing a non-flat Poisson solve on a hole that
+# should fall through to the flat-at-5 mm water-aware fallback.
+# ---------------------------------------------------------------------------
+BOUNDARY_PROXIMITY_PX: float = 3.0  # arrows must be at least this far inside the green polygon edge
+
+
 def soften_extremes(
     Z: np.ndarray,
     mask: np.ndarray,
@@ -428,7 +470,13 @@ def detect_arrows(
         dark_mask, connectivity=8
     )
 
+    # Pre-build the integer polygon contour once for cv2.pointPolygonTest
+    # (used by the boundary-proximity reject below). cv2 returns a SIGNED
+    # distance: > 0 inside, == 0 on edge, < 0 outside.
+    boundary_i = green_boundary_px.astype(np.int32)
+
     arrows = []
+    n_rejected_boundary = 0
     for lbl in range(1, n_labels):
         area = int(stats[lbl, cv2.CC_STAT_AREA])
         if area > max_arrow_area:
@@ -441,6 +489,19 @@ def detect_arrows(
         # PCA for orientation
         cx, cy, dx, dy = pca_orientation(ys, xs)
 
+        # Boundary-proximity reject: yardage labels (e.g. the "78" counters
+        # on PGA West Stadium 17) and other edge-hugging dark glyphs read
+        # as small dark blobs and survive the area filter. Real slope
+        # arrows live in the interior of the green, so we discard any
+        # candidate whose centroid is within BOUNDARY_PROXIMITY_PX of the
+        # polygon edge (signed distance ≤ tol).
+        signed_dist = cv2.pointPolygonTest(
+            boundary_i, (float(cx), float(cy)), measureDist=True
+        )
+        if signed_dist <= BOUNDARY_PROXIMITY_PX:
+            n_rejected_boundary += 1
+            continue
+
         # Resolve ambiguity
         gdx, gdy = resolve_arrow_direction(ys, xs, cx, cy, dx, dy)
 
@@ -452,6 +513,13 @@ def detect_arrows(
         gdy /= mag
 
         arrows.append({"cx": cx, "cy": cy, "dx": gdx, "dy": gdy})
+
+    if n_rejected_boundary > 0:
+        print(
+            f"  detect_arrows: rejected {n_rejected_boundary} blob(s) within "
+            f"{BOUNDARY_PROXIMITY_PX:g} px of green boundary "
+            f"(yardage-label / edge-glyph false-positive class)"
+        )
 
     return arrows
 
@@ -835,16 +903,37 @@ def _height_to_mm(Z_raw: np.ndarray, inside_mask: np.ndarray) -> np.ndarray:
     """
     Normalise raw Poisson heights to mm elevation, preserving NaN outside the green.
     Maps [z_min, z_max] → [BASE_THICKNESS_MM, BASE_THICKNESS_MM + ELEVATION_RANGE_MM].
+
+    Uniform-input special case (squash-bug fix, motivated by SC 17 [127] flat-
+    fallback regression): when z_min == z_max, the prior implementation set
+    z_range = 1.0 and computed `(Z - z_min) / 1.0 * ELEVATION_RANGE_MM` which
+    equals zero everywhere, collapsing the whole green to BASE_THICKNESS_MM
+    (1.5 mm) regardless of the actual fallback value. That destroys the
+    no-arrows fallback's intended elevation (e.g. 5 mm for water holes
+    silently became 1.5 mm). Fix: when the input is uniform, preserve the
+    input value clamped to the printable range
+    [BASE_THICKNESS_MM, BASE_THICKNESS_MM + ELEVATION_RANGE_MM] instead of
+    normalising to zero. This preserves the homeowner-mandated fallback Z.
     """
     valid = Z_raw[inside_mask]
     z_min, z_max = valid.min(), valid.max()
-    z_range = z_max - z_min if z_max != z_min else 1.0
 
     Z_mm = np.full_like(Z_raw, np.nan)
-    Z_mm[inside_mask] = (
-        BASE_THICKNESS_MM
-        + (Z_raw[inside_mask] - z_min) / z_range * ELEVATION_RANGE_MM
-    )
+    if z_max == z_min:
+        # Uniform input: preserve the value, clamped to the printable range.
+        # Rationale: see SC 17 [127] flat-fallback regression (no-arrows
+        # water-hole case where the constant 5 mm was being squashed to
+        # BASE_THICKNESS_MM by the (Z - z_min)/1.0 = 0 arithmetic).
+        z_clamped = float(
+            np.clip(z_min, BASE_THICKNESS_MM, BASE_THICKNESS_MM + ELEVATION_RANGE_MM)
+        )
+        Z_mm[inside_mask] = z_clamped
+    else:
+        z_range = z_max - z_min
+        Z_mm[inside_mask] = (
+            BASE_THICKNESS_MM
+            + (Z_raw[inside_mask] - z_min) / z_range * ELEVATION_RANGE_MM
+        )
     return Z_mm
 
 
@@ -1754,6 +1843,27 @@ def build_fringe_mesh(
     green_cell_z  = _Z_lerp_src[valid_rows_g, valid_cols_g]
     green_kd = cKDTree(green_cell_xy)
 
+    # No-arrows-fallback detection (self-contained, derived from Z_mm).
+    # When the topology stage detected zero arrows, the green is built as a
+    # uniform Z field (see run_pipeline → flat_fallback_triggered). In that
+    # case the fringe must NOT ramp up to FRINGE_EDGE_HEIGHT_MM (10 mm) —
+    # homeowner rule "no arrows = no slope anywhere" requires the fringe to
+    # also be flat at the green-edge Z. Detect uniformity directly from
+    # Z_mm rather than threading a flag through the call graph; this keeps
+    # build_fringe_mesh self-contained and works whether the fallback fired
+    # via the explicit no-arrows path or any future caller that hands us a
+    # uniform Z field.
+    _green_z_vals = Z_mm[inside_mask]
+    _flat_fallback_active = bool(
+        _green_z_vals.size > 0
+        and np.nanmax(_green_z_vals) == np.nanmin(_green_z_vals)
+    )
+    if _flat_fallback_active:
+        print(
+            "  Fringe: detected uniform green Z (no-arrows fallback) — "
+            "flattening fringe to green-edge Z (no slope when no arrows)."
+        )
+
     # Pre-build array of green boundary points in mm for vectorised dist
     gbnd = green_bnd_mm  # (N, 2)
 
@@ -1801,8 +1911,19 @@ def build_fringe_mesh(
             _, idx_g = green_kd.query([nx, ny], k=1)
             green_edge_h = float(green_cell_z[idx_g])
 
-            # Fringe height: lerp from green edge height to FRINGE_EDGE_HEIGHT_MM
-            z_fringe = green_edge_h * (1.0 - t) + FRINGE_EDGE_HEIGHT_MM * t
+            # Fringe height: lerp from green edge height to FRINGE_EDGE_HEIGHT_MM.
+            # No-slope-when-no-arrows policy: when the no-arrows fallback is
+            # active (uniform green Z), the lerp's outer-edge target collapses
+            # to the green-edge Z so the entire green+fringe surface lands at
+            # one uniform height. The default 10 mm rectangle-edge target
+            # only applies when arrows are present and the green has real
+            # slope information. See project_golf_render_rules.md →
+            # "No-arrows fallback (topology)".
+            if _flat_fallback_active:
+                _fringe_outer_target = green_edge_h
+            else:
+                _fringe_outer_target = FRINGE_EDGE_HEIGHT_MM
+            z_fringe = green_edge_h * (1.0 - t) + _fringe_outer_target * t
 
             # Clamp to reasonable range
             z_fringe = max(BASE_THICKNESS_MM, min(z_fringe, BASE_THICKNESS_MM + ELEVATION_RANGE_MM))
@@ -4185,28 +4306,114 @@ def run_pipeline(egm_path: str) -> str:
     arrows = detect_arrows(img, green_boundary_px, dark_threshold=50, max_arrow_area=600)
     print(f"    Found {len(arrows)} arrows")
 
-    if len(arrows) == 0:
-        print("  WARNING: No arrows detected. Check dark_threshold or image path.")
-
-    # ── 3. Build gradient field ─────────────────────────────────────────────
+    # No-arrows fallback (topology rule): if zero arrows are detected, the
+    # image carries no slope information, so we build a flat, horizontal
+    # green surface and skip the Poisson solve. This is the homeowner-
+    # mandated default — see project_golf_render_rules.md.
+    #
+    # Water-aware refinement (2026-05-07): when the hole contains one or
+    # more water polygons, the flat green sits at FLAT_FALLBACK_Z_WATER_MM
+    # (5 mm = 2 mm water slab + 3 mm clearance) so it doesn't intersect
+    # the water surface. Otherwise it sits at FLAT_FALLBACK_Z_MM (0 mm).
     GRID_RES = 200
-    print(f"\n[3] Building gradient field ({GRID_RES}x{GRID_RES} grid)…")
-    xs_grid, ys_grid, inside_mask, Gx, Gy = build_gradient_field(
-        arrows, green_boundary_px, grid_res=GRID_RES
-    )
-    print(f"    Gradient field built. Gx range: [{Gx[inside_mask].min():.3f}, {Gx[inside_mask].max():.3f}]")
-    print(f"    Gy range: [{Gy[inside_mask].min():.3f}, {Gy[inside_mask].max():.3f}]")
+    flat_fallback_triggered = (len(arrows) == 0)
 
-    # ── 4. Solve Poisson ────────────────────────────────────────────────────
-    print("\n[4] Solving Poisson equation…")
-    Z = solve_poisson_height(inside_mask, Gx, Gy)
+    if flat_fallback_triggered:
+        _has_water = _hole_has_water(_egm_data)
+        fallback_z = FLAT_FALLBACK_Z_WATER_MM if _has_water else FLAT_FALLBACK_Z_MM
 
-    # Green smoothing disabled — raw Poisson surface
-    valid = Z[~np.isnan(Z)]
-    print(f"    Height range (raw, pre-soften): {valid.min():.4f} .. {valid.max():.4f}")
+        # Printability floor: a green at Z = 0 mm sits flush with the base
+        # plate, which (combined with the no-arrows fringe-flattening fix)
+        # would produce a green+fringe coplanar with the base — unprintable.
+        # Clamp the fallback Z to at least BASE_THICKNESS_MM (1.5 mm) so the
+        # surface always stands above the base. This only affects the dry
+        # case (raw 0 mm → 1.5 mm); the water case (5 mm) is already above
+        # the floor and is unchanged. We apply the floor as a guard at the
+        # point of use rather than bumping FLAT_FALLBACK_Z_MM itself,
+        # because the homeowner explicitly chose 0 mm as the conceptual
+        # "natural ground level" and the constant should keep that meaning.
+        # See project_golf_render_rules.md → "No-arrows fallback (topology)"
+        # → "Printability floor".
+        _fallback_z_raw = fallback_z
+        fallback_z = max(fallback_z, BASE_THICKNESS_MM)
+        _floor_applied = fallback_z != _fallback_z_raw
 
-    # Clamp + soften spurious local peaks/valleys before triangulation.
-    Z, _soften_stats = soften_extremes(Z, inside_mask)
+        if _has_water:
+            print(
+                f"  NO-ARROWS FALLBACK: water present, using {fallback_z:.3f} mm flat "
+                "(2 mm water slab + 3 mm clearance). Skipping Poisson solve. See "
+                "project_golf_render_rules.md → 'No-arrows fallback (topology)'."
+            )
+        else:
+            if _floor_applied:
+                print(
+                    f"  NO-ARROWS FALLBACK: no water, raw Z={_fallback_z_raw:.3f} mm "
+                    f"clamped to printability floor BASE_THICKNESS_MM={BASE_THICKNESS_MM:.3f} mm. "
+                    "Skipping Poisson solve. See project_golf_render_rules.md → "
+                    "'No-arrows fallback (topology)'."
+                )
+            else:
+                print(
+                    f"  NO-ARROWS FALLBACK: no water, using {fallback_z:.3f} mm flat "
+                    "(natural ground level). Skipping Poisson solve. See "
+                    "project_golf_render_rules.md → 'No-arrows fallback (topology)'."
+                )
+
+        # Still need the grid + inside_mask for the downstream mesh builder.
+        # build_gradient_field handles empty `arrows` by returning zero-vector
+        # Gx/Gy plus a correctly-sized grid + inside_mask, which is exactly
+        # what we need (we only consume the grid and mask below).
+        print(f"\n[3] Building grid for flat fallback ({GRID_RES}x{GRID_RES})…")
+        xs_grid, ys_grid, inside_mask, _Gx, _Gy = build_gradient_field(
+            arrows, green_boundary_px, grid_res=GRID_RES
+        )
+
+        # Build a flat heightmap: fallback_z inside the green, NaN outside.
+        # This matches the shape and dtype contract of solve_poisson_height's
+        # return value.
+        Z = np.where(inside_mask, fallback_z, np.nan)
+        print(
+            f"    Flat heightmap built: {int(inside_mask.sum())} interior cells "
+            f"at z={fallback_z:.3f} mm, NaN elsewhere."
+        )
+
+        # Skip soften_extremes — there are no extremes to soften on a flat
+        # surface, and the function would log misleading peak/valley stats.
+        # Build a stub stats dict so downstream prints stay consistent.
+        _soften_stats = {
+            "peak_limit_mm": _PEAK_LIMIT_MM,
+            "valley_limit_mm": _VALLEY_LIMIT_MM,
+            "local_window_px": _LOCAL_WINDOW_PX,
+            "soften_sigma_px": _SOFTEN_SIGMA_PX,
+            "max_peak_mm_before": 0.0,
+            "min_valley_mm_before": 0.0,
+            "n_peaks_clipped": 0,
+            "n_valleys_clipped": 0,
+            "max_peak_mm_after": 0.0,
+            "min_valley_mm_after": 0.0,
+            "n_peaks_after": 0,
+            "n_valleys_after": 0,
+        }
+        print("    (skipping soften_extremes — no extremes on a flat surface)")
+    else:
+        # ── 3. Build gradient field ─────────────────────────────────────────
+        print(f"\n[3] Building gradient field ({GRID_RES}x{GRID_RES} grid)…")
+        xs_grid, ys_grid, inside_mask, Gx, Gy = build_gradient_field(
+            arrows, green_boundary_px, grid_res=GRID_RES
+        )
+        print(f"    Gradient field built. Gx range: [{Gx[inside_mask].min():.3f}, {Gx[inside_mask].max():.3f}]")
+        print(f"    Gy range: [{Gy[inside_mask].min():.3f}, {Gy[inside_mask].max():.3f}]")
+
+        # ── 4. Solve Poisson ────────────────────────────────────────────────
+        print("\n[4] Solving Poisson equation…")
+        Z = solve_poisson_height(inside_mask, Gx, Gy)
+
+        # Green smoothing disabled — raw Poisson surface
+        valid = Z[~np.isnan(Z)]
+        print(f"    Height range (raw, pre-soften): {valid.min():.4f} .. {valid.max():.4f}")
+
+        # Clamp + soften spurious local peaks/valleys before triangulation.
+        Z, _soften_stats = soften_extremes(Z, inside_mask)
     print(
         f"    soften_extremes: peak_limit={_soften_stats['peak_limit_mm']:.2f} mm, "
         f"valley_limit={_soften_stats['valley_limit_mm']:.2f} mm, "

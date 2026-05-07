@@ -1,6 +1,20 @@
-# Deck Blueprint — 23'-6" × 16'-6" Attached Deck  (v13)
+# Deck Blueprint — 23'-6" × 16'-3" Attached Deck  (v15)
 
-Produced by Gemma (Technical Diagramming Specialist) on 2026-05-05.
+Produced by Gemma (Technical Diagramming Specialist) on 2026-05-06.
+
+**v15 = v14 + ONE change (drawio only, 2026-05-06):**
+
+**Drawio stair-elevation cells replaced with native drawio shapes.** In v14 both elevation insets (left-edge stair and far-edge step) were rendered as ASCII text in `<pre>`-style cells — visually out of place against the otherwise clean drawio diagram. v15 replaces both with proper native drawio shapes: rectangles, dimension arrows, dashed lines, and text labels. The matplotlib PNG is effectively identical to v14 (same elevations, same geometry) with only the version badge updated to v15. No structural or dimensional changes. Generator: `gen_drawio_v15.py`.
+
+---
+
+**v14 = v13 + THREE changes (2026-05-06, Option C confirmed by Hollis):**
+
+**Change 1 — Deck depth pulled in 3" to fit 16-ft framing stock.** Overall finished surface depth: 16'-6" → **16'-3"** (PF outer edge to wall). Framing depth: 16'-3" → **16'-0"**. This lets the three perpendicular girders run as clean 16-ft 2×10 lengths with no rip. Outer pier row shifts in 3": y=16'-3" → **y=16'-0"**. The existing concrete patio is unchanged at 23'-6" × 16'-6", so a **3" strip of exposed patio** now shows along the far edge between the deck outer PF edge (y=16'-3") and the patio boundary (y=16'-6"). This strip is hatched and labeled on both pages so a builder reading the plan understands the deck does not extend to the patio edge on the far side. PF cantilever past rim: still 3.00" exact. PF cantilever past fascia: still 2.33" exact.
+
+**Change 2 — Both stair elevation views confirmed and upgraded in drawio.** The left-edge stair (v12, unchanged) had a reference callout in v13's drawio but only a text stub in the drawio XML — the actual graphical elevation existed only in render_v13.py. v14 adds proper graphical elevation cells (`v14-p2-left-stair-elev-*`) in the drawio matching the render. The far-edge step elevation (v13) similarly had a text stub in the drawio; upgraded to graphical cells (`v14-p2-far-step-elev-*`). Both elevations are present in render_v14.py as proper cross-section diagrams. Labels: "LEFT-EDGE STAIR — SIDE ELEVATION" and "FAR-EDGE STEP — SIDE ELEVATION."
+
+**Change 3 — Full v13→v14 version sweep.** Version badges, page names, diagram IDs, title blocks all updated. Pier legend updated to reflect outer row at y=16'-0".
 
 **v13 = v12 + TWO structural changes only:**
 
@@ -29,10 +43,14 @@ Produced by Gemma (Technical Diagramming Specialist) on 2026-05-05.
 
 | File | Description |
 |------|-------------|
-| `deck_plan.drawio` | Editable draw.io source **(v13, two pages)**. Open in [draw.io desktop](https://www.drawio.com/) or [app.diagrams.net](https://app.diagrams.net). Page 1 = Framing; Page 2 = Decking. Version badge "v13" in upper-left of both pages. MoistureShield Vision throughout. 6 piers (house-side row dropped), HU210-3 hangers, far-edge step and left-edge stair both shown. |
-| `deck_plan.png` | Raster render of **Page 2 (Decking Plan)**. Produced by `render_v13.py`. Version badge "v13" visible top-left. 49 field planks, left-edge stair (v12), far-edge step (v13), 6 piers (house-side row absent), HU210-3 hanger callouts, side-elevation insets for both steps. |
-| `render_v13.py` | matplotlib render script for v13 Page 2 (Decking Plan). 6 piers, HU210-3 hangers at ledger, far-edge step (11'-9", right corner to midpoint), left-edge stair unchanged. |
-| `gen_drawio_v13.py` | Python script to generate v13 drawio from v12. Hides house-side pier row, adds hanger cells, injects far-edge step cells on both pages, sweeps v12→v13 in all badges/titles. |
+| `deck_plan.drawio` | Editable draw.io source **(v15, two pages)**. Open in [draw.io desktop](https://www.drawio.com/) or [app.diagrams.net](https://app.diagrams.net). Page 1 = Framing; Page 2 = Decking. Version badge "v15" in upper-left of both pages. MoistureShield Vision throughout. 6 piers (house-side row dropped, outer row at y=16'-0"), HU210-3 hangers, far-edge step and left-edge stair both shown. 3" exposed patio strip labeled on both pages. Both stair elevation insets now rendered as native drawio shapes (rectangles, dimension arrows, dashed lines) — replaces v14's ASCII `<pre>` cells. |
+| `deck_plan.png` | Raster render of **Page 2 (Decking Plan)**. Produced by `render_v15.py`. Version badge "v15" visible top-left. Elevations unchanged from v14 (native shapes in drawio, matplotlib render identical except badge). |
+| `render_v15.py` | matplotlib render script for v15 Page 2. Version badge v15; all elevations carried from v14 unchanged. |
+| `gen_drawio_v15.py` | Python script to generate v15 drawio from v14. Hides ASCII `<pre>` profile cells; injects 46 native drawio shape cells for both elevation insets; v14→v15 sweep. |
+| `render_v14.py` | v14 render script (kept for reference). Deck depth 16'-0", overall 16'-3", 3" exposed patio strip, both stair elevations confirmed. |
+| `gen_drawio_v14.py` | v14 drawio generation script (kept for reference). Dimensional cascade (-3" on far boundary), exposed patio cells, upgraded elevation cells, v13→v14 sweep. |
+| `render_v13.py` | v13 render script (kept for reference). |
+| `gen_drawio_v13.py` | v13 drawio generation script (kept for reference). |
 | `render_v12.py` | v12 render script (kept for reference). |
 | `render_v11.py` | v11 render script (kept for reference). |
 | `render_v10.py` | v10 render script (kept for reference). |

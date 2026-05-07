@@ -1,6 +1,6 @@
 <mxfile host="Electron" pages="2">
-  <diagram id="deck-plan-v13-p1" name="Page 1 — Framing Plan (v13)">
-    <mxGraphModel dx="3242" dy="888" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <diagram id="deck-plan-v15-p1" name="Page 1 — Framing Plan (v15)">
+    <mxGraphModel dx="2580" dy="518" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-501" parent="0" value="Piers" />
@@ -59,7 +59,7 @@
           <mxGeometry height="34" width="34" x="1116" y="813" as="geometry" />
         </mxCell>
         <mxCell id="1" parent="0" />
-        <mxCell id="v10-badge-p1" parent="1" style="text;html=1;strokeColor=#1a1a1a;fillColor=#1a1a1a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;arcSize=15;fontColor=#ffffff;fontSize=36;fontStyle=1;" value="&lt;b&gt;v13&lt;/b&gt;&lt;br/&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;Page 1 of 2 — Framing&lt;/font&gt;" vertex="1">
+        <mxCell id="v10-badge-p1" parent="1" style="text;html=1;strokeColor=#1a1a1a;fillColor=#1a1a1a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;arcSize=15;fontColor=#ffffff;fontSize=36;fontStyle=1;" value="&lt;b&gt;v15.1&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;Page 1 of 2 — Framing&lt;/font&gt;" vertex="1">
           <mxGeometry height="90" width="160" x="10" y="10" as="geometry" />
         </mxCell>
         <mxCell id="20" parent="1" style="text;html=1;strokeColor=#444444;fillColor=#cccccc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=12;fontColor=#222222;" value="&lt;b&gt;HOUSE WALL  up  NORTH  (attached 23&#39;-6&quot; overall edge)&lt;/b&gt;" vertex="1">
@@ -168,7 +168,7 @@
           <mxGeometry height="6" width="439" x="687" y="816" as="geometry" />
         </mxCell>
         <mxCell id="90" parent="1" style="text;html=1;strokeColor=#d6b656;fillColor=#fff2cc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#5a3000;strokeWidth=2;" value="&lt;b&gt;DOUBLED FAR-SIDE RIM — (2) 2x10 PT | Face-hung in 2 segments | LUS210-2Z hangers | 3in final bay&lt;/b&gt;" vertex="1">
-          <mxGeometry height="9" width="439" x="234" y="826" as="geometry" />
+          <mxGeometry height="30" width="190" x="220" y="890" as="geometry" />
         </mxCell>
         <mxCell id="91" parent="1" style="strokeColor=#d6b656;fillColor=#fff2cc;strokeWidth=2;" value="" vertex="1">
           <mxGeometry height="9" width="439" x="687" y="826" as="geometry" />
@@ -279,7 +279,7 @@
           <mxGeometry height="14" width="140" x="150.4" y="565" as="geometry" />
         </mxCell>
         <mxCell id="v12-p1-step-callout" parent="1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;SINGLE STEP v12 (unchanged) -- L EDGE&lt;/b&gt;&lt;br/&gt;y=6ft to 9ft-6in from house wall&lt;br/&gt;42in wide | 16in projection&lt;br/&gt;3x 2x10 PT cut stringers via LSCZ hangers&lt;br/&gt;Mid tread: 2x 5.4in MoistureShield @ 6in AG&lt;br/&gt;OPEN risers | pavers on #57 gravel" vertex="1">
-          <mxGeometry height="100" width="155" x="-13.6" y="420" as="geometry" />
+          <mxGeometry height="100" width="155" x="-20" y="370" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-hanger-0" parent="1" style="text;html=1;strokeColor=#882200;fillColor=#cc4400;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;" value="&lt;b&gt;HU&lt;br/&gt;210-3&lt;/b&gt;" vertex="1">
           <mxGeometry height="18" width="18" x="211" y="175.5" as="geometry" />
@@ -294,37 +294,49 @@
           <mxGeometry height="55" width="240" x="1100" y="70" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-ledger-note" parent="1" style="text;html=1;strokeColor=#cc8800;fillColor=#fff9e6;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=6.5;fontColor=#663300;strokeWidth=1.5;" value="&lt;b&gt;v13 LEDGER: ½in HDG carriage bolts back-blocked from basement,&lt;br/&gt;clustered at girder connections; ½in HDG lag @ 18in OC two-row&lt;br/&gt;staggered between connections (IRC R507.9.1.3).&lt;br/&gt;Wall = wood-frame. Peel-and-stick + Z-flashing retained.&lt;/b&gt;" vertex="1">
-          <mxGeometry height="65" width="380" x="1160" y="170" as="geometry" />
+          <mxGeometry height="65" width="380" x="1210" y="190" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-gravel" parent="1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;opacity=70;dashed=1;" value="" vertex="1">
-          <mxGeometry height="93.2" width="486" x="672" y="840" as="geometry" />
+          <mxGeometry height="100" width="508" x="650" y="830" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-gravel-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#6a5a48;" value="4in #57 gravel pad&lt;br/&gt;(outside deck footprint)" vertex="1">
-          <mxGeometry height="30" width="486" x="672" y="840" as="geometry" />
+          <mxGeometry height="30" width="486" x="672" y="830" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-ribbon" parent="1" style="strokeColor=#2a5a2a;fillColor=#5a8a5a;strokeWidth=2;opacity=85;" value="&lt;b&gt;Dbl 2x6 PT ribbon&lt;/b&gt;" vertex="1">
-          <mxGeometry height="10" width="470" x="680" y="836.8" as="geometry" />
+          <mxGeometry height="10" width="470" x="680" y="826.8" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-block-0" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="1110" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="1110" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-block-1" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="996.7" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="996.7" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-block-2" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="883.3" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="883.3" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-block-3" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="770" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="770" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-block-4" parent="1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="660" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="660" y="875.2" as="geometry" />
         </mxCell>
-        <mxCell id="v13-p1-far-step-callout" parent="1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;FAR-EDGE STEP — v13 NEW&lt;/b&gt;&lt;br/&gt;11ft-9in long | right corner to midpoint&lt;br/&gt;Single 6in rise | 10.9in tread depth&lt;br/&gt;Doubled 2x6 PT ribbon to outer rim&lt;br/&gt;5x precast blocks @ ~28in OC&lt;br/&gt;4in #57 gravel pad (outside footprint)&lt;br/&gt;HEAVE: ¼-½in seasonal (accepted)" vertex="1">
-          <mxGeometry height="120" width="155" x="470" y="880" as="geometry" />
+        <mxCell id="v13-p1-far-step-callout" parent="1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;FAR-EDGE STEP (v13+, unchanged through v15)&lt;/b&gt;&lt;br/&gt;11ft-9in long | right corner to midpoint&lt;br/&gt;Single 6in rise | 10.9in tread depth&lt;br/&gt;Doubled 2x6 PT ribbon to outer rim&lt;br/&gt;5x precast blocks @ ~28in OC&lt;br/&gt;4in #57 gravel pad (outside footprint)&lt;br/&gt;HEAVE: ¼-½in seasonal (accepted)" vertex="1">
+          <mxGeometry height="120" width="155" x="470" y="870" as="geometry" />
         </mxCell>
-        <mxCell id="v13-p1-pier-note" parent="1" style="text;html=1;strokeColor=#5a3010;fillColor=#f5ede0;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#5a3010;strokeWidth=1.5;" value="&lt;b&gt;v13: 6 PIERS (was 9)&lt;/b&gt;&lt;br/&gt;House-side row (P1,P4,P7) removed.&lt;br/&gt;Ledger carries those reactions&lt;br/&gt;via HU210-3 hangers (3 places).&lt;br/&gt;Middle row (y=8ft-1.5in) +&lt;br/&gt;Outer row (y=16ft-3in) remain." vertex="1">
-          <mxGeometry height="90" width="170" x="40" y="490" as="geometry" />
+        <mxCell id="v13-p1-pier-note" parent="1" style="text;html=1;strokeColor=#5a3010;fillColor=#f5ede0;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#5a3010;strokeWidth=1.5;" value="&lt;b&gt;v13: 6 PIERS (was 9)&lt;/b&gt;&lt;br/&gt;House-side row (P1,P4,P7) removed.&lt;br/&gt;Ledger carries those reactions&lt;br/&gt;via HU210-3 hangers (3 places).&lt;br/&gt;Middle row (y=8ft-1.5in) +&lt;br/&gt;Outer row (y=16ft-0in) remain (-3in from v13, see Option C)." vertex="1">
+          <mxGeometry height="90" width="170" x="-30" y="530" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p1-exposed-patio" parent="1" style="strokeColor=#7a6a58;fillColor=#d0c4b0;strokeWidth=2.5;dashed=0;opacity=85;" value="" vertex="1">
+          <mxGeometry height="10" width="940" x="210" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p1-exposed-patio-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=7;fontColor=#5a4a38;fontStyle=1;" value="3in EXPOSED PATIO STRIP (deck ends at y=16ft-3in; patio edge at y=16ft-6in — BUILDER NOTE: deck does NOT reach patio far edge)" vertex="1">
+          <mxGeometry height="30" width="240" x="190" y="950" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p1-pier-note" parent="1" style="text;html=1;strokeColor=#5a3010;fillColor=#f5ede0;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#5a3010;strokeWidth=1.5;" value="&lt;b&gt;v14: 6 PIERS&lt;/b&gt;&lt;br/&gt;Middle row (y=8ft-1.5in) unchanged.&lt;br/&gt;Outer row: y=16ft-0in (v14, was 16ft-3in).&lt;br/&gt;House-side row still dropped.&lt;br/&gt;Fits clean 16-ft 2x10 stock (Option C)." vertex="1">
+          <mxGeometry height="80" width="170" x="-30" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p1-patio-edge-lbl" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=7;fontColor=#9b7050;" value="PATIO EDGE y=16ft-6in (fixed) →  deck outer edge = y=16ft-3in (v14)" vertex="1">
+          <mxGeometry height="20" width="500" x="200" y="920" as="geometry" />
         </mxCell>
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-500" parent="0" value="Picture Frame" />
         <mxCell id="160" parent="Z8O4pT-hFiafL0M5wHAX-500" style="text;html=1;strokeColor=#b8860b;fillColor=#ffe680;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#6b4400;strokeWidth=2.5;opacity=75;" value="&lt;b&gt;HOUSE-SIDE PF — 5.5in Trex | Butts wall (1/4in thermal gap) | Backed by ledger + house-side 2x10 blocking&lt;/b&gt;" vertex="1">
@@ -359,7 +371,7 @@
             <mxPoint x="1188" y="866" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="Z8O4pT-hFiafL0M5wHAX-502" parent="0" value="Girders" visible="0" />
+        <mxCell id="Z8O4pT-hFiafL0M5wHAX-502" parent="0" value="Girders" />
         <mxCell id="41" parent="Z8O4pT-hFiafL0M5wHAX-502" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a3a6b;strokeWidth=3;" value="&lt;b&gt;MID GIRDER&lt;br/&gt;(3) 2x10 PT&lt;br/&gt;@ x=11&#39;-6&quot;&lt;br/&gt;TOP-FLUSH&lt;br/&gt;@ 11in AG&lt;/b&gt;" vertex="1">
           <mxGeometry height="650" width="14" x="673" y="180" as="geometry" />
         </mxCell>
@@ -369,12 +381,8 @@
         <mxCell id="42" parent="Z8O4pT-hFiafL0M5wHAX-502" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a3a6b;strokeWidth=3;" value="&lt;b&gt;RIGHT GIRDER&lt;br/&gt;(3) 2x10 PT&lt;br/&gt;@ x=23&#39;&lt;br/&gt;TOP-FLUSH&lt;br/&gt;@ 11in AG&lt;/b&gt;" vertex="1">
           <mxGeometry height="650" width="14" x="1126" y="180" as="geometry" />
         </mxCell>
-        <mxCell id="Z8O4pT-hFiafL0M5wHAX-503" parent="0" value="Patio" visible="0" />
-        <mxCell id="10" parent="Z8O4pT-hFiafL0M5wHAX-503" style="text;html=1;strokeColor=#a09080;fillColor=#e8e0d4;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=9;fontColor=#6b5030;opacity=70;" value="EXISTING CONCRETE PATIO — 23&#39;-6&quot; x 16&#39;-6&quot;&lt;br/&gt;Slab punched at each pier location for Pylex 50 installation" vertex="1">
-          <mxGeometry height="650" width="940" x="100" y="140" as="geometry" />
-        </mxCell>
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-504" parent="0" value="Notes" />
-        <mxCell id="2" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#222222;" value="&lt;b&gt;DECK PLAN v13 — PAGE 1: FRAMING PLAN&lt;/b&gt;&lt;br/&gt;23&#39;-6&quot; x 16&#39;-6&quot; Overall Finished Surface, 12&quot; Max AG&lt;br/&gt;Pylex 50 Spiral Piers Through Patio, Face-Hung Joists Top-Flush&lt;br/&gt;House on 23&#39;-6&quot; Edge | Date: 2026-05-01 | Gemma" vertex="1">
+        <mxCell id="2" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#222222;" value="&lt;b&gt;DECK PLAN v15 — PAGE 1: FRAMING PLAN&lt;/b&gt;&lt;br/&gt;23&#39;-6&quot; x 16&#39;-6&quot; Overall Finished Surface, 12&quot; Max AG&lt;br/&gt;Pylex 50 Spiral Piers Through Patio, Face-Hung Joists Top-Flush&lt;br/&gt;House on 23&#39;-6&quot; Edge | Date: 2026-05-06 | Gemma" vertex="1">
           <mxGeometry height="100" width="500" x="-610" y="60" as="geometry" />
         </mxCell>
         <mxCell id="129" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#2a1808;fillColor=#f5ede0;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#2a1808;" value="&lt;b&gt;Pylex 50 spiral pier legend: filled dark circle = pier shaft; outer lighter circle = punched patio hole (~3-4in dia). Pier positions: 12in / 8&#39;-1.5&quot; / 16&#39;-3&quot; out from house. ALL 9 piers within patio footprint.&lt;/b&gt;" vertex="1">
@@ -512,12 +520,12 @@
       </root>
     </mxGraphModel>
   </diagram>
-  <diagram id="deck-plan-v13-p2" name="Page 2 — Decking Plan (v13)">
-    <mxGraphModel dx="4988" dy="1865" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+  <diagram id="deck-plan-v15-p2" name="Page 2 — Decking Plan (v15)">
+    <mxGraphModel dx="2988" dy="746" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="p2-0" />
         <mxCell id="p2-1" parent="p2-0" />
-        <mxCell id="v10-badge-p2" parent="p2-1" style="text;html=1;strokeColor=#1a1a1a;fillColor=#1a1a1a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;arcSize=15;fontColor=#ffffff;fontSize=36;fontStyle=1;" value="&lt;b&gt;v13.1&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;Page 2 of 2 — Decking&lt;/font&gt;" vertex="1">
+        <mxCell id="v10-badge-p2" parent="p2-1" style="text;html=1;strokeColor=#1a1a1a;fillColor=#1a1a1a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=1;arcSize=15;fontColor=#ffffff;fontSize=36;fontStyle=1;" value="&lt;b&gt;v15.1&lt;/b&gt;&lt;br&gt;&lt;font style=&quot;font-size: 11px;&quot;&gt;Page 2 of 2 — Decking&lt;/font&gt;" vertex="1">
           <mxGeometry height="90" width="160" x="10" y="10" as="geometry" />
         </mxCell>
         <mxCell id="p2-2001" parent="p2-1" style="strokeColor=#a09080;fillColor=#e8e0d4;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#9b7050;opacity=40;" value="EXISTING CONCRETE PATIO (background)" vertex="1">
@@ -868,7 +876,7 @@
             <mxPoint x="1160.8" y="840" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="p2-2111" parent="p2-1" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;" value="&lt;b&gt;DECK PLAN v13 — PAGE 2: DECKING&lt;/b&gt;&lt;br/&gt;23&#39;-6&quot; x 16&#39;-6&quot; Overall Finished Surface&lt;br/&gt;Trex Transcend 5.5&quot; | Running ⊥ house | 4-Side Picture Frame&lt;br/&gt;Framing at 40% opacity (structural unchanged from Page 1 / v7)&lt;br/&gt;v13: 9→6 piers (house-side row dropped); HU210-3 hangers at girder-ledger connections; far-edge step 11ft-9in right corner to midpoint&lt;br/&gt;Date: 2026-05-01 | Gemma — Technical Diagramming Specialist" vertex="1">
+        <mxCell id="p2-2111" parent="p2-1" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=9;" value="&lt;b&gt;DECK PLAN v15 — PAGE 2: DECKING&lt;/b&gt;&lt;br/&gt;23&#39;-6&quot; x 16&#39;-6&quot; Overall Finished Surface&lt;br/&gt;Trex Transcend 5.5&quot; | Running ⊥ house | 4-Side Picture Frame&lt;br/&gt;Framing at 40% opacity (structural unchanged from Page 1 / v7)&lt;br/&gt;v15: ASCII stair-elevation cells replaced with native drawio shapes; layout unchanged&lt;br/&gt;Date: 2026-05-06 | Gemma — Technical Diagramming Specialist" vertex="1">
           <mxGeometry height="110" width="420" x="1234" y="57.5" as="geometry" />
         </mxCell>
         <mxCell id="p2-2112" parent="p2-1" style="text;html=1;strokeColor=#a07a4a;fillColor=#fdf5e8;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#3a1a00;strokeWidth=2;" value="&lt;b&gt;PLANK COUNT SUMMARY (planning est.)&lt;/b&gt;&lt;br/&gt;Field planks: 48 × 16-ft Trex 5.5&quot; (cut to 15&#39;-7&quot;, ~5&quot; waste ea.)&lt;br/&gt;PF house-side: 23&#39;-6&quot; (order 24-ft or splice from 16-ft)&lt;br/&gt;PF far-side: 23&#39;-6&quot; (same)&lt;br/&gt;PF left-side: 16&#39;-6&quot; (16-ft board, field-cut)&lt;br/&gt;PF right-side: 16&#39;-6&quot; (16-ft board, field-cut)&lt;br/&gt;Board subtotal: 52&lt;br/&gt;+10% waste: ~5 boards&lt;br/&gt;&lt;b&gt;TOTAL ORDER: ~57 boards (planning est.)&lt;/b&gt;&lt;br/&gt;Hollis will produce precise BOM with cut list." vertex="1">
@@ -949,7 +957,7 @@
         <mxCell id="v12-p2-cj-lbl-1" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#cc2200;fontStyle=1;" value="CUT JOINT y=9ft-6in" vertex="1">
           <mxGeometry height="14" width="130" x="150.4" y="563" as="geometry" />
         </mxCell>
-        <mxCell id="v12-p2-elev-box" parent="p2-1" style="text;html=1;strokeColor=#446688;fillColor=#f8f8f0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#2244aa;strokeWidth=2;" value="&lt;b&gt;STEP SIDE ELEVATION&lt;/b&gt;&lt;br/&gt;Open risers -- no riser board&lt;br/&gt;&lt;br/&gt;12in AG --------- (deck top)&lt;br/&gt;OPEN RISER (no board)&lt;br/&gt;6in AG -- [tread 10.8in deep] --&lt;br/&gt;OPEN RISER (no board)&lt;br/&gt;0in AG ----------- (grade)&lt;br/&gt;[gravel pad + 12in x 12in pavers]&lt;br/&gt;&lt;br/&gt;2 risers @ 6in each&lt;br/&gt;3x 2x10 PT stringers" vertex="1">
+        <mxCell id="v12-p2-elev-box" parent="p2-1" style="text;html=1;strokeColor=#446688;fillColor=#f8f8f0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#2244aa;strokeWidth=2;" value="&lt;b&gt;STEP SIDE ELEVATION&lt;/b&gt;&lt;br/&gt;Open risers -- no riser board&lt;br/&gt;&lt;br/&gt;12in AG --------- (deck top)&lt;br/&gt;OPEN RISER (no board)&lt;br/&gt;6in AG -- [tread 10.8in deep] --&lt;br/&gt;OPEN RISER (no board)&lt;br/&gt;0in AG ----------- (grade)&lt;br/&gt;[gravel pad + 12in x 12in pavers]&lt;br/&gt;&lt;br/&gt;2 risers @ 6in each&lt;br/&gt;3x 2x10 PT stringers" vertex="1" visible="0">
           <mxGeometry height="160" width="155" x="-46.5" y="461.7" as="geometry" />
         </mxCell>
         <mxCell id="v12-p2-pf-gap" parent="p2-1" style="strokeColor=#cc2200;fillColor=white;strokeWidth=1.5;dashed=1;dashPattern=6 3;" value="STEP&lt;br/&gt;OPENING" vertex="1">
@@ -968,49 +976,271 @@
           <mxGeometry height="18" width="18" x="1131" y="175.5" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-gravel" parent="p2-1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="93.2" width="486" x="672" y="840" as="geometry" />
+          <mxGeometry height="93.2" width="486" x="672" y="830" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-gravel-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;fontSize=6;fontColor=#6a5a48;" value="4in compacted #57 gravel pad (outside deck footprint)" vertex="1">
-          <mxGeometry height="20" width="486" x="672" y="933.2" as="geometry" />
+          <mxGeometry height="20" width="486" x="672" y="923.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-ribbon" parent="p2-1" style="text;html=1;strokeColor=#2a5a2a;fillColor=#5a8a5a;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=6.5;fontColor=#ffffff;fontStyle=1;strokeWidth=2;" value="Doubled 2x6 PT SYP ribbon — lag-bolted to outer rim" vertex="1">
-          <mxGeometry height="10" width="470" x="680" y="836.8" as="geometry" />
+          <mxGeometry height="10" width="470" x="680" y="826.8" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-tread-0" parent="p2-1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;" value="" vertex="1">
-          <mxGeometry height="18" width="470" x="680" y="846.8" as="geometry" />
+          <mxGeometry height="18" width="470" x="680" y="836.8" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-tread-1" parent="p2-1" style="strokeColor=#7a5030;fillColor=#c8a878;strokeWidth=1;" value="" vertex="1">
-          <mxGeometry height="18" width="470" x="680" y="865.2" as="geometry" />
+          <mxGeometry height="18" width="470" x="680" y="855.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-tread-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6.5;fontColor=#7a5030;fontStyle=1;" value="2x 5.4in MoistureShield Vision | 10.9in tread | 6in AG | Open riser | Tiger Claw TC-G or Cortex" vertex="1">
-          <mxGeometry height="24" width="470" x="680" y="853" as="geometry" />
+          <mxGeometry height="24" width="470" x="680" y="843" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-block-0" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="1110" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="1110" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-block-1" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="996.7" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="996.7" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-block-2" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="883.3" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="883.3" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-block-3" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="770" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="770" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-block-4" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1.5;" value="" vertex="1">
-          <mxGeometry height="40" width="40" x="660" y="885.2" as="geometry" />
+          <mxGeometry height="40" width="40" x="660" y="875.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-block-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;fontSize=6.5;fontColor=#444444;fontStyle=1;" value="5x precast concrete deck blocks (12in x 12in) @ ≈28in OC" vertex="1">
-          <mxGeometry height="20" width="470" x="680" y="925.2" as="geometry" />
+          <mxGeometry height="20" width="470" x="680" y="915.2" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-heave-callout" parent="p2-1" style="text;html=1;strokeColor=#cc4400;fillColor=#fff0e0;align=left;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=7;fontColor=#8B0000;strokeWidth=1.8;" value="&lt;b&gt;⚠ SEASONAL HEAVE (Hollis): shallow blocks WILL heave ¼-½in per cycle.&lt;/b&gt;&lt;br/&gt;Decorative convenience step — NOT frost-depth founded.&lt;br/&gt;Homeowner has accepted this trade-off.&lt;br/&gt;Separate from left-edge stair; does not affect deck structure." vertex="1">
-          <mxGeometry height="75" width="330" x="415.8" y="957.5" as="geometry" />
+          <mxGeometry height="75" width="330" x="415.8" y="947.5" as="geometry" />
         </mxCell>
-        <mxCell id="v13-p2-far-step-callout" parent="p2-1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;FAR-EDGE STEP — v13 NEW&lt;/b&gt;&lt;br/&gt;11ft-9in along outer 23ft-6in edge&lt;br/&gt;Right corner to midpoint (x=23ft-6in to x=11ft-9in)&lt;br/&gt;Single 6in rise | 10.9in tread (2x 5.4in MoistureShield)&lt;br/&gt;Doubled 2x6 PT ribbon to outer rim face&lt;br/&gt;5x precast blocks @ ~28in OC on 4in #57 gravel&lt;br/&gt;Open riser | TC-G or Cortex fasteners" vertex="1">
-          <mxGeometry height="110" width="330" x="1410" y="823.2" as="geometry" />
+        <mxCell id="v13-p2-far-step-callout" parent="p2-1" style="text;html=1;strokeColor=#2244aa;fillColor=#e8eeff;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a2a88;strokeWidth=1.5;" value="&lt;b&gt;FAR-EDGE STEP (v13+, unchanged through v15)&lt;/b&gt;&lt;br/&gt;11ft-9in along outer 23ft-6in edge&lt;br/&gt;Right corner to midpoint (x=23ft-6in to x=11ft-9in)&lt;br/&gt;Single 6in rise | 10.9in tread (2x 5.4in MoistureShield)&lt;br/&gt;Doubled 2x6 PT ribbon to outer rim face&lt;br/&gt;5x precast blocks @ ~28in OC on 4in #57 gravel&lt;br/&gt;Open riser | TC-G or Cortex fasteners" vertex="1">
+          <mxGeometry height="110" width="330" x="984.3" y="977" as="geometry" />
         </mxCell>
         <mxCell id="v13-p2-far-elev-box" parent="p2-1" style="text;html=1;strokeColor=#2a6a2a;fillColor=#f8f8f0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#2a6a2a;strokeWidth=2;" value="&lt;b&gt;FAR-EDGE STEP — SIDE ELEVATION (v13)&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;12in AG -------- (deck top)&lt;br/&gt;OPEN RISER (6in drop, no board)&lt;br/&gt;6in AG ---- [tread 10.9in deep] ----&lt;br/&gt;(grade / block top)&lt;br/&gt;[4in #57 gravel pad + precast blocks]&lt;br/&gt;&lt;br/&gt;1 riser @ 6in&lt;br/&gt;Doubled 2x6 PT ribbon to deck rim&lt;br/&gt;5x blocks @ ~28in OC" vertex="1">
-          <mxGeometry height="150" width="150" x="1250.8" y="807.5" as="geometry" />
+          <mxGeometry height="110" width="150" x="1408" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-exposed-patio" parent="p2-1" style="strokeColor=#7a6a58;fillColor=#d0c4b0;strokeWidth=2.5;dashed=1;opacity=85;" value="" vertex="1">
+          <mxGeometry height="10" width="940" x="210" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-exposed-patio-lbl" parent="p2-1" style="text;html=1;strokeColor=#7a6a58;fillColor=#ede8e0;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7.5;fontColor=#5a4a38;fontStyle=1;strokeWidth=1.5;" value="3in EXPOSED PATIO — deck does NOT extend to patio far edge" vertex="1">
+          <mxGeometry height="10" width="940" x="210" y="830" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-left-stair-elev-bg" parent="p2-1" style="text;html=1;strokeColor=#446688;fillColor=#f8f8f0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#2244aa;strokeWidth=2;" value="&lt;b&gt;LEFT-EDGE STAIR — SIDE ELEVATION&lt;/b&gt;&lt;br/&gt;(v12, unchanged — v15 native shapes)" vertex="1">
+          <mxGeometry height="220" width="220" x="1340" y="900" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-left-stair-gravel" parent="p2-1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1;opacity=80;" value="" vertex="1">
+          <mxGeometry height="20" width="62" x="1395" y="1090" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-left-stair-paver" parent="p2-1" style="strokeColor=#444444;fillColor=#9a9a9a;strokeWidth=1;" value="" vertex="1">
+          <mxGeometry height="5" width="16" x="1400" y="1085" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-left-stair-profile" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=6;fontColor=#333333;" value="&lt;pre&gt;12in AG [deck top]──────────────┐&lt;br/&gt;           ▓▓▓▓▓▓▓▓▓▓▓ deck&lt;br/&gt;OPEN RISER │&lt;br/&gt;6in AG  ───┤ [tread 10.8in] ──┐&lt;br/&gt;           ▓▓▓ MS Vision ▓▓▓  │&lt;br/&gt;OPEN RISER          │         │&lt;br/&gt;0in AG  ────────────┘ paver    │&lt;br/&gt;           [#57 gravel pad]   │&lt;br/&gt;2 risers @ 6in ea.  ←16in→&lt;/pre&gt;" vertex="1" visible="0">
+          <mxGeometry height="165" width="204" x="1348" y="928" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-left-stair-dims" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#444444;" value="3 PT 2×10 stringers | Simpson LSCZ to L girder&lt;br/&gt;Tread: 2× 5.4in MoistureShield Vision | 10.8in deep&lt;br/&gt;Open risers | 12×12in pavers on #57 gravel" vertex="1">
+          <mxGeometry height="44" width="212" x="1530" y="1075" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-far-step-elev-bg" parent="p2-1" style="text;html=1;strokeColor=#2a6a2a;fillColor=#f8f8f0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=8;fontColor=#2a6a2a;strokeWidth=2;" value="&lt;b&gt;FAR-EDGE STEP — SIDE ELEVATION&lt;/b&gt;&lt;br/&gt;(v13, unchanged — v15 native shapes)" vertex="1">
+          <mxGeometry height="190" width="220" x="1340" y="700" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-far-step-elev-profile" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=top;whiteSpace=wrap;fontSize=6;fontColor=#333333;" value="&lt;pre&gt;12in AG [deck top]────────────────┐&lt;br/&gt;           ▓▓▓▓▓▓▓▓▓▓▓ deck&lt;br/&gt;│ribbon│OPEN RISER&lt;br/&gt;6in AG ─┤ [tread 10.9in ─ 2× 5.4in] ──┐&lt;br/&gt;        ▓▓ MS Vision ▓▓ ▓▓ MS Vision ▓▓&lt;br/&gt;0in AG ──────────────────── block│&lt;br/&gt;           [4in #57 gravel pad]    │&lt;br/&gt;1 riser @ 6in | 5 blocks @ ~28in OC&lt;/pre&gt;" vertex="1" visible="0">
+          <mxGeometry height="135" width="204" x="1348" y="728" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-far-step-elev-dims" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=6;fontColor=#444444;" value="Doubled 2×6 PT SYP ribbon | lag-bolted to outer rim&lt;br/&gt;Tread: 2× 5.4in MoistureShield Vision | 10.9in deep&lt;br/&gt;Open riser | precast blocks on 4in #57 gravel" vertex="1">
+          <mxGeometry height="44" width="212" x="1540" y="835" as="geometry" />
+        </mxCell>
+        <mxCell id="v14-p2-rim-callout" parent="p2-1" style="text;html=1;strokeColor=#d6b656;fillColor=#fffff0;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=1;fontSize=7;fontColor=#7a6010;strokeWidth=1.2;" value="&lt;b&gt;outer rim y=16ft-0in (v14: -3in from v13)&lt;/b&gt;&lt;br/&gt;Fits 16-ft 2x10 stock (Option C, 2026-05-06)" vertex="1">
+          <mxGeometry height="44" width="220" x="1176" y="638" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-grade-line" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#444488;strokeWidth=1.0;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1388" y="1064" as="sourcePoint" />
+            <mxPoint x="1446" y="1064" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-gravel" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d0c8b8;strokeColor=#8a7a68;strokeWidth=1.0;opacity=85;fillStyle=cross-hatch;" value="" vertex="1">
+          <mxGeometry height="16" width="58" x="1388" y="1064" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-paver" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#9a9a9a;strokeColor=#444444;strokeWidth=1.0;opacity=100;" value="" vertex="1">
+          <mxGeometry height="5" width="16" x="1396" y="1059" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-paver-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=bottom;whiteSpace=wrap;fontSize=5;fontColor=#555555;" value="12×12 paver" vertex="1">
+          <mxGeometry height="10" width="26" x="1396" y="1049" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-str-upper" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#a07060;strokeColor=#7a4828;strokeWidth=1.5;opacity=100;" value="" vertex="1">
+          <mxGeometry height="54" width="24" x="1396" y="956" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-str-lower" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#a07060;strokeColor=#7a4828;strokeWidth=1.5;opacity=100;" value="" vertex="1">
+          <mxGeometry height="54" width="14" x="1420" y="1010" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-tread-upper" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#7a9a7a;strokeColor=#4a7050;strokeWidth=1.0;opacity=100;" value="" vertex="1">
+          <mxGeometry height="5" width="24" x="1396" y="1005" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-deck-top" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#c9a778;strokeColor=#8a7040;strokeWidth=1.0;opacity=100;" value="" vertex="1">
+          <mxGeometry height="5" width="32" x="1392" y="951" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-deck-line" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#8a7040;strokeWidth=1.5;dashed=0;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1392" y="951" as="sourcePoint" />
+            <mxPoint x="1440" y="951" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-riser1" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#cc4400;strokeWidth=1.2;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1420" y="956" as="sourcePoint" />
+            <mxPoint x="1420" y="1010" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-riser2" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#cc4400;strokeWidth=1.2;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1434" y="1010" as="sourcePoint" />
+            <mxPoint x="1434" y="1064" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-riser1-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=4;fontColor=#cc4400;" value="OPEN&lt;br/&gt;RISER" vertex="1">
+          <mxGeometry height="12" width="30" x="1421" y="977" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-tick-12" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#444488;strokeWidth=0.8;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1366" y="956" as="sourcePoint" />
+            <mxPoint x="1393" y="956" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-lbl-12" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#2244aa;fontStyle=1;" value="12&quot; AG&lt;br/&gt;(deck top)" vertex="1">
+          <mxGeometry height="16" width="50" x="1342" y="948" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-tick-6" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#444488;strokeWidth=0.8;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1366" y="1010" as="sourcePoint" />
+            <mxPoint x="1393" y="1010" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-lbl-6" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#2244aa;fontStyle=1;" value="6&quot; AG&lt;br/&gt;(mid tread)" vertex="1">
+          <mxGeometry height="16" width="50" x="1342" y="1002" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-tick-0" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#444488;strokeWidth=0.8;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1366" y="1064" as="sourcePoint" />
+            <mxPoint x="1393" y="1064" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-lbl-0" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#2244aa;fontStyle=1;" value="0&quot; AG&lt;br/&gt;(grade)" vertex="1">
+          <mxGeometry height="16" width="50" x="1342" y="1056" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-rise1-arrow" edge="1" parent="p2-1" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#444466;strokeWidth=1.0;fillColor=#444466;endFill=1;startFill=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1378" y="956" as="sourcePoint" />
+            <mxPoint x="1378" y="1010" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-rise1-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#444444;fontStyle=1;" value="6&quot;" vertex="1">
+          <mxGeometry height="10" width="12" x="1366" y="978" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-rise2-arrow" edge="1" parent="p2-1" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#444466;strokeWidth=1.0;fillColor=#444466;endFill=1;startFill=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1378" y="1010" as="sourcePoint" />
+            <mxPoint x="1378" y="1064" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-rise2-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#444444;fontStyle=1;" value="6&quot;" vertex="1">
+          <mxGeometry height="10" width="12" x="1366" y="1032" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-tread-arrow" edge="1" parent="p2-1" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#774400;strokeWidth=1.0;fillColor=#774400;endFill=1;startFill=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1396" y="1074" as="sourcePoint" />
+            <mxPoint x="1420" y="1074" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-left-stair-tread-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;fontSize=5;fontColor=#774400;fontStyle=1;" value="10.8&quot; tread" vertex="1">
+          <mxGeometry height="10" width="34" x="1391" y="1075" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-grade-line" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#444488;strokeWidth=1.0;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1392" y="840" as="sourcePoint" />
+            <mxPoint x="1448" y="840" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-far-step-gravel" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d4cbc0;strokeColor=#8a7868;strokeWidth=1.0;opacity=85;fillStyle=cross-hatch;" value="" vertex="1">
+          <mxGeometry height="14" width="32" x="1400" y="840" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-gravel-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=4;fontColor=#7a6050;" value="4&quot; #57 gravel" vertex="1">
+          <mxGeometry height="12" width="28" x="1402" y="842" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-block" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#b8b0a0;strokeColor=#888070;strokeWidth=1.0;opacity=100;" value="" vertex="1">
+          <mxGeometry height="5" width="14" x="1410" y="835" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-block-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=bottom;whiteSpace=wrap;fontSize=4;fontColor=#666655;" value="precast block" vertex="1">
+          <mxGeometry height="10" width="22" x="1408" y="825" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-ribbon" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#8b6030;strokeColor=#5a3a10;strokeWidth=1.5;opacity=100;" value="" vertex="1">
+          <mxGeometry height="-54" width="8" x="1400" y="786" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-ribbon-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;whiteSpace=wrap;fontSize=4;fontColor=#8b6030;" value="ribbon" vertex="1">
+          <mxGeometry height="16" width="24" x="1376" y="751" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-tread1" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#7a9a7a;strokeColor=#4a7050;strokeWidth=1.0;opacity=100;" value="" vertex="1">
+          <mxGeometry height="5" width="11.5" x="1408" y="781" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-tread2" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#7a9a7a;strokeColor=#4a7050;strokeWidth=1.0;opacity=100;" value="" vertex="1">
+          <mxGeometry height="5" width="11.5" x="1420.5" y="781" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-deck-top" parent="p2-1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#c9a778;strokeColor=#8a7040;strokeWidth=1.0;opacity=100;" value="" vertex="1">
+          <mxGeometry height="5" width="40" x="1396" y="727" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-riser" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#cc4400;strokeWidth=1.2;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1432" y="732" as="sourcePoint" />
+            <mxPoint x="1432" y="786" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-far-step-riser-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=4;fontColor=#cc4400;" value="OPEN&lt;br/&gt;RISER" vertex="1">
+          <mxGeometry height="12" width="34" x="1434" y="753" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-tick-12" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#444488;strokeWidth=0.8;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1370" y="732" as="sourcePoint" />
+            <mxPoint x="1397" y="732" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-far-step-lbl-12" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#2a6a2a;fontStyle=1;" value="12&quot; AG&lt;br/&gt;(deck)" vertex="1">
+          <mxGeometry height="16" width="54" x="1342" y="724" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-tick-6" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#444488;strokeWidth=0.8;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1370" y="786" as="sourcePoint" />
+            <mxPoint x="1397" y="786" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-far-step-lbl-6" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#2a6a2a;fontStyle=1;" value="6&quot; AG&lt;br/&gt;(tread)" vertex="1">
+          <mxGeometry height="16" width="54" x="1342" y="778" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-tick-0" edge="1" parent="p2-1" style="endArrow=none;startArrow=none;html=1;strokeColor=#444488;strokeWidth=0.8;dashed=1;dashPattern=8 4;exitX=0.5;exitY=0.5;entryX=0.5;entryY=0.5;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1370" y="840" as="sourcePoint" />
+            <mxPoint x="1397" y="840" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-far-step-lbl-0" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=right;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#2a6a2a;fontStyle=1;" value="0&quot; AG&lt;br/&gt;(grade)" vertex="1">
+          <mxGeometry height="16" width="54" x="1342" y="832" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-rise-arrow" edge="1" parent="p2-1" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#444466;strokeWidth=1.0;fillColor=#444466;endFill=1;startFill=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1382" y="732" as="sourcePoint" />
+            <mxPoint x="1382" y="786" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-far-step-rise-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=5;fontColor=#444444;fontStyle=1;" value="6&quot;" vertex="1">
+          <mxGeometry height="10" width="12" x="1370" y="754" as="geometry" />
+        </mxCell>
+        <mxCell id="v15-p2-far-step-tread-arrow" edge="1" parent="p2-1" style="endArrow=classic;startArrow=classic;html=1;strokeColor=#774400;strokeWidth=1.0;fillColor=#774400;endFill=1;startFill=1;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1408" y="850" as="sourcePoint" />
+            <mxPoint x="1432" y="850" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="v15-p2-far-step-tread-lbl" parent="p2-1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=top;whiteSpace=wrap;fontSize=5;fontColor=#774400;fontStyle=1;" value="10.9&quot; tread" vertex="1">
+          <mxGeometry height="10" width="28" x="1406" y="851" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

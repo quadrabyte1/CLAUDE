@@ -1,0 +1,56 @@
+{
+  "course": "The Stadium - PGA West",
+  "hole": "17",
+  "image": "PGA West - Stadium Clubhouse.png",
+  "imageSize": {
+    "width": 638,
+    "height": 703
+  },
+  "contourStep": 10,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 223,
+          "y": 246
+        },
+        {
+          "x": 324,
+          "y": 246
+        },
+        {
+          "x": 415,
+          "y": 256
+        },
+        {
+          "x": 415,
+          "y": 356
+        },
+        {
+          "x": 415,
+          "y": 457
+        },
+        {
+          "x": 314,
+          "y": 457
+        },
+        {
+          "x": 223,
+          "y": 447
+        },
+        {
+          "x": 223,
+          "y": 347
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "main": {
+    "id": "main",
+    "type": "split",
+    "children": [
+      {
+        "id": "workspace-leaf",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "default-leaf",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {}
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "left",
+    "type": "split",
+    "children": [],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "right",
+    "type": "split",
+    "children": [],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "leftRibbon": {
+    "hiddenItems": {}
+  },
+  "rightRibbon": {
+    "collapsed": true
+  },
+  "active": "default-leaf",
+  "lastOpenFiles": []
+}

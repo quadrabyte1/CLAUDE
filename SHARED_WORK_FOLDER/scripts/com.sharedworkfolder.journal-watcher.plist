@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.sharedworkfolder.journal-watcher</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scripts/.venv/bin/python3</string>
+        <string>/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scripts/sync_journal.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Keep the process alive; restart on crash -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Start immediately on launchctl bootstrap -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Stdout/stderr logs -->
+    <key>StandardOutPath</key>
+    <string>/tmp/journal-watcher.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/journal-watcher.err</string>
+
+    <!-- Throttle restart storms: wait at least 10s before restarting -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>

@@ -1,0 +1,31 @@
+{
+  "userIgnoreFilters": [
+    "^\\.claude/",
+    "^\\.git/",
+    "^app/",
+    "^db/",
+    "^test-results/",
+    "^EliteGolfMoments/.*/STLs/",
+    "^EliteGolfMoments/.*/3MFs/",
+    "^EliteGolfMoments/.*/EGMs/",
+    "^EliteGolfMoments/Frames/",
+    "^owner_inbox/deck_blueprint/",
+    "^owner_inbox/GoButton/",
+    "^Images/",
+    "^Homunculus/Packages/",
+    "^Team/",
+    ".*/__pycache__/",
+    ".*/node_modules/",
+    ".*\\.pyc$",
+    ".*\\.3mf$",
+    ".*\\.stl$",
+    ".*\\.step$",
+    ".*\\.egm$",
+    ".*\\.db$",
+    ".*\\.db-shm$",
+    ".*\\.db-wal$"
+  ],
+  "newFileLocation": "root",
+  "newFileFolderPath": "",
+  "attachmentFolderPath": "_attachments"
+}

@@ -1,6 +1,6 @@
 <mxfile host="Electron" pages="2">
   <diagram id="deck-plan-v15-p1" name="Page 1 — Framing Plan (v15)">
-    <mxGraphModel dx="2580" dy="518" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="4432" dy="1554" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-501" parent="0" value="Piers" />
@@ -69,7 +69,7 @@
           <mxGeometry height="15" width="920" x="220" y="180" as="geometry" />
         </mxCell>
         <mxCell id="31" parent="1" style="text;html=1;strokeColor=#cc8800;fillColor=#fff9e6;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#663300;" value="WARNING MTWDeck LATERAL TIE REQUIRED — min. 2x Simpson MTWDeck per IRC R507.9 / DCA-6: 2x band joist + 2x interior blocking bearing on sill plate" vertex="1">
-          <mxGeometry height="30" width="600" x="470" y="70" as="geometry" />
+          <mxGeometry height="30" width="600" x="210" y="70" as="geometry" />
         </mxCell>
         <mxCell id="50" parent="1" style="strokeColor=#82b366;fillColor=#d5e8d4;strokeWidth=1;" value="" vertex="1">
           <mxGeometry height="6" width="439" x="234" y="216" as="geometry" />
@@ -291,10 +291,10 @@
           <mxGeometry height="18" width="18" x="1131" y="175.5" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-hanger-callout" parent="1" style="text;html=1;strokeColor=#882200;fillColor=#fff0e0;align=center;verticalAlign=top;whiteSpace=wrap;rounded=1;fontSize=7;fontColor=#882200;strokeWidth=1.5;" value="&lt;b&gt;Simpson HU210-3 (or eq.)&lt;br/&gt;at each girder-ledger connection&lt;br/&gt;— typ. 3 places&lt;/b&gt;" vertex="1">
-          <mxGeometry height="55" width="240" x="1100" y="70" as="geometry" />
+          <mxGeometry height="55" width="240" x="490" y="10" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-ledger-note" parent="1" style="text;html=1;strokeColor=#cc8800;fillColor=#fff9e6;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;fontSize=6.5;fontColor=#663300;strokeWidth=1.5;" value="&lt;b&gt;v13 LEDGER: ½in HDG carriage bolts back-blocked from basement,&lt;br/&gt;clustered at girder connections; ½in HDG lag @ 18in OC two-row&lt;br/&gt;staggered between connections (IRC R507.9.1.3).&lt;br/&gt;Wall = wood-frame. Peel-and-stick + Z-flashing retained.&lt;/b&gt;" vertex="1">
-          <mxGeometry height="65" width="380" x="1210" y="190" as="geometry" />
+          <mxGeometry height="65" width="380" x="860" y="60" as="geometry" />
         </mxCell>
         <mxCell id="v13-p1-far-gravel" parent="1" style="strokeColor=#8a7a68;fillColor=#d0c8b8;strokeWidth=1.5;opacity=70;dashed=1;" value="" vertex="1">
           <mxGeometry height="100" width="508" x="650" y="830" as="geometry" />
@@ -371,7 +371,7 @@
             <mxPoint x="1188" y="866" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="Z8O4pT-hFiafL0M5wHAX-502" parent="0" value="Girders" />
+        <mxCell id="Z8O4pT-hFiafL0M5wHAX-502" parent="0" value="Girders" visible="0" />
         <mxCell id="41" parent="Z8O4pT-hFiafL0M5wHAX-502" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a3a6b;strokeWidth=3;" value="&lt;b&gt;MID GIRDER&lt;br/&gt;(3) 2x10 PT&lt;br/&gt;@ x=11&#39;-6&quot;&lt;br/&gt;TOP-FLUSH&lt;br/&gt;@ 11in AG&lt;/b&gt;" vertex="1">
           <mxGeometry height="650" width="14" x="673" y="180" as="geometry" />
         </mxCell>
@@ -380,6 +380,28 @@
         </mxCell>
         <mxCell id="42" parent="Z8O4pT-hFiafL0M5wHAX-502" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a3a6b;strokeWidth=3;" value="&lt;b&gt;RIGHT GIRDER&lt;br/&gt;(3) 2x10 PT&lt;br/&gt;@ x=23&#39;&lt;br/&gt;TOP-FLUSH&lt;br/&gt;@ 11in AG&lt;/b&gt;" vertex="1">
           <mxGeometry height="650" width="14" x="1126" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="BweHahjQ0cUsgxNPDr2o-500" edge="1" parent="Z8O4pT-hFiafL0M5wHAX-502" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1180" y="180" as="sourcePoint" />
+            <mxPoint x="1180" y="510" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="BweHahjQ0cUsgxNPDr2o-501" connectable="0" parent="BweHahjQ0cUsgxNPDr2o-500" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="8&#39;" vertex="1">
+          <mxGeometry relative="1" x="0.2081" y="-1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="BweHahjQ0cUsgxNPDr2o-502" edge="1" parent="Z8O4pT-hFiafL0M5wHAX-502" style="endArrow=classic;startArrow=classic;html=1;rounded=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="1180" y="500" as="sourcePoint" />
+            <mxPoint x="1180" y="830" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="BweHahjQ0cUsgxNPDr2o-503" connectable="0" parent="BweHahjQ0cUsgxNPDr2o-502" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="8&#39;" vertex="1">
+          <mxGeometry relative="1" x="0.2081" y="-1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-504" parent="0" value="Notes" />
         <mxCell id="2" parent="Z8O4pT-hFiafL0M5wHAX-504" style="text;html=1;strokeColor=#444444;fillColor=#f5f5f5;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=10;fontColor=#222222;" value="&lt;b&gt;DECK PLAN v15 — PAGE 1: FRAMING PLAN&lt;/b&gt;&lt;br/&gt;23&#39;-6&quot; x 16&#39;-6&quot; Overall Finished Surface, 12&quot; Max AG&lt;br/&gt;Pylex 50 Spiral Piers Through Patio, Face-Hung Joists Top-Flush&lt;br/&gt;House on 23&#39;-6&quot; Edge | Date: 2026-05-06 | Gemma" vertex="1">

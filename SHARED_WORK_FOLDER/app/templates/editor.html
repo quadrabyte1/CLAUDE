@@ -515,19 +515,19 @@ function polygonEditor() {
           console.warn('Detection server error:', result.msg);
           this.initPolygons();
           this.draw();
-          this.flash('Detection failed: ' + (result.msg || 'unknown server error') + ' — using defaults', false);
+          this.flash('Detection failed: ' + (result.msg || 'unknown server error') + ' — 100 using defaults', false);
         } else {
           // status === 'ok' but polygons.length === 0
           this.initPolygons();
           this.draw();
-          this.flash('Detection found no green or traps in this image — using defaults', false);
+          this.flash('Detection found no green or traps in this image — 101 using defaults', false);
         }
       })
       .catch((err) => {
         console.error('Detection error:', err);
         this.initPolygons();
         this.draw();
-        this.flash('Detection request failed (network or server crash) — using defaults', false);
+        this.flash('Detection request failed (network or server crash) — 102 using defaults', false);
       });
     },
 

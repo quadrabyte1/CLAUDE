@@ -354,7 +354,7 @@ def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
             image_path = candidate
             break
     if image_path is None:
-        raise FileNotFoundError(f"Image not found: {image_filename}")
+        raise FileNotFoundError(f"2 Image not found: {image_filename}")
 
     # Extract green polygon (first polygon of type 'green')
     green_poly = None

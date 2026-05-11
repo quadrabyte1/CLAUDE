@@ -10,6 +10,8 @@
   "grassAmplitude": 0.5,
   "grassSpacing": 2.4,
   "greenStyle": "terraced",
+  "flagOffsetXMm": -2,
+  "flagOffsetYMm": 2,
   "polygons": [
     {
       "name": "Green",

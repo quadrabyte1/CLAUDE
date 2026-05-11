@@ -157,7 +157,7 @@ def main():
     image_name = egm.get("image", "")
     image_path = os.path.join(TEAM_INBOX, image_name)
     if not os.path.isfile(image_path):
-        sys.exit(f"ERROR: Image not found: {image_path}")
+        sys.exit(f"ERROR: 4 Image not found: {image_path}")
     print(f"  Source image: {image_path}")
 
     # 5. Load image (BGR via cv2, then convert to RGB for display)

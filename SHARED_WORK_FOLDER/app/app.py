@@ -1142,7 +1142,7 @@ def find_contours():
             img_path = _candidate
             break
     if img_path is None:
-        return jsonify({"status": "error", "msg": f"Image not found: {image_name}"}), 400
+        return jsonify({"status": "error", "msg": f"1 Image not found: {image_name}"}), 400
 
     # The editor sends dense spline-sampled points — use them directly as the
     # green boundary polygon (Nx2 float64 array of (x, y) pixel coords).

@@ -1,6 +1,6 @@
 <mxfile host="Electron" pages="2">
   <diagram id="deck-plan-v15-p1" name="Page 1 — Framing Plan (v15)">
-    <mxGraphModel dx="4432" dy="1554" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="4988" dy="1865" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1654" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="Z8O4pT-hFiafL0M5wHAX-501" parent="0" value="Piers" />
@@ -371,7 +371,7 @@
             <mxPoint x="1188" y="866" as="targetPoint" />
           </mxGeometry>
         </mxCell>
-        <mxCell id="Z8O4pT-hFiafL0M5wHAX-502" parent="0" value="Girders" visible="0" />
+        <mxCell id="Z8O4pT-hFiafL0M5wHAX-502" parent="0" value="Girders" />
         <mxCell id="41" parent="Z8O4pT-hFiafL0M5wHAX-502" style="text;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=7;fontColor=#1a3a6b;strokeWidth=3;" value="&lt;b&gt;MID GIRDER&lt;br/&gt;(3) 2x10 PT&lt;br/&gt;@ x=11&#39;-6&quot;&lt;br/&gt;TOP-FLUSH&lt;br/&gt;@ 11in AG&lt;/b&gt;" vertex="1">
           <mxGeometry height="650" width="14" x="673" y="180" as="geometry" />
         </mxCell>

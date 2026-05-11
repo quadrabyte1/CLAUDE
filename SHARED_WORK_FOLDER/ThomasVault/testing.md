@@ -1,2 +1,0 @@
-
-Obsidian was just installed

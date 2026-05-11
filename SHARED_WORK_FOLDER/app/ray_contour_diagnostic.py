@@ -339,7 +339,7 @@ def main():
     image_name = egm_data.get("image", "")
     image_path = os.path.join(TEAM_INBOX, image_name)
     if not os.path.isfile(image_path):
-        raise FileNotFoundError(f"Image not found: {image_path}")
+        raise FileNotFoundError(f"3 Image not found: {image_path}")
     print(f"[ray_contour] Image: {image_path}")
 
     # Get green boundary spline

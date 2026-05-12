@@ -1,0 +1,3 @@
+*/*.pyc
+*/*.DS_Store
+SHARED_WORK_FOLDER/app/__pycache__/*

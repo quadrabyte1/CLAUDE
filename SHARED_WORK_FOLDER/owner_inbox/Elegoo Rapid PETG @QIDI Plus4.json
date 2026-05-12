@@ -1,0 +1,41 @@
+{
+    "type": "filament",
+    "setting_id": "UF_ElegooRapidPETG_Plus4",
+    "filament_id": "UF_ERPG4",
+    "name": "Elegoo Rapid PETG @X-Plus 4 0.4 nozzle",
+    "from": "User",
+    "instantiation": "true",
+
+    "filament_type": ["PETG"],
+    "filament_vendor": ["Elegoo"],
+    "filament_density": ["1.27"],
+
+    "nozzle_temperature_initial_layer": ["245"],
+    "nozzle_temperature": ["240"],
+    "nozzle_temperature_range_low": ["230"],
+    "nozzle_temperature_range_high": ["270"],
+
+    "textured_plate_temp_initial_layer": ["80"],
+    "textured_plate_temp": ["80"],
+    "supertack_plate_temp_initial_layer": ["70"],
+    "supertack_plate_temp": ["70"],
+
+    "close_fan_the_first_x_layers": ["3"],
+    "fan_min_speed": ["20"],
+    "fan_max_speed": ["40"],
+    "fan_cooling_layer_time": ["20"],
+    "overhang_fan_speed": ["90"],
+    "overhang_fan_threshold": ["10%"],
+
+    "filament_flow_ratio": ["0.95"],
+    "filament_max_volumetric_speed": ["18"],
+
+    "pressure_advance": ["0.055"],
+
+    "slow_down_layer_time": ["10"],
+
+    "temperature_vitrification": ["70"],
+    "box_temperature_range_high": ["45"],
+
+    "compatible_printers": []
+}

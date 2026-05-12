@@ -19,12 +19,12 @@
 </div>
 
 {# ── Stats cards ─────────────────────────────────────────────── #}
-<div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-10">
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-3">
   {% set cards = [
     ('Team members', team|length, 'bg-blue-50 text-blue-600'),
-    ('Total tasks', task_counts.total, 'bg-gray-50 text-gray-600'),
-    ('In progress', task_counts.in_progress, 'bg-yellow-50 text-yellow-700'),
-    ('Completed', task_counts.done, 'bg-green-50 text-green-600'),
+    ('Total tasks', task_counts.total|default(0), 'bg-gray-50 text-gray-600'),
+    ('In progress', task_counts.in_progress|default(0), 'bg-yellow-50 text-yellow-700'),
+    ('Completed', task_counts.done|default(0), 'bg-green-50 text-green-600'),
     ('Journal entries', journal_count, 'bg-purple-50 text-purple-600'),
   ] %}
   {% for label, value, colors in cards %}
@@ -34,6 +34,16 @@
   </div>
   {% endfor %}
 </div>
+{# ── Task reconciliation sub-line ─────────────────────────── #}
+<p class="text-xs text-notion-muted mb-10 pl-0.5">
+  {{ task_counts.total|default(0) }} total tasks —
+  {{ task_counts.done|default(0) }} done
+  {% if task_counts.in_progress|default(0) %} · {{ task_counts.in_progress }} in progress{% endif %}
+  {% if task_counts.pending|default(0) %} · {{ task_counts.pending }} pending{% endif %}
+  {% if task_counts.cancelled|default(0) %} · {{ task_counts.cancelled }} cancelled{% endif %}
+  {%- set _accounted = (task_counts.done|default(0)) + (task_counts.in_progress|default(0)) + (task_counts.pending|default(0)) + (task_counts.cancelled|default(0)) %}
+  {%- if task_counts.total|default(0) != _accounted %} · {{ task_counts.total|default(0) - _accounted }} other{% endif %}
+</p>
 
 {# ── Team — full width ────────────────────────────────────────── #}
 <div class="mb-10">
@@ -53,7 +63,7 @@
           {{ m.name[0] }}
         </div>
         <div class="flex-1 min-w-0">
-          <div class="font-medium text-sm truncate">{{ m.name }}</div>
+          <div class="font-medium text-sm truncate">{{ m.name }}{% if member_active_counts.get(m.id) %}<span class="text-notion-muted font-normal"> ({{ member_active_counts[m.id] }})</span>{% endif %}</div>
           <div class="text-xs text-notion-muted truncate">{{ m.role }}</div>
           {% if m.id in busy_tasks %}
           <div class="text-xs text-yellow-700 font-medium mt-0.5">Working for {{ busy_tasks[m.id] | elapsed }}</div>

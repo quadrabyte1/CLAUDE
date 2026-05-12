@@ -17,6 +17,10 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
+# ── Display baseline for task counts ──────────────────────────────────────
+# Dashboard task counts only reflect tasks created after this id — set 2026-05-12 to
+# zero out the historical/internal-bookkeeping backlog; raise this value to re-zero later.
+_TASK_COUNT_BASELINE_MAX_ID = 433
 
 # ── Database initialisation ────────────────────────────────────────────────
 
@@ -291,11 +295,25 @@ def dashboard():
             "SELECT * FROM journal_entries ORDER BY date DESC LIMIT 1",
             one=True,
         )
-    task_counts = {
-        "total": query("SELECT COUNT(*) as c FROM tasks", one=True)["c"],
-        "pending": query("SELECT COUNT(*) as c FROM tasks WHERE status='pending'", one=True)["c"],
-        "in_progress": query("SELECT COUNT(*) as c FROM tasks WHERE status='in_progress'", one=True)["c"],
-        "done": query("SELECT COUNT(*) as c FROM tasks WHERE status='done'", one=True)["c"],
+    _status_rows = query(
+        "SELECT status, COUNT(*) AS c FROM tasks WHERE id > ? GROUP BY status",
+        (_TASK_COUNT_BASELINE_MAX_ID,),
+    )
+    task_counts = {"total": sum(r["c"] for r in _status_rows)}
+    for r in _status_rows:
+        task_counts[r["status"]] = r["c"]
+    # Ensure keys are always present even if no rows exist
+    for _s in ("pending", "in_progress", "done", "cancelled"):
+        task_counts.setdefault(_s, 0)
+
+    # Per-member in-progress count (full table — reflects reality, not baselined)
+    member_active_counts = {
+        row["assigned_to"]: row["c"]
+        for row in query(
+            "SELECT assigned_to, COUNT(*) AS c FROM tasks"
+            " WHERE status='in_progress' AND assigned_to IS NOT NULL"
+            " GROUP BY assigned_to"
+        )
     }
     journal_count = query("SELECT COUNT(*) as c FROM journal_entries", one=True)["c"]
 
@@ -322,11 +340,12 @@ def dashboard():
 
     research_docs = _collect_research_docs()
 
-    dashboard_version = "v1.2"  # bump this when layout/functionality changes
+    dashboard_version = "v1.6"  # bump this when layout/functionality changes
     return render("dashboard.html", team=team, activity=activity,
                    journal=journal, task_counts=task_counts,
                    journal_count=journal_count, updated_at=updated_at,
                    busy_tasks=busy_tasks, recently_done=recently_done,
+                   member_active_counts=member_active_counts,
                    research_docs=research_docs,
                    dashboard_version=dashboard_version)
 
@@ -533,6 +552,41 @@ _EGM_BASE = os.path.normpath(
 _TEAM_INBOX = os.path.join(os.path.dirname(__file__), "..", "team_inbox")
 
 
+def _find_image_path(image_name: str, preferred_course: str = "") -> str | None:
+    """Resolve an image filename to an absolute path.
+
+    Search order:
+      1. ``preferred_course``/Images/ (the image's declared source course)
+      2. All other course Images/ folders under _EGM_BASE (cross-course fallback)
+      3. team_inbox/ (legacy location)
+      4. owner_inbox/ (legacy location)
+
+    Returns the absolute path string, or None if not found.
+    """
+    search_dirs = []
+    # 1. Preferred (source) course first
+    if preferred_course and os.path.isdir(_EGM_BASE):
+        search_dirs.append(os.path.abspath(os.path.join(_EGM_BASE, preferred_course, "Images")))
+    # 2. All course Images/ folders (catches cross-course references)
+    if os.path.isdir(_EGM_BASE):
+        for entry in sorted(os.listdir(_EGM_BASE)):
+            if entry == preferred_course:
+                continue  # already added above
+            candidate_dir = os.path.abspath(os.path.join(_EGM_BASE, entry, "Images"))
+            if os.path.isdir(candidate_dir):
+                search_dirs.append(candidate_dir)
+    # 3. Legacy locations
+    search_dirs.append(os.path.abspath(_TEAM_INBOX))
+    _owner_inbox = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "owner_inbox"))
+    search_dirs.append(os.path.abspath(_owner_inbox))
+
+    for folder in search_dirs:
+        candidate = os.path.join(folder, image_name)
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def _collect_course_images():
     """
     Return a list of image dicts from all GolfCourses/*/Images/ folders.
@@ -736,25 +790,18 @@ def detect_boundaries():
     data = request.get_json()
     image_name = data.get("image", "")
     course = data.get("course", "")
+    image_course = data.get("imageCourse", "") or course
     if not image_name:
         return jsonify({"status": "error", "msg": "No image specified"}), 400
 
-    # Search course Images/ folder first, then team_inbox as fallback
-    img_path = None
-    search_dirs = []
-    if course and os.path.isdir(_EGM_BASE):
-        search_dirs.append(os.path.join(_EGM_BASE, course, "Images"))
-    search_dirs.append(os.path.abspath(_TEAM_INBOX))
-    for search_dir in search_dirs:
-        candidate = os.path.join(search_dir, image_name)
-        if os.path.isfile(candidate):
-            img_path = candidate
-            break
+    # Resolve image to absolute path, searching all course folders as fallback
+    img_path = _find_image_path(image_name, preferred_course=image_course)
+    print(f"[detect_boundaries] image lookup: name={image_name!r} preferred_course={image_course!r} -> {img_path!r}")
     if img_path is None:
-        return jsonify({"status": "error", "msg": "Image not found"}), 400
+        return jsonify({"status": "error", "msg": f"Image not found: {image_name}"}), 400
     img = cv2.imread(img_path)
     if img is None:
-        return jsonify({"status": "error", "msg": "Cannot read image"}), 400
+        return jsonify({"status": "error", "msg": f"Cannot read image: {img_path}"}), 400
 
     h, w = img.shape[:2]
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -1125,24 +1172,17 @@ def find_contours():
     data = request.get_json()
     image_name = data.get("image", "")
     course = data.get("course", "")
+    image_course = data.get("imageCourse", "") or course
     green_points = data.get("green_points", [])
 
     if not image_name or not green_points:
         return jsonify({"status": "error", "msg": "Need image and green_points"}), 400
 
-    # Search course Images/ folder first, then team_inbox as fallback
-    img_path = None
-    search_dirs = []
-    if course and os.path.isdir(_EGM_BASE):
-        search_dirs.append(os.path.join(_EGM_BASE, course, "Images"))
-    search_dirs.append(os.path.abspath(_TEAM_INBOX))
-    for _search_dir in search_dirs:
-        _candidate = os.path.join(_search_dir, image_name)
-        if os.path.isfile(_candidate):
-            img_path = _candidate
-            break
+    # Resolve image to absolute path, searching all course folders as fallback
+    img_path = _find_image_path(image_name, preferred_course=image_course)
+    print(f"[find_contours] image lookup: name={image_name!r} preferred_course={image_course!r} -> {img_path!r}")
     if img_path is None:
-        return jsonify({"status": "error", "msg": f"1 Image not found: {image_name}"}), 400
+        return jsonify({"status": "error", "msg": f"Image not found: {image_name}"}), 400
 
     # The editor sends dense spline-sampled points — use them directly as the
     # green boundary polygon (Nx2 float64 array of (x, y) pixel coords).
@@ -1209,11 +1249,11 @@ def generate_models():
     # Look for EGM in course EGMs/ folder first, then owner_inbox fallback
     egm_path = None
     if os.path.isdir(_EGM_BASE):
-        candidate = os.path.join(_EGM_BASE, course, "EGMs", egm_fname)
+        candidate = os.path.abspath(os.path.join(_EGM_BASE, course, "EGMs", egm_fname))
         if os.path.exists(candidate):
             egm_path = candidate
     if egm_path is None:
-        _owner_inbox = os.path.join(os.path.dirname(__file__), "..", "owner_inbox")
+        _owner_inbox = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "owner_inbox"))
         candidate = os.path.join(_owner_inbox, egm_fname)
         if os.path.exists(candidate):
             egm_path = candidate
@@ -1222,6 +1262,8 @@ def generate_models():
             "status": "error",
             "msg": f"EGM file not found: {egm_fname}"
         }), 404
+
+    print(f"[generate_models] EGM path:        {egm_path}")
 
     try:
         three_mf_path = run_pipeline(egm_path)
@@ -1235,11 +1277,15 @@ def generate_models():
     else:
         # Fallback: old-style name without serial (file may not exist yet)
         three_mf_name = f"{course} (Hole {hole}).3mf"
-        three_mf_dir = os.path.join(_EGM_BASE, course, "3MFs")
+        three_mf_dir = os.path.abspath(os.path.join(_EGM_BASE, course, "3MFs"))
         three_mf_path = os.path.join(three_mf_dir, three_mf_name)
         if not os.path.exists(three_mf_path):
-            _owner_inbox = os.path.join(os.path.dirname(__file__), "..", "owner_inbox")
+            _owner_inbox = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "owner_inbox")
+            )
             three_mf_path = os.path.join(_owner_inbox, three_mf_name)
+
+    print(f"[generate_models] output 3MF path: {os.path.abspath(three_mf_path)}")
 
     result = {
         "name": three_mf_name,

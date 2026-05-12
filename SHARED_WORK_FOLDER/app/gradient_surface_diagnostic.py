@@ -342,19 +342,40 @@ def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
 
     image_filename = data["image"]
     course = data.get("course", "")
-    # Try course Images/ folder first, then team_inbox, then owner_inbox (fallbacks)
+    # imageCourse records which course folder the image file actually lives in.
+    # This may differ from ``course`` when the user selected an image from a
+    # different course's folder when creating the project.
+    image_course = data.get("imageCourse", "") or course
+
+    # Build search list: imageCourse first, then all other course folders,
+    # then legacy locations.
     image_path = None
     search_dirs = []
-    if course:
-        search_dirs.append(course_paths(course)["images"])
+    if image_course:
+        search_dirs.append(os.path.abspath(course_paths(image_course)["images"]))
+    # Also try the project's own course folder (in case imageCourse is stale)
+    if course and course != image_course:
+        search_dirs.append(os.path.abspath(course_paths(course)["images"]))
+    # Fallback: scan all other course Images/ dirs to handle cross-course references
+    if os.path.isdir(EGM_BASE):
+        for entry in sorted(os.listdir(EGM_BASE)):
+            if entry in (image_course, course):
+                continue  # already added above
+            candidate_dir = os.path.abspath(os.path.join(EGM_BASE, entry, "Images"))
+            if os.path.isdir(candidate_dir):
+                search_dirs.append(candidate_dir)
     search_dirs.extend([TEAM_INBOX, OWNER_INBOX])
+
     for folder in search_dirs:
         candidate = os.path.join(folder, image_filename)
         if os.path.exists(candidate):
-            image_path = candidate
+            image_path = os.path.abspath(candidate)
             break
     if image_path is None:
-        raise FileNotFoundError(f"2 Image not found: {image_filename}")
+        raise FileNotFoundError(
+            f"Image not found: {image_filename!r} — searched: "
+            + ", ".join(search_dirs)
+        )
 
     # Extract green polygon (first polygon of type 'green')
     green_poly = None
@@ -4291,9 +4312,12 @@ def run_pipeline(egm_path: str) -> str:
     print("=" * 60)
 
     # ── 1. Load EGM and image ───────────────────────────────────────────────
+    egm_path = os.path.abspath(egm_path)
     print(f"\n[1] EGM: {os.path.basename(egm_path)}")
+    print(f"    [generate] EGM absolute path:   {egm_path}")
     _egm_data, image_path, green_boundary_px = load_egm(egm_path)
     print(f"    Image: {os.path.basename(image_path)}")
+    print(f"    [generate] input image:         {image_path}")
     print(f"    Green boundary: {len(green_boundary_px)} spline points")
 
     img = cv2.imread(image_path)
@@ -4445,10 +4469,12 @@ def run_pipeline(egm_path: str) -> str:
     # into the course folder. STLs are not deliverables — only the final 3MF
     # matters. All intermediate meshes stay in memory.
     _cpaths = course_paths(course) if course != "unknown" else None
-    _3mf_dir  = _cpaths["3mfs"]   if _cpaths else OWNER_INBOX
-    _img_dir  = _cpaths["images"] if _cpaths else OWNER_INBOX
+    _3mf_dir  = os.path.abspath(_cpaths["3mfs"]   if _cpaths else OWNER_INBOX)
+    _img_dir  = os.path.abspath(_cpaths["images"] if _cpaths else OWNER_INBOX)
     os.makedirs(_3mf_dir,  exist_ok=True)
     os.makedirs(_img_dir,  exist_ok=True)
+    print(f"    [generate] output 3MF dir:      {_3mf_dir}")
+    print(f"    [generate] output images dir:   {_img_dir}")
 
     # ── 5. Save diagnostic images ───────────────────────────────────────────
     # Diagnostic PNG writes (arrow_directions, height_map) disabled to keep
@@ -4715,7 +4741,8 @@ def run_pipeline(egm_path: str) -> str:
     serial_number = _peek_serial(course)
     # Embed serial in filename: "Course (Hole N) [SN].3mf"
     fname_3mf = f"{course} (Hole {hole}) [{serial_number}].3mf"
-    path_3mf = os.path.join(_3mf_dir, fname_3mf)
+    path_3mf = os.path.abspath(os.path.join(_3mf_dir, fname_3mf))
+    print(f"    [generate] output 3MF file:     {path_3mf}")
 
     scene = trimesh.Scene()
     scene_names = []
@@ -4769,7 +4796,7 @@ def run_pipeline(egm_path: str) -> str:
     )
 
     scene.export(path_3mf)
-    print(f"  Saved: {path_3mf}")
+    print(f"  [generate] output 3MF written:  {path_3mf}")
     print(f"  Objects in 3MF ({len(scene_names)}):")
     for name in scene_names:
         print(f"    - {name}")

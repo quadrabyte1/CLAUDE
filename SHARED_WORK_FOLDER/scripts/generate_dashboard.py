@@ -154,6 +154,19 @@ def generate_recent_activity(conn: sqlite3.Connection) -> str:
 
 # ── task-index.md ──────────────────────────────────────────────────────────
 
+def _task_count_summary(conn: sqlite3.Connection) -> str:
+    """Return a one-line summary of task counts by status, e.g.:
+    Tasks: 427 total — 420 done, 3 cancelled, 3 in_progress, 1 pending
+    Driven entirely from the DB so new statuses appear automatically.
+    """
+    total = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+    by_status = conn.execute(
+        "SELECT status, COUNT(*) AS cnt FROM tasks GROUP BY status ORDER BY cnt DESC"
+    ).fetchall()
+    parts = ", ".join(f"{row[1]} {row[0]}" for row in by_status)
+    return f"**Tasks: {total} total — {parts}**\n\n"
+
+
 def generate_task_index(conn: sqlite3.Connection) -> str:
     rows = conn.execute(
         """
@@ -170,6 +183,7 @@ def generate_task_index(conn: sqlite3.Connection) -> str:
 
     out = auto_header("Task Index")
     out += "# Task Index (open tasks by team member)\n\n"
+    out += _task_count_summary(conn)
 
     if not rows:
         out += "_No open tasks right now._\n"

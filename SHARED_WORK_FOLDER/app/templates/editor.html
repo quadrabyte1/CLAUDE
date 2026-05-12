@@ -8,7 +8,7 @@
   {# ── Header ─────────────────────────────────────────────── #}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.18</span></h1>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.19</span></h1>
       <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
     </div>
   </div>
@@ -55,6 +55,10 @@
             class="text-sm font-medium"></span>
       <span x-show="statusMsg && statusFilename" x-text="statusFilename" x-transition
             class="text-sm bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"></span>
+      <button x-show="statusMsg" @click="flashDismiss()"
+              title="Dismiss"
+              :class="statusOk ? 'text-green-500 hover:text-green-700' : 'text-red-400 hover:text-red-600'"
+              class="text-sm leading-none px-0.5 transition-colors">&times;</button>
     </div>
   </div>
 
@@ -300,6 +304,7 @@ function polygonEditor() {
   return {
     selectedImage: '{{ image | e }}',
     selectedImageUrl: '',
+    selectedImageCourse: '',  // source course folder the selected image lives in (may differ from courseName)
     holeName: '',
     courseName: '',
 
@@ -358,6 +363,7 @@ function polygonEditor() {
     statusMsg: '',
     statusOk: true,
     statusFilename: '',
+    statusSticky: false,
     generating: false,
     _flashTimer: null,
 
@@ -1519,6 +1525,7 @@ function polygonEditor() {
         course: this.courseName.trim(),
         hole: this.holeName.trim(),
         image: this.selectedImage,
+        imageCourse: this.selectedImageCourse || this.courseName.trim(),
         imageSize: { width: this.imgW, height: this.imgH },
         contourStep: this.contourStep,
         grassAmplitude: this.grassAmplitude,
@@ -1631,8 +1638,9 @@ function polygonEditor() {
         this.courseName = data.course;
         this.holeName = data.hole;
         this.selectedImage = data.image;
-        this.selectedImageUrl = data.course
-          ? '/egm/images/' + encodeURIComponent(data.course) + '/' + encodeURIComponent(data.image)
+        this.selectedImageCourse = data.imageCourse || data.course || '';
+        this.selectedImageUrl = this.selectedImageCourse
+          ? '/egm/images/' + encodeURIComponent(this.selectedImageCourse) + '/' + encodeURIComponent(data.image)
           : '/team_inbox/' + encodeURIComponent(data.image);
         this.contourStep = data.contourStep != null ? data.contourStep : 10.0;
         this.grassAmplitude = data.grassAmplitude != null ? data.grassAmplitude : 0.5;
@@ -1663,6 +1671,7 @@ function polygonEditor() {
       this.selectedImage = this.dlgImage;
       const matchedImg = this.dlgImages.find(i => i.filename === this.dlgImage);
       this.selectedImageUrl = matchedImg ? matchedImg.url : '';
+      this.selectedImageCourse = (matchedImg && matchedImg.course) ? matchedImg.course : '';
       this.showNewDialog = false;
       // Fetch print constants so the fringe-expansion zone is correctly sized
       try {
@@ -1710,6 +1719,7 @@ function polygonEditor() {
           body: JSON.stringify({
             image: this.selectedImage,
             course: this.courseName,
+            imageCourse: this.selectedImageCourse || this.courseName,
             green_points: greenPoints,
             imageSize: { width: this.imgW, height: this.imgH },
           }),
@@ -1766,6 +1776,7 @@ function polygonEditor() {
         course: this.courseName.trim(),
         hole: this.holeName.trim(),
         image: this.selectedImage,
+        imageCourse: this.selectedImageCourse || this.courseName.trim(),
         imageSize: { width: this.imgW, height: this.imgH },
         contourStep: this.contourStep,
         grassAmplitude: this.grassAmplitude,
@@ -1796,12 +1807,31 @@ function polygonEditor() {
       }
     },
 
-    flash(msg, ok, filename = '', durationMs = 3000) {
+    // flash(msg, ok, filename, durationMs)
+    //   ok=true  (info/success): auto-dismisses after durationMs (default 4500ms)
+    //   ok=false (error):        sticky — stays until the user clicks ×, unless an
+    //                            explicit durationMs is passed (e.g. a 500ms transient)
+    flash(msg, ok, filename = '', durationMs = null) {
       if (this._flashTimer) { clearTimeout(this._flashTimer); this._flashTimer = null; }
       this.statusMsg = msg;
       this.statusOk = ok;
       this.statusFilename = filename;
-      this._flashTimer = setTimeout(() => { this.statusMsg = ''; this.statusFilename = ''; this._flashTimer = null; }, durationMs);
+      // Determine auto-dismiss duration:
+      //   • caller supplied explicit ms → honour it
+      //   • ok=true  (info/success)     → 4500ms
+      //   • ok=false (error)            → sticky (no timer)
+      const ms = durationMs !== null ? durationMs : (ok ? 4500 : null);
+      this.statusSticky = (ms === null);
+      if (ms !== null) {
+        this._flashTimer = setTimeout(() => { this.statusMsg = ''; this.statusFilename = ''; this._flashTimer = null; }, ms);
+      }
+    },
+
+    flashDismiss() {
+      if (this._flashTimer) { clearTimeout(this._flashTimer); this._flashTimer = null; }
+      this.statusMsg = '';
+      this.statusFilename = '';
+      this.statusSticky = false;
     },
 
     handleKey(e) {

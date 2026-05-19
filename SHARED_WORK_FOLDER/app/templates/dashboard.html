@@ -1,10 +1,61 @@
 {% extends "base.html" %}
 <!-- Dashboard version: bump dashboard_version in app.py when layout/functionality changes -->
 {% block title %}Dashboard — AI Team Workspace{% endblock %}
+
+{# Remove the max-w-4xl cap — dashboard fills the full main column #}
+{% block content_width %}w-full max-w-none{% endblock %}
+
 {% block content %}
 
+{# ── Container-query + responsive grid styles ──────────────────────────── #}
+<style>
+  /* Page grid: fills full width, cards auto-fit at 280px min */
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+  }
+
+  /* Each card is a container so children can react to card width */
+  .team-card {
+    container-type: inline-size;
+    container-name: card;
+  }
+
+  /* ── Tier 2: medium card (≥ 340px) — model badge row + elapsed ── */
+  .card-tier-2 { display: none; }
+  @container card (min-width: 340px) {
+    .card-tier-2 { display: flex; }
+  }
+
+  /* ── Tier 3: wide card (≥ 440px) — current task snippet ── */
+  .card-tier-3 { display: none; }
+  @container card (min-width: 440px) {
+    .card-tier-3 { display: block; }
+  }
+
+  /* ── Tier 4: very wide card (≥ 560px) — last activity + full description ── */
+  .card-tier-4 { display: none; }
+  @container card (min-width: 560px) {
+    .card-tier-4 { display: block; }
+  }
+
+  /* Truncation helpers */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>
+
 <div id="dashboard-poll"
-     class="bg-gradient-to-br from-blue-50 via-white to-white rounded-xl p-1"
      hx-get="/"
      hx-trigger="every 750ms"
      hx-target="#dashboard-poll"
@@ -52,34 +103,77 @@
     <a href="/team" hx-get="/team" hx-target="#main-content" hx-swap="innerHTML settle:150ms" hx-push-url="true"
        class="text-xs text-notion-accent hover:underline">View all</a>
   </div>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+
+  <div class="team-grid">
     {% for m in team %}
-    <div class="p-3 rounded-lg border transition-default
-      {% if m.id in busy_tasks %}bg-yellow-100 border-yellow-300 hover:bg-yellow-200
-      {% elif m.id in recently_done %}task-recently-done border-green-200
+    {%- set is_busy = m.id in busy_tasks %}
+    {%- set is_done = m.id in recently_done %}
+    {%- set cur_task = (member_current_tasks | default({})).get(m.id) %}
+    {%- set last_act = (member_last_activity | default({})).get(m.name) %}
+    <div class="team-card rounded-lg border transition-default
+      {% if is_busy %}bg-yellow-50 border-yellow-300 hover:bg-yellow-100
+      {% elif is_done %}task-recently-done border-green-200
       {% else %}border-notion-border hover:bg-notion-hover{% endif %}">
-      <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-full bg-notion-accent/10 text-notion-accent flex items-center justify-center text-sm font-semibold flex-shrink-0">
-          {{ m.name[0] }}
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="font-medium text-sm truncate">{{ m.name }}{% if member_active_counts.get(m.id) %}<span class="text-notion-muted font-normal"> ({{ member_active_counts[m.id] }})</span>{% endif %}</div>
-          <div class="text-xs text-notion-muted truncate">{{ m.role }}</div>
-          {% if m.id in busy_tasks %}
-          <div class="text-xs text-yellow-700 font-medium mt-0.5">Working for {{ busy_tasks[m.id] | elapsed }}</div>
-          {% endif %}
-        </div>
-        <div class="flex flex-col items-end gap-1 flex-shrink-0">
-          <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full
-            {% if m.model == 'opus' %}bg-purple-50 text-purple-600{% elif m.model == 'sonnet' %}bg-blue-50 text-blue-600{% elif m.model == 'haiku' %}bg-emerald-50 text-emerald-600{% else %}bg-gray-100 text-gray-500{% endif %}">
-            {{ m.model | capitalize if m.model else 'Sonnet' }}
-          </span>
-          <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
-            {{ 'bg-green-50 text-green-700' if m.status == 'active' else 'bg-gray-100 text-gray-500' }}">
+
+      <div class="p-3">
+
+        {# ── TIER 1: Always visible — avatar + name + role + status dot ── #}
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full bg-notion-accent/10 text-notion-accent flex items-center justify-center text-sm font-semibold flex-shrink-0 mt-0.5">
+            {{ m.name[0] }}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="font-semibold text-sm text-notion-text truncate">{{ m.name }}</span>
+              {% if member_active_counts.get(m.id) %}
+              <span class="text-notion-muted text-xs font-normal">({{ member_active_counts[m.id] }} active)</span>
+              {% endif %}
+            </div>
+            <div class="text-xs text-notion-muted truncate leading-snug mt-0.5">{{ m.role }}</div>
+          </div>
+          {# Status dot — always visible #}
+          <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full flex-shrink-0
+              {{ 'bg-green-50 text-green-700' if m.status == 'active' else 'bg-gray-100 text-gray-500' }}">
             <span class="w-1.5 h-1.5 rounded-full {{ 'bg-green-500' if m.status == 'active' else 'bg-gray-400' }}"></span>
             {{ m.status }}
           </span>
         </div>
+
+        {# ── TIER 2: card ≥ 340px — model badge + elapsed time ── #}
+        <div class="card-tier-2 items-center gap-2 mt-2 flex-wrap">
+          <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full
+            {% if m.model == 'opus' %}bg-purple-50 text-purple-600{% elif m.model == 'sonnet' %}bg-blue-50 text-blue-600{% elif m.model == 'haiku' %}bg-emerald-50 text-emerald-600{% else %}bg-gray-100 text-gray-500{% endif %}">
+            {{ m.model | capitalize if m.model else 'Sonnet' }}
+          </span>
+          {% if is_busy %}
+          <span class="text-xs text-yellow-700 font-medium">Working for {{ busy_tasks[m.id] | elapsed }}</span>
+          {% elif is_done %}
+          <span class="text-xs text-green-700 font-medium">Just finished</span>
+          {% else %}
+          <span class="text-xs text-notion-muted">Idle</span>
+          {% endif %}
+        </div>
+
+        {# ── TIER 3: card ≥ 440px — current task title + short snippet ── #}
+        {% if cur_task %}
+        <div class="card-tier-3 mt-2.5 pt-2.5 border-t border-notion-border/60">
+          <div class="text-xs font-medium text-notion-muted uppercase tracking-wide mb-1">Current task</div>
+          <div class="text-xs text-notion-text font-medium leading-snug truncate">{{ cur_task.title }}</div>
+          {% if cur_task.description %}
+          <div class="text-xs text-notion-muted mt-0.5 line-clamp-2 leading-snug">{{ cur_task.description }}</div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        {# ── TIER 4: card ≥ 560px — last activity details ── #}
+        {% if last_act %}
+        <div class="card-tier-4 mt-2.5 pt-2.5 border-t border-notion-border/60">
+          <div class="text-xs font-medium text-notion-muted uppercase tracking-wide mb-1">Last activity</div>
+          <div class="text-xs text-notion-text line-clamp-3 leading-snug">{{ last_act.details }}</div>
+          <div class="text-xs text-notion-muted mt-1 opacity-70">{{ last_act.created_at[:10] }}</div>
+        </div>
+        {% endif %}
+
       </div>
     </div>
     {% endfor %}

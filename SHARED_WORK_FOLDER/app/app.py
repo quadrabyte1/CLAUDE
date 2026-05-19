@@ -340,12 +340,39 @@ def dashboard():
 
     research_docs = _collect_research_docs()
 
-    dashboard_version = "v1.6"  # bump this when layout/functionality changes
+    # Per-member current in-progress task (most recently started)
+    member_current_tasks = {
+        row["assigned_to"]: {"title": row["title"], "description": row["description"] or ""}
+        for row in query(
+            "SELECT assigned_to, title, description FROM tasks"
+            " WHERE status='in_progress' AND assigned_to IS NOT NULL AND started_at IS NOT NULL"
+            " GROUP BY assigned_to HAVING started_at = MAX(started_at)"
+        )
+    }
+
+    # Per-member last activity entry (most recent by created_at)
+    _activity_rows = query(
+        "SELECT actor, action, details, created_at FROM activity_log"
+        " ORDER BY created_at DESC LIMIT 200"
+    )
+    member_last_activity = {}
+    for _row in _activity_rows:
+        _actor = _row["actor"]
+        if _actor and _actor not in member_last_activity:
+            member_last_activity[_actor] = {
+                "action": _row["action"],
+                "details": _row["details"] or "",
+                "created_at": _row["created_at"],
+            }
+
+    dashboard_version = "v1.7.1"  # bump this when layout/functionality changes
     return render("dashboard.html", team=team, activity=activity,
                    journal=journal, task_counts=task_counts,
                    journal_count=journal_count, updated_at=updated_at,
                    busy_tasks=busy_tasks, recently_done=recently_done,
                    member_active_counts=member_active_counts,
+                   member_current_tasks=member_current_tasks,
+                   member_last_activity=member_last_activity,
                    research_docs=research_docs,
                    dashboard_version=dashboard_version)
 
@@ -634,7 +661,7 @@ def list_images():
     return jsonify(_collect_course_images())
 
 
-@app.route("/api/courses")
+@app.route("/api/courses", methods=["GET"])
 def list_courses():
     """Return sorted list of existing course folder names under GolfCourses/.
 
@@ -651,6 +678,43 @@ def list_courses():
     resp = jsonify({"courses": courses})
     resp.headers["Cache-Control"] = "no-store"
     return resp
+
+
+@app.route("/api/courses", methods=["POST"])
+def create_course():
+    """Create a new course folder under GolfCourses/ with standard subfolders.
+
+    Expects JSON: {"name": "<course folder name>"}
+    Returns: {"status": "ok", "course": "<name>"} on success.
+    Rejects: empty name, path separators, leading dot, or already-exists (409).
+    Subfolders created: 3MFs/, EGMs/, Images/ (no STLs/).
+    """
+    data = request.get_json(force=True) or {}
+    name = (data.get("name") or "").strip()
+
+    # Validate
+    if not name:
+        return jsonify({"status": "error", "msg": "Course name must not be empty."}), 400
+    if "/" in name or "\\" in name:
+        return jsonify({"status": "error", "msg": "Course name must not contain path separators."}), 400
+    if name.startswith("."):
+        return jsonify({"status": "error", "msg": "Course name must not start with a dot."}), 400
+
+    course_root = os.path.normpath(os.path.join(_EGM_BASE, name))
+    # Guard against path traversal
+    if not course_root.startswith(os.path.normpath(_EGM_BASE) + os.sep):
+        return jsonify({"status": "error", "msg": "Invalid course name."}), 400
+
+    if os.path.exists(course_root):
+        return jsonify({"status": "error", "msg": f"Folder '{name}' already exists."}), 409
+
+    try:
+        for sub in ("3MFs", "EGMs", "Images"):
+            os.makedirs(os.path.join(course_root, sub), exist_ok=True)
+    except OSError as exc:
+        return jsonify({"status": "error", "msg": str(exc)}), 500
+
+    return jsonify({"status": "ok", "course": name})
 
 
 @app.route("/team_inbox/<path:filename>")
@@ -1582,7 +1646,7 @@ def plaque_page():
         last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
     except Exception:
         last_modified = ""
-    return render("plaque.html", plaque_version="v3.0", last_modified=last_modified)
+    return render("plaque.html", plaque_version="v3.3", last_modified=last_modified)
 
 
 @app.route("/api/fonts")
@@ -1592,62 +1656,52 @@ def api_fonts():
 
 
 def _slug_from_lines(line1: str, line2: str) -> str:
-    return re.sub(r'[^\w\- ]+', '', (line2 or line1)).strip().replace(' ', '_') or 'custom_plate'
+    return re.sub(r'[^\w\- ]+', '', (line1 or line2)).strip().replace(' ', '_') or 'custom_plate'
 
 
-def _match_course_from_line(line1: str) -> str | None:
-    """Find the longest existing GolfCourses/ subfolder whose name appears as a
-    whole-word substring of line1 (case-insensitive). Returns the folder's
-    actual name, or None if no match."""
+def _normalize_course_key(s: str) -> str:
+    """Normalize a course name or user input for comparison.
+
+    Rules applied in order:
+    1. Lowercase.
+    2. Replace en-dash (U+2013), em-dash (U+2014), and minus (U+2212) with ASCII hyphen.
+    3. Collapse runs of whitespace to a single space.
+    4. Strip all spaces immediately around hyphens so "a - b", "a-b", "a -b" all
+       become the canonical form "a-b" (no spaces around hyphen).
+    5. Strip leading/trailing whitespace.
+    """
+    s = s.lower()
+    # Step 2 – Unicode dash variants → ASCII hyphen
+    s = s.replace('–', '-').replace('—', '-').replace('−', '-')
+    # Step 3 – collapse whitespace
+    s = re.sub(r'\s+', ' ', s)
+    # Step 4 – remove spaces around hyphens
+    s = re.sub(r'\s*-\s*', '-', s)
+    # Step 5 – strip edges
+    return s.strip()
+
+
+def _match_courses_from_line(course_line: str) -> list[str]:
+    """Find all existing GolfCourses/ subfolders whose normalized name is a
+    case-insensitive substring of the normalized course_line, or vice-versa.
+    Returns all matches sorted longest-first so the caller can decide whether
+    the result is unambiguous (1 match), ambiguous (>1), or absent (0)."""
     from generate_stl_3mf import EGM_BASE
-    if not line1 or not os.path.isdir(EGM_BASE):
-        return None
+    if not course_line or not os.path.isdir(EGM_BASE):
+        return []
     try:
         entries = [e for e in os.listdir(EGM_BASE)
                    if os.path.isdir(os.path.join(EGM_BASE, e)) and not e.startswith('.')]
     except OSError:
-        return None
+        return []
+    needle = _normalize_course_key(course_line)
     matches: list[str] = []
     for name in entries:
-        pattern = r'\b' + re.escape(name) + r'\b'
-        if re.search(pattern, line1, flags=re.IGNORECASE):
+        haystack = _normalize_course_key(name)
+        if needle in haystack or haystack in needle:
             matches.append(name)
-    if not matches:
-        return None
     matches.sort(key=len, reverse=True)
-    return matches[0]
-
-
-def _suggest_course_from_line(line1: str) -> str:
-    """Derive a suggested course folder name from line1 by trimming common
-    suffixes (case-insensitive) such as 'Golf Course', 'Country Club', etc."""
-    suffixes = [" Golf Course", " Country Club", " Golf Club", " GC", " CC"]
-    s = (line1 or "").strip()
-    changed = True
-    while changed:
-        changed = False
-        for sfx in suffixes:
-            if s.lower().endswith(sfx.lower()):
-                s = s[: -len(sfx)].strip()
-                changed = True
-                break
-    return s or (line1 or "").strip()
-
-
-_COURSE_NAME_RE = re.compile(r'^[^/\\]+$')
-
-
-def _validate_course_name(name: str) -> tuple[bool, str]:
-    s = (name or "").strip()
-    if not s:
-        return False, "Course name cannot be empty."
-    if "/" in s or "\\" in s:
-        return False, "Course name cannot contain path separators."
-    if ".." in s:
-        return False, "Course name cannot contain '..'."
-    if s.startswith("."):
-        return False, "Course name cannot start with a dot."
-    return True, s
+    return matches
 
 
 @app.route("/api/generate_plate", methods=["POST"])
@@ -1656,20 +1710,25 @@ def api_generate_plate():
     line1 = data.get("line1", "").strip()
     line2 = data.get("line2", "").strip()
     line3 = data.get("line3", "").strip()
-    # Ignore any client-supplied `course`/`font`/`bold`/`italic`; server decides.
     if not (line1 or line2 or line3):
-        return jsonify({"status": "error", "msg": "Provide at least one line"}), 400
+        return jsonify({"status": "error", "msg": "Provide at least one line of text."}), 400
 
     slug = _slug_from_lines(line1, line2)
 
-    matched = _match_course_from_line(line1)
-    if matched is None:
+    candidates = _match_courses_from_line(line2)
+    if len(candidates) == 0:
         return jsonify({
             "status": "no_course_match",
-            "line1": line1,
-            "suggested": _suggest_course_from_line(line1),
+            "course_line": line2,
+        })
+    if len(candidates) > 1:
+        return jsonify({
+            "status": "ambiguous_course",
+            "course_line": line2,
+            "candidates": candidates,
         })
 
+    matched = candidates[0]
     from generate_stl_3mf import course_paths
     cpaths = course_paths(matched)
     os.makedirs(cpaths["3mfs"], exist_ok=True)
@@ -1685,46 +1744,6 @@ def api_generate_plate():
         "status": "ok",
         "filename": os.path.basename(out_path),
         "course": matched,
-    })
-
-
-@app.route("/api/create_course", methods=["POST"])
-def api_create_course():
-    data = request.get_json(force=True)
-    raw_course = data.get("course", "")
-    line1 = data.get("line1", "").strip()
-    line2 = data.get("line2", "").strip()
-    line3 = data.get("line3", "").strip()
-
-    ok, result = _validate_course_name(raw_course)
-    if not ok:
-        return jsonify({"status": "error", "msg": result}), 400
-    course = result
-
-    if not (line1 or line2 or line3):
-        return jsonify({"status": "error", "msg": "Provide at least one line"}), 400
-
-    from generate_stl_3mf import course_paths
-    cpaths = course_paths(course)
-    # Scaffold only the directories that are part of the deliverable pipeline.
-    # Per the course folder convention, STLs are not deliverables and the
-    # boundary editor produces 3MFs directly — do NOT create an STLs/ folder.
-    for key in ("3mfs", "egms", "images"):
-        os.makedirs(cpaths[key], exist_ok=True)
-
-    slug = _slug_from_lines(line1, line2)
-    out_path = os.path.join(cpaths["3mfs"], f"{slug}.3mf")
-
-    from plate_text import generate_plate_3mf
-    try:
-        generate_plate_3mf(line1, line2, line3, out_path,
-                           font_family="Orbitron", bold=False, italic=False)
-    except Exception as exc:
-        return jsonify({"status": "error", "msg": str(exc)}), 500
-    return jsonify({
-        "status": "ok",
-        "filename": os.path.basename(out_path),
-        "course": course,
     })
 
 

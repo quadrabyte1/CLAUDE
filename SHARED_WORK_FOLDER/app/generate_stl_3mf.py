@@ -71,9 +71,10 @@ CATMULL_TENSION: float = 0.5        # editor uses 0.5
 CATMULL_SEGMENTS: int = 16          # editor uses 16 segments per edge
 
 THICKNESS_BY_TYPE: dict[str, float] = {
-    "green":  15.0,
-    "fringe": 12.0,
-    "trap":   10.0,
+    "green":    15.0,
+    "fringe":   12.0,
+    "trap":     10.0,
+    "boulders":  2.5,
 }
 DEFAULT_THICKNESS: float = 2.5
 PRINT_TOLERANCE_MM: float = 0.25    # inset each piece by this much for easier fit

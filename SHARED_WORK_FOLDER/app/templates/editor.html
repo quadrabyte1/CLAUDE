@@ -8,7 +8,7 @@
   {# ── Header ─────────────────────────────────────────────── #}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.19</span></h1>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.20</span></h1>
       <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
     </div>
   </div>
@@ -44,6 +44,13 @@
             :class="imgLoaded ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-yellow-500/40 cursor-not-allowed'"
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
       Add Water
+    </button>
+
+    <button @click="addBoulders()"
+            :disabled="!imgLoaded"
+            :class="imgLoaded ? 'bg-pink-500 hover:bg-pink-600' : 'bg-pink-500/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+      Add Boulders
     </button>
 
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
@@ -437,7 +444,7 @@ function polygonEditor() {
           this.polygons = restored.filter(p => p.type !== 'contour').map(p => ({
             name: p.name,
             type: p.type,
-            color: p.type === 'green' ? '#22C55E' : p.type === 'water' ? '#EAB308' : '#EF4444',
+            color: p.type === 'green' ? '#22C55E' : p.type === 'water' ? '#EAB308' : p.type === 'boulders' ? '#EC4899' : '#EF4444',
             points: p.points.map(pt => ({ x: pt.x, y: pt.y })),
           }));
           this.contours = restored.filter(p => p.type === 'contour').map(p => ({
@@ -484,7 +491,7 @@ function polygonEditor() {
           this.polygons = regularPolygons.map(p => ({
             name: p.name,
             type: p.type,
-            color: p.type === 'green' ? '#22C55E' : p.type === 'water' ? '#EAB308' : '#EF4444',
+            color: p.type === 'green' ? '#22C55E' : p.type === 'water' ? '#EAB308' : p.type === 'boulders' ? '#EC4899' : '#EF4444',
             points: p.points,
           }));
 
@@ -1244,8 +1251,8 @@ function polygonEditor() {
           this.draw();
           this.flash('Vertex removed', true);
           this.autoSave();
-        } else if (this.polygons[hit.polyIdx].type === 'trap' || this.polygons[hit.polyIdx].type === 'water') {
-          // 3-vertex trap/water — delete the whole polygon rather than erroring
+        } else if (this.polygons[hit.polyIdx].type === 'trap' || this.polygons[hit.polyIdx].type === 'water' || this.polygons[hit.polyIdx].type === 'boulders') {
+          // 3-vertex trap/water/boulders — delete the whole polygon rather than erroring
           this.selectedVerts = [];
           this.removePoly(hit.polyIdx);
         } else {
@@ -1484,18 +1491,42 @@ function polygonEditor() {
       this.autoSave();
     },
 
+    addBoulders() {
+      this.pushUndo();
+      const bouldersCount = this.polygons.filter(p => p.type === 'boulders').length;
+      const cx = this.imgW / 2;
+      const cy = this.imgH / 2;
+      const r = Math.min(this.imgW, this.imgH) * 0.08;
+      const pts = [];
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8 - Math.PI / 2;
+        pts.push({ x: Math.round(cx + r * Math.cos(a)), y: Math.round(cy + r * Math.sin(a)) });
+      }
+      this.polygons.push({
+        name: 'Boulders ' + (bouldersCount + 1),
+        type: 'boulders',
+        color: '#EC4899',
+        points: pts,
+      });
+      this.selectedPoly = this.polygons.length - 1;
+      this.draw();
+      this.flash('Boulders region added - drag to position', true);
+      this.autoSave();
+    },
+
     removePoly(idx) {
-      if (this.polygons[idx].type !== 'trap' && this.polygons[idx].type !== 'water') return;
+      if (this.polygons[idx].type !== 'trap' && this.polygons[idx].type !== 'water' && this.polygons[idx].type !== 'boulders') return;
       this.pushUndo();
       this.polygons.splice(idx, 1);
       if (this.selectedPoly >= this.polygons.length) {
         this.selectedPoly = this.polygons.length - 1;
       }
-      // Rename traps and water traps
-      let tc = 0, wc = 0;
+      // Rename traps, water traps, and boulder regions
+      let tc = 0, wc = 0, bc = 0;
       for (const p of this.polygons) {
         if (p.type === 'trap') { tc++; p.name = 'Trap ' + tc; }
         if (p.type === 'water') { wc++; p.name = 'Water ' + wc; }
+        if (p.type === 'boulders') { bc++; p.name = 'Boulders ' + bc; }
       }
       this.draw();
       this.flash('Polygon removed', true);
@@ -1861,11 +1892,11 @@ function polygonEditor() {
         this.draw();
         return;
       }
-      // Cmd+Delete / Ctrl+Delete: remove the selected polygon if it is a trap or water
+      // Cmd+Delete / Ctrl+Delete: remove the selected polygon if it is a trap, water, or boulders
       if ((e.metaKey || e.ctrlKey) && (e.key === 'Delete' || e.key === 'Backspace')) {
         if (this.selectedPoly >= 0 && this.selectedPoly < this.polygons.length) {
           const selType = this.polygons[this.selectedPoly].type;
-          if (selType === 'trap' || selType === 'water') {
+          if (selType === 'trap' || selType === 'water' || selType === 'boulders') {
             e.preventDefault();
             this.removePoly(this.selectedPoly);
           }
@@ -1884,12 +1915,12 @@ function polygonEditor() {
         for (const sv of sorted) {
           removesPerPoly[sv.poly] = (removesPerPoly[sv.poly] || 0) + 1;
         }
-        // Identify trap/water polys that would drop to < 3 — delete the whole polygon
+        // Identify trap/water/boulders polys that would drop to < 3 — delete the whole polygon
         const trapPolysToRemove = new Set();
         for (const [polyIdxStr, count] of Object.entries(removesPerPoly)) {
           const polyIdx = Number(polyIdxStr);
           const poly = this.polygons[polyIdx];
-          if ((poly.type === 'trap' || poly.type === 'water') && poly.points.length - count < 3) {
+          if ((poly.type === 'trap' || poly.type === 'water' || poly.type === 'boulders') && poly.points.length - count < 3) {
             trapPolysToRemove.add(polyIdx);
           }
         }
@@ -1914,11 +1945,12 @@ function polygonEditor() {
           }
         }
         if (trapPolysToRemove.size > 0) {
-          // Renumber remaining traps and water traps
-          let tc = 0, wc = 0;
+          // Renumber remaining traps, water traps, and boulder regions
+          let tc = 0, wc = 0, bc = 0;
           for (const p of this.polygons) {
             if (p.type === 'trap') { tc++; p.name = 'Trap ' + tc; }
             if (p.type === 'water') { wc++; p.name = 'Water ' + wc; }
+            if (p.type === 'boulders') { bc++; p.name = 'Boulders ' + bc; }
           }
         }
         this.draw();

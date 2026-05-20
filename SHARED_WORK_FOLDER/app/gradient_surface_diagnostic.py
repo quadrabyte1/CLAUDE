@@ -3137,6 +3137,128 @@ def export_water_meshes(
     return results
 
 
+def export_boulders_meshes(
+    egm_data: dict,
+    green_boundary_px: np.ndarray,
+    slug: str,
+    fringe_mesh: "trimesh.Trimesh | None" = None,
+    stl_dir: str | None = None,
+    write_stls: bool = True,
+    pipe_circle: "ShapelyPolygon | None" = None,
+) -> list:
+    """
+    Build flat slab meshes for every polygon of type 'boulders' in egm_data.
+
+    Mirrors export_water_meshes: same px→mm transform, same Catmull-Rom interp,
+    same PRINT_TOLERANCE_MM inset, same fringe-Z minimum sampling for the deck
+    height. Boulders are emitted as smooth flat slabs (no texture).
+
+    Returns list of (node_name, trimesh.Trimesh) when write_stls=False, else
+    list of file paths.
+    """
+    from scipy.spatial import cKDTree as _cKDTree
+    from shapely.geometry import Point as ShapelyPoint
+
+    if write_stls:
+        if stl_dir is None:
+            course = egm_data.get("course", "")
+            if course:
+                stl_dir = course_paths(course)["stls"]
+            else:
+                stl_dir = OWNER_INBOX
+        os.makedirs(stl_dir, exist_ok=True)
+
+    scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
+
+    boulders_polygons = [p for p in egm_data.get("polygons", []) if p.get("type") == "boulders"]
+    if not boulders_polygons:
+        print("  No boulders polygons found in EGM data.")
+        return []
+
+    fringe_kd = None
+    fringe_verts_top = None
+    if fringe_mesh is not None:
+        all_verts = fringe_mesh.vertices
+        top_mask = all_verts[:, 2] > 0.0
+        fringe_verts_top = all_verts[top_mask]
+        if len(fringe_verts_top) > 0:
+            fringe_kd = _cKDTree(fringe_verts_top[:, :2])
+        else:
+            print("  WARNING: fringe mesh has no top-surface vertices (Z>0); boulders heights will fall back to fixed.")
+
+    results: list = []
+    for i, boulders_poly in enumerate(boulders_polygons, start=1):
+        try:
+            pts_px = interpolate_catmull_rom(boulders_poly["points"])
+            pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
+
+            shapely_boulders = ShapelyPolygon(pts_mm)
+
+            if pipe_circle is not None:
+                shapely_boulders = _subtract_pipe_from_polygon(
+                    shapely_boulders, pipe_circle, f"Boulders {i}"
+                )
+                if shapely_boulders is None:
+                    continue
+
+            shapely_boulders = _clip_polygon_to_fringe_rect(shapely_boulders, f"Boulders {i}")
+            if shapely_boulders is None:
+                continue
+
+            if not shapely_boulders.is_valid:
+                shapely_boulders = shapely_boulders.buffer(0)
+            shapely_inset = shapely_boulders.buffer(-PRINT_TOLERANCE_MM)
+
+            if shapely_inset.is_empty:
+                print(f"  Boulders {i}: inset produced empty polygon — skipping.")
+                continue
+
+            if fringe_kd is not None:
+                minx, miny, maxx, maxy = shapely_inset.bounds
+                n_sample = 12
+                xs_s = np.linspace(minx, maxx, n_sample)
+                ys_s = np.linspace(miny, maxy, n_sample)
+                sample_pts = []
+                for sx in xs_s:
+                    for sy in ys_s:
+                        if shapely_inset.contains(ShapelyPoint(sx, sy)):
+                            sample_pts.append([sx, sy])
+                cx, cy = shapely_inset.centroid.x, shapely_inset.centroid.y
+                if not sample_pts:
+                    sample_pts = [[cx, cy]]
+                sample_pts = np.array(sample_pts)
+                _, idxs = fringe_kd.query(sample_pts)
+                sampled_z = fringe_verts_top[idxs, 2]
+                boulders_height = float(sampled_z.min())
+                print(f"  Boulders {i}: fringe Z min over {len(sample_pts)} samples = {boulders_height:.2f} mm")
+            else:
+                boulders_height = TRAP_THICKNESS_MM
+                print(f"  Boulders {i}: no fringe mesh — using fixed height {boulders_height} mm")
+
+            from generate_stl_3mf import _build_slab_from_shapely
+            mesh = _build_slab_from_shapely(shapely_inset, boulders_height)
+
+            bb = mesh.bounds
+            print(f"  Boulders {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "
+                  f"watertight={mesh.is_watertight}, "
+                  f"X[{bb[0,0]:.1f},{bb[1,0]:.1f}] Y[{bb[0,1]:.1f},{bb[1,1]:.1f}] mm")
+
+            if write_stls:
+                out_path = os.path.join(stl_dir, f"{slug}_boulders_{i}.stl")
+                mesh.export(out_path)
+                print(f"  Saved: {out_path}")
+                results.append(out_path)
+            else:
+                results.append((f"boulders_{i}", mesh))
+
+        except Exception as exc:
+            import traceback
+            print(f"  ERROR exporting boulders {i}: {exc}")
+            traceback.print_exc()
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Sand grain texture
 # ---------------------------------------------------------------------------
@@ -4092,15 +4214,18 @@ def _filament_for_scene_name(name: str) -> int:
     Map a scene node name to a Bambu Studio extruder/filament index.
 
     Convention:
-        green*  → 1
-        fringe* → 2
-        trap*   → 3   (sand traps; "sand_trap*" also matches)
-        water*  → 4   (water traps; placeholder until EGM gains type='water')
+        green*    → 1
+        fringe*   → 2
+        trap*     → 3   (sand traps; "sand_trap*" also matches)
+        water*    → 4   (water traps)
+        boulders* → 5   (boulders region)
 
     Default for anything unrecognised is 1, so unknown geometries don't
     silently land on a high extruder slot the user has nothing loaded into.
     """
     n = (name or "").lower()
+    if n.startswith("boulders"):
+        return 5
     if n.startswith("water"):
         return 4
     if n.startswith("sand_trap") or n.startswith("trap"):
@@ -4716,6 +4841,15 @@ def run_pipeline(egm_path: str) -> str:
     if not water_meshes:
         print("  (no water built)")
 
+    # ── 8c. Build boulders meshes (in-memory) ───────────────────────────────
+    print("\n[8c] Building boulders meshes…")
+    boulders_meshes = export_boulders_meshes(_egm_data, green_boundary_px, slug,
+                                             fringe_mesh=fringe_mesh_flat,
+                                             pipe_circle=pipe_circle,
+                                             write_stls=False)
+    if not boulders_meshes:
+        print("  (no boulders built)")
+
     # ── 9. Contour debug image ──────────────────────────────────────────────
     # Diagnostic gradient_contours.png write disabled to keep course Images/
     # folders clean. Helper `save_contour_debug_image` remains defined for
@@ -4772,6 +4906,12 @@ def run_pipeline(egm_path: str) -> str:
         scene.add_geometry(water_mesh, node_name=water_node)
         scene_names.append(water_node)
 
+    # Boulders meshes — names start with "boulders" so _filament_for_scene_name
+    # routes each one to extruder 5 (pink filament).
+    for boulders_node, boulders_mesh in boulders_meshes:
+        scene.add_geometry(boulders_mesh, node_name=boulders_node)
+        scene_names.append(boulders_node)
+
     print(f"\n[10b] Engraving serial s/n: {serial_number} on {len(scene_names)} item(s)…")
     _engrave_scene(scene, serial_number)
 
@@ -4819,7 +4959,7 @@ def run_pipeline(egm_path: str) -> str:
     print("Done.")
     # Diagnostic PNG paths suppressed — those writes are disabled (see steps 5 and 9).
     print(f"  3MF assembly:       {path_3mf}")
-    print(f"  Scene objects:      {len(scene_names)} (green + fringe + {len(trap_meshes)} trap(s) + {len(water_meshes)} water)")
+    print(f"  Scene objects:      {len(scene_names)} (green + fringe + {len(trap_meshes)} trap(s) + {len(water_meshes)} water + {len(boulders_meshes)} boulders)")
     print("=" * 60)
 
     return path_3mf

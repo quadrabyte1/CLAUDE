@@ -1748,6 +1748,7 @@ def build_fringe_mesh(
     trap_shapely: list[ShapelyPolygon] = []
     water_polys_mm: list[np.ndarray] = []
     water_shapely: list[ShapelyPolygon] = []
+    boulders_annulus_shapely: list[ShapelyPolygon] = []
 
     # Build pipe-footprint Shapely circles from the holes list. Each hole is
     # (cx, cy, radius). We subtract these from the trap/water shapely polygons
@@ -1791,14 +1792,61 @@ def build_fringe_mesh(
             if sp is not None:
                 water_shapely.append(sp)
 
+    # --- Collect boulders-annulus carve shapes ---
+    # A boulders polygon enters annulus mode when it fully contains at least
+    # one water polygon (full-ring containment via Shapely `.contains`).  In
+    # that case the fringe must have the ANNULUS shape (boulders minus enclosed
+    # water) carved out of it — the same way trap and water carve-outs work —
+    # so the annulus slab sits in a real recess rather than floating on top.
+    # Water-only boulders polygons (no enclosed water) remain on-top slabs and
+    # must NOT be carved from the fringe (they sit above it, not inside it).
+    #
+    # We re-derive the water polygons in mm here (already built above in
+    # water_shapely) to avoid a second px→mm pass.
+    if water_shapely:
+        from shapely.ops import unary_union as _fringe_uu
+        for _bpoly in egm_data.get("polygons", []):
+            if _bpoly.get("type") != "boulders":
+                continue
+            try:
+                _b_pts_px = interpolate_catmull_rom(_bpoly["points"])
+            except Exception:
+                _b_pts_px = np.array([[p["x"], p["y"]] for p in _bpoly["points"]], dtype=np.float64)
+            _b_pts_mm = _px_to_mm_2d(_b_pts_px, scale, centroid_px)
+            try:
+                _b_sp = ShapelyPolygon(_b_pts_mm)
+                if not _b_sp.is_valid:
+                    _b_sp = _b_sp.buffer(0)
+                _enclosed = [wsp for wsp in water_shapely if _b_sp.contains(wsp)]
+                if not _enclosed:
+                    continue
+                _w_union = _fringe_uu(_enclosed)
+                _annulus = _b_sp.difference(_w_union)
+                if not _annulus.is_valid:
+                    _annulus = _annulus.buffer(0)
+                if _annulus.is_empty:
+                    continue
+                # Subtract pipe-hole circles from the annulus carve shape.
+                for _hc in _hole_circles:
+                    if _annulus.intersects(_hc):
+                        _diff = _annulus.difference(_hc)
+                        if not _diff.is_empty:
+                            _annulus = _diff
+                boulders_annulus_shapely.append(_annulus)
+            except Exception as _exc_ba:
+                print(f"  WARNING: fringe boulders-annulus carve failed: {_exc_ba}")
+
     # --- Build Shapely green polygon for point-in-polygon tests ---
     green_shapely = ShapelyPolygon(green_bnd_mm)
     if not green_shapely.is_valid:
         green_shapely = green_shapely.buffer(0)
 
-    # Union all traps + water polygons. They share the same carve-out role:
-    # any cell falling inside either type must be excluded from the fringe so
-    # the corresponding slab can drop into a real recess.
+    # Union all traps + water + boulders-annuli polygons.  They share the same
+    # carve-out role: any fringe cell falling inside any of these shapes is
+    # excluded so the corresponding slab can drop into a real recess.
+    #
+    # Boulders on-top slabs (no enclosed water) are intentionally absent here —
+    # they sit above the fringe surface and must not carve it.
     #
     # Fringe-rectangle clip note (#343): the trap/water mesh path clips each
     # polygon to the fringe rectangle (see _clip_polygon_to_fringe_rect, used
@@ -1809,7 +1857,7 @@ def build_fringe_mesh(
     # the fringe rectangle. Any portion of a trap/water polygon outside the
     # rectangle simply has no fringe cells to carve out — the implicit clip
     # by the iteration domain matches the explicit clip applied to the slab.
-    _carve_shapely = trap_shapely + water_shapely
+    _carve_shapely = trap_shapely + water_shapely + boulders_annulus_shapely
     if _carve_shapely:
         from shapely.ops import unary_union
         traps_union = unary_union(_carve_shapely)
@@ -1820,6 +1868,7 @@ def build_fringe_mesh(
     print(f"  Green boundary: {len(green_bnd_mm)} mm-space points")
     print(f"  Trap polygons: {len(trap_polys_mm)}")
     print(f"  Water polygons: {len(water_polys_mm)}")
+    print(f"  Boulders annuli (carved): {len(boulders_annulus_shapely)}")
     if holes:
         print(f"  Baked holes: {holes}")
 
@@ -3147,17 +3196,34 @@ def export_boulders_meshes(
     pipe_circle: "ShapelyPolygon | None" = None,
 ) -> list:
     """
-    Build flat slab meshes for every polygon of type 'boulders' in egm_data.
+    Build meshes for every polygon of type 'boulders' in egm_data.
 
-    Mirrors export_water_meshes: same px→mm transform, same Catmull-Rom interp,
-    same PRINT_TOLERANCE_MM inset, same fringe-Z minimum sampling for the deck
-    height. Boulders are emitted as smooth flat slabs (no texture).
+    Two modes, chosen per-polygon:
+
+    **Annulus mode** (water-carved): when a boulders polygon fully contains at
+    least one water polygon (full-ring containment — `boulders_sp.contains(
+    water_sp)` — never a centroid-only check), the boulders mesh is the
+    difference boulders_poly MINUS the union of those enclosed water polygons.
+    The resulting Shapely polygon has one or more interior rings (holes).
+    `_build_slab_from_shapely` / `trimesh.creation.extrude_polygon` handle
+    holed polygons natively.  Height treatment mirrors water: fringe-Z minimum
+    over the annulus footprint so the slab sits flush in the carved recess.
+    Scene name starts with "boulders" → extruder 5.
+
+    **On-top mode** (v3.20 fallback): when no water polygon is enclosed, the
+    boulders mesh is a filled flat slab sitting above the surface at the fringe
+    Z minimum, same as the previous implementation.
+
+    The fringe carving for annulus-mode boulders is handled in
+    `build_fringe_mesh`, which collects boulders-annuli in the same
+    `_carve_shapely` list as traps and water.
 
     Returns list of (node_name, trimesh.Trimesh) when write_stls=False, else
     list of file paths.
     """
     from scipy.spatial import cKDTree as _cKDTree
     from shapely.geometry import Point as ShapelyPoint
+    from shapely.ops import unary_union as _unary_union
 
     if write_stls:
         if stl_dir is None:
@@ -3174,6 +3240,24 @@ def export_boulders_meshes(
     if not boulders_polygons:
         print("  No boulders polygons found in EGM data.")
         return []
+
+    # Pre-build Shapely water polygons in mm coords for containment checks.
+    water_shapely_mm: list[ShapelyPolygon] = []
+    for wp in egm_data.get("polygons", []):
+        if wp.get("type") != "water":
+            continue
+        try:
+            w_pts_px = interpolate_catmull_rom(wp["points"])
+        except Exception:
+            w_pts_px = np.array([[p["x"], p["y"]] for p in wp["points"]], dtype=np.float64)
+        w_pts_mm = _px_to_mm_2d(w_pts_px, scale, centroid_px)
+        try:
+            wsp = ShapelyPolygon(w_pts_mm)
+            if not wsp.is_valid:
+                wsp = wsp.buffer(0)
+            water_shapely_mm.append(wsp)
+        except Exception:
+            pass
 
     fringe_kd = None
     fringe_verts_top = None
@@ -3193,6 +3277,24 @@ def export_boulders_meshes(
             pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
 
             shapely_boulders = ShapelyPolygon(pts_mm)
+            if not shapely_boulders.is_valid:
+                shapely_boulders = shapely_boulders.buffer(0)
+
+            # --- Determine mode: annulus or on-top slab ---
+            # Full-ring containment: water polygon counts as enclosed only when
+            # boulders_sp.contains(water_sp) is True — the entire water ring
+            # must lie inside the boulders polygon, not just its centroid.
+            enclosed_water = [wsp for wsp in water_shapely_mm
+                              if shapely_boulders.contains(wsp)]
+            annulus_mode = len(enclosed_water) > 0
+            if annulus_mode:
+                water_union = _unary_union(enclosed_water)
+                shapely_boulders = shapely_boulders.difference(water_union)
+                if not shapely_boulders.is_valid:
+                    shapely_boulders = shapely_boulders.buffer(0)
+                print(f"  Boulders {i}: ANNULUS mode — {len(enclosed_water)} enclosed water polygon(s) subtracted.")
+            else:
+                print(f"  Boulders {i}: ON-TOP mode — no enclosed water polygon found.")
 
             if pipe_circle is not None:
                 shapely_boulders = _subtract_pipe_from_polygon(
@@ -3201,7 +3303,10 @@ def export_boulders_meshes(
                 if shapely_boulders is None:
                     continue
 
-            shapely_boulders = _clip_polygon_to_fringe_rect(shapely_boulders, f"Boulders {i}")
+            if annulus_mode:
+                shapely_boulders = _clip_polygon_to_fringe_rect(shapely_boulders, f"Boulders {i}")
+            else:
+                shapely_boulders = _clip_polygon_to_fringe_rect(shapely_boulders, f"Boulders {i}")
             if shapely_boulders is None:
                 continue
 
@@ -3213,6 +3318,7 @@ def export_boulders_meshes(
                 print(f"  Boulders {i}: inset produced empty polygon — skipping.")
                 continue
 
+            # Sample fringe Z over the boulders footprint (same recipe as water).
             if fringe_kd is not None:
                 minx, miny, maxx, maxy = shapely_inset.bounds
                 n_sample = 12
@@ -3239,7 +3345,15 @@ def export_boulders_meshes(
             mesh = _build_slab_from_shapely(shapely_inset, boulders_height)
 
             bb = mesh.bounds
-            print(f"  Boulders {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "
+            n_interior = 0
+            from shapely.geometry import MultiPolygon as _MP
+            if isinstance(shapely_inset, _MP):
+                for _g in shapely_inset.geoms:
+                    n_interior += len(list(_g.interiors))
+            else:
+                n_interior = len(list(shapely_inset.interiors))
+            mode_tag = f"annulus ({n_interior} hole(s))" if annulus_mode else "on-top slab"
+            print(f"  Boulders {i} [{mode_tag}]: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "
                   f"watertight={mesh.is_watertight}, "
                   f"X[{bb[0,0]:.1f},{bb[1,0]:.1f}] Y[{bb[0,1]:.1f},{bb[1,1]:.1f}] mm")
 
@@ -4873,8 +4987,9 @@ def run_pipeline(egm_path: str) -> str:
         engrave_scene_geometries as _engrave_scene,
     )
     serial_number = _peek_serial(course)
-    # Embed serial in filename: "Course (Hole N) [SN].3mf"
-    fname_3mf = f"{course} (Hole {hole}) [{serial_number}].3mf"
+    # Embed serial in filename: "Course (Hole NN) [SN].3mf"
+    hole_label = str(hole).zfill(2) if str(hole).isdigit() else str(hole)
+    fname_3mf = f"{course} (Hole {hole_label}) [{serial_number}].3mf"
     path_3mf = os.path.abspath(os.path.join(_3mf_dir, fname_3mf))
     print(f"    [generate] output 3MF file:     {path_3mf}")
 

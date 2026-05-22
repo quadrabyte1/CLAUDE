@@ -894,8 +894,9 @@ def _slugify(text: str) -> str:
 
 
 def _3mf_filename(course: str, hole: str, serial: int | None = None) -> str:
-    """e.g. "Moffett Field (Hole 9) [105].3mf" (or without brackets if no serial)."""
-    base = f"{course} (Hole {hole})"
+    """e.g. "Moffett Field (Hole 09) [105].3mf" (or without brackets if no serial)."""
+    hole_label = str(hole).zfill(2) if str(hole).isdigit() else str(hole)
+    base = f"{course} (Hole {hole_label})"
     if serial is not None:
         return f"{base} [{serial}].3mf"
     return f"{base}.3mf"

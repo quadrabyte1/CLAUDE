@@ -620,15 +620,16 @@ def _collect_course_images():
 
     Each dict has keys: 'filename', 'course', 'url'
     Falls back to team_inbox images (course=None) for backwards compat.
+    Results are sorted case-insensitively: courses A→Z, then filenames A→Z within each course.
     """
     results = []
     exts = ('.png', '.jpg', '.jpeg')
     if os.path.isdir(_EGM_BASE):
-        for course in sorted(os.listdir(_EGM_BASE)):
+        for course in sorted(os.listdir(_EGM_BASE), key=str.casefold):
             img_dir = os.path.join(_EGM_BASE, course, "Images")
             if not os.path.isdir(img_dir):
                 continue
-            for fname in sorted(os.listdir(img_dir)):
+            for fname in sorted(os.listdir(img_dir), key=str.casefold):
                 if fname.lower().endswith(exts):
                     results.append({
                         "filename": fname,
@@ -637,7 +638,7 @@ def _collect_course_images():
                     })
     # Backwards compat: also include team_inbox images
     if os.path.isdir(_TEAM_INBOX):
-        for fname in sorted(os.listdir(_TEAM_INBOX)):
+        for fname in sorted(os.listdir(_TEAM_INBOX), key=str.casefold):
             if fname.lower().endswith(exts):
                 results.append({
                     "filename": fname,
@@ -663,14 +664,14 @@ def list_images():
 
 @app.route("/api/courses", methods=["GET"])
 def list_courses():
-    """Return sorted list of existing course folder names under GolfCourses/.
+    """Return case-insensitively sorted list of existing course folder names under GolfCourses/.
 
     Used by the New Project dialog to surface matching folders before the user
     creates a new (potentially duplicate) folder.
     """
     courses = []
     if os.path.isdir(_EGM_BASE):
-        for entry in sorted(os.listdir(_EGM_BASE)):
+        for entry in sorted(os.listdir(_EGM_BASE), key=str.casefold):
             if entry.startswith("."):
                 continue
             if os.path.isdir(os.path.join(_EGM_BASE, entry)):
@@ -744,7 +745,8 @@ def save_boundaries():
     data = request.get_json()
     course = data.get("course", "Unknown Course")
     hole = data.get("hole", "0")
-    filename = f"{course} (Hole {hole}).egm"
+    hole_label = str(hole).zfill(2) if str(hole).isdigit() else str(hole)
+    filename = f"{course} (Hole {hole_label}).egm"
     # Save to course EGMs/ folder; fall back to owner_inbox for unknown courses
     if course and course != "Unknown Course" and os.path.isdir(_EGM_BASE):
         course_root = os.path.join(_EGM_BASE, course)
@@ -761,14 +763,18 @@ def save_boundaries():
 
 @app.route("/api/boundaries/list")
 def list_boundaries():
-    """Return a list of all saved .egm project files from all course EGMs/ folders."""
+    """Return a list of all saved .egm project files from all course EGMs/ folders.
+
+    Courses are enumerated case-insensitively A→Z; files within each course are
+    enumerated case-insensitively A→Z.
+    """
     import json as _json
     projects = []
 
     def _scan_dir(scan_dir):
         if not os.path.isdir(scan_dir):
             return
-        for fname in sorted(os.listdir(scan_dir)):
+        for fname in sorted(os.listdir(scan_dir), key=str.casefold):
             if not fname.endswith(".egm"):
                 continue
             fpath = os.path.join(scan_dir, fname)
@@ -787,7 +793,7 @@ def list_boundaries():
 
     # Scan all GolfCourses/*/EGMs/ directories
     if os.path.isdir(_EGM_BASE):
-        for course_name in sorted(os.listdir(_EGM_BASE)):
+        for course_name in sorted(os.listdir(_EGM_BASE), key=str.casefold):
             _scan_dir(os.path.join(_EGM_BASE, course_name, "EGMs"))
     # Backwards compat: also scan owner_inbox
     _scan_dir(os.path.join(os.path.dirname(__file__), "..", "owner_inbox"))
@@ -1309,7 +1315,8 @@ def generate_models():
     if not course or not hole:
         return jsonify({"status": "error", "msg": "Missing course or hole"}), 400
 
-    egm_fname = f"{course} (Hole {hole}).egm"
+    hole_label = hole.zfill(2) if hole.isdigit() else hole
+    egm_fname = f"{course} (Hole {hole_label}).egm"
     # Look for EGM in course EGMs/ folder first, then owner_inbox fallback
     egm_path = None
     if os.path.isdir(_EGM_BASE):
@@ -1340,7 +1347,7 @@ def generate_models():
         three_mf_name = os.path.basename(three_mf_path)
     else:
         # Fallback: old-style name without serial (file may not exist yet)
-        three_mf_name = f"{course} (Hole {hole}).3mf"
+        three_mf_name = f"{course} (Hole {hole_label}).3mf"
         three_mf_dir = os.path.abspath(os.path.join(_EGM_BASE, course, "3MFs"))
         three_mf_path = os.path.join(three_mf_dir, three_mf_name)
         if not os.path.exists(three_mf_path):

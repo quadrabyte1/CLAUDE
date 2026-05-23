@@ -1914,7 +1914,7 @@ def plaque_page():
         last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
     except Exception:
         last_modified = ""
-    return render("plaque.html", plaque_version="v3.3", last_modified=last_modified)
+    return render("plaque.html", plaque_version="v3.4", last_modified=last_modified)
 
 
 @app.route("/api/fonts")
@@ -2005,7 +2005,7 @@ def api_generate_plate():
     from plate_text import generate_plate_3mf
     try:
         generate_plate_3mf(line1, line2, line3, out_path,
-                           font_family="Orbitron", bold=False, italic=False)
+                           font_family="Helvetica", bold=False, italic=False)
     except Exception as exc:
         return jsonify({"status": "error", "msg": str(exc)}), 500
     return jsonify({

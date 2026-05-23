@@ -853,6 +853,25 @@ MOUNT_BORE_INNER_RADIUS_MM: float = MOUNT_BORE_INNER_DIAMETER_MM / 2.0
 MOUNT_BORE_OUTER_RADIUS_MM: float = MOUNT_BORE_INNER_RADIUS_MM + WALL_THICKNESS_MM
 MOUNT_BORE_INSET_MM: float = 20.0                 # distance from print rect corner
 
+# Master enable/disable for the upper-left T-mounting bore. When False:
+#   - no fringe hole is reserved at the corner,
+#   - no pipe mesh is built or merged into the fringe,
+#   - `pipe_circle` is left as None so trap/water/boulders subtractions are no-ops,
+#   - all `_subtract_pipe_from_polygon` / `build_mount_pipe_mesh` helpers stay
+#     defined but unused so a future re-enable is a one-line flip back to True.
+# Topo, task #459 (2026-05-23) — Thomas: "Drop the T-mounting hole in the upper
+# left corner of the frame. It's just causing too much trouble."
+ENABLE_MOUNT_BORE: bool = False
+
+
+class _MountBoreDisabled(Exception):
+    """Sentinel raised inside the pipe-build try-block when ENABLE_MOUNT_BORE
+    is False, so the existing except machinery cleanly short-circuits without
+    re-indenting the entire mount-bore body. Caught and silently logged as a
+    SKIP message — not an error.
+    """
+    pass
+
 # ---------------------------------------------------------------------------
 # Water-containing-hole rule (Topo, 2026-05-01) — task per Thomas/Larry.
 #
@@ -920,20 +939,27 @@ def _px_to_mm_2d(pts_px: np.ndarray, scale: float, centroid_px: np.ndarray) -> n
     return xy
 
 
-def _height_to_mm(Z_raw: np.ndarray, inside_mask: np.ndarray) -> np.ndarray:
+def _height_to_mm(
+    Z_raw: np.ndarray,
+    inside_mask: np.ndarray,
+    elevation_range_mm: float = ELEVATION_RANGE_MM,
+) -> np.ndarray:
     """
     Normalise raw Poisson heights to mm elevation, preserving NaN outside the green.
-    Maps [z_min, z_max] → [BASE_THICKNESS_MM, BASE_THICKNESS_MM + ELEVATION_RANGE_MM].
+    Maps [z_min, z_max] → [BASE_THICKNESS_MM, BASE_THICKNESS_MM + elevation_range_mm].
+
+    elevation_range_mm defaults to the module-level ELEVATION_RANGE_MM constant;
+    callers that read a per-EGM override should pass it explicitly.
 
     Uniform-input special case (squash-bug fix, motivated by SC 17 [127] flat-
     fallback regression): when z_min == z_max, the prior implementation set
-    z_range = 1.0 and computed `(Z - z_min) / 1.0 * ELEVATION_RANGE_MM` which
+    z_range = 1.0 and computed `(Z - z_min) / 1.0 * elevation_range_mm` which
     equals zero everywhere, collapsing the whole green to BASE_THICKNESS_MM
     (1.5 mm) regardless of the actual fallback value. That destroys the
     no-arrows fallback's intended elevation (e.g. 5 mm for water holes
     silently became 1.5 mm). Fix: when the input is uniform, preserve the
     input value clamped to the printable range
-    [BASE_THICKNESS_MM, BASE_THICKNESS_MM + ELEVATION_RANGE_MM] instead of
+    [BASE_THICKNESS_MM, BASE_THICKNESS_MM + elevation_range_mm] instead of
     normalising to zero. This preserves the homeowner-mandated fallback Z.
     """
     valid = Z_raw[inside_mask]
@@ -946,14 +972,14 @@ def _height_to_mm(Z_raw: np.ndarray, inside_mask: np.ndarray) -> np.ndarray:
         # water-hole case where the constant 5 mm was being squashed to
         # BASE_THICKNESS_MM by the (Z - z_min)/1.0 = 0 arithmetic).
         z_clamped = float(
-            np.clip(z_min, BASE_THICKNESS_MM, BASE_THICKNESS_MM + ELEVATION_RANGE_MM)
+            np.clip(z_min, BASE_THICKNESS_MM, BASE_THICKNESS_MM + elevation_range_mm)
         )
         Z_mm[inside_mask] = z_clamped
     else:
         z_range = z_max - z_min
         Z_mm[inside_mask] = (
             BASE_THICKNESS_MM
-            + (Z_raw[inside_mask] - z_min) / z_range * ELEVATION_RANGE_MM
+            + (Z_raw[inside_mask] - z_min) / z_range * elevation_range_mm
         )
     return Z_mm
 
@@ -1539,7 +1565,12 @@ def save_stl_meshes(
     scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
     print(f"  Scale: {scale:.6f} px→mm, centroid: {centroid_px}")
 
-    Z_mm = _height_to_mm(Z_grid, inside_mask)
+    elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
+    fringe_edge_height_mm = float(egm_data.get("fringeEdgeHeight") or FRINGE_EDGE_HEIGHT_MM)
+    print(f"  Elevation range from EGM: {elevation_range_mm} mm")
+    print(f"  Fringe edge height from EGM: {fringe_edge_height_mm} mm")
+
+    Z_mm = _height_to_mm(Z_grid, inside_mask, elevation_range_mm=elevation_range_mm)
     valid_mm = Z_mm[inside_mask]
     print(f"  Z_mm range: {valid_mm.min():.3f} .. {valid_mm.max():.3f} mm")
 
@@ -1730,6 +1761,9 @@ def build_fringe_mesh(
     """
     from scipy.spatial import cKDTree
     from collections import defaultdict
+
+    _elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
+    _fringe_edge_height_mm = float(egm_data.get("fringeEdgeHeight") or FRINGE_EDGE_HEIGHT_MM)
 
     scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
 
@@ -2011,11 +2045,11 @@ def build_fringe_mesh(
             if _flat_fallback_active:
                 _fringe_outer_target = green_edge_h
             else:
-                _fringe_outer_target = FRINGE_EDGE_HEIGHT_MM
+                _fringe_outer_target = _fringe_edge_height_mm
             z_fringe = green_edge_h * (1.0 - t) + _fringe_outer_target * t
 
             # Clamp to reasonable range
-            z_fringe = max(BASE_THICKNESS_MM, min(z_fringe, BASE_THICKNESS_MM + ELEVATION_RANGE_MM))
+            z_fringe = max(BASE_THICKNESS_MM, min(z_fringe, BASE_THICKNESS_MM + _elevation_range_mm))
 
             fringe_mask[r, c] = True
             Z_fringe[r, c] = z_fringe
@@ -4607,6 +4641,7 @@ def run_pipeline(egm_path: str) -> str:
     flat_fallback_triggered = (len(arrows) == 0)
 
     if flat_fallback_triggered:
+        print("[gradient] zero arrows detected — generating flat green")
         _has_water = _hole_has_water(_egm_data)
         fallback_z = FLAT_FALLBACK_Z_WATER_MM if _has_water else FLAT_FALLBACK_Z_MM
 
@@ -4701,7 +4736,8 @@ def run_pipeline(egm_path: str) -> str:
         print(f"    Height range (raw, pre-soften): {valid.min():.4f} .. {valid.max():.4f}")
 
         # Clamp + soften spurious local peaks/valleys before triangulation.
-        Z, _soften_stats = soften_extremes(Z, inside_mask)
+        _elev_range_soften = float(_egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
+        Z, _soften_stats = soften_extremes(Z, inside_mask, elevation_range_mm=_elev_range_soften)
     print(
         f"    soften_extremes: peak_limit={_soften_stats['peak_limit_mm']:.2f} mm, "
         f"valley_limit={_soften_stats['valley_limit_mm']:.2f} mm, "
@@ -4769,7 +4805,8 @@ def run_pipeline(egm_path: str) -> str:
     # ── 7. Build fringe mesh ────────────────────────────────────────────────
     print("\n[7] Building fringe mesh…")
     scale_f, centroid_f = _compute_px_to_mm(green_boundary_px, _egm_data)
-    Z_mm_for_fringe = _height_to_mm(Z, inside_mask)
+    _elevation_range_for_fringe = float(_egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
+    Z_mm_for_fringe = _height_to_mm(Z, inside_mask, elevation_range_mm=_elevation_range_for_fringe)
     fringe_mesh = None
     fringe_mesh_flat = None   # kept for trap height sampling (no texture perturbation)
 
@@ -4783,34 +4820,48 @@ def run_pipeline(egm_path: str) -> str:
     # was the wrong design — Thomas wants the pipe in a known fixed position
     # and the OTHER surfaces (traps, water, fringe) carved to match. The
     # `pipe_circle` Shapely polygon below is what those subtractions use.
-    _half_for_bore = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
-    _bore_cx = -_half_for_bore + MOUNT_BORE_INSET_MM
-    _bore_cy = +_half_for_bore - MOUNT_BORE_INSET_MM
-    pipe_circle = _build_pipe_circle(_bore_cx, _bore_cy)
-    print(f"  Mount pipe: fixed upper-left at ({_bore_cx:.2f}, {_bore_cy:.2f}), "
-          f"r_outer={MOUNT_BORE_OUTER_RADIUS_MM:.4f} mm")
+    #
+    # Task #459 (2026-05-23): the whole mount-bore feature is gated behind
+    # ENABLE_MOUNT_BORE. When False (current default), no fringe hole is
+    # reserved, no pipe is built, and pipe_circle stays None so that the
+    # trap/water/boulders pipe-subtractions and the fringe carve-list pipe-hole
+    # circles all degenerate to no-ops. Re-enable with a one-line flip.
+    if ENABLE_MOUNT_BORE:
+        _half_for_bore = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+        _bore_cx = -_half_for_bore + MOUNT_BORE_INSET_MM
+        _bore_cy = +_half_for_bore - MOUNT_BORE_INSET_MM
+        pipe_circle = _build_pipe_circle(_bore_cx, _bore_cy)
+        print(f"  Mount pipe: fixed upper-left at ({_bore_cx:.2f}, {_bore_cy:.2f}), "
+              f"r_outer={MOUNT_BORE_OUTER_RADIUS_MM:.4f} mm")
 
-    # Green-overlap warning (#347 step 2.4): the pipe lives ~20 mm from the
-    # rect edge so it should never land inside the green polygon, but log a
-    # warning if it ever does so Thomas can flag the case. We do NOT carve
-    # the green raster mask — see #347 step 2.4 for the rationale.
-    try:
-        _green_bnd_mm_warn = _px_to_mm_2d(
-            green_boundary_px.copy(), scale_f, centroid_f
-        )
-        _green_sp_warn = ShapelyPolygon(_green_bnd_mm_warn)
-        if not _green_sp_warn.is_valid:
-            _green_sp_warn = _green_sp_warn.buffer(0)
-        if pipe_circle.intersects(_green_sp_warn):
-            _green_overlap = float(_green_sp_warn.intersection(pipe_circle).area)
-            if _green_overlap > 1e-3:
-                print(f"  Mount pipe: WARNING — pipe footprint intersects green "
-                      f"polygon (overlap={_green_overlap:.2f} mm^2). The green "
-                      f"raster mask is NOT carved; flag this hole for review.")
-    except Exception as _exc_green_warn:
-        print(f"  Mount pipe: green-overlap check failed: {_exc_green_warn}")
+        # Green-overlap warning (#347 step 2.4): the pipe lives ~20 mm from the
+        # rect edge so it should never land inside the green polygon, but log a
+        # warning if it ever does so Thomas can flag the case. We do NOT carve
+        # the green raster mask — see #347 step 2.4 for the rationale.
+        try:
+            _green_bnd_mm_warn = _px_to_mm_2d(
+                green_boundary_px.copy(), scale_f, centroid_f
+            )
+            _green_sp_warn = ShapelyPolygon(_green_bnd_mm_warn)
+            if not _green_sp_warn.is_valid:
+                _green_sp_warn = _green_sp_warn.buffer(0)
+            if pipe_circle.intersects(_green_sp_warn):
+                _green_overlap = float(_green_sp_warn.intersection(pipe_circle).area)
+                if _green_overlap > 1e-3:
+                    print(f"  Mount pipe: WARNING — pipe footprint intersects green "
+                          f"polygon (overlap={_green_overlap:.2f} mm^2). The green "
+                          f"raster mask is NOT carved; flag this hole for review.")
+        except Exception as _exc_green_warn:
+            print(f"  Mount pipe: green-overlap check failed: {_exc_green_warn}")
 
-    fringe_holes: list = [(_bore_cx, _bore_cy, MOUNT_BORE_OUTER_RADIUS_MM)]
+        fringe_holes: list = [(_bore_cx, _bore_cy, MOUNT_BORE_OUTER_RADIUS_MM)]
+    else:
+        _bore_cx = 0.0
+        _bore_cy = 0.0
+        pipe_circle = None
+        fringe_holes = []
+        print("  Mount pipe: DISABLED (ENABLE_MOUNT_BORE = False) — "
+              "no fringe hole, no pipe mesh, no trap/water/boulders pipe-subtraction.")
     try:
         fringe_mesh = build_fringe_mesh(
             Z_mm_for_fringe,
@@ -4860,7 +4911,15 @@ def run_pipeline(egm_path: str) -> str:
         # that void: outer wall = MOUNT_BORE_OUTER_RADIUS_MM, inner bore =
         # MOUNT_BORE_INNER_RADIUS_MM (3/16"), height = fringe top Z at the
         # bore boundary (no stub above fringe).
+        #
+        # Task #459: gated behind ENABLE_MOUNT_BORE so the pipe is neither
+        # measured nor merged into the fringe when the mount bore is off.
+        # We short-circuit the entire try-block with an early no-op when
+        # disabled, keeping the existing indentation intact (the try-body
+        # references _bore_cx/_bore_cy and would crash on bogus values otherwise).
         try:
+            if not ENABLE_MOUNT_BORE:
+                raise _MountBoreDisabled
             _flat_verts = fringe_mesh_flat.vertices
             _dx = _flat_verts[:, 0] - _bore_cx
             _dy = _flat_verts[:, 1] - _bore_cy
@@ -4912,6 +4971,8 @@ def run_pipeline(egm_path: str) -> str:
             print(f"  Fringe + pipe (merged): {len(fringe_mesh.vertices)} verts, "
                   f"{len(fringe_mesh.faces)} faces, "
                   f"watertight={fringe_mesh.is_watertight}")
+        except _MountBoreDisabled:
+            print("  Mount pipe: build SKIPPED (ENABLE_MOUNT_BORE = False)")
         except Exception as exc_pipe:
             print(f"  ERROR building/merging mount pipe: {exc_pipe}")
             import traceback; traceback.print_exc()

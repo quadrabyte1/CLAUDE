@@ -8,7 +8,7 @@
   {# ── Header ─────────────────────────────────────────────── #}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.26</span></h1>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.29</span></h1>
       <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
     </div>
   </div>
@@ -113,6 +113,22 @@
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Grass spacing (mm)</label>
         <input type="number" x-model.number="grassSpacing" @change="autoSave()"
                step="0.1" min="0.5"
+               class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      {# Elevation range #}
+      <div class="flex flex-col gap-1 min-w-[130px]">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Elevation range (mm)</label>
+        <input type="number" x-model.number="elevationRange" @change="autoSave()"
+               step="0.1" min="0.1"
+               class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      {# Fringe edge height #}
+      <div class="flex flex-col gap-1 min-w-[140px]">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Fringe edge height (mm)</label>
+        <input type="number" x-model.number="fringeEdgeHeight" @change="autoSave()"
+               step="0.5" min="0.5"
                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
       </div>
 
@@ -421,10 +437,12 @@ function polygonEditor() {
     contours: [],          // [{name, direction, points:[{x,y}]}]
     contourMode: false,    // whether we are currently drawing a contour
     contourDraft: [],      // points being drawn in the current session
-    contourStep: 10.0,     // mm elevation increment per contour line
-    grassAmplitude: 0.5,   // grass bump height in mm
-    grassSpacing: 2.4,     // distance between bump centers in mm
-    greenStyle: 'terraced',  // 'smooth' or 'terraced'
+    contourStep: 10.0,        // mm elevation increment per contour line
+    grassAmplitude: 0.5,      // grass bump height in mm
+    grassSpacing: 2.4,        // distance between bump centers in mm
+    greenStyle: 'terraced',   // 'smooth' or 'terraced'
+    elevationRange: 20.09,    // total Z amplitude of the green's slope (mm)
+    fringeEdgeHeight: 10.0,   // outer wall height of the fringe (mm)
     flagOffsetXMm: 0.0,    // mm: move flag right (+) or left (-)
     flagOffsetYMm: 0.0,    // mm: move flag up (+) or down (-)
     selectedContour: -1,   // index into contours[]
@@ -1596,6 +1614,8 @@ function polygonEditor() {
         grassAmplitude: this.grassAmplitude,
         grassSpacing: this.grassSpacing,
         greenStyle: this.greenStyle,
+        elevationRange: this.elevationRange,
+        fringeEdgeHeight: this.fringeEdgeHeight,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
@@ -1711,6 +1731,8 @@ function polygonEditor() {
         this.grassAmplitude = data.grassAmplitude != null ? data.grassAmplitude : 0.5;
         this.grassSpacing = data.grassSpacing != null ? data.grassSpacing : 2.4;
         this.greenStyle = data.greenStyle || 'terraced';
+        this.elevationRange = data.elevationRange != null ? data.elevationRange : 20.09;
+        this.fringeEdgeHeight = data.fringeEdgeHeight != null ? data.fringeEdgeHeight : 10.0;
         this.flagOffsetXMm = data.flagOffsetXMm != null ? data.flagOffsetXMm : 0.0;
         this.flagOffsetYMm = data.flagOffsetYMm != null ? data.flagOffsetYMm : 0.0;
         // Absorb print constants from server (avoids hardcoding in JS)
@@ -1908,6 +1930,8 @@ function polygonEditor() {
         grassAmplitude: this.grassAmplitude,
         grassSpacing: this.grassSpacing,
         greenStyle: this.greenStyle,
+        elevationRange: this.elevationRange,
+        fringeEdgeHeight: this.fringeEdgeHeight,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,

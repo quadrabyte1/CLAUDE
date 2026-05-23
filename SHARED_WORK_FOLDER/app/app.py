@@ -1367,6 +1367,267 @@ def generate_models():
     return jsonify({"status": "ok", "file": result})
 
 
+# ── Arrow Diagnostic ─────────────────────────────────────────────────────────
+
+@app.route("/diagnostic/arrows", methods=["POST"])
+def diagnostic_arrows():
+    """Return an annotated PNG showing every detected arrow in a source image.
+
+    Accepts JSON with:
+      - image:       source image filename
+      - course:      course name (project's course)
+      - imageCourse: course folder where the image lives (may differ)
+      - green_points: array of {x, y} — dense spline-sampled boundary points
+
+    Returns: image/png — annotated diagnostic image.
+
+    The image is always returned (never 500 without a visual); errors are
+    rendered as text overlaid on a black canvas so Thomas can see what went wrong.
+    """
+    import io
+    import math as _math
+    import numpy as _np
+    import cv2 as _cv2
+    from PIL import Image as _PILImage, ImageDraw as _PILDraw, ImageFont as _PILFont
+    from flask import Response as _Response
+
+    DIAG_VERSION = "arrow-diag v1.1"
+    DIAG_DATE    = "2026-05-22"
+
+    def _error_image(msg: str, w: int = 800, h: int = 400) -> bytes:
+        """Return a PNG with the error message written across a dark canvas."""
+        img = _PILImage.new("RGB", (w, h), color=(30, 30, 30))
+        draw = _PILDraw.Draw(img)
+        # Version badge top-left
+        draw.rectangle([4, 4, 4 + 200, 4 + 22], fill=(40, 40, 80))
+        draw.text((8, 6), DIAG_VERSION, fill=(180, 200, 255))
+        # Error text centre
+        draw.text((20, h // 2 - 30), "ERROR", fill=(255, 80, 80))
+        # Wrap message crudely at ~80 chars
+        words = msg.split()
+        line, lines = [], []
+        for w_ in words:
+            if len(" ".join(line + [w_])) > 80:
+                lines.append(" ".join(line))
+                line = [w_]
+            else:
+                line.append(w_)
+        if line:
+            lines.append(" ".join(line))
+        y = h // 2
+        for ln in lines[:6]:
+            draw.text((20, y), ln, fill=(255, 200, 200))
+            y += 18
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        return buf.getvalue()
+
+    def _send_png(data: bytes) -> _Response:
+        return _Response(data, mimetype="image/png",
+                         headers={"Cache-Control": "no-store"})
+
+    # ── Parse request ────────────────────────────────────────────────────────
+    try:
+        payload = request.get_json(force=True) or {}
+        image_name    = payload.get("image", "")
+        course        = payload.get("course", "")
+        image_course  = payload.get("imageCourse", "") or course
+        green_points  = payload.get("green_points", [])
+        water_polygons_raw = payload.get("water_polygons", [])
+
+        if not image_name:
+            return _send_png(_error_image("No image specified in request."))
+        if not green_points:
+            return _send_png(_error_image("No green_points in request — draw a green polygon first."))
+
+        # ── Resolve image path ───────────────────────────────────────────────
+        img_path = _find_image_path(image_name, preferred_course=image_course)
+        if img_path is None:
+            return _send_png(_error_image(f"Image not found: {image_name!r}"))
+
+        # ── Load image ───────────────────────────────────────────────────────
+        bgr = _cv2.imread(img_path)
+        if bgr is None:
+            return _send_png(_error_image(f"cv2.imread failed for: {img_path}"))
+        img_h, img_w = bgr.shape[:2]
+
+        # ── Build green boundary polygon ─────────────────────────────────────
+        green_boundary_px = _np.array(
+            [[p["x"], p["y"]] for p in green_points], dtype=_np.float64
+        )
+
+        # ── Build water boundary polygons (for false-positive filtering) ─────
+        # Any dark blob whose centroid falls inside a water polygon is not a
+        # gradient arrow — it's a water-edge glyph, yardage label, or
+        # shoreline marking. Build int32 contours for cv2.pointPolygonTest.
+        water_boundaries_i = []
+        for wpoly in water_polygons_raw:
+            if len(wpoly) >= 3:
+                water_boundaries_i.append(
+                    _np.array([[p["x"], p["y"]] for p in wpoly], dtype=_np.int32)
+                )
+
+        # ── Run arrow detector ───────────────────────────────────────────────
+        from gradient_surface_diagnostic import detect_arrows
+        all_arrows = detect_arrows(bgr, green_boundary_px, dark_threshold=50, max_arrow_area=600)
+
+        # Filter out any arrow whose centroid is inside a water polygon.
+        # These are water-shoreline glyphs that happen to sit inside the green
+        # boundary polygon but are not gradient arrows.
+        n_water_rejected = 0
+        arrows = []
+        for a in all_arrows:
+            in_water = False
+            for wb in water_boundaries_i:
+                if _cv2.pointPolygonTest(wb, (float(a["cx"]), float(a["cy"])), measureDist=False) >= 0:
+                    in_water = True
+                    break
+            if in_water:
+                n_water_rejected += 1
+            else:
+                arrows.append(a)
+        if n_water_rejected > 0:
+            print(f"  diagnostic_arrows: rejected {n_water_rejected} arrow(s) whose centroid "
+                  f"fell inside a water polygon (water-glyph false-positive class)")
+
+    except Exception as exc:
+        import traceback
+        return _send_png(_error_image(f"Pipeline error: {exc}\n{traceback.format_exc()[:400]}"))
+
+    # ── Render annotated image ───────────────────────────────────────────────
+    try:
+        # Convert BGR → RGB for PIL
+        rgb = _cv2.cvtColor(bgr, _cv2.COLOR_BGR2RGB)
+        pil_img = _PILImage.fromarray(rgb).convert("RGBA")
+        overlay = _PILImage.new("RGBA", pil_img.size, (0, 0, 0, 0))
+        draw = _PILDraw.Draw(overlay)
+
+        # Draw green boundary — solid white outline so it's visually unambiguous
+        # that all gradient arrows sit on the green, not on water or fringe.
+        boundary_pts = [(float(pt[0]), float(pt[1])) for pt in green_boundary_px]
+        if len(boundary_pts) >= 2:
+            draw.line(boundary_pts + [boundary_pts[0]], fill=(255, 255, 255, 255), width=3)
+
+        ARROW_COLOR  = (255, 0, 220, 230)   # magenta fill
+        OUTLINE_COL  = (255, 255, 255, 230)  # white outline
+        CIRCLE_R     = 8
+        ARROW_LEN    = 24
+        LABEL_COLOR  = (255, 255, 255, 255)
+
+        for idx, a in enumerate(arrows):
+            cx, cy = float(a["cx"]), float(a["cy"])
+            dx, dy = a["dx"], a["dy"]
+            label  = str(idx + 1)
+
+            # Arrow glyph: white outline then magenta fill arrowedLine
+            ex = cx + dx * ARROW_LEN
+            ey = cy + dy * ARROW_LEN
+            # Draw as a line with a manual arrowhead in the overlay
+            draw.line([(cx, cy), (ex, ey)], fill=OUTLINE_COL, width=5)
+            draw.line([(cx, cy), (ex, ey)], fill=ARROW_COLOR, width=3)
+
+            # Arrowhead triangle
+            angle = _math.atan2(dy, dx)
+            tip_x, tip_y = ex, ey
+            LEFT_ANGLE  = angle + _math.pi * 0.75
+            RIGHT_ANGLE = angle - _math.pi * 0.75
+            HEAD_LEN = 10
+            lx = tip_x + _math.cos(LEFT_ANGLE)  * HEAD_LEN
+            ly = tip_y + _math.sin(LEFT_ANGLE)  * HEAD_LEN
+            rx = tip_x + _math.cos(RIGHT_ANGLE) * HEAD_LEN
+            ry = tip_y + _math.sin(RIGHT_ANGLE) * HEAD_LEN
+            draw.polygon([(tip_x, tip_y), (lx, ly), (rx, ry)], fill=ARROW_COLOR, outline=OUTLINE_COL)
+
+            # Numbered circle at tail
+            draw.ellipse(
+                [cx - CIRCLE_R - 1, cy - CIRCLE_R - 1,
+                 cx + CIRCLE_R + 1, cy + CIRCLE_R + 1],
+                fill=OUTLINE_COL,
+            )
+            draw.ellipse(
+                [cx - CIRCLE_R, cy - CIRCLE_R,
+                 cx + CIRCLE_R, cy + CIRCLE_R],
+                fill=(30, 0, 60, 230),
+            )
+            draw.text((cx - CIRCLE_R + 2, cy - CIRCLE_R + 1), label, fill=LABEL_COLOR)
+
+        # Composite overlay onto source
+        composite = _PILImage.alpha_composite(pil_img, overlay).convert("RGB")
+        draw2 = _PILDraw.Draw(composite)
+
+        # ── Version badge (top-left) ─────────────────────────────────────────
+        badge_text = f"{DIAG_VERSION}  {DIAG_DATE}"
+        bx0, by0 = 6, 6
+        bx1, by1 = bx0 + len(badge_text) * 7 + 10, by0 + 20
+        draw2.rectangle([bx0, by0, bx1, by1], fill=(20, 10, 50))
+        draw2.rectangle([bx0, by0, bx1, by1], outline=(140, 100, 255), width=1)
+        draw2.text((bx0 + 5, by0 + 3), badge_text, fill=(200, 180, 255))
+
+        # ── Summary text (top-right) ─────────────────────────────────────────
+        n = len(arrows)
+        if n == 0:
+            summary = "0 arrows detected"
+            s_fill  = (255, 80, 80)
+        elif n == 1:
+            summary = "1 arrow detected"
+            s_fill  = (100, 255, 120)
+        else:
+            summary = f"{n} arrows detected"
+            s_fill  = (100, 255, 120)
+
+        s_w = len(summary) * 8 + 16
+        sx0 = img_w - s_w - 4
+        draw2.rectangle([sx0 - 2, 6, img_w - 4, 28], fill=(20, 10, 50))
+        draw2.rectangle([sx0 - 2, 6, img_w - 4, 28], outline=(80, 200, 80), width=1)
+        draw2.text((sx0 + 5, 10), summary, fill=s_fill)
+
+        # ── Legend (bottom-left) ─────────────────────────────────────────────
+        if arrows:
+            LEGEND_LINE_H = 16
+            LEGEND_COLS   = 4  # max columns in legend box
+            LEGEND_COL_W  = 180
+
+            legend_lines = []
+            for idx, a in enumerate(arrows):
+                angle_deg = round(_math.degrees(_math.atan2(a["dy"], a["dx"])))
+                legend_lines.append(
+                    f"  {idx+1:>2}. ({int(a['cx'])}, {int(a['cy'])})  dir={angle_deg}°"
+                )
+
+            # Split into columns if many arrows
+            n_rows = max(1, -(-len(legend_lines) // LEGEND_COLS))  # ceil div
+            columns = []
+            for c in range(LEGEND_COLS):
+                col = legend_lines[c * n_rows: (c + 1) * n_rows]
+                if col:
+                    columns.append(col)
+
+            box_h = n_rows * LEGEND_LINE_H + 24
+            box_w = len(columns) * LEGEND_COL_W + 16
+            lx0, ly0 = 6, img_h - box_h - 6
+
+            draw2.rectangle([lx0, ly0, lx0 + box_w, ly0 + box_h], fill=(15, 8, 40, 210))
+            draw2.rectangle([lx0, ly0, lx0 + box_w, ly0 + box_h], outline=(100, 80, 180), width=1)
+            draw2.text((lx0 + 8, ly0 + 5), "Arrow  (x, y)  direction", fill=(160, 140, 220))
+
+            for ci, col in enumerate(columns):
+                for ri, line in enumerate(col):
+                    draw2.text(
+                        (lx0 + 8 + ci * LEGEND_COL_W, ly0 + 18 + ri * LEGEND_LINE_H),
+                        line,
+                        fill=(220, 210, 240),
+                    )
+
+        # ── Encode and return ────────────────────────────────────────────────
+        buf = io.BytesIO()
+        composite.save(buf, format="PNG")
+        return _send_png(buf.getvalue())
+
+    except Exception as exc:
+        import traceback
+        return _send_png(_error_image(f"Render error: {exc}\n{traceback.format_exc()[:400]}"))
+
+
 # ── Life Manager routes ──────────────────────────────────────────────────────
 
 def _life_next_due(current_due, recur_rule, recur_interval):

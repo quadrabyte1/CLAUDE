@@ -2,6 +2,7 @@
   "course": "Stanford",
   "hole": "8",
   "image": "Stanford (Hole 8).png",
+  "imageCourse": "Stanford",
   "imageSize": {
     "width": 945,
     "height": 1500

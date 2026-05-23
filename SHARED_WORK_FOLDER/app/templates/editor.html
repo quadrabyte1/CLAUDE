@@ -8,7 +8,7 @@
   {# ── Header ─────────────────────────────────────────────── #}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.23</span></h1>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.26</span></h1>
       <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
     </div>
   </div>
@@ -51,6 +51,14 @@
             :class="imgLoaded ? 'bg-pink-500 hover:bg-pink-600' : 'bg-pink-500/40 cursor-not-allowed'"
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
       Add Boulders
+    </button>
+
+    <button @click="arrowDiagnostic()"
+            :disabled="!imgLoaded || !polygons.find(p => p.type === 'green')"
+            :class="(imgLoaded && polygons.find(p => p.type === 'green')) ? 'bg-violet-600 hover:bg-violet-700' : 'bg-violet-600/40 cursor-not-allowed'"
+            :title="!imgLoaded ? 'Load an image first' : (!polygons.find(p => p.type === 'green') ? 'Draw a green polygon first' : 'Open arrow detection diagnostic in new tab')"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+      Arrow Diagnostic
     </button>
 
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
@@ -1800,6 +1808,67 @@ function polygonEditor() {
         }
       } catch (err) {
         this.flash('Contour detection error: ' + err.message, false);
+      }
+    },
+
+    async arrowDiagnostic() {
+      // Open an annotated arrow-detection PNG in a new tab for the currently
+      // loaded source image. Sends green_points and water_polygons so the
+      // endpoint can exclude any arrow centroids that fall inside water.
+      const greenPoly = this.polygons.find(p => p.type === 'green');
+      if (!greenPoly) {
+        this.flash('No green polygon — draw one first', false);
+        return;
+      }
+      if (!this.selectedImage) {
+        this.flash('No image loaded', false);
+        return;
+      }
+
+      this.flash('Running arrow diagnostic…', true);
+
+      const splinePts = this.sampleSplinePoints(greenPoly.points, 16);
+      const greenPoints = splinePts.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+
+      // Collect water polygons (spline-sampled) so the server can exclude
+      // water-interior false positives from the gradient-arrow detection.
+      const waterPolygons = this.polygons
+        .filter(p => p.type === 'water')
+        .map(wp => {
+          const wPts = this.sampleSplinePoints(wp.points, 16);
+          return wPts.map(p => ({ x: Math.round(p.x), y: Math.round(p.y) }));
+        });
+
+      try {
+        const resp = await fetch('/diagnostic/arrows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image:          this.selectedImage,
+            course:         this.courseName,
+            imageCourse:    this.selectedImageCourse || this.courseName,
+            green_points:   greenPoints,
+            water_polygons: waterPolygons,
+            imageSize:      { width: this.imgW, height: this.imgH },
+          }),
+        });
+
+        if (!resp.ok && resp.headers.get('Content-Type') !== 'image/png') {
+          this.flash('Arrow diagnostic failed (' + resp.status + ')', false);
+          return;
+        }
+
+        // Response is always a PNG — open it in a new tab via a blob URL
+        const blob = await resp.blob();
+        const url  = URL.createObjectURL(blob);
+        const win  = window.open(url, '_blank');
+        if (!win) {
+          this.flash('Popup blocked — allow pop-ups and try again', false);
+        } else {
+          this.flash('Arrow diagnostic opened in new tab', true);
+        }
+      } catch (err) {
+        this.flash('Arrow diagnostic error: ' + err.message, false);
       }
     },
 

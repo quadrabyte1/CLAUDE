@@ -1131,6 +1131,7 @@ def _build_heightmap_mesh(
     scale: float,
     centroid_px: np.ndarray,
     stepped: bool = False,
+    contour_step_mm: float = 0.0,
 ) -> trimesh.Trimesh:
     """
     Build a closed watertight mesh from a height map grid.
@@ -1147,7 +1148,10 @@ def _build_heightmap_mesh(
 
     Parameters
     ----------
-    stepped : if True, quantize Z_mm into N_CONTOUR_LEVELS discrete levels first.
+    stepped : if True, quantize Z_mm into discrete terrace levels first.
+    contour_step_mm : terrace step size in mm (from EGM contourStep). When > 0
+        the number of levels is derived from the actual Z range divided by this
+        value. When 0 (default / legacy), N_CONTOUR_LEVELS is used instead.
     """
     grid_res = Z_mm.shape[0]
 
@@ -1155,7 +1159,12 @@ def _build_heightmap_mesh(
     if stepped:
         valid_vals = Z_mm[inside_mask]
         z_min_mm, z_max_mm = valid_vals.min(), valid_vals.max()
-        step = (z_max_mm - z_min_mm) / N_CONTOUR_LEVELS
+        z_range_mm = z_max_mm - z_min_mm
+        if contour_step_mm > 0.0 and z_range_mm > 1e-9:
+            n_levels = max(1, round(z_range_mm / contour_step_mm))
+            step = z_range_mm / n_levels
+        else:
+            step = z_range_mm / N_CONTOUR_LEVELS
         if step < 1e-9:
             step = 1.0
         Z_plot = np.copy(Z_mm)
@@ -1534,11 +1543,15 @@ def save_stl_meshes(
     valid_mm = Z_mm[inside_mask]
     print(f"  Z_mm range: {valid_mm.min():.3f} .. {valid_mm.max():.3f} mm")
 
+    contour_step_mm = float(egm_data.get("contourStep") or 0.0)
+    print(f"  Contour step from EGM: {contour_step_mm} mm "
+          f"({'user-specified' if contour_step_mm > 0 else 'fallback to N_CONTOUR_LEVELS=' + str(N_CONTOUR_LEVELS)})")
+
     # --- Smooth surface ---
     print("  Building smooth surface mesh…")
     smooth_mesh = _build_heightmap_mesh(
         Z_mm, xs_grid, ys_grid, inside_mask, green_boundary_px,
-        scale, centroid_px, stepped=False
+        scale, centroid_px, stepped=False, contour_step_mm=contour_step_mm
     )
     bb = smooth_mesh.bounds
     print(f"  Smooth mesh: {len(smooth_mesh.vertices)} vertices, {len(smooth_mesh.faces)} faces")
@@ -1550,7 +1563,7 @@ def save_stl_meshes(
     print("  Building stepped surface mesh…")
     stepped_mesh = _build_heightmap_mesh(
         Z_mm, xs_grid, ys_grid, inside_mask, green_boundary_px,
-        scale, centroid_px, stepped=True
+        scale, centroid_px, stepped=True, contour_step_mm=contour_step_mm
     )
     bb = stepped_mesh.bounds
     print(f"  Stepped mesh: {len(stepped_mesh.vertices)} vertices, {len(stepped_mesh.faces)} faces")
@@ -1886,11 +1899,17 @@ def build_fringe_mesh(
     # terrace height. We avoid that by lerping from the same quantized Z
     # source the seam ends up using. (Smooth-style green: use Z_mm as before.)
     _green_style_lerp = str(egm_data.get("greenStyle", "smooth")).lower()
+    _contour_step_lerp = float(egm_data.get("contourStep") or 0.0)
     if _green_style_lerp == "terraced":
         _valid_vals_lerp = Z_mm[inside_mask]
         _z_min_lerp = float(_valid_vals_lerp.min())
         _z_max_lerp = float(_valid_vals_lerp.max())
-        _step_lerp = (_z_max_lerp - _z_min_lerp) / N_CONTOUR_LEVELS
+        _z_range_lerp = _z_max_lerp - _z_min_lerp
+        if _contour_step_lerp > 0.0 and _z_range_lerp > 1e-9:
+            _n_levels_lerp = max(1, round(_z_range_lerp / _contour_step_lerp))
+            _step_lerp = _z_range_lerp / _n_levels_lerp
+        else:
+            _step_lerp = _z_range_lerp / N_CONTOUR_LEVELS
         if _step_lerp < 1e-9:
             _step_lerp = 1.0
         _Z_lerp_src = np.copy(Z_mm)
@@ -2025,10 +2044,16 @@ def build_fringe_mesh(
     # not the raw Z_mm. We replicate that quantization here so the seam
     # exactly matches the green mesh's boundary, whichever style is used.
     green_style = str(egm_data.get("greenStyle", "smooth")).lower()
+    _contour_step_seam = float(egm_data.get("contourStep") or 0.0)
     if green_style == "terraced":
         valid_vals = Z_mm[inside_mask]
         z_min_g, z_max_g = valid_vals.min(), valid_vals.max()
-        step_g = (z_max_g - z_min_g) / N_CONTOUR_LEVELS
+        _z_range_g = z_max_g - z_min_g
+        if _contour_step_seam > 0.0 and _z_range_g > 1e-9:
+            _n_levels_g = max(1, round(_z_range_g / _contour_step_seam))
+            step_g = _z_range_g / _n_levels_g
+        else:
+            step_g = _z_range_g / N_CONTOUR_LEVELS
         if step_g < 1e-9:
             step_g = 1.0
         Z_for_seam = np.copy(Z_mm)

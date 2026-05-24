@@ -1813,7 +1813,7 @@ def build_fringe_mesh(
             continue
         # poly["points"] is a list of {"x": float, "y": float} dicts
         try:
-            pts_px = interpolate_catmull_rom(poly["points"])
+            pts_px = _poly_to_dense_px(poly)
         except Exception:
             pts_px = np.array([[p["x"], p["y"]] for p in poly["points"]], dtype=np.float64)
         pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
@@ -1840,11 +1840,17 @@ def build_fringe_mesh(
                 water_shapely.append(sp)
 
     # --- Collect boulders-annulus carve shapes ---
-    # A boulders polygon enters annulus mode when it fully contains at least
-    # one water polygon (full-ring containment via Shapely `.contains`).  In
-    # that case the fringe must have the ANNULUS shape (boulders minus enclosed
-    # water) carved out of it — the same way trap and water carve-outs work —
-    # so the annulus slab sits in a real recess rather than floating on top.
+    # A boulders polygon enters annulus mode when it geometrically encloses
+    # at least one water polygon (full-ring containment via Shapely `.covers`,
+    # not `.contains` — task #466). `covers` is the right predicate because
+    # after task #463 the boundary-region-derived water polygon shares frame
+    # edges with the boulders polygon, and `contains` returns False whenever
+    # boundaries touch (strict interior containment). `covers` returns True
+    # when the water is geometrically inside the boulders polygon OR they
+    # share boundary — both should trigger annulus mode. In that case the
+    # fringe must have the ANNULUS shape (boulders minus enclosed water)
+    # carved out of it — the same way trap and water carve-outs work — so
+    # the annulus slab sits in a real recess rather than floating on top.
     # Water-only boulders polygons (no enclosed water) remain on-top slabs and
     # must NOT be carved from the fringe (they sit above it, not inside it).
     #
@@ -1856,7 +1862,7 @@ def build_fringe_mesh(
             if _bpoly.get("type") != "boulders":
                 continue
             try:
-                _b_pts_px = interpolate_catmull_rom(_bpoly["points"])
+                _b_pts_px = _poly_to_dense_px(_bpoly)
             except Exception:
                 _b_pts_px = np.array([[p["x"], p["y"]] for p in _bpoly["points"]], dtype=np.float64)
             _b_pts_mm = _px_to_mm_2d(_b_pts_px, scale, centroid_px)
@@ -1864,7 +1870,7 @@ def build_fringe_mesh(
                 _b_sp = ShapelyPolygon(_b_pts_mm)
                 if not _b_sp.is_valid:
                     _b_sp = _b_sp.buffer(0)
-                _enclosed = [wsp for wsp in water_shapely if _b_sp.contains(wsp)]
+                _enclosed = [wsp for wsp in water_shapely if _b_sp.covers(wsp)]
                 if not _enclosed:
                     continue
                 _w_union = _fringe_uu(_enclosed)
@@ -2441,6 +2447,30 @@ def build_fringe_mesh(
     trimesh.repair.fill_holes(mesh)
     print(f"  Fringe: top_faces={len(top_faces)} wall_faces={len(wall_faces)} "
           f"cap_faces={len(cap_faces)}")
+
+    # ── Drop spurious small disconnected components ─────────────────────────
+    # When a water polygon nearly covers the whole printable rectangle (the
+    # Catmull-Rom spline can swing slightly inward at the rectangle corners),
+    # the fringe_mask gets carved so aggressively that a handful of cells at
+    # the corners survive as tiny isolated islands.  After mesh assembly these
+    # show up as small 3D "rectangles" attached to / floating next to the
+    # fringe frame.  The fringe is by design a SINGLE connected body (the
+    # outer frame with green / traps / water as interior holes), so any
+    # disconnected component beyond the largest one is an artifact.  Drop
+    # everything that isn't the main body (using face count as the size
+    # metric — robust to mesh repair changing vertex counts).
+    try:
+        components = mesh.split(only_watertight=False)
+        if len(components) > 1:
+            main = max(components, key=lambda c: len(c.faces))
+            dropped = [c for c in components if c is not main]
+            n_dropped_faces = sum(len(c.faces) for c in dropped)
+            print(f"  Fringe: dropped {len(dropped)} spurious component(s) "
+                  f"({n_dropped_faces} faces) — water-near-corner carve artifact")
+            mesh = main
+    except Exception as _exc_split:
+        print(f"  Fringe: component-split cleanup skipped ({_exc_split})")
+
     return mesh
 
 
@@ -3154,7 +3184,7 @@ def export_water_meshes(
     results: list = []
     for i, water_poly in enumerate(water_polygons, start=1):
         try:
-            pts_px = interpolate_catmull_rom(water_poly["points"])
+            pts_px = _poly_to_dense_px(water_poly)
             pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
 
             shapely_water = ShapelyPolygon(pts_mm)
@@ -3259,10 +3289,13 @@ def export_boulders_meshes(
 
     Two modes, chosen per-polygon:
 
-    **Annulus mode** (water-carved): when a boulders polygon fully contains at
-    least one water polygon (full-ring containment — `boulders_sp.contains(
-    water_sp)` — never a centroid-only check), the boulders mesh is the
-    difference boulders_poly MINUS the union of those enclosed water polygons.
+    **Annulus mode** (water-carved): when a boulders polygon geometrically
+    encloses at least one water polygon (full-ring containment —
+    `boulders_sp.covers(water_sp)` — never a centroid-only check), the
+    boulders mesh is the difference boulders_poly MINUS the union of those
+    enclosed water polygons. `covers` (not `contains`) is the predicate of
+    record so frame-edge-sharing water polygons (the standard output of the
+    boundary-region derivation in task #463) still register as enclosed.
     The resulting Shapely polygon has one or more interior rings (holes).
     `_build_slab_from_shapely` / `trimesh.creation.extrude_polygon` handle
     holed polygons natively.  Height treatment mirrors water: fringe-Z minimum
@@ -3306,7 +3339,7 @@ def export_boulders_meshes(
         if wp.get("type") != "water":
             continue
         try:
-            w_pts_px = interpolate_catmull_rom(wp["points"])
+            w_pts_px = _poly_to_dense_px(wp)
         except Exception:
             w_pts_px = np.array([[p["x"], p["y"]] for p in wp["points"]], dtype=np.float64)
         w_pts_mm = _px_to_mm_2d(w_pts_px, scale, centroid_px)
@@ -3332,7 +3365,7 @@ def export_boulders_meshes(
     results: list = []
     for i, boulders_poly in enumerate(boulders_polygons, start=1):
         try:
-            pts_px = interpolate_catmull_rom(boulders_poly["points"])
+            pts_px = _poly_to_dense_px(boulders_poly)
             pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
 
             shapely_boulders = ShapelyPolygon(pts_mm)
@@ -3340,11 +3373,18 @@ def export_boulders_meshes(
                 shapely_boulders = shapely_boulders.buffer(0)
 
             # --- Determine mode: annulus or on-top slab ---
-            # Full-ring containment: water polygon counts as enclosed only when
-            # boulders_sp.contains(water_sp) is True — the entire water ring
+            # Full-ring containment: water polygon counts as enclosed when
+            # boulders_sp.covers(water_sp) is True — the entire water ring
             # must lie inside the boulders polygon, not just its centroid.
+            # `covers` is used instead of `contains` (task #466) so that
+            # water polygons sharing frame-edge boundary with the boulders
+            # polygon (the normal case after the boundary-region derivation
+            # in task #463) still register as enclosed and trigger annulus
+            # mode. `contains` would return False on boundary-touching pairs
+            # and fall back to the on-top slab path, placing the boulders
+            # ribbon in the fringe area instead of inside the water.
             enclosed_water = [wsp for wsp in water_shapely_mm
-                              if shapely_boulders.contains(wsp)]
+                              if shapely_boulders.covers(wsp)]
             annulus_mode = len(enclosed_water) > 0
             if annulus_mode:
                 water_union = _unary_union(enclosed_water)
@@ -3430,6 +3470,323 @@ def export_boulders_meshes(
             traceback.print_exc()
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Boundary-region derivation (task #460): auto-derive boulders ring from water
+# ---------------------------------------------------------------------------
+
+# Width of the auto-derived boulders ring just inside each water polygon's
+# original outer edge. Five millimetres matches the manual riprap band Thomas
+# was previously annotating by hand.
+BOUNDARY_REGION_BAND_MM: float = 5.0
+
+
+def _poly_to_dense_px(poly: dict) -> np.ndarray:
+    """Return an Nx2 dense pixel polyline for a polygon.
+
+    For polygons synthesised by ``_apply_boundary_region_derivation``
+    (flagged with ``"_dense_px_points": True``), the stored ``points`` are
+    already a dense pre-interpolated outline produced by Shapely's
+    buffer/simplify pipeline — passing them through Catmull-Rom again would
+    introduce overshoot wiggles that desynchronise the boulders / shrunken-
+    water outlines, breaking the ``shapely_boulders.covers(water_sp)``
+    check in :func:`export_boulders_meshes` and producing an on-top slab
+    instead of the intended annular ring.
+
+    For all other polygons, fall back to the editor's Catmull-Rom spline
+    (matching the editor's preview).
+    """
+    if poly.get("_dense_px_points"):
+        pts = np.array(
+            [[p["x"], p["y"]] for p in poly.get("points", [])],
+            dtype=np.float64,
+        )
+        return pts
+    return interpolate_catmull_rom(poly["points"])
+
+
+def _mm_to_px_2d(pts_mm: np.ndarray, scale: float, centroid_px: np.ndarray) -> np.ndarray:
+    """Inverse of ``_px_to_mm_2d``: convert Nx2 mm coords back to image pixels.
+
+    The forward transform is ``mm_xy = (px - centroid) * scale`` with Y flipped.
+    The inverse un-flips Y first, then divides by scale and re-adds the centroid.
+    """
+    xy = pts_mm.copy().astype(np.float64)
+    xy[:, 1] = -xy[:, 1]  # un-flip Y
+    return xy / scale + centroid_px
+
+
+def _shapely_outer_coords_to_px(
+    poly_mm: ShapelyPolygon,
+    scale: float,
+    centroid_px: np.ndarray,
+    simplify_tol_mm: float = 0.25,
+) -> list[dict]:
+    """Convert the EXTERIOR ring of a Shapely polygon (mm) to the px-dict format
+    EGM polygons use (``[{"x": float, "y": float}, ...]``).
+
+    Drops the duplicated closing vertex Shapely produces — EGM control points
+    are an open ring (the editor and downstream code close it implicitly).
+    Lightly simplifies the polygon first (``simplify_tol_mm``) so the dense
+    buffer output doesn't feed thousands of near-collinear "control points"
+    into the downstream Catmull-Rom interpolator (which would produce minor
+    spline wiggles between near-duplicate vertices).
+    """
+    if simplify_tol_mm > 0:
+        try:
+            simplified = poly_mm.simplify(simplify_tol_mm, preserve_topology=True)
+            if isinstance(simplified, ShapelyPolygon) and not simplified.is_empty:
+                poly_mm = simplified
+        except Exception:
+            pass
+    coords = np.asarray(poly_mm.exterior.coords, dtype=np.float64)
+    # Shapely's `exterior.coords` repeats the first point at the end.
+    if len(coords) >= 2 and np.allclose(coords[0], coords[-1]):
+        coords = coords[:-1]
+    pts_px = _mm_to_px_2d(coords, scale, centroid_px)
+    return [{"x": float(p[0]), "y": float(p[1])} for p in pts_px]
+
+
+def _apply_boundary_region_derivation(
+    egm_data: dict,
+    green_boundary_px: np.ndarray,
+    band_mm: float = BOUNDARY_REGION_BAND_MM,
+) -> None:
+    """In-place: replace boulders polygons with auto-derived rings around water.
+
+    For each ``water`` polygon in ``egm_data["polygons"]``:
+      1. Convert its (Catmull-Rom interpolated) outline to mm.
+      2. Compute ``water_shrunk = water_orig.buffer(-band_mm)``.
+      3. If ``water_shrunk`` is empty (the water is already smaller than the
+         band), log a warning and leave that water polygon untouched — no
+         ring is synthesised for it.
+      4. Otherwise:
+           * Replace the water polygon's stored points with the shrunken
+             outline (so export_water_meshes and the fringe carve see the
+             smaller water).
+           * Add a NEW ``boulders`` polygon whose outer ring equals the
+             ORIGINAL water outline. The downstream annulus-mode logic
+             (``boulders_sp.covers(water_sp)``) will then subtract the
+             shrunken water to produce the actual ring shape.
+
+    All synthesised geometry is clipped to the printable fringe rectangle so
+    nothing leaks past the plaque frame. Any pre-existing boulders polygon is
+    dropped to prevent double-counting.
+
+    Mutates ``egm_data["polygons"]`` in place.
+    """
+    polygons = egm_data.get("polygons", [])
+    water_polys = [p for p in polygons if p.get("type") == "water"]
+    print(
+        f"[BOUNDARY_REGION] _apply_boundary_region_derivation called: "
+        f"band_mm={band_mm:.2f}, water_polygons={len(water_polys)}, "
+        f"existing_boulders="
+        f"{sum(1 for p in polygons if p.get('type') == 'boulders')}"
+    )
+    if not water_polys:
+        print("  boundary region: no water polygons — nothing to derive.")
+        return
+
+    scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
+    _half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+    fringe_rect = shapely_box(-_half, -_half, +_half, +_half)
+
+    # Frame-edge band: a ``band_mm``-wide corridor running along the inside of
+    # the plaque/frame perimeter. Wherever the original water polygon touches
+    # the frame edge, we want the water mesh to remain flush with the frame —
+    # NOT shrunk inward by ``band_mm``. So we restore that corridor to the
+    # shrunken water (Option A) and the boulders ring derives naturally from
+    # ``water_orig.difference(water_shrunk)`` without any frame-flush strip.
+    # Guarded against degenerate frame rectangles (< 2*band_mm in either axis).
+    _frame_inner = fringe_rect.buffer(-band_mm)
+    if _frame_inner.is_empty or not _frame_inner.is_valid:
+        frame_edge_band = None  # frame too small — skip suppression
+    else:
+        frame_edge_band = fringe_rect.difference(_frame_inner)
+        if frame_edge_band.is_empty or not frame_edge_band.is_valid:
+            frame_edge_band = None
+
+    n_existing_boulders = sum(1 for p in polygons if p.get("type") == "boulders")
+    if n_existing_boulders:
+        print(
+            f"  boundary region: replacing {n_existing_boulders} existing "
+            "boulders polygon(s) with auto-derived ring(s)."
+        )
+
+    new_polygons: list[dict] = []
+    n_rings = 0
+    n_skipped = 0
+    for poly in polygons:
+        ptype = poly.get("type")
+        if ptype == "boulders":
+            # Drop existing boulders polygons — the derivation replaces them.
+            continue
+        if ptype != "water":
+            new_polygons.append(poly)
+            continue
+
+        # ── Build mm-space shapes for this water polygon ──
+        try:
+            pts_px = interpolate_catmull_rom(poly["points"])
+        except Exception:
+            pts_px = np.array([[p["x"], p["y"]] for p in poly["points"]],
+                              dtype=np.float64)
+        pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
+        try:
+            water_orig = ShapelyPolygon(pts_mm)
+            if not water_orig.is_valid:
+                water_orig = water_orig.buffer(0)
+        except Exception as exc:
+            print(f"  boundary region: water polygon → Shapely failed: {exc}. "
+                  "Keeping original water polygon unchanged.")
+            new_polygons.append(poly)
+            continue
+
+        # Clip the original water shape to the printable rectangle so the
+        # synthesised boulders polygon never extends past the plaque frame.
+        water_orig_clipped = water_orig.intersection(fringe_rect)
+        if not water_orig_clipped.is_valid:
+            water_orig_clipped = water_orig_clipped.buffer(0)
+        # If clipping produced a MultiPolygon, keep the largest piece (the
+        # downstream slab builder is single-polygon).
+        if isinstance(water_orig_clipped, ShapelyMultiPolygon):
+            water_orig_clipped = max(water_orig_clipped.geoms, key=lambda g: g.area)
+        if water_orig_clipped.is_empty or not isinstance(water_orig_clipped, ShapelyPolygon):
+            print("  boundary region: water polygon lies entirely outside fringe "
+                  "rectangle — skipping.")
+            new_polygons.append(poly)
+            continue
+
+        # Compute the shrunken water. buffer(-band) can yield empty or
+        # multi-piece results when the water is smaller than ~2*band on any
+        # axis; we treat that as a skip.
+        water_shrunk = water_orig_clipped.buffer(-band_mm)
+        if not water_shrunk.is_valid:
+            water_shrunk = water_shrunk.buffer(0)
+        # Option A: restore the frame-edge corridor to the shrunken water so
+        # the water remains flush with the plaque frame wherever it already
+        # touched the frame. The resulting boulders ring
+        # (= water_orig.difference(water_shrunk)) therefore has zero width
+        # along frame-flush boundaries and the full ``band_mm`` along
+        # interior (fringe-adjacent) boundaries. No-op if water_orig doesn't
+        # touch the frame at all (intersection is empty).
+        if frame_edge_band is not None:
+            try:
+                frame_overlap = water_orig_clipped.intersection(frame_edge_band)
+                if not frame_overlap.is_empty:
+                    water_shrunk = water_shrunk.union(frame_overlap)
+                    # Fix A (task #465): the union of an inward-buffered polygon
+                    # with a frame-flush band often introduces T-junctions /
+                    # collinear runs / sliver seams that survive into the
+                    # Delaunay water mesh as edges shared by 3+ faces. Heal with
+                    # buffer(0) + simplify before the outline is consumed.
+                    water_shrunk = water_shrunk.buffer(0)
+                    water_shrunk = water_shrunk.simplify(0.01, preserve_topology=True)
+                    # Fix (task #466): simplify(0.01) can nudge vertices up to
+                    # 0.01 mm outward, pushing water_shrunk just outside
+                    # water_orig_clipped. Snap shared vertices back so the
+                    # downstream ``boulders_sp.covers(water_sp)`` check in
+                    # export_boulders_meshes / build_fringe_mesh actually
+                    # returns True (otherwise annulus mode is skipped and the
+                    # boulders ring falls back to the on-top slab path,
+                    # appearing as a ribbon in the fringe instead of inside
+                    # the water polygon).
+                    from shapely import snap as _shapely_snap
+                    water_shrunk = _shapely_snap(
+                        water_shrunk, water_orig_clipped, 0.02
+                    )
+                    if not water_shrunk.is_valid:
+                        water_shrunk = water_shrunk.buffer(0)
+            except Exception as exc:
+                print(f"  boundary region: frame-edge suppression failed "
+                      f"({exc}); falling back to uniform 5 mm ring.")
+        if water_shrunk.is_empty:
+            print(
+                f"  boundary region: water polygon too small to shrink by "
+                f"{band_mm:.1f} mm — leaving water unchanged and skipping ring."
+            )
+            new_polygons.append(poly)
+            n_skipped += 1
+            continue
+        if isinstance(water_shrunk, ShapelyMultiPolygon):
+            # Keep the largest connected piece — the slab builder is
+            # single-polygon and split water would otherwise become
+            # several mismatched pieces.
+            water_shrunk = max(water_shrunk.geoms, key=lambda g: g.area)
+        if not isinstance(water_shrunk, ShapelyPolygon) or water_shrunk.is_empty:
+            print(
+                f"  boundary region: water polygon shrink → non-polygon "
+                f"({type(water_shrunk).__name__}). Skipping ring."
+            )
+            new_polygons.append(poly)
+            n_skipped += 1
+            continue
+
+        # Replace this water polygon's points with the shrunken outline.
+        # Skip simplification — these points are consumed directly (no
+        # Catmull-Rom re-interp), so dense buffer output is fine. A sparse
+        # 0.25 mm-simplified ring would also leave the water ripple Delaunay
+        # with too few rim verts (61 boundary edges fail manifold check).
+        new_water_pts = _shapely_outer_coords_to_px(
+            water_shrunk, scale, centroid_px, simplify_tol_mm=0.0,
+        )
+        if len(new_water_pts) < 3:
+            print("  boundary region: shrunken water polygon has < 3 points — "
+                  "skipping ring and leaving water unchanged.")
+            new_polygons.append(poly)
+            n_skipped += 1
+            continue
+        new_water = dict(poly)
+        new_water["points"] = new_water_pts
+        # The new water points are a dense exterior outline straight from
+        # Shapely (post-buffer + simplify). They MUST NOT be passed through
+        # Catmull-Rom again — that would re-introduce overshoot bulges that
+        # desynchronise the water outline from the matching boulders ring.
+        # See _poly_to_dense_px and task #461.
+        new_water["_dense_px_points"] = True
+        new_polygons.append(new_water)
+
+        # Synthesise the boulders polygon = ORIGINAL water (clipped). The
+        # downstream annulus-mode carve will subtract water_shrunk to obtain
+        # the actual ring shape. Skip simplification for the same reason as
+        # the water polygon above — dense points are consumed directly.
+        boulders_outer_pts = _shapely_outer_coords_to_px(
+            water_orig_clipped, scale, centroid_px, simplify_tol_mm=0.0,
+        )
+        if len(boulders_outer_pts) < 3:
+            print("  boundary region: boulders outer ring has < 3 points — "
+                  "skipping ring.")
+            n_skipped += 1
+            continue
+        new_polygons.append({
+            "name": f"boulders_auto_{n_rings + 1}",
+            "type": "boulders",
+            "closed": True,
+            "points": boulders_outer_pts,
+            "auto_derived": True,
+            # Dense pre-interpolated outline straight from Shapely — skip the
+            # Catmull-Rom pass downstream so the boulders polygon stays in
+            # lock-step with the matching shrunken water polygon and
+            # ``shapely_boulders.covers(water_sp)`` reliably holds. See
+            # _poly_to_dense_px and task #461.
+            "_dense_px_points": True,
+        })
+        n_rings += 1
+        print(
+            f"  boundary region: derived ring around water polygon "
+            f"'{poly.get('name', '?')}' — water shrunk by {band_mm:.1f} mm, "
+            f"ring area ≈ {(water_orig_clipped.area - water_shrunk.area):.2f} mm^2."
+        )
+
+    egm_data["polygons"] = new_polygons
+    print(
+        f"[BOUNDARY_REGION] derivation done: derived {n_rings} ring(s); "
+        f"skipped {n_skipped}; dropped {n_existing_boulders} manual boulders polygon(s); "
+        f"post-derivation polygon count={len(new_polygons)} "
+        f"(water={sum(1 for p in new_polygons if p.get('type')=='water')}, "
+        f"boulders={sum(1 for p in new_polygons if p.get('type')=='boulders')})."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -4600,8 +4957,22 @@ def _build_pipe_circle(cx: float, cy: float) -> ShapelyPolygon:
 # Main
 # ---------------------------------------------------------------------------
 
-def run_pipeline(egm_path: str) -> str:
+def run_pipeline(
+    egm_path: str,
+    include_boundary_region: bool | None = None,
+) -> str:
     """Run the full gradient surface pipeline for a given EGM file path.
+
+    Parameters
+    ----------
+    egm_path : str
+        Absolute path to the .egm project file.
+    include_boundary_region : bool | None, optional
+        When True, auto-derive a 5 mm-wide boulders ring around each water
+        polygon (replacing any manual boulders polygons) and shrink the water
+        meshes inward by 5 mm to create the gap the ring fills. When False,
+        skip the derivation. When None (default), fall back to the
+        ``includeBoundaryRegion`` flag persisted inside the EGM file.
 
     Returns the absolute path to the generated .3mf file.
     """
@@ -4617,6 +4988,35 @@ def run_pipeline(egm_path: str) -> str:
     print(f"    Image: {os.path.basename(image_path)}")
     print(f"    [generate] input image:         {image_path}")
     print(f"    Green boundary: {len(green_boundary_px)} spline points")
+
+    # ── 1b. Auto-derive boulders ring from water (boundary region) ──────────
+    # When include_boundary_region is True, we replace any manual boulders
+    # polygons with a synthesised 5 mm-wide annular ring just inside each
+    # water polygon's original outer edge. The water polygon itself is
+    # shrunk inward by 5 mm so the printed water sits in the recess defined
+    # by water_shrunk; the boulders ring fills the 5 mm gap that opens up
+    # between water_shrunk and the (un-changed) fringe inner boundary.
+    #
+    # The downstream "annulus-mode" boulders carve in build_fringe_mesh and
+    # export_boulders_meshes (`shapely_boulders.covers(water_sp)` → subtract)
+    # then does the actual ring construction automatically — we just have to
+    # hand it a boulders polygon equal to the ORIGINAL water shape and a
+    # water polygon equal to the SHRUNKEN water shape. See task #460 and
+    # project_golf_render_rules.md → "Boulders polygon convention".
+    #
+    # All geometry happens in mm coords (where the 5 mm buffer is meaningful);
+    # the synthesised polygons are then converted back to px coords for
+    # storage in egm_data["polygons"], which is what the rest of the pipeline
+    # consumes.
+    if include_boundary_region is None:
+        include_boundary_region = bool(_egm_data.get("includeBoundaryRegion", False))
+    else:
+        # Persist the caller's choice into egm_data so any downstream logic
+        # that introspects the EGM sees a consistent value.
+        _egm_data["includeBoundaryRegion"] = bool(include_boundary_region)
+
+    if include_boundary_region:
+        _apply_boundary_region_derivation(_egm_data, green_boundary_px)
 
     img = cv2.imread(image_path)
     if img is None:

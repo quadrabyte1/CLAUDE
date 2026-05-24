@@ -1315,6 +1315,13 @@ def generate_models():
     if not course or not hole:
         return jsonify({"status": "error", "msg": "Missing course or hole"}), 400
 
+    # Auto-derive a 5 mm boulders ring around each water polygon when checked
+    # (replaces any manual boulders polygons in the EGM). The editor persists
+    # this flag to the EGM via autoSave before calling /api/generate_models,
+    # but we also forward the request-time value here so the route can override
+    # the persisted value if the client ever wants to.
+    include_boundary_region = bool(data.get("includeBoundaryRegion", False))
+
     hole_label = hole.zfill(2) if hole.isdigit() else hole
     egm_fname = f"{course} (Hole {hole_label}).egm"
     # Look for EGM in course EGMs/ folder first, then owner_inbox fallback
@@ -1337,7 +1344,10 @@ def generate_models():
     print(f"[generate_models] EGM path:        {egm_path}")
 
     try:
-        three_mf_path = run_pipeline(egm_path)
+        three_mf_path = run_pipeline(
+            egm_path,
+            include_boundary_region=include_boundary_region,
+        )
     except Exception as exc:
         return jsonify({"status": "error", "msg": str(exc)}), 500
 

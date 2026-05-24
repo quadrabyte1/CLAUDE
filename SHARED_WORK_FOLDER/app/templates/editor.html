@@ -8,7 +8,7 @@
   {# ── Header ─────────────────────────────────────────────── #}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.29</span></h1>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.34</span></h1>
       <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
     </div>
   </div>
@@ -130,6 +130,17 @@
         <input type="number" x-model.number="fringeEdgeHeight" @change="autoSave()"
                step="0.5" min="0.5"
                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      {# Include boundary region (auto-derived 5 mm boulders ring around water) #}
+      <div class="flex flex-col gap-1 min-w-[180px]">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Boundary region</label>
+        <label class="inline-flex items-center gap-2 text-sm text-notion-text cursor-pointer select-none">
+          <input type="checkbox" x-model="includeBoundaryRegion" @change="autoSave()"
+                 class="h-4 w-4 rounded border-notion-border text-notion-accent focus:ring-2 focus:ring-notion-accent/30">
+          <span>Include boundary region</span>
+        </label>
+        <span class="text-xs text-notion-muted">Auto-derives a 5 mm boulders ring around each water polygon.</span>
       </div>
 
       {# Divider #}
@@ -443,6 +454,7 @@ function polygonEditor() {
     greenStyle: 'terraced',   // 'smooth' or 'terraced'
     elevationRange: 20.09,    // total Z amplitude of the green's slope (mm)
     fringeEdgeHeight: 10.0,   // outer wall height of the fringe (mm)
+    includeBoundaryRegion: false,  // auto-derive a 5 mm boulders ring from each water polygon
     flagOffsetXMm: 0.0,    // mm: move flag right (+) or left (-)
     flagOffsetYMm: 0.0,    // mm: move flag up (+) or down (-)
     selectedContour: -1,   // index into contours[]
@@ -1616,6 +1628,7 @@ function polygonEditor() {
         greenStyle: this.greenStyle,
         elevationRange: this.elevationRange,
         fringeEdgeHeight: this.fringeEdgeHeight,
+        includeBoundaryRegion: this.includeBoundaryRegion,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
@@ -1733,6 +1746,7 @@ function polygonEditor() {
         this.greenStyle = data.greenStyle || 'terraced';
         this.elevationRange = data.elevationRange != null ? data.elevationRange : 20.09;
         this.fringeEdgeHeight = data.fringeEdgeHeight != null ? data.fringeEdgeHeight : 10.0;
+        this.includeBoundaryRegion = data.includeBoundaryRegion === true;
         this.flagOffsetXMm = data.flagOffsetXMm != null ? data.flagOffsetXMm : 0.0;
         this.flagOffsetYMm = data.flagOffsetYMm != null ? data.flagOffsetYMm : 0.0;
         // Absorb print constants from server (avoids hardcoding in JS)
@@ -1932,6 +1946,7 @@ function polygonEditor() {
         greenStyle: this.greenStyle,
         elevationRange: this.elevationRange,
         fringeEdgeHeight: this.fringeEdgeHeight,
+        includeBoundaryRegion: this.includeBoundaryRegion,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,

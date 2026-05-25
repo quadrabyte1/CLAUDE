@@ -27,12 +27,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Deck Project/v18_bill_of_materials (lumber yard).md",
+                "file": "Welcome.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "v18_bill_of_materials (lumber yard)"
+              "title": "Welcome"
             }
           }
         ],
@@ -200,8 +200,13 @@
   },
   "active": "759e19e075ad4d52",
   "lastOpenFiles": [
-    "Deck Project/v18_build_instructions.md",
+    "Untitled.base",
+    "2026-05-25.md",
+    "Untitled 1.canvas",
+    "2026-05-07.md",
+    "Untitled.canvas",
     "Deck Project/v18_bill_of_materials (lumber yard).md",
+    "Deck Project/v18_build_instructions.md",
     "v18_bill_of_materials (lumber yard).md",
     "Deck Project/v18_bill_of_materials.md",
     "Deck Project/deck_plan_v18.pier work.png",
@@ -212,7 +217,6 @@
     "Deck Project/Carly and Kiel's Deck Project.md",
     "deck_plan_v17.png.md",
     "testing.md",
-    "Deck Project",
-    "2026-05-07.md"
+    "Deck Project"
   ]
 }

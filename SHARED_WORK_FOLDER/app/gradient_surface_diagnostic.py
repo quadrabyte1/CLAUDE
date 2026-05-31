@@ -1870,7 +1870,8 @@ def build_fringe_mesh(
                 _b_sp = ShapelyPolygon(_b_pts_mm)
                 if not _b_sp.is_valid:
                     _b_sp = _b_sp.buffer(0)
-                _enclosed = [wsp for wsp in water_shapely if _b_sp.covers(wsp)]
+                _b_sp_padded = _b_sp.buffer(BOUNDARY_REGION_COVERS_TOL_MM)
+                _enclosed = [wsp for wsp in water_shapely if _b_sp_padded.covers(wsp)]
                 if not _enclosed:
                     continue
                 _w_union = _fringe_uu(_enclosed)
@@ -3383,8 +3384,11 @@ def export_boulders_meshes(
             # mode. `contains` would return False on boundary-touching pairs
             # and fall back to the on-top slab path, placing the boulders
             # ribbon in the fringe area instead of inside the water.
+            shapely_boulders_padded = shapely_boulders.buffer(
+                BOUNDARY_REGION_COVERS_TOL_MM
+            )
             enclosed_water = [wsp for wsp in water_shapely_mm
-                              if shapely_boulders.covers(wsp)]
+                              if shapely_boulders_padded.covers(wsp)]
             annulus_mode = len(enclosed_water) > 0
             if annulus_mode:
                 water_union = _unary_union(enclosed_water)
@@ -3480,6 +3484,15 @@ def export_boulders_meshes(
 # original outer edge. Five millimetres matches the manual riprap band Thomas
 # was previously annotating by hand.
 BOUNDARY_REGION_BAND_MM: float = 5.0
+
+# Outward buffer applied to the boulders polygon ONLY for the
+# `boulders.covers(water)` predicate that picks annulus vs on-top mode.
+# After _apply_boundary_region_derivation runs, the shrunken-water polygon
+# can have a few vertices a hair (≤ snap tol = 0.02 mm) outside the original
+# water outline, which makes strict `.covers()` return False and silently
+# falls the boulders polygon back to on-top mode — a full slab placed on
+# the fringe instead of the intended 5 mm ring carved into the water.
+BOUNDARY_REGION_COVERS_TOL_MM: float = 0.1
 
 
 def _poly_to_dense_px(poly: dict) -> np.ndarray:

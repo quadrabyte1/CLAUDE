@@ -7,11 +7,11 @@
     "width": 1179,
     "height": 1376
   },
-  "contourStep": 1,
+  "contourStep": 0.8,
   "grassAmplitude": 0.5,
   "grassSpacing": 2.4,
   "greenStyle": "terraced",
-  "elevationRange": 10,
+  "elevationRange": 14,
   "fringeEdgeHeight": 10,
   "includeBoundaryRegion": false,
   "flagOffsetXMm": 0,

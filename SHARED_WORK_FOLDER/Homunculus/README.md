@@ -1,50 +1,46 @@
 # Homunculus
 
-A single-user, device-local, voice-first scheduling assistant for iPhone.
+A voice-first capture and reminder assistant for the boss.
 
-**Status:** v1 — M1 in progress.
-**Deployment target:** iOS 26.0.
-**Language:** Swift 6 (strict concurrency).
-**Device:** iPhone 16 (Apple Intelligence capable).
-**Architecture spec:** `../owner_inbox/mori_homunculus_v1_plan.md`.
+**Design version:** 1.0 (relocked 2026-06-07; see
+`~/.claude/projects/-Volumes-GIT-CLAUDE/memory/project_homunculus.md` for the
+locked decisions).
+
+The current architecture is **Mac-as-brain, phone-as-thin-client**:
+
+- The Mac runs `brain/` — a Python FastAPI server backed by a local LLM
+  (Ollama). It holds the markdown calendar, classifies and routes captures,
+  and generates reminder schedules.
+- The phone (not yet built) is the press-to-talk surface and runs
+  `UNUserNotificationCenter` to fire the reminders the brain pushes to it
+  over Tailscale.
+- The Watch mirrors phone notifications. No native Watch app in v1.
 
 ## Layout
 
 ```
 Homunculus/
-├── README.md                     — this file
-├── docs/                         — handoff notes, ADRs, working docs
-└── Packages/                     — local SPM packages (one per module)
-    ├── CalendarCore/             — local data layer: GRDB + schema + TZ helpers   (Mori)
-    ├── VoiceCapture/             — AVAudioSession + SpeechAnalyzer + TTS          (Mori)
-    ├── NLU/                      — Foundation Models @Generable parse + resolver  (Mori)
-    ├── Scheduling/               — rolling scheduler + reconciler                 (Mori)
-    ├── NotificationsKit/         — UNUserNotificationCenter wrapper + delegate    (Mori)
-    └── AppShell/                 — SwiftUI app entry + coordinator                (Kit)
+├── README.md                — this file
+├── brain/                   — Mac-side Python brain (FastAPI + Ollama)
+├── vault/                   — markdown source of truth (calendar/, tools/, prompts/, inbox.md)
+└── docs/                    — design notes and runbooks
 ```
 
-The Xcode project itself (signing, entitlements, `Info.plist`, the `App` target) is Kit's
-to create and lives alongside `Packages/` once Kit sets it up.
+## Current state
 
-## Module ownership
+| Layer       | Status                                                                  |
+| ----------- | ----------------------------------------------------------------------- |
+| Mac brain   | Skeleton + core logic + tests. 44 unit tests pass. Real LLM not wired.  |
+| Vault       | Layout exists; empty until first capture.                               |
+| Phone app   | Not started. Will be a thin Swift client; Kit's job.                    |
+| Watch       | Auto-mirrors phone notifications; no native app.                        |
+| Reminders   | Schedule generation works; push to phone is a stub until the app exists.|
 
-Per §9 of the v1 plan:
+## Where to start
 
-| Package          | Primary author | Notes                                                           |
-|------------------|----------------|-----------------------------------------------------------------|
-| CalendarCore     | Mori           | GRDB, schema migrations, writer actor, reader pool, TZ helpers  |
-| VoiceCapture     | Mori           | Audio session, STT, TTS, permissions, barge-in                  |
-| NLU              | Mori           | `@Generable` types, prompt, deterministic date resolver         |
-| Scheduling       | Mori           | Rolling 72h horizon, reconciliation, missed-event logic         |
-| NotificationsKit | Mori           | UN center wrapper, category/action, delegate                    |
-| AppShell         | Kit            | `@main App`, SwiftUI views, navigation, `Today`, Add Event form |
-
-## Dependencies
-
-Exactly one third-party dependency in v1: **GRDB.swift**. No analytics, no crash reporters,
-no networking libraries. Every dependency is a privacy liability in a local-only app.
-
-## Tests
-
-Swift Testing. Each package owns its own `Tests/` folder. Device test matrix runs on real
-iPhone 16 before any RC (see §11 of the plan).
+- Brain install + run: `brain/README.md`.
+- Design source of truth: the memory entry at
+  `~/.claude/projects/-Volumes-GIT-CLAUDE/memory/project_homunculus.md`.
+- Versioning: `x.y` — `y` increments on small modifications, `x` on
+  significant architectural changes. Bump in the memory entry whenever
+  the design moves.

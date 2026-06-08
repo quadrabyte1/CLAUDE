@@ -20,6 +20,7 @@ This folder contains persona files for each AI team member. Each file defines a 
 | **Zane** | Consumer Storage Reviewer (SSD Specialist) | sonnet | `zane.md` |
 | **Wren** | Voice-First Mac Productivity Specialist (Dictation, Voice Input & Hotkey Automation) | sonnet | `wren.md` |
 | **Mori** | Voice-First iOS Product Engineer (Homunculus Lead — voice I/O, on-device NLP, local calendar, reminder reliability) | opus | `mori.md` |
+| **Rune** | Local-LLM Voice Assistant Backend Engineer (Homunculus Brain Owner — FastAPI, Ollama, markdown vault, reminder scheduler, Tailscale↔iOS protocol) | opus | `rune.md` |
 | **Hollis** | Home-Improvement Concierge / Owner's Advocate (Hartford, CT metro) | sonnet | `hollis.md` |
 | **Marlo** | Brand & Trademark Clearance Specialist | opus | `marlo.md` |
 | **Cairn** | PKM Specialist (Personal Knowledge Migration & Linked-Notes) | sonnet | `cairn.md` |

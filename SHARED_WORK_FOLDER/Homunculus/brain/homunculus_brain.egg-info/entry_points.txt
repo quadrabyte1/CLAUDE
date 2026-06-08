@@ -1,0 +1,2 @@
+[console_scripts]
+homunculus-brain = homunculus_brain.server:main

@@ -10,6 +10,8 @@ This module today:
   * Generates the daily morning-summary row (one per day, includes that
     day's event list).
   * Persists schedules as JSON sidecars in vault/_reminders/.
+  * Reads sidecars back for ``/reminders/upcoming``.
+  * Acks a row + cancels later strikes in the same chain (``/ack``).
   * Provides a `push_to_phone` stub that logs what *would* be pushed.
 
 When the phone exists, swap the stub for an HTTPS POST over Tailscale.
@@ -23,11 +25,35 @@ from pathlib import Path
 from typing import Iterable
 from zoneinfo import ZoneInfo
 
+from . import calendar as cal
 from . import vault
 from .schemas import CalendarEvent, ReminderRow, ReminderKind
 
 
 log = logging.getLogger(__name__)
+
+
+# Strikes that fire AFTER the event starts — these are the rows that get
+# cancelled when the user acks any earlier row in the chain.
+_POST_START_KINDS: tuple[ReminderKind, ...] = (
+    ReminderKind.STRIKE_0,
+    ReminderKind.STRIKE_5,
+    ReminderKind.STRIKE_10,
+    ReminderKind.STRIKE_15,
+)
+
+
+# Ordering used to decide which rows are "after" an acked row in the chain.
+# Heads-up and pre fire before the event; strikes fire at and after start.
+_KIND_ORDER: dict[ReminderKind, int] = {
+    ReminderKind.MORNING_SUMMARY: -2,
+    ReminderKind.HEADS_UP_30: -1,
+    ReminderKind.PRE_5: 0,
+    ReminderKind.STRIKE_0: 1,
+    ReminderKind.STRIKE_5: 2,
+    ReminderKind.STRIKE_10: 3,
+    ReminderKind.STRIKE_15: 4,
+}
 
 
 # Offsets relative to event start, in minutes. Negative = before.
@@ -144,3 +170,209 @@ def push_to_phone(rows: Iterable[ReminderRow]) -> None:
     """
     for r in rows:
         log.info("would-push reminder kind=%s event=%s fire_at=%s body=%r", r.kind, r.event_id, r.fire_at, r.body)
+
+
+# --- v1.2: daily summary rows + /reminders/upcoming composition --------------
+
+
+def build_daily_summary_rows(
+    vault_path: Path,
+    *,
+    now: datetime,
+    days_ahead: int = 3,
+    summary_time: str,
+    anchor_tz: ZoneInfo,
+) -> list[ReminderRow]:
+    """Return one ``ReminderRow`` per upcoming day in [today, today+days_ahead).
+
+    The summary fires at ``summary_time`` (``HH:MM``) in ``anchor_tz`` on each
+    day. Its body lists that day's events (read from the vault on demand)
+    plus the previous day's missed events.
+
+    Missed-event tracking is a v1.3 deliverable; today the
+    ``missed_yesterday`` slot is stubbed as an empty list so the API shape
+    is correct and the iOS spec can wire against it without breaking when
+    the v1.3 missed-tracking lands.
+    """
+    hh, mm = (int(x) for x in summary_time.split(":"))
+    today_local = now.astimezone(anchor_tz).date()
+
+    rows: list[ReminderRow] = []
+    for offset in range(days_ahead):
+        day = today_local + timedelta(days=offset)
+        day_start = datetime.combine(day, time(0, 0), tzinfo=anchor_tz)
+        day_end = day_start + timedelta(days=1)
+
+        events_today = cal.list_events_between(vault_path, day_start, day_end)
+        events_today.sort(key=lambda e: e.starts_at)
+
+        # Stub for v1.3 missed-event tracking. Shape stays stable.
+        missed_yesterday: list[CalendarEvent] = []
+
+        summary = build_morning_summary(
+            events_today=events_today,
+            missed_yesterday=missed_yesterday,
+            summary_date=day_start,
+            summary_time_local=summary_time,
+            tz=anchor_tz,
+        )
+        # Use the iOS-spec identifier scheme: summary.<yyyy-mm-dd>.
+        summary = summary.model_copy(update={"event_id": f"summary.{day.isoformat()}"})
+        rows.append(summary)
+    return rows
+
+
+def read_event_rows(vault_path: Path, event_id: str) -> list[ReminderRow]:
+    """Reconstitute the persisted ReminderRow list for a single event."""
+    data = vault.read_reminder_schedule(vault_path, event_id)
+    if data is None:
+        return []
+    rows: list[ReminderRow] = []
+    for raw in data.get("schedule", []):
+        rows.append(
+            ReminderRow(
+                event_id=raw["event_id"],
+                kind=ReminderKind(raw["kind"]),
+                fire_at=datetime.fromisoformat(raw["fire_at"]),
+                tz=raw["tz"],
+                body=raw["body"],
+                status=raw.get("status", "pending"),
+            )
+        )
+    return rows
+
+
+def _persist_rows(vault_path: Path, event_id: str, rows: list[ReminderRow]) -> None:
+    payload = [
+        {
+            "event_id": r.event_id,
+            "kind": r.kind.value,
+            "fire_at": r.fire_at.isoformat(),
+            "tz": r.tz,
+            "body": r.body,
+            "status": r.status,
+        }
+        for r in rows
+    ]
+    vault.write_reminder_schedule(vault_path, event_id, payload)
+
+
+def collect_upcoming_rows(
+    vault_path: Path,
+    *,
+    now: datetime,
+    window_end: datetime,
+    anchor_tz: ZoneInfo,
+    summary_time: str,
+) -> list[ReminderRow]:
+    """Combine per-event strike rows + daily summary rows in the window.
+
+    Rules:
+      - Pull every event in [now, window_end] from the vault.
+      - For each, read its sidecar; if no sidecar exists (hand-edited event),
+        generate the strike plan on the fly. Do NOT persist on a read.
+      - Filter to rows whose ``fire_at`` is within [now, window_end].
+      - Exclude rows with status ``acked``, ``cancelled``, or ``fired``.
+      - Append one morning-summary row per day in the window.
+      - Sort ascending by ``fire_at``.
+    """
+    events = cal.list_events_between(vault_path, now, window_end + timedelta(hours=1))
+
+    out: list[ReminderRow] = []
+    for event in events:
+        rows = read_event_rows(vault_path, event.id)
+        if not rows:
+            rows = build_event_schedule(event)
+        for r in rows:
+            if r.status in ("acked", "cancelled", "fired"):
+                continue
+            if now <= r.fire_at <= window_end:
+                out.append(r)
+
+    days_ahead = max(1, (window_end.date() - now.astimezone(anchor_tz).date()).days + 1)
+    summary_rows = build_daily_summary_rows(
+        vault_path,
+        now=now,
+        days_ahead=days_ahead,
+        summary_time=summary_time,
+        anchor_tz=anchor_tz,
+    )
+    for r in summary_rows:
+        if now <= r.fire_at <= window_end:
+            out.append(r)
+
+    out.sort(key=lambda r: r.fire_at)
+    return out
+
+
+# --- v1.2: ack handling ------------------------------------------------------
+
+
+def ack_reminder(
+    vault_path: Path,
+    *,
+    event_id: str,
+    kind: ReminderKind,
+    acked_at: datetime,
+):
+    """Mark a single row acked and cancel later strikes in the same chain.
+
+    Returns an ``AckResponse``.
+
+    Idempotent. Acking an already-acked row is a no-op (returns the same
+    rows with an empty ``cancelled_kinds``). Acking a row in an event we
+    have no sidecar for returns an empty result; the phone reconciles on
+    the next ``/reminders/upcoming`` pull.
+
+    Persists via atomic write (see ``vault.write_reminder_schedule``).
+    """
+    from .schemas import AckResponse
+
+    rows = read_event_rows(vault_path, event_id)
+    if not rows:
+        # Unknown event — return idempotent empty result, no 404.
+        return AckResponse(
+            event_id=event_id,
+            acked_kind=kind,
+            cancelled_kinds=[],
+            rows=[],
+        )
+
+    acked_pos = _KIND_ORDER.get(kind, 99)
+    cancelled: list[ReminderKind] = []
+    updated: list[ReminderRow] = []
+    target_already_acked = False
+    mutated = False
+
+    for r in rows:
+        if r.kind == kind:
+            if r.status == "acked":
+                target_already_acked = True
+                updated.append(r)
+                continue
+            updated.append(r.model_copy(update={"status": "acked"}))
+            mutated = True
+            continue
+
+        # Later strike in the same chain → cancel if currently live.
+        if (
+            _KIND_ORDER.get(r.kind, -1) > acked_pos
+            and r.kind in _POST_START_KINDS
+            and r.status in ("pending", "scheduled")
+        ):
+            updated.append(r.model_copy(update={"status": "cancelled"}))
+            cancelled.append(r.kind)
+            mutated = True
+            continue
+
+        updated.append(r)
+
+    if mutated:
+        _persist_rows(vault_path, event_id, updated)
+
+    return AckResponse(
+        event_id=event_id,
+        acked_kind=kind,
+        cancelled_kinds=cancelled,
+        rows=updated,
+    )

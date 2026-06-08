@@ -10,17 +10,36 @@ Layout under ``vault_path``:
 
 Files are the truth. Anything that reads vault state reads the files; nothing
 is cached in a separate database.
+
+Concurrency / crash-safety discipline (v1.2):
+- Every mutation goes through ``_atomic_write_text`` — write to a sibling
+  ``<name>.tmp.<pid>.<counter>`` file, fsync, then ``os.replace`` onto the
+  target. ``os.replace`` is atomic on POSIX filesystems, so a crash mid-write
+  cannot leave a half-written event file in the vault.
+- The inbox append is wrapped in an OS-level file lock via ``fcntl.flock``
+  so two concurrent captures cannot interleave their writes or both write
+  the header. ``fcntl`` is POSIX-only (macOS + Linux); that is the
+  portability scope we care about. Windows is not a supported brain host.
 """
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
+import itertools
 import json
+import os
 import re
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 import yaml
+
+
+# Counter used to make per-process tmp filenames unique even when two threads
+# write to the same target file within the same microsecond.
+_TMP_COUNTER = itertools.count()
 
 
 # --- slug + id generation -----------------------------------------------------
@@ -52,15 +71,40 @@ def note_id(captured_at: datetime, title: str) -> str:
 _FRONTMATTER_FENCE = "---"
 
 
-def write_markdown(path: Path, frontmatter: dict[str, Any], body: str) -> Path:
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Write `content` to `path` atomically.
+
+    Writes to a sibling temp file in the same directory (must be the same
+    filesystem so that ``os.replace`` is atomic), fsyncs the bytes, then
+    renames over the target. A crash before the rename leaves a stray .tmp
+    file but never a half-written target. Two writes targeting the same
+    path with different tmp names will both succeed; the second rename
+    wins, but neither leaves a corrupt file behind.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_name = f"{path.name}.tmp.{os.getpid()}.{next(_TMP_COUNTER)}"
+    tmp_path = path.with_name(tmp_name)
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(content)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, path)
+    except Exception:
+        # Best-effort cleanup; never raise from the cleanup branch.
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(tmp_path)
+        raise
+
+
+def write_markdown(path: Path, frontmatter: dict[str, Any], body: str) -> Path:
     rendered = (
         f"{_FRONTMATTER_FENCE}\n"
         f"{yaml.safe_dump(_jsonable(frontmatter), sort_keys=False).strip()}\n"
         f"{_FRONTMATTER_FENCE}\n\n"
         f"{body.rstrip()}\n"
     )
-    path.write_text(rendered, encoding="utf-8")
+    _atomic_write_text(path, rendered)
     return path
 
 
@@ -142,11 +186,37 @@ def inbox_path(vault_path: Path) -> Path:
 # --- inbox --------------------------------------------------------------------
 
 
+_INBOX_HEADER = (
+    "# Homunculus Inbox\n\nLow-confidence captures land here for manual sorting.\n\n"
+)
+
+
+@contextlib.contextmanager
+def _flocked(path: Path) -> Iterator[None]:
+    """Acquire an exclusive POSIX file lock against `<path>.lock`.
+
+    The lock file is created next to the target. ``fcntl.flock`` is
+    advisory; everyone who appends through this helper participates, so
+    concurrent captures cannot interleave their writes. POSIX-only —
+    macOS and Linux, which is the brain's supported portability scope.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(path.name + ".lock")
+    # Open for writing without truncation so a stale lockfile is harmless.
+    fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
 def append_inbox(vault_path: Path, captured_at: datetime, raw_text: str, best_guess: Optional[str], reason: str) -> Path:
     path = inbox_path(vault_path)
     path.parent.mkdir(parents=True, exist_ok=True)
-
-    header = "" if path.exists() else "# Homunculus Inbox\n\nLow-confidence captures land here for manual sorting.\n\n"
 
     entry = (
         f"## {captured_at.strftime('%Y-%m-%d %H:%M')} — {raw_text!r}\n"
@@ -154,10 +224,16 @@ def append_inbox(vault_path: Path, captured_at: datetime, raw_text: str, best_gu
         f"- Reason: {reason}\n\n"
     )
 
-    with path.open("a", encoding="utf-8") as f:
-        if header:
-            f.write(header)
-        f.write(entry)
+    with _flocked(path):
+        # Re-check existence inside the lock so two simultaneous appenders
+        # don't both decide to write the header.
+        needs_header = not path.exists() or path.stat().st_size == 0
+        with path.open("a", encoding="utf-8") as f:
+            if needs_header:
+                f.write(_INBOX_HEADER)
+            f.write(entry)
+            f.flush()
+            os.fsync(f.fileno())
     return path
 
 
@@ -176,8 +252,12 @@ def iter_calendar_files(vault_path: Path) -> Iterable[Path]:
 
 def write_reminder_schedule(vault_path: Path, event_id_: str, schedule: list[dict[str, Any]]) -> Path:
     path = reminder_path(vault_path, event_id_)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(_jsonable({"event_id": event_id_, "schedule": schedule}), indent=2, default=str), encoding="utf-8")
+    payload = json.dumps(
+        _jsonable({"event_id": event_id_, "schedule": schedule}),
+        indent=2,
+        default=str,
+    )
+    _atomic_write_text(path, payload)
     return path
 
 

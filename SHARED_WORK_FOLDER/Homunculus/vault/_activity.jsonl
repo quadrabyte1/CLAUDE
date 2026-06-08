@@ -1,0 +1,4 @@
+{"at": "2026-06-08T17:09:34.145154-04:00", "kind": "parse", "event_id": null, "raw_text": "can we meet for coffee Thursday at 10am?", "details": {"kind": "calendar_query", "confidence": "medium", "ambiguous_fields": []}}
+{"at": "2026-06-08T17:15:37.359530-04:00", "kind": "parse", "event_id": null, "raw_text": "am I free Thursday at 10?", "details": {"kind": "calendar_query", "confidence": "medium", "ambiguous_fields": []}}
+{"at": "2026-06-08T17:15:37.510324-04:00", "kind": "parse", "event_id": null, "raw_text": "schedule coffee with Jane Thursday at 10am", "details": {"kind": "calendar_event", "confidence": "medium", "ambiguous_fields": []}}
+{"at": "2026-06-08T17:15:37.618582-04:00", "kind": "parse", "event_id": null, "raw_text": "remind me to call the dentist tomorrow afternoon", "details": {"kind": "calendar_event", "confidence": "medium", "ambiguous_fields": []}}

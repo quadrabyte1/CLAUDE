@@ -144,17 +144,68 @@ Returns a list of events for the day in ISO-8601. Powers the Today view.
 Returns the last N activity-log entries. Powers the ActivityView for
 debugging.
 
-### `GET /reminders/upcoming` *(not yet implemented on the brain — coordinate with the brain engineer)*
+### `GET /reminders/upcoming?window_hours=72`
 
-Will return the next-72h reminder schedule. Today the brain pushes via a
-stub (logs only); the v1 mechanism is: client polls `/reminders/upcoming`
-on app launch + on app-foreground + after every capture, diffs against
-its local `UNUserNotificationCenter` queue, and registers/cancels as needed.
+Returns the next-window reminder schedule. Brain composes it fresh on
+every call from the vault (per-event strike rows + daily morning-summary
+rows). Sorted ascending by `fire_at`; capped at 60 rows so the client
+stays under iOS's 64-pending limit.
 
-A simpler short-term shim if `/reminders/upcoming` isn't ready yet: derive
-the schedule from the events you fetch with `/events`, and apply the same
-six-row pattern client-side (T-30, T-5, T+0, +5, +10, +15). Same answer,
-just doubled the math on the client.
+Mechanism: client polls `/reminders/upcoming` on app launch, on
+app-foreground, and after every capture, diffs against its local
+`UNUserNotificationCenter` queue, and registers/cancels as needed.
+
+```json
+[
+  {
+    "event_id": "summary.2026-06-12",
+    "kind": "morning_summary",
+    "fire_at": "2026-06-12T07:00:00-04:00",
+    "tz": "America/New_York",
+    "body": "Good morning. Today: 10:00 AM Coffee with Jane.",
+    "status": "pending"
+  },
+  {
+    "event_id": "2026-06-12-coffee-with-jane",
+    "kind": "heads_up_30",
+    "fire_at": "2026-06-12T09:30:00-04:00",
+    "tz": "America/New_York",
+    "body": "In 30 minutes: Coffee with Jane at 10:00 AM.",
+    "status": "pending"
+  }
+]
+```
+
+### `POST /ack`
+
+The brain owns the strike chain. When the user taps `OK` on a strike,
+POST the ack and the brain cancels every later strike in the same chain.
+
+Request:
+
+```json
+{
+  "event_id": "2026-06-12-coffee-with-jane",
+  "kind": "strike_0",
+  "acked_at": "2026-06-12T10:00:32-04:00"
+}
+```
+
+Response:
+
+```json
+{
+  "event_id": "2026-06-12-coffee-with-jane",
+  "acked_kind": "strike_0",
+  "cancelled_kinds": ["strike_5", "strike_10", "strike_15"],
+  "rows": [ ... updated rows for the event chain ... ]
+}
+```
+
+Idempotent: double-ack returns the same shape with an empty
+`cancelled_kinds`. Unknown event ids return 200 with empty results —
+never 404. The phone should still remove the cancelled strikes from
+`UNUserNotificationCenter` even if it had a stale local view.
 
 ## Voice capture pipeline
 
@@ -231,8 +282,10 @@ On `didReceive` with `actionIdentifier == "ACK"`:
 
 1. Cancel remaining strikes for that event:
    `removePendingNotificationRequests(withIdentifiers: ["ev.<id>.strike.5", ".10", ".15"])`.
-2. POST `/ack { event_id: ..., acked_at: <iso> }` to the brain *(this endpoint
-   doesn't exist yet — coordinate with the brain engineer; design is a 1-liner)*.
+2. POST `/ack { event_id: ..., kind: ..., acked_at: <iso> }` to the brain.
+   The brain cancels the remaining strikes; honor the `cancelled_kinds`
+   array it returns by also removing those identifiers from the local
+   `UNUserNotificationCenter` queue.
 3. Call the completion handler promptly.
 
 Set the delegate in `application(_:didFinishLaunchingWithOptions:)` —
@@ -300,17 +353,16 @@ Simulator doesn't reproduce most of these. Use the real iPhone 16.
 
 ## Open coordination items with the brain engineer
 
-These don't exist on the brain yet. Coordinate before relying on them:
+As of brain v1.2 (2026-06-08):
 
-- `GET /reminders/upcoming` (next 72h of rows)
-- `POST /ack` (event_id, kind, acked_at)
-- `POST /undo` (the 5-min undo window — see project memory)
-- `GET /activity` is partially built (the brain has the JSONL log; needs
-  the endpoint surface).
-
-When the brain engineer is hired (Nolan is creating the persona in
-parallel to this spec), the first conversation between you two should
-nail down those four endpoints.
+- `GET /reminders/upcoming` — **live.** Window-driven; combines strikes
+  + daily summary rows. Documented above.
+- `POST /ack` — **live.** Cancels remaining strikes; idempotent. See
+  above.
+- `POST /undo` — **still deferred to v1.3.** The 5-min undo window (see
+  project memory) is on the next round.
+- `GET /activity` — **still deferred to v1.3.** The JSONL log exists on
+  the brain side; the HTTP surface isn't wired yet.
 
 ## Versioning
 

@@ -42,8 +42,17 @@ def route(
     *,
     config: Config,
     now: datetime,
+    tz: Optional[ZoneInfo] = None,
 ) -> CaptureResponse:
-    """Top-level dispatcher."""
+    """Top-level dispatcher.
+
+    ``tz`` is the speaker's zone, derived from ``CaptureRequest.speaker_tz``
+    when the phone supplied one. When omitted, fall back to the server's
+    configured default. Honors the persona rule: phone-reported zone wins
+    over server default.
+    """
+    tz = tz or ZoneInfo(config.default_tz_name)
+
     activity_log.log(
         config.vault_path,
         "parse",
@@ -60,9 +69,9 @@ def route(
         return _drop_to_inbox(intent, config=config, now=now, reason="low confidence")
 
     if intent.kind is IntentKind.CALENDAR_EVENT:
-        return _handle_calendar_event(intent, config=config, now=now)
+        return _handle_calendar_event(intent, config=config, now=now, tz=tz)
     if intent.kind is IntentKind.CALENDAR_QUERY:
-        return _handle_calendar_query(intent, config=config, now=now)
+        return _handle_calendar_query(intent, config=config, now=now, tz=tz)
     if intent.kind is IntentKind.TOOL_NOTE:
         return _handle_tool_note(intent, config=config, now=now)
     if intent.kind is IntentKind.PROMPT_NOTE:
@@ -74,8 +83,10 @@ def route(
 # --- calendar event (write requires confirmation) ----------------------------
 
 
-def _handle_calendar_event(intent: ParsedIntent, *, config: Config, now: datetime) -> CaptureResponse:
-    tz = ZoneInfo(config.default_tz_name)
+def _handle_calendar_event(
+    intent: ParsedIntent, *, config: Config, now: datetime, tz: Optional[ZoneInfo] = None
+) -> CaptureResponse:
+    tz = tz or ZoneInfo(config.default_tz_name)
     resolved = resolve_datetime(
         intent.day_hint,
         intent.time_hint,
@@ -122,9 +133,17 @@ def commit_calendar_event(
     *,
     config: Config,
     now: datetime,
+    tz: Optional[ZoneInfo] = None,
 ) -> CaptureResponse:
-    """Called by the /confirm endpoint after the user says yes."""
-    tz = ZoneInfo(config.default_tz_name)
+    """Called by the /confirm endpoint after the user says yes.
+
+    ``tz`` is the speaker's zone (from ``CaptureRequest.speaker_tz``). The
+    event is persisted in that zone — so a "10 AM Thursday" said in Pacific
+    travel mode lands as 10 AM Pacific, not 10 AM Eastern. Falls back to
+    the server default when no speaker zone was given.
+    """
+    tz = tz or ZoneInfo(config.default_tz_name)
+    tz_name = str(tz)
     resolved = resolve_datetime(
         intent.day_hint,
         intent.time_hint,
@@ -143,7 +162,7 @@ def commit_calendar_event(
         title=title,
         starts_at=resolved.resolved_at,
         duration_minutes=duration,
-        tz_name=config.default_tz_name,
+        tz_name=tz_name,
         people=intent.people,
         tags=intent.tags,
         source_utterance=intent.raw_text,
@@ -185,8 +204,10 @@ def _event_file(vault_path: Path, starts_at: datetime, title: str) -> Path:
 # --- calendar query (read, never write) -------------------------------------
 
 
-def _handle_calendar_query(intent: ParsedIntent, *, config: Config, now: datetime) -> CaptureResponse:
-    tz = ZoneInfo(config.default_tz_name)
+def _handle_calendar_query(
+    intent: ParsedIntent, *, config: Config, now: datetime, tz: Optional[ZoneInfo] = None
+) -> CaptureResponse:
+    tz = tz or ZoneInfo(config.default_tz_name)
     resolved = resolve_datetime(intent.day_hint, intent.time_hint, now=now, tz=tz, morning_anchor_hour=config.morning_anchor_hour)
     if resolved.resolved_at is None:
         return CaptureResponse(

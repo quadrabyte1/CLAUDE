@@ -10,12 +10,19 @@ client will register with `UNUserNotificationCenter` over Tailscale.
 
 ## Status
 
-- Skeleton + core logic implemented. All 44 unit tests pass.
+- v1.2 shipped 2026-06-08. **70 unit tests pass** (51 baseline + 19 new
+  for the v1.2 must-fix items).
+- `speaker_tz` is honored end-to-end (phone zone wins over server default).
+- Vault writes are atomic (tmp + `os.replace`); inbox appends are
+  serialized by a POSIX file lock — two simultaneous captures cannot
+  corrupt the vault.
+- Morning summary rows are generated lazily inside `/reminders/upcoming`.
+- `/reminders/upcoming` and `/ack` are live — Kit can wire the iOS client
+  against the real contract instead of the client-side shim.
 - Ollama integration written; not wired to a real model yet (heuristic
-  fallback used in tests).
-- Reminder push to phone is a logging stub; the phone client doesn't exist yet.
-- No persona-driven team work yet — this skeleton was built directly by Larry
-  while the user was out so the work could continue.
+  fallback carries the test suite).
+- Reminder push to phone is still a logging stub; the phone client
+  doesn't exist yet (v1.3 gating).
 
 ## Layout
 
@@ -95,8 +102,8 @@ Tests are hermetic — no Ollama, no network, no filesystem state outside
 ```json
 {
   "status": "ok",
-  "design_version": "1.0",
-  "package_version": "1.0.0",
+  "design_version": "1.2",
+  "package_version": "1.2.0",
   "vault_path": "/path/to/vault"
 }
 ```
@@ -140,6 +147,70 @@ Writes the calendar event and generates the reminder schedule. Returns
 
 Lists events on that day (or all events if `day` is omitted).
 
+### `GET /reminders/upcoming?window_hours=72`
+
+Returns the next window of reminder rows the phone should register with
+`UNUserNotificationCenter`. Combines:
+
+- Per-event strike rows (T-30, T-5, T+0, T+5, T+10, T+15) for every
+  event whose fire times fall in the window.
+- Daily morning-summary rows (one per day in the window, identifier
+  `summary.<yyyy-mm-dd>`).
+
+Rows already `acked`, `cancelled`, or `fired` are excluded. Output is
+sorted ascending by `fire_at` and capped at 60 rows so the phone stays
+under iOS's 64-pending limit. The brain composes this list fresh on
+every call — the vault is the truth.
+
+```json
+[
+  {
+    "event_id": "summary.2026-06-12",
+    "kind": "morning_summary",
+    "fire_at": "2026-06-12T07:00:00-04:00",
+    "tz": "America/New_York",
+    "body": "Good morning. Today: 10:00 AM Coffee with Jane.",
+    "status": "pending"
+  },
+  {
+    "event_id": "2026-06-12-coffee-with-jane",
+    "kind": "heads_up_30",
+    "fire_at": "2026-06-12T09:30:00-04:00",
+    "tz": "America/New_York",
+    "body": "In 30 minutes: Coffee with Jane at 10:00 AM.",
+    "status": "pending"
+  }
+]
+```
+
+### `POST /ack`
+
+```json
+{
+  "event_id": "2026-06-12-coffee-with-jane",
+  "kind": "strike_0",
+  "acked_at": "2026-06-12T10:00:32-04:00"
+}
+```
+
+Marks the named row `acked` and cancels every later strike in the same
+event chain (`strike_5`, `strike_10`, `strike_15` when `strike_0` is
+acked). Idempotent: a double-ack returns the same shape with an empty
+`cancelled_kinds`. Unknown event ids return 200 with empty results — the
+brain is the source of truth; the phone reconciles on the next
+`/reminders/upcoming` pull.
+
+Response:
+
+```json
+{
+  "event_id": "2026-06-12-coffee-with-jane",
+  "acked_kind": "strike_0",
+  "cancelled_kinds": ["strike_5", "strike_10", "strike_15"],
+  "rows": [ ... updated ReminderRow list for the chain ... ]
+}
+```
+
 ## Architectural notes
 
 - **Files are truth.** Hand-editing a markdown file changes the brain's
@@ -165,8 +236,17 @@ auto-starts and survives crashes).
 - iOS / watchOS client (Kit's job; phone is the press-to-talk surface,
   Watch mirrors notifications).
 - Real push of the reminder schedule to the phone (HTTPS POST over
-  Tailscale; today it's a logging stub).
-- "Undo that" voice-driven correction within the 5-minute window.
-- Activity log / dev viewer.
+  Tailscale; today it's still a logging stub — gated on the phone
+  client existing).
+- "Undo that" voice-driven correction within the 5-minute window
+  (`POST /undo`, deferred to v1.3 — not blocked, just not in the v1.2
+  must-fix set).
+- `GET /activity` HTTP surface for the dev viewer (the JSONL log is
+  there; the endpoint isn't surfaced yet).
+- Richer `ambiguous_fields` shape (still a list of names; v1.3 promotes
+  to per-field reason + candidate values, requires Kit review).
+- Missed-event tracking — `build_daily_summary_rows` accepts the slot
+  but stubs `missed_yesterday` as `[]` so the API shape is stable while
+  the v1.3 tracking work is open.
 - LLM prompt tuning against a real model (the system prompt is a first
   pass and will need iteration with whatever model the user lands on).

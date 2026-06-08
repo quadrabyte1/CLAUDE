@@ -147,3 +147,25 @@ class HealthResponse(BaseModel):
     design_version: str
     package_version: str
     vault_path: str
+
+
+class AckRequest(BaseModel):
+    """Phone → brain: the user tapped 'OK' on a reminder.
+
+    The brain cancels all later strikes in the same chain so the phone can
+    remove them from ``UNUserNotificationCenter`` even if its local view
+    disagreed with the brain's record.
+    """
+
+    event_id: str
+    kind: ReminderKind
+    acked_at: Optional[datetime] = None
+
+
+class AckResponse(BaseModel):
+    event_id: str
+    acked_kind: ReminderKind
+    # The kinds in the same event chain that were cancelled by this ack.
+    cancelled_kinds: list[ReminderKind] = Field(default_factory=list)
+    # The updated sidecar rows (for the event chain) after the mutation.
+    rows: list[ReminderRow] = Field(default_factory=list)

@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-06-10-at-6-00",
+  "schedule": [
+    {
+      "event_id": "2026-06-10-at-6-00",
+      "kind": "heads_up_30",
+      "fire_at": "2026-06-10T17:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: AT 6:00 at 6:00 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-at-6-00",
+      "kind": "pre_5",
+      "fire_at": "2026-06-10T17:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: AT 6:00 at 6:00 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-at-6-00",
+      "kind": "strike_0",
+      "fire_at": "2026-06-10T18:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "AT 6:00 is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-at-6-00",
+      "kind": "strike_5",
+      "fire_at": "2026-06-10T18:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? AT 6:00 started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-at-6-00",
+      "kind": "strike_10",
+      "fire_at": "2026-06-10T18:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: AT 6:00 \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-at-6-00",
+      "kind": "strike_15",
+      "fire_at": "2026-06-10T18:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. AT 6:00. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

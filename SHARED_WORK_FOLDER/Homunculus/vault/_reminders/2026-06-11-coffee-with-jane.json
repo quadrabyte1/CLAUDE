@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-06-11-coffee-with-jane",
+  "schedule": [
+    {
+      "event_id": "2026-06-11-coffee-with-jane",
+      "kind": "heads_up_30",
+      "fire_at": "2026-06-11T09:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: coffee with Jane at 10:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-11-coffee-with-jane",
+      "kind": "pre_5",
+      "fire_at": "2026-06-11T09:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: coffee with Jane at 10:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-11-coffee-with-jane",
+      "kind": "strike_0",
+      "fire_at": "2026-06-11T10:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "coffee with Jane is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-11-coffee-with-jane",
+      "kind": "strike_5",
+      "fire_at": "2026-06-11T10:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? coffee with Jane started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-11-coffee-with-jane",
+      "kind": "strike_10",
+      "fire_at": "2026-06-11T10:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: coffee with Jane \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-11-coffee-with-jane",
+      "kind": "strike_15",
+      "fire_at": "2026-06-11T10:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. coffee with Jane. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

@@ -19,8 +19,9 @@ client will register with `UNUserNotificationCenter` over Tailscale.
 - Morning summary rows are generated lazily inside `/reminders/upcoming`.
 - `/reminders/upcoming` and `/ack` are live — Kit can wire the iOS client
   against the real contract instead of the client-side shim.
-- Ollama integration written; not wired to a real model yet (heuristic
-  fallback carries the test suite).
+- Ollama wired in production against `qwen2.5:7b` (local, on the Mac mini
+  M4); live captures hit the model. The heuristic parser remains as the
+  offline-fallback path and as the carrier for the hermetic test suite.
 - Reminder push to phone is still a logging stub; the phone client
   doesn't exist yet (v1.3 gating).
 

@@ -11,7 +11,7 @@
   "grassAmplitude": 0.5,
   "grassSpacing": 2.4,
   "greenStyle": "terraced",
-  "elevationRange": 14,
+  "elevationRange": 16,
   "fringeEdgeHeight": 10,
   "includeBoundaryRegion": false,
   "flagOffsetXMm": 0,
@@ -23,36 +23,36 @@
       "closed": true,
       "points": [
         {
-          "x": 517,
-          "y": 198
+          "x": 522,
+          "y": 257
         },
         {
-          "x": 235,
-          "y": 327
+          "x": 284,
+          "y": 351
         },
         {
-          "x": 175,
-          "y": 620
+          "x": 244,
+          "y": 581
         },
         {
-          "x": 346,
-          "y": 1042
+          "x": 372,
+          "y": 946
         },
         {
-          "x": 687,
-          "y": 1199
+          "x": 630,
+          "y": 1131
         },
         {
-          "x": 1005,
-          "y": 962
+          "x": 893,
+          "y": 1011
         },
         {
-          "x": 1052,
-          "y": 718
+          "x": 1001,
+          "y": 745
         },
         {
-          "x": 771,
-          "y": 330
+          "x": 732,
+          "y": 385
         }
       ]
     },

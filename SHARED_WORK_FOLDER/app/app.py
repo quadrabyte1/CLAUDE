@@ -281,20 +281,6 @@ def render(template, **kwargs):
 def dashboard():
     _sync_team_member_models()
     team = query("SELECT * FROM team_members ORDER BY name")
-    activity = query(
-        "SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 15"
-    )
-    journal = query(
-        "SELECT * FROM journal_entries WHERE date = ? LIMIT 1",
-        (date.today().isoformat(),),
-        one=True,
-    )
-    # If no entry today, get the most recent one
-    if not journal:
-        journal = query(
-            "SELECT * FROM journal_entries ORDER BY date DESC LIMIT 1",
-            one=True,
-        )
     _status_rows = query(
         "SELECT status, COUNT(*) AS c FROM tasks WHERE id > ? GROUP BY status",
         (_TASK_COUNT_BASELINE_MAX_ID,),
@@ -338,8 +324,6 @@ def dashboard():
            /* AND (julianday(completed_at) - julianday(started_at)) * 86400 >= 120 */"""
     )}
 
-    research_docs = _collect_research_docs()
-
     # Per-member current in-progress task (most recently started)
     member_current_tasks = {
         row["assigned_to"]: {"title": row["title"], "description": row["description"] or ""}
@@ -365,16 +349,83 @@ def dashboard():
                 "created_at": _row["created_at"],
             }
 
-    dashboard_version = "v1.7.1"  # bump this when layout/functionality changes
-    return render("dashboard.html", team=team, activity=activity,
-                   journal=journal, task_counts=task_counts,
+    homunculus = _homunculus_stats()
+
+    dashboard_version = "v1.8.4"  # bump this when layout/functionality changes
+    return render("dashboard.html", team=team,
+                   task_counts=task_counts,
                    journal_count=journal_count, updated_at=updated_at,
                    busy_tasks=busy_tasks, recently_done=recently_done,
                    member_active_counts=member_active_counts,
                    member_current_tasks=member_current_tasks,
                    member_last_activity=member_last_activity,
-                   research_docs=research_docs,
+                   homunculus=homunculus,
                    dashboard_version=dashboard_version)
+
+
+_HOMUNCULUS_ACTIVITY_PATH = "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault/_activity.jsonl"
+
+
+def _homunculus_stats():
+    """Lightweight Homunculus snapshot for the dashboard. Fast enough to run on every 750ms poll."""
+    import json as _json
+    import urllib.request, urllib.error
+
+    brain_status = "down"
+    brain_version = None
+    try:
+        with urllib.request.urlopen("http://localhost:8765/health", timeout=0.3) as r:
+            h = _json.loads(r.read())
+            brain_status = "up"
+            brain_version = h.get("package_version")
+    except (urllib.error.URLError, OSError, ValueError):
+        pass
+
+    total = 0
+    today_count = 0
+    today_kinds = {}
+    last_capture = None
+    today_iso = date.today().isoformat()
+
+    if os.path.exists(_HOMUNCULUS_ACTIVITY_PATH):
+        try:
+            with open(_HOMUNCULUS_ACTIVITY_PATH, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = _json.loads(line)
+                    except _json.JSONDecodeError:
+                        continue
+                    if row.get("kind") != "parse":
+                        continue
+                    total += 1
+                    if (row.get("at") or "")[:10] == today_iso:
+                        today_count += 1
+                        kind = (row.get("details") or {}).get("kind", "unknown")
+                        today_kinds[kind] = today_kinds.get(kind, 0) + 1
+                    last_capture = row
+        except OSError:
+            pass
+
+    last_summary = None
+    if last_capture:
+        last_summary = {
+            "raw_text": last_capture.get("raw_text", ""),
+            "at": last_capture.get("at", ""),
+            "kind": (last_capture.get("details") or {}).get("kind", "unknown"),
+        }
+
+    # Sort kinds so the display is stable across polls.
+    return {
+        "brain_status": brain_status,
+        "brain_version": brain_version,
+        "total": total,
+        "today_count": today_count,
+        "today_kinds": dict(sorted(today_kinds.items())),
+        "last_capture": last_summary,
+    }
 
 
 # ── Research documents helpers ─────────────────────────────────────────────

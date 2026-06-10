@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-06-10-feed-jake",
+  "schedule": [
+    {
+      "event_id": "2026-06-10-feed-jake",
+      "kind": "heads_up_30",
+      "fire_at": "2026-06-10T17:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: feed jake at 5:35 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-feed-jake",
+      "kind": "pre_5",
+      "fire_at": "2026-06-10T17:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: feed jake at 5:35 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-feed-jake",
+      "kind": "strike_0",
+      "fire_at": "2026-06-10T17:35:00-04:00",
+      "tz": "America/New_York",
+      "body": "feed jake is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-feed-jake",
+      "kind": "strike_5",
+      "fire_at": "2026-06-10T17:40:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? feed jake started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-feed-jake",
+      "kind": "strike_10",
+      "fire_at": "2026-06-10T17:45:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: feed jake \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-06-10-feed-jake",
+      "kind": "strike_15",
+      "fire_at": "2026-06-10T17:50:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. feed jake. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

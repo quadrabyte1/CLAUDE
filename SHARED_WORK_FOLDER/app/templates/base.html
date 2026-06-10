@@ -59,24 +59,34 @@
     ::-webkit-scrollbar-thumb:hover { background: #CFCDC9; }
   </style>
 </head>
-<body class="h-full bg-notion-bg font-sans" x-data="{ sidebarOpen: true }">
+<body class="h-full bg-notion-bg font-sans"
+      x-data="{
+        sidebarOpen: true,
+        activePath: window.location.pathname,
+        isActive(href) {
+          return this.activePath === href || (href !== '/' && this.activePath.startsWith(href));
+        }
+      }"
+      @htmx:push-url.window="activePath = window.location.pathname"
+      @htmx:after-settle.window="activePath = window.location.pathname"
+      @popstate.window="activePath = window.location.pathname">
   <div class="flex h-full">
 
     {# ── Sidebar ──────────────────────────────────────────────── #}
     <aside
       :class="sidebarOpen ? 'w-60' : 'w-0 overflow-hidden'"
-      class="flex-shrink-0 bg-notion-sidebar border-r border-notion-border flex flex-col transition-all duration-200 ease-out h-screen sticky top-0"
+      class="flex-shrink-0 bg-notion-accent flex flex-col transition-all duration-200 ease-out h-screen sticky top-0"
     >
       <div class="p-4 flex items-center justify-between min-w-[240px]">
         <div class="flex items-center gap-2">
-          <div class="w-6 h-6 rounded bg-notion-accent flex items-center justify-center">
+          <div class="w-6 h-6 rounded bg-white/15 flex items-center justify-center">
             <span class="text-white text-xs font-bold">AI</span>
           </div>
-          <span class="font-semibold text-sm text-notion-text truncate">AI Team Workspace</span>
+          <span class="text-sm font-semibold text-white truncate">AI Team Workspace</span>
         </div>
         <button
           @click="sidebarOpen = false"
-          class="text-notion-muted hover:text-notion-text transition-default p-0.5 rounded hover:bg-notion-hover"
+          class="text-white/70 hover:text-white hover:bg-white/10 transition-default p-0.5 rounded"
           title="Collapse sidebar"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17-5-5 5-5"/><path d="m18 17-5-5 5-5"/></svg>
@@ -106,8 +116,9 @@
                    hx-swap="innerHTML settle:150ms"
           hx-push-url="true"
           {% endif %}
-          class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-default
-                 {{ 'bg-notion-hover text-notion-text font-medium' if request.path == href or (href != '/' and request.path.startswith(href)) else 'text-notion-muted hover:bg-notion-hover hover:text-notion-text' }}"
+          @click="activePath = '{{ href }}'"
+          class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md transition-default"
+          :class="isActive('{{ href }}') ? 'bg-white/20 text-white font-semibold' : 'text-white/80 hover:bg-white/10 hover:text-white'"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">{{ icon_path | safe }}</svg>
           <span>{{ label }}</span>
@@ -115,9 +126,9 @@
         {% endfor %}
       </nav>
 
-      <div class="p-3 border-t border-notion-border text-xs text-notion-muted min-w-[240px]">
+      <div class="p-3 border-t border-white/15 text-xs text-white/70 min-w-[240px]">
         <div class="flex items-center gap-1.5">
-          <div class="w-1.5 h-1.5 rounded-full bg-green-500"></div>
+          <div class="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_4px_rgba(74,222,128,0.7)]"></div>
           Workspace active
         </div>
       </div>
@@ -128,7 +139,7 @@
       x-show="!sidebarOpen"
       x-cloak
       @click="sidebarOpen = true"
-      class="fixed top-3 left-3 z-50 p-1.5 rounded-md bg-notion-sidebar border border-notion-border text-notion-muted hover:text-notion-text hover:bg-notion-hover transition-default shadow-sm"
+      class="fixed top-3 left-3 z-50 p-1.5 rounded-md bg-notion-accent text-white hover:bg-notion-accent/90 transition-default shadow-sm"
       title="Open sidebar"
     >
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 17 5-5-5-5"/><path d="m6 17 5-5-5-5"/></svg>

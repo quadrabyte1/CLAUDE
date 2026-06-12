@@ -40,6 +40,12 @@ Rules:
   "next Monday"). Do NOT compute the date — the caller does that.
 - Copy the time expression into `time_hint` exactly ("10am", "2:30 PM",
   "morning"). Do NOT convert to 24-hour.
+- If the user said an hour 1-12 with NO am/pm and NO 24-hour context
+  (e.g. "5:35", "feed Jake at 6"), add "time" to `ambiguous_fields`.
+  We will ask "AM or PM?" rather than guess. Hours 0 and 13-23 are
+  unambiguous (they can only be a 24-hour reading). Named anchors
+  ("noon", "midnight", "morning", "afternoon", "evening", "night")
+  are unambiguous too.
 - "remind me to X" and "schedule/book/add X" are ALWAYS calendar_event,
   never calendar_query. Use calendar_query only when the user is asking
   about their availability ("am I free…", "do I have anything on…",

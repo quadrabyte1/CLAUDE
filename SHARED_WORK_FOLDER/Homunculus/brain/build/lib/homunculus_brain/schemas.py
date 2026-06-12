@@ -140,6 +140,12 @@ class CaptureResponse(BaseModel):
     conflicts: Optional[ConflictReport] = None
     clarifying_question: Optional[str] = None
     raw_text: str
+    # The structured intent the brain parsed from the utterance. Echoed back
+    # so a client (web test page, iOS app) can post the same intent verbatim
+    # to /capture/confirm without trying to reconstruct it from visible
+    # fields. Additive optional field — wire-compatible with v1.2.0 clients
+    # that ignore unknown keys. Populated for every path the router takes.
+    intent: Optional[ParsedIntent] = None
 
 
 class HealthResponse(BaseModel):

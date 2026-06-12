@@ -5,5 +5,5 @@ Design version follows x.y convention:
   - x increments on significant architectural changes.
 """
 
-VERSION = "1.2.0"
+VERSION = "1.2.2"
 DESIGN_VERSION = "1.2"

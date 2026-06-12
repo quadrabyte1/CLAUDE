@@ -264,6 +264,7 @@ def collect_upcoming_rows(
     window_end: datetime,
     anchor_tz: ZoneInfo,
     summary_time: str,
+    include_fired: bool = False,
 ) -> list[ReminderRow]:
     """Combine per-event strike rows + daily summary rows in the window.
 
@@ -275,8 +276,21 @@ def collect_upcoming_rows(
       - Exclude rows with status ``acked``, ``cancelled``, or ``fired``.
       - Append one morning-summary row per day in the window.
       - Sort ascending by ``fire_at``.
+
+    ``include_fired`` (v1.2.1, test-client affordance): when true, the time
+    window opens up to start at ``now - 24h`` and rows in any status are
+    returned — so the test client can see rows that have already fired
+    (and were thus filtered out by the default behavior). The flag does
+    NOT change phone-client semantics; ``UNUserNotificationCenter`` would
+    silently drop past triggers anyway. It exists so the boss can verify
+    schedule generation during live testing.
     """
-    events = cal.list_events_between(vault_path, now, window_end + timedelta(hours=1))
+    if include_fired:
+        # Look back so just-fired rows remain visible.
+        events_from = now - timedelta(hours=24)
+    else:
+        events_from = now
+    events = cal.list_events_between(vault_path, events_from, window_end + timedelta(hours=1))
 
     out: list[ReminderRow] = []
     for event in events:
@@ -284,10 +298,15 @@ def collect_upcoming_rows(
         if not rows:
             rows = build_event_schedule(event)
         for r in rows:
-            if r.status in ("acked", "cancelled", "fired"):
+            if not include_fired and r.status in ("acked", "cancelled", "fired"):
                 continue
-            if now <= r.fire_at <= window_end:
-                out.append(r)
+            if include_fired:
+                # Wider visibility window for the test client.
+                if events_from <= r.fire_at <= window_end:
+                    out.append(r)
+            else:
+                if now <= r.fire_at <= window_end:
+                    out.append(r)
 
     days_ahead = max(1, (window_end.date() - now.astimezone(anchor_tz).date()).days + 1)
     summary_rows = build_daily_summary_rows(
@@ -298,8 +317,12 @@ def collect_upcoming_rows(
         anchor_tz=anchor_tz,
     )
     for r in summary_rows:
-        if now <= r.fire_at <= window_end:
-            out.append(r)
+        if include_fired:
+            if events_from <= r.fire_at <= window_end:
+                out.append(r)
+        else:
+            if now <= r.fire_at <= window_end:
+                out.append(r)
 
     out.sort(key=lambda r: r.fire_at)
     return out

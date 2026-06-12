@@ -1,6 +1,6 @@
 [project]
 name = "homunculus-brain"
-version = "1.2.0"
+version = "1.2.2"
 description = "Mac-side brain for the Homunculus voice assistant — markdown-backed capture, scheduling, and reminders."
 requires-python = ">=3.11"
 dependencies = [
@@ -26,6 +26,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["homunculus_brain*"]
+
+[tool.setuptools.package-data]
+# Ship the in-browser test client (v1.2.1) inside the wheel so pip-installed
+# brains serve /test/ without any extra steps. Vanilla HTML/CSS/JS, no build.
+homunculus_brain = ["test_client/*.html", "test_client/*.css", "test_client/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

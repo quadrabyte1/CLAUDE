@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App identity -->
+	<key>CFBundleDisplayName</key>
+	<string>Homunculus</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.homunculus.ios</string>
+	<key>CFBundleName</key>
+	<string>Homunculus</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+
+	<!-- iOS deployment -->
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+
+	<!-- Privacy usage descriptions -->
+	<!-- Microphone: needed when voice STT is added in v1.3 -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Homunculus uses the microphone to capture your voice captures for the brain to process.</string>
+	<!-- Speech recognition: needed when voice STT is added in v1.3 -->
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Homunculus uses speech recognition to transcribe your voice captures before sending to the brain.</string>
+
+	<!-- App Transport Security: allow plain HTTP to brain on tailnet.
+	     Tailscale provides encrypted transport; the brain itself runs plain HTTP.
+	     We add an exception for the default placeholder and leave it open for
+	     any tailnet hostname the user configures.
+	     NOTE: For production (App Store), replace with the boss's real tailnet
+	     hostname and restrict to that domain only. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<!-- Allow HTTP to any *.ts.net hostname (Tailscale tailnet addresses).
+			     Tailscale already encrypts all traffic; the HTTP between the app
+			     and the brain is within the encrypted tailnet tunnel. -->
+			<key>ts.net</key>
+			<dict>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+				<key>NSExceptionMinimumTLSVersion</key>
+				<string>TLSv1.0</string>
+			</dict>
+		</dict>
+	</dict>
+
+	<!-- Background modes: none needed for v1.
+	     Reminder polling happens in-process while the app is foregrounded.
+	     Background notification registration is handled by UNUserNotificationCenter
+	     firing locally — no background fetch needed. -->
+
+	<!-- Launch screen: use default system launch screen -->
+	<key>UILaunchScreen</key>
+	<dict/>
+
+	<!-- Scene manifest for SwiftUI lifecycle -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict/>
+	</dict>
+</dict>
+</plist>

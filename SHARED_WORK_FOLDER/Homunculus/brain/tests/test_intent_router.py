@@ -78,6 +78,35 @@ def test_ambiguous_time_triggers_clarification(tmp_path: Path):
     assert "time" in (resp.clarifying_question or "").lower()
 
 
+def test_feed_jake_at_535_asks_am_or_pm(tmp_path: Path):
+    """v1.2.2 regression: the live bug from 2026-06-10 17:31:40 EDT.
+
+    Boss spoke "Feed Jake at 5:35" at 5:31 PM. Old behavior: brain silently
+    chose 5:35 AM the next morning (~12 hours away, almost certainly wrong;
+    the nearest-future 5:35 was just 4 minutes away). New behavior: bare
+    hour:minute with no AM/PM and no 24-hour context (hour 0 or 13+) is
+    ambiguous; ask the user instead of guessing.
+    """
+    # Wed Jun 10 17:31:40 EDT 2026 — the moment the bug was observed.
+    bug_now = datetime(2026, 6, 10, 17, 31, 40, tzinfo=TZ)
+    intent = heuristic_parse("Feed Jake at 5:35")
+    intent.kind = IntentKind.CALENDAR_EVENT  # router-level decision, force it
+    from homunculus_brain.schemas import Confidence
+    intent.confidence = Confidence.HIGH  # the LLM gave this medium/high in prod
+    cfg = _config(tmp_path)
+    resp = route(intent, config=cfg, now=bug_now)
+    assert resp.action == "needs_clarification", (
+        f"expected needs_clarification for ambiguous bare-hour-minute time; "
+        f"got {resp.action!r} with reply={resp.spoken_reply!r}"
+    )
+    assert (resp.clarifying_question or "").strip(), "must surface a question"
+    # The question should be about the missing am/pm — not "what day".
+    q = (resp.clarifying_question or "").lower()
+    assert "am" in q and "pm" in q, (
+        f"clarifying question should ask AM vs PM; got {resp.clarifying_question!r}"
+    )
+
+
 def test_commit_creates_event_and_schedule(tmp_path: Path):
     intent = heuristic_parse("add a meeting with Jane on Thursday at 2pm")
     cfg = _config(tmp_path)

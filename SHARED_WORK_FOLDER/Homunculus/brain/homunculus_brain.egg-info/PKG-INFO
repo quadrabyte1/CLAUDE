@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: homunculus-brain
-Version: 1.2.0
+Version: 1.2.2
 Summary: Mac-side brain for the Homunculus voice assistant — markdown-backed capture, scheduling, and reminders.
 Requires-Python: >=3.11
 Requires-Dist: fastapi>=0.110

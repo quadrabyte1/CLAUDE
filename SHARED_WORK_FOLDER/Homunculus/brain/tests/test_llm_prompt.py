@@ -46,3 +46,22 @@ def test_prompt_pins_remind_me_to_as_calendar_event():
     """
     assert "remind me to" in SYSTEM_PROMPT.lower()
     assert "calendar_event" in SYSTEM_PROMPT
+
+
+def test_prompt_teaches_ambiguous_time_when_no_ampm():
+    """Bug 2026-06-10 17:31 EDT: utterance "Feed Jake at 5:35" came back
+    parsed as an event for "Thursday June 11 at 5:35 AM" — the brain
+    silently chose AM for a bare hour:minute spoken at 5:31 PM. The
+    deterministic resolver was fixed to flag bare 1-12 with no am/pm as
+    ambiguous; the prompt must also teach the LLM to mark `time_hint` as
+    ambiguous in the same shape so the heuristic and LLM paths agree.
+    Per the locked UX rule: missing/ambiguous info → one specific
+    clarifying question, never a silent guess.
+    """
+    p = SYSTEM_PROMPT.lower()
+    assert "am" in p and "pm" in p
+    # The prompt must explicitly link the no-am/pm case to ambiguous_fields.
+    assert "ambiguous_fields" in SYSTEM_PROMPT
+    # And carry at least one concrete example of a bare-hour utterance so
+    # the model has something to pattern-match against.
+    assert "5:35" in SYSTEM_PROMPT or "5:35" in p

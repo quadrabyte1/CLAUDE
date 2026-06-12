@@ -29,3 +29,5 @@
 {"at": "2026-06-10T17:38:20.637971-04:00", "kind": "parse", "event_id": null, "raw_text": "Set an announcement at 6pm titled AT 6:00", "details": {"kind": "calendar_event", "confidence": "high", "ambiguous_fields": []}}
 {"at": "2026-06-10T17:38:37.012593-04:00", "kind": "event_create", "event_id": "2026-06-10-at-6-00", "raw_text": "Set an announcement at 6pm titled AT 6:00", "details": {"title": "AT 6:00", "starts_at": "2026-06-10T18:00:00-04:00", "duration_minutes": 30, "reminder_rows": 6}}
 {"at": "2026-06-10T17:40:47.910715-04:00", "kind": "parse", "event_id": null, "raw_text": "remind me to call mom this Sunday after lunch", "details": {"kind": "calendar_event", "confidence": "high", "ambiguous_fields": []}}
+{"at": "2026-06-10T18:10:54.991920-04:00", "kind": "event_ack", "event_id": "2026-06-10-at-6-00", "raw_text": null, "details": {"acked_kind": "strike_10", "cancelled_kinds": ["strike_15"]}}
+{"at": "2026-06-10T18:25:40.240706-04:00", "kind": "parse", "event_id": null, "raw_text": "what do I have Tuesday", "details": {"kind": "calendar_query", "confidence": "high", "ambiguous_fields": []}}

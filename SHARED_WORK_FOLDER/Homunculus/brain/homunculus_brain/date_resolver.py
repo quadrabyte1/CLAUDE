@@ -184,6 +184,17 @@ def _resolve_time(time_hint: Optional[str], morning_anchor_hour: int):
     minute = int(match.group("minute") or 0)
     ampm = (match.group("ampm") or "").replace(".", "").lower()
 
+    # v1.2.2 fix — silent guessing is the failure mode that destroys trust in
+    # a memory-support product (persona rule: `ambiguous_fields` is a first-
+    # class output; never silently choose for the user). When the user says a
+    # bare hour 1-12 with no AM/PM marker and no 24-hour context, we cannot
+    # tell what they meant. The cost of guessing wrong is the user misses the
+    # event entirely. The cost of asking is one extra round-trip ("AM or
+    # PM?"). Asking wins. Hour 0 or 13-23 is unambiguous — only a 24-hour
+    # clock can produce those — so we resolve those normally.
+    if not ampm and 1 <= hour <= 12:
+        return None, True, f"'{time_hint}' is ambiguous — AM or PM?"
+
     if ampm == "pm" and hour < 12:
         hour += 12
     elif ampm == "am" and hour == 12:

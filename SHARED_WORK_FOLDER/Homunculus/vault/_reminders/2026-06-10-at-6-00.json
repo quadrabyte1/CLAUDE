@@ -39,7 +39,7 @@
       "fire_at": "2026-06-10T18:10:00-04:00",
       "tz": "America/New_York",
       "body": "Reminder: AT 6:00 \u2014 10 minutes ago. Tap OK.",
-      "status": "pending"
+      "status": "acked"
     },
     {
       "event_id": "2026-06-10-at-6-00",
@@ -47,7 +47,7 @@
       "fire_at": "2026-06-10T18:15:00-04:00",
       "tz": "America/New_York",
       "body": "Final reminder. AT 6:00. Tap OK or I'll log it as missed.",
-      "status": "pending"
+      "status": "cancelled"
     }
   ]
 }

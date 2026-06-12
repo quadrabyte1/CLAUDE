@@ -10,6 +10,19 @@ client will register with `UNUserNotificationCenter` over Tailscale.
 
 ## Status
 
+- v1.2.2 shipped 2026-06-10. **87 unit tests pass** (77 baseline + 10
+  new). Bug fix: an ambiguous bare hour:minute (e.g. "Feed Jake at
+  5:35") no longer silently defaults to AM. The date resolver flags
+  hours 1-12 with no AM/PM and no 24-hour context as ambiguous; the
+  router asks "AM or PM?" instead of guessing. Matches the locked UX
+  rule "Missing info: one specific clarifying question." Heuristic +
+  LLM paths agree (system prompt also updated; prompt-contract test
+  guards against regression).
+- v1.2.1 shipped 2026-06-10. **77 unit tests pass** (73 baseline + 4 new
+  for the in-browser test client). Additive over v1.2:
+  `CaptureResponse.intent` is now populated, `/reminders/upcoming`
+  accepts `include_fired`, and a single-page test client lives at
+  `/test/`.
 - v1.2 shipped 2026-06-08. **70 unit tests pass** (51 baseline + 19 new
   for the v1.2 must-fix items).
 - `speaker_tz` is honored end-to-end (phone zone wins over server default).
@@ -96,6 +109,53 @@ PYTHONPATH=. pytest tests/
 Tests are hermetic — no Ollama, no network, no filesystem state outside
 `tmp_path`. The heuristic fallback parser carries the test suite.
 
+## In-browser test client
+
+A single-page harness for hand-exercising the brain end-to-end without
+curl. Vanilla HTML/CSS/JS — no build step, no framework, ships inside the
+package.
+
+Open it at:
+
+```
+http://localhost:8765/test/
+```
+
+The page is mounted by the brain itself (same port), so there is no
+second process to start. Files live at
+`homunculus_brain/test_client/{index.html, styles.css, app.js}`.
+
+Features:
+
+- **Text capture** — textarea + Send hits `POST /capture/text` and
+  renders the response with one of four color-coded action states
+  (`wrote` green, `needs_confirmation` yellow, `needs_clarification`
+  orange, `inbox` gray).
+- **Confirm flow** — when the brain returns `needs_confirmation`, the
+  page reads `CaptureResponse.intent` (echoed by the brain — see the
+  schema change below) and posts it back to `/capture/confirm` on
+  click. No client-side intent reconstruction.
+- **Live `/reminders/upcoming`** — auto-refreshes every 5 seconds.
+  Groups rows by `event_id`, shows fire times in the row's own `tz`,
+  exposes a per-row OK button → `POST /ack`. After ack, the next
+  refresh reconciles by full rebuild — cancelled strikes disappear
+  immediately.
+- **Version badge** — upper-left, populated from `/health`.
+- **"Include fired" toggle** — sets `?include_fired=true` so just-fired
+  rows stay visible during live testing (the default endpoint behavior
+  filters them out so the phone client gets a clean iOS schedule).
+
+The test client uses no auth — Tailscale is the trust boundary, same as
+the phone client will be. Don't expose port 8765 outside the tailnet
+without adding bearer-token middleware first.
+
+### Related schema change (additive, wire-compatible)
+
+`CaptureResponse` now carries an optional `intent: ParsedIntent` field,
+populated for every router branch. The test client uses it for the
+confirm round-trip; the iOS client may use it (or ignore it). Older
+clients that don't know about the field will silently drop it.
+
 ## API
 
 ### `GET /health`
@@ -148,7 +208,7 @@ Writes the calendar event and generates the reminder schedule. Returns
 
 Lists events on that day (or all events if `day` is omitted).
 
-### `GET /reminders/upcoming?window_hours=72`
+### `GET /reminders/upcoming?window_hours=72&include_fired=false`
 
 Returns the next window of reminder rows the phone should register with
 `UNUserNotificationCenter`. Combines:
@@ -162,6 +222,13 @@ Rows already `acked`, `cancelled`, or `fired` are excluded. Output is
 sorted ascending by `fire_at` and capped at 60 rows so the phone stays
 under iOS's 64-pending limit. The brain composes this list fresh on
 every call — the vault is the truth.
+
+`include_fired=true` is a test-client affordance (v1.2.1): the time
+window opens to `now - 24h` and rows of any status are returned, so the
+boss can verify schedule generation during live testing without losing
+visibility as soon as a strike fires. The phone client should never set
+this — `UNUserNotificationCenter` would silently drop past triggers
+anyway.
 
 ```json
 [

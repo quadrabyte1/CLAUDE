@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import VERSION, DESIGN_VERSION
@@ -116,12 +119,20 @@ def create_app() -> FastAPI:
         return [e.model_dump(mode="json") for e in events]
 
     @app.get("/reminders/upcoming", response_model=list[ReminderRow])
-    async def reminders_upcoming(window_hours: int = 72) -> list[ReminderRow]:
+    async def reminders_upcoming(
+        window_hours: int = 72,
+        include_fired: bool = False,
+    ) -> list[ReminderRow]:
         """Return reminders the phone should register over the next window.
 
         Combines per-event strike rows (read from the persisted sidecars) with
         daily summary rows for the next few days. Sorted ascending by
         ``fire_at`` and capped at 60 so we stay under iOS's 64-pending limit.
+
+        ``include_fired`` is a test-client affordance (v1.2.1): when true the
+        window opens to ``now - 24h`` and rows are returned regardless of
+        status, so the boss can see strikes that already fired during live
+        testing. The phone client should never set this.
         """
         tz = ZoneInfo(config.default_tz_name)
         now = datetime.now(tz)
@@ -133,6 +144,7 @@ def create_app() -> FastAPI:
             window_end=window_end,
             anchor_tz=tz,
             summary_time=config.morning_summary_time,
+            include_fired=include_fired,
         )
         return rows[:60]
 
@@ -167,6 +179,23 @@ def create_app() -> FastAPI:
             },
         )
         return result
+
+    # --- v1.2.1 test client ---------------------------------------------------
+    # Single-page browser harness for hand-exercising the brain end-to-end
+    # without curl. Lives in homunculus_brain/test_client/ as a single
+    # index.html (vanilla JS, no build step) so the brain can ship it with
+    # zero extra dependencies. Mounted at /test/. The portability rule
+    # holds — same code runs on Linux when the brain migrates.
+    _test_client_dir = Path(__file__).resolve().parent / "test_client"
+    if _test_client_dir.is_dir():
+        app.mount("/test", StaticFiles(directory=str(_test_client_dir), html=True), name="test_client")
+
+        @app.get("/test", include_in_schema=False)
+        async def _test_root_redirect() -> FileResponse:
+            # FastAPI's StaticFiles with html=True serves index.html on the
+            # mount path WITH a trailing slash. A bare /test (no slash) gets
+            # a 404 from StaticFiles, which is confusing — so handle it here.
+            return FileResponse(str(_test_client_dir / "index.html"))
 
     return app
 

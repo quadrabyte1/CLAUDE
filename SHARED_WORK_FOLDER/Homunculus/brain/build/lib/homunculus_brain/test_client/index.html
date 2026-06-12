@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Homunculus brain — test client</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Version badge: upper-left, per the boss's standing rule. Filled at
+       page-load from /health. -->
+  <div id="version-badge" class="version-badge">
+    <span class="vb-label">Homunculus</span>
+    <span class="vb-design">design v<span id="vb-design">?</span></span>
+    <span class="vb-pkg">pkg v<span id="vb-pkg">?</span></span>
+    <span class="vb-client">client v1.2.1</span>
+    <span class="vb-conn" id="vb-conn">connecting…</span>
+  </div>
+
+  <header class="hdr">
+    <h1>Homunculus brain — test client</h1>
+    <p class="sub">
+      One page, no curl. Type an utterance, watch the brain parse it,
+      walk through confirm / clarify, and see live reminders fire.
+    </p>
+  </header>
+
+  <main>
+    <!-- 1. CAPTURE -------------------------------------------------------- -->
+    <section class="card" id="capture-card">
+      <h2>1 · Capture</h2>
+      <div class="capture-row">
+        <textarea
+          id="capture-text"
+          rows="2"
+          placeholder='e.g. "add coffee with Jane on Thursday at 10am" or "remember the bostitch pin nailer is the F33PT"'
+        ></textarea>
+        <button id="capture-send" class="primary">Send</button>
+      </div>
+      <div class="examples">
+        <span class="examples-label">Try:</span>
+        <button class="chip" data-text="add coffee with Jane on Thursday at 10am">calendar event</button>
+        <button class="chip" data-text="remember the bostitch pin nailer is the F33PT">tool note</button>
+        <button class="chip" data-text="save this prompt — when reviewing PRs, look for the load-bearing change first">prompt note</button>
+        <button class="chip" data-text="what do I have Tuesday">calendar query</button>
+        <button class="chip" data-text="feed Jake at 5:35">ambiguous time</button>
+        <button class="chip" data-text="meeting">unknown</button>
+      </div>
+
+      <div id="response-area" class="response-area hidden">
+        <div id="response-card" class="response-card"></div>
+      </div>
+    </section>
+
+    <!-- 2. UPCOMING REMINDERS -------------------------------------------- -->
+    <section class="card" id="upcoming-card">
+      <h2>
+        2 · Upcoming reminders
+        <span class="hdr-controls">
+          <label class="ck">
+            <input type="checkbox" id="include-fired" />
+            include fired
+          </label>
+          <label class="ck">window (h):
+            <input type="number" id="window-hours" value="72" min="1" max="720" />
+          </label>
+          <button id="refresh-now" class="secondary">refresh</button>
+          <span id="next-refresh" class="muted">—</span>
+        </span>
+      </h2>
+      <div id="upcoming-rows" class="upcoming-rows">
+        <div class="muted">Loading…</div>
+      </div>
+    </section>
+
+    <!-- 3. ACTIVITY TAIL (lightweight peek for debugging) ---------------- -->
+    <section class="card" id="activity-card">
+      <h2>3 · Recent activity <span class="muted small">(last response only)</span></h2>
+      <pre id="activity-tail" class="activity-tail muted">No captures yet.</pre>
+    </section>
+  </main>
+
+  <footer class="ftr">
+    <span class="muted small">
+      Brain on <code id="brain-origin">…</code> · vault at <code id="brain-vault">…</code>
+    </span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

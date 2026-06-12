@@ -40,6 +40,28 @@ Rules:
   "next Monday"). Do NOT compute the date — the caller does that.
 - Copy the time expression into `time_hint` exactly ("10am", "2:30 PM",
   "morning"). Do NOT convert to 24-hour.
+- If the user said an hour 1-12 with NO am/pm and NO 24-hour context
+  (e.g. "5:35", "feed Jake at 6"), add "time" to `ambiguous_fields`.
+  We will ask "AM or PM?" rather than guess. Hours 0 and 13-23 are
+  unambiguous (they can only be a 24-hour reading). Named anchors
+  ("noon", "midnight", "morning", "afternoon", "evening", "night")
+  are unambiguous too.
+- "remind me to X" and "schedule/book/add X" are ALWAYS calendar_event,
+  never calendar_query. Use calendar_query only when the user is asking
+  about their availability ("am I free…", "do I have anything on…",
+  "can we meet…").
+- For calendar_event and calendar_query, fill `title` with a short noun
+  phrase naming the activity — the verb/object plus any key participant —
+  with scheduling words ("schedule", "remind me to", "book") stripped.
+  Preserve the casing of proper nouns (people, places, brands); the rest
+  may be lowercase. No trailing punctuation.
+  Examples:
+    "schedule coffee with Jane Thursday at 10am" → title: "coffee with Jane"
+    "remind me to call the dentist tomorrow afternoon" → title: "call the dentist"
+    "am I free Thursday at 10?" → title: null  (no activity named)
+    "book the conference room for the design review Friday" → title: "design review"
+  Do NOT include the day or time in `title` — those go in `day_hint` /
+  `time_hint`. Do NOT invent a title; leave it null if none is stated.
 - Put any names mentioned in `people`.
 - Put any topic words (e.g. "woodworking", "gardening") in `tags`.
 - If you guessed at any field, list its name in `ambiguous_fields`.

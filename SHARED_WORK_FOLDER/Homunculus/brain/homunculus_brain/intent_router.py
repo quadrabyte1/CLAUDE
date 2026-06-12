@@ -103,6 +103,7 @@ def _handle_calendar_event(
             spoken_reply=_clarifying_question(resolved.ambiguous, intent),
             clarifying_question=_clarifying_question(resolved.ambiguous, intent),
             raw_text=intent.raw_text,
+            intent=intent,
         )
 
     duration = intent.duration_minutes or config.default_event_duration_minutes
@@ -125,6 +126,7 @@ def _handle_calendar_event(
         written_path=None,
         conflicts=conflicts,
         raw_text=intent.raw_text,
+        intent=intent,
     )
 
 
@@ -193,6 +195,7 @@ def commit_calendar_event(
         spoken_reply=f"Saved. {event.title} on {event.starts_at.strftime('%A %B %-d at %-I:%M %p')}.",
         written_path=str(_relative(config.vault_path, _event_file(config.vault_path, event.starts_at, event.title))),
         raw_text=intent.raw_text,
+        intent=intent,
     )
 
 
@@ -217,6 +220,7 @@ def _handle_calendar_query(
             spoken_reply=_clarifying_question(resolved.ambiguous, intent),
             clarifying_question=_clarifying_question(resolved.ambiguous, intent),
             raw_text=intent.raw_text,
+            intent=intent,
         )
 
     duration = intent.duration_minutes or config.default_event_duration_minutes
@@ -245,6 +249,7 @@ def _handle_calendar_query(
         spoken_reply=reply,
         conflicts=conflicts,
         raw_text=intent.raw_text,
+        intent=intent,
     )
 
 
@@ -275,6 +280,7 @@ def _handle_tool_note(intent: ParsedIntent, *, config: Config, now: datetime) ->
         spoken_reply=f"Noted — {intent.title}, in tools.",
         written_path=str(_relative(config.vault_path, path)),
         raw_text=intent.raw_text,
+        intent=intent,
     )
 
 
@@ -305,6 +311,7 @@ def _handle_prompt_note(intent: ParsedIntent, *, config: Config, now: datetime) 
         spoken_reply=f"Saved that prompt — {title}.",
         written_path=str(_relative(config.vault_path, path)),
         raw_text=intent.raw_text,
+        intent=intent,
     )
 
 
@@ -333,6 +340,7 @@ def _drop_to_inbox(intent: ParsedIntent, *, config: Config, now: datetime, reaso
         spoken_reply=f"I wasn't sure where this goes — it's in the inbox. {reason}.",
         written_path=str(_relative(config.vault_path, path)),
         raw_text=intent.raw_text,
+        intent=intent,
     )
 
 
@@ -356,6 +364,15 @@ def _clarifying_question(ambiguous: list[str], intent: ParsedIntent) -> str:
     if "day" in ambiguous:
         return "Which day?"
     if "time" in ambiguous:
+        # v1.2.2: if the user gave a bare hour like "5:35" with no AM/PM
+        # marker, the date resolver flags time as ambiguous even though the
+        # utterance contained a time. Asking "What time?" would be confusing
+        # ("I just told you"); ask the disambiguating question instead.
+        # ParsedIntent.time_hint is the verbatim user text — if it exists and
+        # has no am/pm marker, the missing piece is AM vs PM specifically.
+        hint = (intent.time_hint or "").lower()
+        if hint and "am" not in hint and "pm" not in hint:
+            return f"{intent.time_hint} — AM or PM?"
         return "What time?"
     return "Can you say that again?"
 

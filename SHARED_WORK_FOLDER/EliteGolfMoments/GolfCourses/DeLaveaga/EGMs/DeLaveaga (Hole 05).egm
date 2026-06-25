@@ -13,6 +13,7 @@
   "greenStyle": "terraced",
   "elevationRange": 16,
   "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
   "includeBoundaryRegion": false,
   "flagOffsetXMm": 0,
   "flagOffsetYMm": 0,
@@ -23,8 +24,8 @@
       "closed": true,
       "points": [
         {
-          "x": 522,
-          "y": 257
+          "x": 524,
+          "y": 264
         },
         {
           "x": 284,
@@ -43,16 +44,16 @@
           "y": 1131
         },
         {
-          "x": 893,
+          "x": 885,
           "y": 1011
         },
         {
-          "x": 1001,
+          "x": 995,
           "y": 745
         },
         {
-          "x": 732,
-          "y": 385
+          "x": 723,
+          "y": 394
         }
       ]
     },

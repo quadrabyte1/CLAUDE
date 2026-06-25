@@ -1,0 +1,100 @@
+{
+  "course": "Los Lagos",
+  "hole": "16",
+  "image": "Los Lagos Golf Course (16).png",
+  "imageCourse": "Seabright",
+  "imageSize": {
+    "width": 1179,
+    "height": 1641
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "elevationRange": 20.09,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 682,
+          "y": 44
+        },
+        {
+          "x": 444,
+          "y": 217
+        },
+        {
+          "x": 178,
+          "y": 571
+        },
+        {
+          "x": 202,
+          "y": 1212
+        },
+        {
+          "x": 467,
+          "y": 1610
+        },
+        {
+          "x": 919,
+          "y": 1420
+        },
+        {
+          "x": 959,
+          "y": 874
+        },
+        {
+          "x": 1067,
+          "y": 540
+        },
+        {
+          "x": 1087,
+          "y": 208
+        }
+      ]
+    },
+    {
+      "name": "Water 1",
+      "type": "water",
+      "closed": true,
+      "points": [
+        {
+          "x": 1238,
+          "y": 730
+        },
+        {
+          "x": 1137,
+          "y": 835
+        },
+        {
+          "x": 1123,
+          "y": 959
+        },
+        {
+          "x": 1142,
+          "y": 1092
+        },
+        {
+          "x": 1320,
+          "y": 1659
+        },
+        {
+          "x": 1404.9415660542431,
+          "y": 1633
+        },
+        {
+          "x": 1404.9415660542431,
+          "y": 802
+        }
+      ]
+    }
+  ]
+}

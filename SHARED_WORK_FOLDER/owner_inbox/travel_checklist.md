@@ -1,4 +1,4 @@
-# Travel Checklist
+# Travel Checklist (v1.0)
 
 Reusable packing checklist Thomas keeps and adds to over time. Built incrementally — new items get tucked into existing categories; new categories are only added when an item doesn't fit anywhere.
 

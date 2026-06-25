@@ -5002,6 +5002,22 @@ def run_pipeline(
     print(f"    [generate] input image:         {image_path}")
     print(f"    Green boundary: {len(green_boundary_px)} spline points")
 
+    # Apply per-project base-thickness override from the EGM (Boundary Editor
+    # "Base thickness (mm)" field). BASE_THICKNESS_MM is referenced as a
+    # module-level constant by ~23 call sites in this file; rather than thread
+    # the value through every helper, we mutate the module global so the
+    # next reads in this pipeline run pick it up. Missing/zero/invalid → keep
+    # the module default (1.5 mm).
+    try:
+        _base_override = float(_egm_data.get("baseThicknessMm") or 0)
+    except (TypeError, ValueError):
+        _base_override = 0.0
+    if _base_override > 0:
+        globals()["BASE_THICKNESS_MM"] = _base_override
+        print(f"    Base thickness from EGM: {_base_override} mm")
+    else:
+        print(f"    Base thickness: {BASE_THICKNESS_MM} mm (default)")
+
     # ── 1b. Auto-derive boulders ring from water (boundary region) ──────────
     # When include_boundary_region is True, we replace any manual boulders
     # polygons with a synthesised 5 mm-wide annular ring just inside each

@@ -1,4 +1,4 @@
-# Travel Checklist (v1.0)
+# Travel Checklist (v1.1)
 
 Reusable packing checklist Thomas keeps and adds to over time. Built incrementally — new items get tucked into existing categories; new categories are only added when an item doesn't fit anywhere.
 
@@ -43,6 +43,7 @@ Reusable packing checklist Thomas keeps and adds to over time. Built incremental
 - [ ] Battery pack (mobile charging)
 - [ ] Bose noise-canceling headphones
 - [ ] Camera
+- [ ] EU voltage converter
 - [ ] iPad
 - [ ] iPad pencil
 - [ ] iPhone
@@ -67,9 +68,11 @@ Reusable packing checklist Thomas keeps and adds to over time. Built incremental
 - [ ] Flotation device
 - [ ] Kayak
 - [ ] Kayaking gloves
+- [ ] Water shirt
 
 ## Accessories
 
+- [ ] Kerchief / bandana
 - [ ] Reading glasses
 - [ ] Sunglasses
 

@@ -1,0 +1,152 @@
+============================================================
+Gradient Surface Diagnostic
+============================================================
+
+[1] EGM: TaskFourEightFive (Hole 16).egm
+    [generate] EGM absolute path:   /Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scratch/task_485/GolfCourses/TaskFourEightFive/EGMs/TaskFourEightFive (Hole 16).egm
+    Image: Los Lagos Golf Course (16).png
+    [generate] input image:         /Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scratch/task_485/GolfCourses/TaskFourEightFive/Images/Los Lagos Golf Course (16).png
+    Green boundary: 160 spline points
+    Base thickness from EGM: 1.5 mm
+    Image size: 1069x900
+
+[2] Detecting arrows…
+  detect_arrows: rejected 7 blob(s) within 3 px of green boundary (yardage-label / edge-glyph false-positive class)
+    Found 228 arrows
+
+[3] Building gradient field (200x200 grid)…
+  Grid 200x200, inside cells: 24651
+    Gradient field built. Gx range: [-0.999, 0.840]
+    Gy range: [-0.993, 0.957]
+
+[4] Solving Poisson equation…
+  Poisson solve: 24651 unknowns
+  Solving sparse system…
+    Height range (raw, pre-soften): -33.4980 .. 69.8737
+    soften_extremes: peak_limit=6.00 mm, valley_limit=-4.00 mm, window=11 px, sigma=2.0 px
+    BEFORE: max peak=+0.200 mm, min valley=-0.890 mm, #peaks>limit=0, #valleys<limit=0
+    AFTER:  max peak=+0.200 mm, min valley=-0.890 mm, #peaks>limit=0, #valleys<limit=0
+    File slug: taskfoureightfive_hole_16
+    [generate] output 3MF dir:      /Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scratch/task_485/GolfCourses/TaskFourEightFive/3MFs
+    [generate] output images dir:   /Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scratch/task_485/GolfCourses/TaskFourEightFive/Images
+
+[6] Building green surface meshes…
+  Scale: 0.160384 px→mm, centroid: [534.5 450. ]
+  Elevation range from EGM: 16.0 mm
+  Z_mm range: 1.500 .. 17.500 mm
+  Contour step from EGM: 0.5 mm (user-specified)
+  Building smooth surface mesh…
+  Smooth mesh: 25443 vertices, 50882 faces
+  Watertight: True
+  Bounding box: X [-35.2, 71.0] Y [-55.4, 58.6] Z [0.0, 17.5] mm
+  Building stepped surface mesh…
+  Stepped mesh: 25443 vertices, 50882 faces
+  Watertight: True
+  Bounding box: X [-35.2, 71.0] Y [-55.4, 58.6] Z [0.0, 17.5] mm
+  Drilling 3.0mm flag hole at green center (flagOffset = +0.00, +0.00 mm)…
+  [smooth]
+  Boolean difference succeeded (engine='manifold')
+  Post-drill watertight: True
+  Post-drill faces: 51158, vertices: 25579
+  [stepped]
+  Boolean difference succeeded (engine='manifold')
+  Post-drill watertight: True
+  Post-drill faces: 51108, vertices: 25554
+
+[6b] Applying grass texture (amplitude=0.5 mm, spacing=2.4 mm)…
+    Grass texture: 2254 bumps, R=1.152 mm, amplitude=0.500 mm, dz range [0.000, 0.500] mm on 24723 vertices
+
+[7] Building fringe mesh…
+  Mount pipe: DISABLED (ENABLE_MOUNT_BORE = False) — no fringe hole, no pipe mesh, no trap/water/boulders pipe-subtraction.
+  Fringe grid: 200x200 over ±85.20 mm
+  Green boundary: 160 mm-space points
+  Trap polygons: 2
+  Water polygons: 1
+  Boulders annuli (carved): 0
+  Fringe cells: 21614
+  Fringe Z range: 1.500 .. 17.500 mm
+  Seam-reseat: snapped 488 fringe inner-boundary cells to green mesh's top-boundary ring (greenStyle=terraced)
+  Spike filter (3x3 mask-aware median, blend=0.50): spikes >1.5mm above 8-nbr median: 0 -> 0
+  FINAL fringe top surface (Z_fringe + seam_override) spikes >1.5mm above 8-nbr median: 0
+  Bottom cap: 722 triangles (polygon-with-holes, earcut)
+  Fringe: top_faces=41440 wall_faces=3520 cap_faces=722
+  Fringe: dropped 304 spurious component(s) (448 faces) — water-near-corner carve artifact
+  Fringe mesh: 23074 vertices, 45234 faces
+  Watertight: False
+  Bounding box: X [-85.2, 85.2] Y [-85.2, 85.2] Z [0.0, 17.5] mm
+  Fringe top-surface Z near green boundary (should match green edge): mean=10.25 min=1.50 max=17.50 mm
+  Fringe top-surface Z near rect boundary (should match green-edge Z — task 483, flat to frame): mean=11.39 min=1.50 max=17.50 mm
+  Fringe flat-to-frame delta (rect_mean − green_mean): +1.14 mm  (task 483: should be ≈ 0)
+  Applying grass texture to fringe (amplitude=0.5 mm, spacing=2.4 mm)…
+    Grass texture: protecting 679 top-surface vertices within 2.00 mm of seam polyline
+    Grass texture: 5184 bumps, R=1.152 mm, amplitude=0.500 mm, dz range [0.000, 0.500] mm on 21136 vertices (+679 seam-frozen)
+  Mount pipe: build SKIPPED (ENABLE_MOUNT_BORE = False)
+
+[7c] Water-hole rule: lift=2.0 mm (fringe boundary cap DISABLED — task 485)
+    lift+cap [green_smooth]: lift=2.00 mm, cap=-, z_top 1.56-17.45 → 3.56-19.45, clipped 0 vert(s), max_clip 0.00 mm
+    lift+cap [green_stepped]: lift=2.00 mm, cap=-, z_top 1.50-17.50 → 3.50-19.50, clipped 0 vert(s), max_clip 0.00 mm
+    lift+cap [fringe]: lift=2.00 mm, cap=-, z_top 1.50-18.00 → 3.50-20.00, clipped 0 vert(s), max_clip 0.00 mm
+
+[8] Building sand trap meshes…
+  Water-hole rule active: lift=2.0 mm, boundary cap=9.0 mm (mode=hard)
+  Trap 1: fringe Z min over 56 samples = 14.50 mm (centroid Z = 17.50 mm, was fixed 10.0 mm)
+    Sand texture grid: step=0.225 mm, bbox 46.6×90.8 mm → 209×405 candidates → 38967 inside polygon (boundary inset = 0.225 mm)
+    Sand texture: rake lines, angle=0°, spacing=1.12 mm, amplitude=1.000 mm, ~43 lines, dz range [0.056, 0.994] mm on 38967 grid verts + 456 boundary ring verts
+    Sand texture: Delaunay → 78754 triangles, 78388 kept after centroid clipping
+    Sand texture: reassembled mesh — 39879 verts, 79754 faces, watertight=True
+    lift+cap [trap_1]: lift=2.00 mm, cap=9.0 mm (hard), z_top 14.50-15.50 → 16.50-17.50, clipped 0 vert(s), max_clip 0.00 mm, band_verts=0/39423 (width=1.00mm), uncapped_above_cap=39423
+  Trap 1: 39879 verts, 79754 faces, watertight=True, X[-83.4,-36.8] Y[-46.0,44.8] Z[0.00,17.50] mm
+  Trap 2: fringe Z min over 73 samples = 5.00 mm (centroid Z = 6.50 mm, was fixed 10.0 mm)
+    Sand texture grid: step=0.225 mm, bbox 43.6×19.2 mm → 195×87 candidates → 10303 inside polygon (boundary inset = 0.225 mm)
+    Sand texture: rake lines, angle=0°, spacing=1.12 mm, amplitude=1.000 mm, ~40 lines, dz range [0.002, 0.931] mm on 10303 grid verts + 158 boundary ring verts
+    Sand texture: Delaunay → 20842 triangles, 20762 kept after centroid clipping
+    Sand texture: reassembled mesh — 10619 verts, 21234 faces, watertight=True
+    lift+cap [trap_2 (boundary)]: lift=2.00 mm, cap=9.0 mm (hard), z_top 5.00-6.00 → 7.00-8.00, clipped 0 vert(s), max_clip 0.00 mm, band_verts=451/10461 (width=1.00mm), uncapped_above_cap=0
+  Trap 2: 10619 verts, 21234 faces, watertight=True, X[37.7,81.3] Y[66.0,85.2] Z[0.00,8.00] mm
+
+[8b] Building water trap meshes…
+  Water 1: fringe Z min over 92 samples = 3.88 mm
+    Water ripple grid: step=0.500 mm, bbox 50.3×73.9 mm → 102×149 candidates → 12416 inside polygon (seed=0xb98f7f57, θ1=258.4°, θ2=343.7°)
+    Water ripple: A1=0.200/λ1=4.00, A2=0.080/λ2=2.50 mm, dz range [-0.280, 0.000] mm (clamped ≤0) on 12416 grid + 118 ring verts
+    Water ripple: Delaunay → 24989 triangles, 24948 kept after centroid clipping
+    Water ripple: reassembled mesh — 12652 verts, 25300 faces, watertight=True
+  Water 1: 12652 verts, 25300 faces, watertight=True, X[34.9,85.2] Y[-85.2,-11.2] mm
+
+[8c] Building boulders meshes…
+  No boulders polygons found in EGM data.
+  (no boulders built)
+
+[10] Assembling 3MF…
+    [generate] output 3MF file:     /Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scratch/task_485/GolfCourses/TaskFourEightFive/3MFs/TaskFourEightFive (Hole 16) [100].3mf
+  Using terraced green surface
+
+[10b] Engraving serial s/n: 100 on 5 item(s)…
+[serial_engraver]   'geometry_0': engraved, watertight, 52322 faces
+[serial_engraver]   boolean.difference: all engines failed (last error: 'scad')
+[serial_engraver]   boolean.difference: all engines failed (last error: 'scad')
+[serial_engraver]   boolean failed for mesh (verts=23074, faces=45234); trying plane-surgery fallback…
+[serial_engraver]   plane-surgery: removed 722 old-bottom faces, added 791+216+464 new faces (bottom/pocket/walls)
+[serial_engraver]   'geometry_1': engraved, NOT watertight, 45983 faces
+[serial_engraver]   'geometry_2': engraved, watertight, 80968 faces
+[serial_engraver]   'geometry_3': engraved, watertight, 22448 faces
+[serial_engraver]   'geometry_4': engraved, watertight, 26514 faces
+manifold: TaskFourEightFive-hole-16/geometry_0 boundary_edges=0 triple_shared=0 (tolerate_boundary=30, tolerate_triple=5) watertight=True winding_consistent=True
+manifold: TaskFourEightFive-hole-16/geometry_1 SKIPPED (skip_labels)
+manifold: TaskFourEightFive-hole-16/geometry_2 boundary_edges=0 triple_shared=0 (tolerate_boundary=30, tolerate_triple=5) watertight=True winding_consistent=True
+manifold: TaskFourEightFive-hole-16/geometry_3 boundary_edges=0 triple_shared=0 (tolerate_boundary=30, tolerate_triple=5) watertight=True winding_consistent=True
+manifold: TaskFourEightFive-hole-16/geometry_4 boundary_edges=0 triple_shared=0 (tolerate_boundary=30, tolerate_triple=5) watertight=True winding_consistent=True
+  [generate] output 3MF written:  /Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scratch/task_485/GolfCourses/TaskFourEightFive/3MFs/TaskFourEightFive (Hole 16) [100].3mf
+  Objects in 3MF (5):
+    - green_surface
+    - fringe
+    - trap_1
+    - trap_2
+    - water_1
+  Extruder metadata injected → geometry_0=ext1, geometry_1=ext2, geometry_2=ext3, geometry_3=ext3, geometry_4=ext4
+  Serial committed: used s/n 100, next will be s/n 101
+
+============================================================
+Done.
+  3MF assembly:       /Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/scratch/task_485/GolfCourses/TaskFourEightFive/3MFs/TaskFourEightFive (Hole 16) [100].3mf
+  Scene objects:      5 (green + fringe + 2 trap(s) + 1 water + 0 boulders)
+============================================================

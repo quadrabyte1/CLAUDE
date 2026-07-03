@@ -5404,9 +5404,8 @@ def run_pipeline(
     # every printable piece in the assembly.
     _hole_water_active = WATER_HOLE_LIFT_ENABLED and _hole_has_water(_egm_data)
     if _hole_water_active:
-        print(f"\n[7c] Water-hole rule: lift={WATER_HOLE_LIFT_MM} mm, "
-              f"boundary cap={BOUNDARY_HEIGHT_CAP_MM} mm "
-              f"(mode={BOUNDARY_HEIGHT_CAP_MODE})")
+        print(f"\n[7c] Water-hole rule: lift={WATER_HOLE_LIFT_MM} mm "
+              f"(fringe boundary cap DISABLED — task 485)")
         # Green: smooth + stepped variants — never touches the frame, so no cap.
         if isinstance(smooth_mesh_flat, trimesh.Trimesh):
             _apply_lift_and_cap(
@@ -5418,11 +5417,20 @@ def run_pipeline(
                 stepped_mesh, lift_mm=WATER_HOLE_LIFT_MM,
                 cap_mm=None, label="green_stepped",
             )
-        # Fringe: ALWAYS touches the frame by construction → lift + cap.
+        # Fringe: task 483 held green-edge Z flat all the way to the frame in
+        # `build_fringe_mesh`. That flat-to-frame property was then RE-broken
+        # here by the per-vertex boundary cap (BOUNDARY_HEIGHT_CAP_MM = 9 mm
+        # inside a 1 mm-wide band around the plaque perimeter), which pulled
+        # every near-frame fringe vertex whose Z exceeded 9 mm down to 9 mm —
+        # exactly the "meets the frame at its top-surface height and slopes to
+        # meet the green" ramp the owner reported in task 485. Setting
+        # cap_mm=None here lets the fringe keep the flat-to-frame Z assigned
+        # by `build_fringe_mesh`. The cap constants stay in the module for
+        # any future reuse; only the fringe call site is unwired.
         if isinstance(fringe_mesh, trimesh.Trimesh):
             _apply_lift_and_cap(
                 fringe_mesh, lift_mm=WATER_HOLE_LIFT_MM,
-                cap_mm=BOUNDARY_HEIGHT_CAP_MM, label="fringe",
+                cap_mm=None, label="fringe",
             )
     else:
         print("\n[7c] Water-hole rule: SKIPPED (no water polygons in EGM)")

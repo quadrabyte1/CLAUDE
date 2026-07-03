@@ -18,9 +18,9 @@ app = Flask(__name__)
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
 # ── Display baseline for task counts ──────────────────────────────────────
-# Dashboard task counts only reflect tasks created after this id — set 2026-05-12 to
-# zero out the historical/internal-bookkeeping backlog; raise this value to re-zero later.
-_TASK_COUNT_BASELINE_MAX_ID = 433
+# Dashboard task counts only reflect tasks created after this id — bumped 2026-07-03
+# at owner's request to re-zero the counter; raise this value again to re-zero later.
+_TASK_COUNT_BASELINE_MAX_ID = 485
 
 # ── Database initialisation ────────────────────────────────────────────────
 
@@ -351,7 +351,7 @@ def dashboard():
 
     homunculus = _homunculus_stats()
 
-    dashboard_version = "v1.8.4"  # bump this when layout/functionality changes
+    dashboard_version = "v1.8.5"  # bump this when layout/functionality changes
     return render("dashboard.html", team=team,
                    task_counts=task_counts,
                    journal_count=journal_count, updated_at=updated_at,

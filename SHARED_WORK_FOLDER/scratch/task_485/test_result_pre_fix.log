@@ -1,0 +1,36 @@
+[task 485] analysing: Los Lagos (Hole 16) [108].3mf
+  Total top-surface fringe verts: 18731
+  Outer ring (< 4.0 mm from rect): 3183 verts
+  Inner ring (> 10.0 mm from rect): 11715 verts
+  Angular bins: 24 × 15.0°
+
+  bin      deg   n_out   n_in   mean_out   mean_in        Δ
+    0      7.5      13    435       9.43     10.89    -1.47   OK
+    1     22.5     149    966      10.51      9.05    +1.47   OK
+    2     37.5     204   1193      10.46      6.98    +3.48  !!
+    3     52.5     209    434      10.36      6.63    +3.73  !!
+    4     67.5     150     29       9.96      5.33    +4.63  !!
+    5     82.5      87      0          -         -     skip
+    6     97.5     120      4      11.25     16.30    -5.04  !!
+    7    112.5     150    274      11.26     15.96    -4.70  !!
+    8    127.5     204    819      11.12     16.03    -4.92  !!
+    9    142.5     209    893      11.17     16.85    -5.69  !!
+   10    157.5     150    496      11.35     18.08    -6.73  !!
+   11    172.5     138    464      10.90     15.58    -4.68  !!
+   12    187.5     132    443      11.40     16.82    -5.42  !!
+   13    202.5     150    491      11.48     19.60    -8.12  !!
+   14    217.5     204    777      11.32     18.85    -7.52  !!
+   15    232.5     209    604      11.42     18.78    -7.36  !!
+   16    247.5     148     31      12.59     20.35    -7.77  !!
+   17    262.5     126      0          -         -     skip
+   18    277.5     131    102      11.46     15.61    -4.15  !!
+   19    292.5     150    552      11.12     14.85    -3.73  !!
+   20    307.5     150   1269      11.02     14.26    -3.24  !!
+   21    322.5       0    781          -         -     skip
+   22    337.5       0    355          -         -     skip
+   23    352.5       0    303          -         -     skip
+
+  Bins used: 19  bins over-tolerance (|Δ| > 1.75 mm): 17
+  Mean per-bin Δ (outer − inner): -3.54 mm  (tolerance ±0.75 mm)
+  Max per-bin |Δ|: 8.12 mm  (tolerance 1.75 mm)
+  FAIL — outer ring is systematically LOWER than inner ring: the fringe ramps DOWN to the frame (old task-483 defect).

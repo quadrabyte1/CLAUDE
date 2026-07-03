@@ -822,7 +822,11 @@ def save_height_map(
 PRINT_SIZE_MM: float = 171.45   # max bounding-box dimension (6.75 in)
 ELEVATION_RANGE_MM: float = 20.09  # total elevation variation on top surface (0.85in = 21.59mm total - 1.5mm base)
 BASE_THICKNESS_MM: float = 1.5    # flat base below lowest point
-FRINGE_EDGE_HEIGHT_MM: float = 10.0  # height of fringe at the rectangular outer perimeter
+# NOTE: FRINGE_EDGE_HEIGHT_MM and the `fringeEdgeHeight` EGM key were removed
+# from the fringe Z math (task 483) — the fringe now holds green-edge Z flat
+# all the way to the frame instead of ramping to a per-hole rectangle-edge
+# target. The EGM key is intentionally preserved on-disk for backward
+# compatibility with existing .egm / serial.json files.
 N_CONTOUR_LEVELS: int = 27        # steps for quantized surface
 
 # Signed XY offset applied to the fringe outer bbox.
@@ -1566,9 +1570,10 @@ def save_stl_meshes(
     print(f"  Scale: {scale:.6f} px→mm, centroid: {centroid_px}")
 
     elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
-    fringe_edge_height_mm = float(egm_data.get("fringeEdgeHeight") or FRINGE_EDGE_HEIGHT_MM)
     print(f"  Elevation range from EGM: {elevation_range_mm} mm")
-    print(f"  Fringe edge height from EGM: {fringe_edge_height_mm} mm")
+    # `fringeEdgeHeight` intentionally NOT read here — the fringe Z math no
+    # longer ramps to a rectangle-edge target (task 483). The EGM key remains
+    # on-disk for backward compatibility with existing .egm files.
 
     Z_mm = _height_to_mm(Z_grid, inside_mask, elevation_range_mm=elevation_range_mm)
     valid_mm = Z_mm[inside_mask]
@@ -1683,16 +1688,6 @@ def _nearest_grid_z(nx_mm: float, ny_mm: float,
     return float(Z_mm[valid_rows[best], valid_cols[best]])
 
 
-def _rect_dist_mm(x_mm: float, y_mm: float, half: float) -> float:
-    """Distance from interior point to the nearest side of the ±half square."""
-    # Distance to each of 4 sides: left, right, bottom, top
-    d_left  = x_mm - (-half)
-    d_right = half - x_mm
-    d_bot   = y_mm - (-half)
-    d_top   = half - y_mm
-    return min(d_left, d_right, d_bot, d_top)
-
-
 def _count_fringe_spikes(
     Z: np.ndarray,
     mask: np.ndarray,
@@ -1749,7 +1744,9 @@ def build_fringe_mesh(
     - Is bounded by the PRINT_SIZE_MM square centred at origin (mm coords)
     - Excludes sand trap and water polygons (so their inset slabs sit in a
       true recess in the fringe rather than overlapping a flush surface)
-    - Tapers from green-edge height down to BASE_THICKNESS_MM at the rectangle
+    - Holds green-edge Z flat all the way to the frame — no ramp toward
+      the rectangle boundary (task 483). Prior implementation tapered from
+      green-edge height to a per-hole rectangle-edge target.
 
     Parameters
     ----------
@@ -1763,7 +1760,6 @@ def build_fringe_mesh(
     from collections import defaultdict
 
     _elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
-    _fringe_edge_height_mm = float(egm_data.get("fringeEdgeHeight") or FRINGE_EDGE_HEIGHT_MM)
 
     scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
 
@@ -1973,27 +1969,6 @@ def build_fringe_mesh(
     green_cell_z  = _Z_lerp_src[valid_rows_g, valid_cols_g]
     green_kd = cKDTree(green_cell_xy)
 
-    # No-arrows-fallback detection (self-contained, derived from Z_mm).
-    # When the topology stage detected zero arrows, the green is built as a
-    # uniform Z field (see run_pipeline → flat_fallback_triggered). In that
-    # case the fringe must NOT ramp up to FRINGE_EDGE_HEIGHT_MM (10 mm) —
-    # homeowner rule "no arrows = no slope anywhere" requires the fringe to
-    # also be flat at the green-edge Z. Detect uniformity directly from
-    # Z_mm rather than threading a flag through the call graph; this keeps
-    # build_fringe_mesh self-contained and works whether the fallback fired
-    # via the explicit no-arrows path or any future caller that hands us a
-    # uniform Z field.
-    _green_z_vals = Z_mm[inside_mask]
-    _flat_fallback_active = bool(
-        _green_z_vals.size > 0
-        and np.nanmax(_green_z_vals) == np.nanmin(_green_z_vals)
-    )
-    if _flat_fallback_active:
-        print(
-            "  Fringe: detected uniform green Z (no-arrows fallback) — "
-            "flattening fringe to green-edge Z (no slope when no arrows)."
-        )
-
     # Pre-build array of green boundary points in mm for vectorised dist
     gbnd = green_bnd_mm  # (N, 2)
 
@@ -2024,39 +1999,14 @@ def build_fringe_mesh(
                 if in_hole:
                     continue
 
-            # Distance to green boundary (polyline walk)
-            d_green, nx, ny = _min_dist_to_polyline(x, y, gbnd)
-
-            # Distance to rectangle boundary
-            d_rect = _rect_dist_mm(x, y, half)
-
-            # Blend factor: 0 at green edge, 1 at rectangle
-            total = d_green + d_rect
-            if total < 1e-9:
-                t = 0.5
-            else:
-                t = d_green / total
-
-            # Green-edge height: find nearest valid green grid cell to (nx, ny)
+            # Nearest point on the green boundary — used only to sample the
+            # green-edge height. Fringe holds that height flat all the way
+            # to the frame; no ramp toward a rectangle-edge target.
+            _, nx, ny = _min_dist_to_polyline(x, y, gbnd)
             _, idx_g = green_kd.query([nx, ny], k=1)
             green_edge_h = float(green_cell_z[idx_g])
 
-            # Fringe height: lerp from green edge height to FRINGE_EDGE_HEIGHT_MM.
-            # No-slope-when-no-arrows policy: when the no-arrows fallback is
-            # active (uniform green Z), the lerp's outer-edge target collapses
-            # to the green-edge Z so the entire green+fringe surface lands at
-            # one uniform height. The default 10 mm rectangle-edge target
-            # only applies when arrows are present and the green has real
-            # slope information. See project_golf_render_rules.md →
-            # "No-arrows fallback (topology)".
-            if _flat_fallback_active:
-                _fringe_outer_target = green_edge_h
-            else:
-                _fringe_outer_target = _fringe_edge_height_mm
-            z_fringe = green_edge_h * (1.0 - t) + _fringe_outer_target * t
-
-            # Clamp to reasonable range
-            z_fringe = max(BASE_THICKNESS_MM, min(z_fringe, BASE_THICKNESS_MM + _elevation_range_mm))
+            z_fringe = max(BASE_THICKNESS_MM, min(green_edge_h, BASE_THICKNESS_MM + _elevation_range_mm))
 
             fringe_mask[r, c] = True
             Z_fringe[r, c] = z_fringe
@@ -2525,11 +2475,36 @@ def _verify_fringe_boundary(
     else:
         print("  No fringe top-surface verts near green boundary found")
 
+    # Task 483 regression assertion: fringe holds green-edge Z flat to the
+    # frame. Near-rect Z should be inside the green Z envelope
+    # ([BASE_THICKNESS_MM, BASE_THICKNESS_MM + elevation_range_mm]) and,
+    # more importantly, should NOT sit at BASE_THICKNESS_MM — that would
+    # mean the old ramp-to-base behavior has regressed. We only warn (not
+    # raise) because the near-green stats above already tell the reader
+    # what the green-edge Z is, and this scans the raw mesh vertices.
     if len(near_rect_top) > 0:
-        print(f"  Fringe top-surface Z near rect boundary (should be ~{BASE_THICKNESS_MM:.1f} mm): "
-              f"mean={near_rect_top[:, 2].mean():.2f} "
-              f"min={near_rect_top[:, 2].min():.2f} "
-              f"max={near_rect_top[:, 2].max():.2f} mm")
+        rect_min = float(near_rect_top[:, 2].min())
+        rect_max = float(near_rect_top[:, 2].max())
+        rect_mean = float(near_rect_top[:, 2].mean())
+        print(f"  Fringe top-surface Z near rect boundary (should match "
+              f"green-edge Z — task 483, flat to frame): "
+              f"mean={rect_mean:.2f} "
+              f"min={rect_min:.2f} "
+              f"max={rect_max:.2f} mm")
+        # Regression check: if the near-rect Z envelope collapses to the
+        # base slab thickness, the old ramp-to-BASE_THICKNESS behavior has
+        # snuck back in. We flag it loudly but do not raise, because a
+        # legitimate uniform-green + BASE_THICKNESS clamp path can put a
+        # cell at that height when green_edge_h == BASE_THICKNESS_MM.
+        if len(near_green_top) > 0:
+            green_edge_mean = float(near_green_top[:, 2].mean())
+            delta = rect_mean - green_edge_mean
+            print(f"  Fringe flat-to-frame delta (rect_mean − green_mean): "
+                  f"{delta:+.2f} mm  (task 483: should be ≈ 0)")
+            if abs(delta) > 1.0 and rect_mean < green_edge_mean:
+                print("  WARNING: task 483 regression — near-rect Z is more "
+                      "than 1 mm BELOW green-edge Z; the fringe appears to "
+                      "be ramping down to the frame again.")
     else:
         print("  No fringe top-surface verts near rect boundary found")
 

@@ -290,6 +290,101 @@ def soften_extremes(
 
 
 # ---------------------------------------------------------------------------
+# Slope limiter — turn peaks into gentle rolling hills
+#
+# This is a grayscale morphological opening with a cone kernel of slope
+# _MAX_SLOPE_DELTA_MM per grid cell. For every cell inside the mask we cap Z
+# at ``min_neighbor + max_delta`` and iterate to convergence. Because the cap
+# is relative to the *lowest* 4-neighbor, the reduction propagates inward
+# from the perimeter of any high region: a mesa collapses layer by layer
+# until the entire feature slopes at ≤ max_delta per cell from its lowest
+# adjacent valley. Single-cell spikes and multi-cell plateaus alike become
+# gently sloped hills.
+#
+# Earlier iteration used ``max_neighbor + max_delta`` — that only reduced
+# isolated single-cell spikes because a mesa's inner cells all share high
+# neighbors. Switched to ``min_neighbor + max_delta`` after a stepped-green
+# render still showed a tall pyramid: the "spike" was actually a small
+# cluster of high cells that the max-neighbor variant refused to touch.
+# ---------------------------------------------------------------------------
+
+_MAX_SLOPE_DELTA_MM: float = 0.10  # max mm rise between two adjacent grid cells
+_MAX_SLOPE_ITERS:    int   = 400   # safety cap on iteration count
+
+
+def limit_max_slope(
+    Z: np.ndarray,
+    mask: np.ndarray,
+    *,
+    max_delta_mm: float = _MAX_SLOPE_DELTA_MM,
+    max_iters:    int   = _MAX_SLOPE_ITERS,
+    elevation_range_mm: float | None = None,
+) -> tuple[np.ndarray, dict]:
+    """Iteratively cap each cell at ``min_neighbor + max_delta_mm`` so no
+    cell rises faster than ``max_delta_mm`` per step from its lowest adjacent
+    valley. Peaks (both isolated spikes and multi-cell mesas) collapse into
+    gentle mounds sloping at the limit; broad low-relief surfaces pass
+    through unchanged.
+
+    Z is in raw Poisson units. As in :func:`soften_extremes`, we translate
+    mm → raw units via (current Z range / ``elevation_range_mm``).
+    """
+    if elevation_range_mm is None:
+        elevation_range_mm = ELEVATION_RANGE_MM
+
+    Z_out = np.array(Z, copy=True)
+    valid = mask & np.isfinite(Z_out)
+    if not valid.any() or max_delta_mm <= 0:
+        return Z_out, {
+            "max_delta_mm":  max_delta_mm,
+            "iters":         0,
+            "cells_reduced": 0,
+            "max_drop_mm":   0.0,
+        }
+
+    z_vals = Z_out[valid]
+    z_range_raw = float(z_vals.max() - z_vals.min()) or 1.0
+    raw_per_mm = z_range_raw / elevation_range_mm
+    max_delta_raw = max_delta_mm * raw_per_mm
+
+    # Out-of-mask cells are set to +inf so they are ignored by the min-neighbor
+    # reduction (a valid cell on the mask boundary must be reduced by its
+    # in-mask neighbours only).
+    Z_pad = np.where(valid, Z_out, np.inf)
+    max_drop_mm_start = 0.0
+    total_reduced = 0
+    it = 0
+
+    for it in range(1, max_iters + 1):
+        up    = np.full_like(Z_pad,  np.inf); up[1:,   :]   = Z_pad[:-1, :]
+        down  = np.full_like(Z_pad,  np.inf); down[:-1, :]  = Z_pad[1:,  :]
+        left  = np.full_like(Z_pad,  np.inf); left[:, 1:]   = Z_pad[:, :-1]
+        right = np.full_like(Z_pad,  np.inf); right[:, :-1] = Z_pad[:, 1:]
+        min_nbr = np.minimum(np.minimum(up, down), np.minimum(left, right))
+        cap = min_nbr + max_delta_raw
+        excess = valid & np.isfinite(min_nbr) & (Z_out > cap)
+        n = int(excess.sum())
+        if n == 0:
+            it -= 1  # last iter was a no-op verification pass
+            break
+        if total_reduced == 0:
+            drops_raw = (Z_out - cap)[excess]
+            if drops_raw.size:
+                max_drop_mm_start = float(drops_raw.max() / raw_per_mm)
+        Z_out = np.where(excess, cap, Z_out)
+        Z_pad = np.where(valid, Z_out, np.inf)
+        total_reduced += n
+
+    return Z_out, {
+        "max_delta_mm":  max_delta_mm,
+        "iters":         it,
+        "cells_reduced": total_reduced,
+        "max_drop_mm":   max_drop_mm_start,
+        "raw_per_mm":    raw_per_mm,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Step 1: Load EGM and image
 # ---------------------------------------------------------------------------
 
@@ -1578,6 +1673,27 @@ def save_stl_meshes(
     Z_mm = _height_to_mm(Z_grid, inside_mask, elevation_range_mm=elevation_range_mm)
     valid_mm = Z_mm[inside_mask]
     print(f"  Z_mm range: {valid_mm.min():.3f} .. {valid_mm.max():.3f} mm")
+
+    # Slope limiter (mm units): cap any cell whose Z rises more than
+    # _MAX_SLOPE_DELTA_MM above its highest 4-neighbor. Passing
+    # elevation_range_mm equal to the current Z_mm range makes the
+    # raw→mm conversion inside limit_max_slope a no-op (raw_per_mm = 1),
+    # so max_delta_mm is applied directly in mm. Both the smooth and
+    # stepped green meshes below consume this filtered Z_mm, so the
+    # fringe seam (built later from the same underlying Z) inherits
+    # the reduced peak instead of chasing an artefact spike.
+    _z_range_mm = float(valid_mm.max() - valid_mm.min())
+    if _z_range_mm > 0:
+        Z_mm, _slope_stats = limit_max_slope(
+            Z_mm, inside_mask, elevation_range_mm=_z_range_mm,
+        )
+        valid_mm = Z_mm[inside_mask]
+        print(
+            f"  limit_max_slope (Z_mm): max_delta={_slope_stats['max_delta_mm']:.2f} mm/cell, "
+            f"iters={_slope_stats['iters']}, cells reduced={_slope_stats['cells_reduced']}, "
+            f"first-pass max drop={_slope_stats['max_drop_mm']:.3f} mm"
+        )
+        print(f"  Z_mm range post-limit: {valid_mm.min():.3f} .. {valid_mm.max():.3f} mm")
 
     contour_step_mm = float(egm_data.get("contourStep") or 0.0)
     print(f"  Contour step from EGM: {contour_step_mm} mm "
@@ -5161,6 +5277,14 @@ def run_pipeline(
         f"#valleys<limit={_soften_stats['n_valleys_after']}"
     )
 
+    # NOTE: the slope limiter (limit_max_slope) is NOT called here on raw Z
+    # because `_height_to_mm` re-normalises [z_min, z_max] to the full
+    # elevation range — any peak reduction on raw Z gets stretched right back
+    # to the top of the mm range and the spike returns. The limiter is
+    # instead applied post-normalisation in `save_stl_meshes` (green meshes)
+    # and again on `Z_mm_for_fringe` below so the fringe seam follows the
+    # limited surface.
+
     # ── Build filename slug from course + hole ────────────────────────────────
     import re
     course = _egm_data.get("course", "unknown")
@@ -5211,6 +5335,20 @@ def run_pipeline(
     scale_f, centroid_f = _compute_px_to_mm(green_boundary_px, _egm_data)
     _elevation_range_for_fringe = float(_egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
     Z_mm_for_fringe = _height_to_mm(Z, inside_mask, elevation_range_mm=_elevation_range_for_fringe)
+    # Apply the same slope limit used inside save_stl_meshes so the fringe
+    # seam heights track the (limited) green surface instead of the original
+    # spike. Keeping these two calls in lockstep is what makes the fringe
+    # "follow" the green after the peak has been smashed down.
+    _fringe_valid = Z_mm_for_fringe[inside_mask]
+    _fringe_range_mm = float(_fringe_valid.max() - _fringe_valid.min()) if _fringe_valid.size else 0.0
+    if _fringe_range_mm > 0:
+        Z_mm_for_fringe, _fringe_slope_stats = limit_max_slope(
+            Z_mm_for_fringe, inside_mask, elevation_range_mm=_fringe_range_mm,
+        )
+        print(
+            f"    limit_max_slope (fringe Z_mm): iters={_fringe_slope_stats['iters']}, "
+            f"cells reduced={_fringe_slope_stats['cells_reduced']}"
+        )
     fringe_mesh = None
     fringe_mesh_flat = None   # kept for trap height sampling (no texture perturbation)
 
@@ -5404,8 +5542,9 @@ def run_pipeline(
     # every printable piece in the assembly.
     _hole_water_active = WATER_HOLE_LIFT_ENABLED and _hole_has_water(_egm_data)
     if _hole_water_active:
-        print(f"\n[7c] Water-hole rule: lift={WATER_HOLE_LIFT_MM} mm "
-              f"(fringe boundary cap DISABLED — task 485)")
+        print(f"\n[7c] Water-hole rule: lift={WATER_HOLE_LIFT_MM} mm, "
+              f"boundary cap={BOUNDARY_HEIGHT_CAP_MM} mm "
+              f"(mode={BOUNDARY_HEIGHT_CAP_MODE})")
         # Green: smooth + stepped variants — never touches the frame, so no cap.
         if isinstance(smooth_mesh_flat, trimesh.Trimesh):
             _apply_lift_and_cap(
@@ -5417,20 +5556,11 @@ def run_pipeline(
                 stepped_mesh, lift_mm=WATER_HOLE_LIFT_MM,
                 cap_mm=None, label="green_stepped",
             )
-        # Fringe: task 483 held green-edge Z flat all the way to the frame in
-        # `build_fringe_mesh`. That flat-to-frame property was then RE-broken
-        # here by the per-vertex boundary cap (BOUNDARY_HEIGHT_CAP_MM = 9 mm
-        # inside a 1 mm-wide band around the plaque perimeter), which pulled
-        # every near-frame fringe vertex whose Z exceeded 9 mm down to 9 mm —
-        # exactly the "meets the frame at its top-surface height and slopes to
-        # meet the green" ramp the owner reported in task 485. Setting
-        # cap_mm=None here lets the fringe keep the flat-to-frame Z assigned
-        # by `build_fringe_mesh`. The cap constants stay in the module for
-        # any future reuse; only the fringe call site is unwired.
+        # Fringe: ALWAYS touches the frame by construction → lift + cap.
         if isinstance(fringe_mesh, trimesh.Trimesh):
             _apply_lift_and_cap(
                 fringe_mesh, lift_mm=WATER_HOLE_LIFT_MM,
-                cap_mm=None, label="fringe",
+                cap_mm=BOUNDARY_HEIGHT_CAP_MM, label="fringe",
             )
     else:
         print("\n[7c] Water-hole rule: SKIPPED (no water polygons in EGM)")

@@ -1,0 +1,5 @@
+[task 487] COARSE spike-scan: Los_Lagos_Hole_16_task_485_test.3mf
+  radius=7.0 mm  tol=3.0 mm  min_nbrs=10  top_z_min=2.0 mm
+  Top-surface fringe verts (unique): 21436
+  Coarse spikes above tol: 0
+  PASS — no coarse fringe spikes above local-median tolerance.

@@ -1,0 +1,13 @@
+[task 486] spike-scan: Los_Lagos_Hole_16_task_487_test.3mf
+  Top-surface fringe verts (unique): 21436
+  Local-median radius: 2.0 mm; spike tol: 0.5 mm above local median
+  Spikes above tol: 5
+
+  rank         x        y         z       med        Δ  n_nbr
+     1    -36.39    29.54     18.37     17.71    +0.66     13
+     2     82.63   -10.70      6.33      5.68    +0.65     16
+     3    -76.63   -14.98     18.77     18.18    +0.59      9
+     4    -77.49   -14.98     18.71     18.18    +0.53     12
+     5    -29.54     3.00     19.91     19.41    +0.50     16
+
+  FAIL — 5 fringe spike(s) above local median by > 0.5 mm  (max Δ = +0.66 mm).

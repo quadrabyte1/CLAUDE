@@ -1,0 +1,5 @@
+[task 486] spike-scan: Los_Lagos_Hole_16_task_486_test.3mf
+  Top-surface fringe verts (unique): 21436
+  Local-median radius: 2.0 mm; spike tol: 0.5 mm above local median
+  Spikes above tol: 0
+  PASS — no fringe spikes above local-median tolerance.

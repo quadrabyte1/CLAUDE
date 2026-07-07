@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fable5 LinkCheck — Results</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    @keyframes spin      { to { transform: rotate(360deg); } }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes flash-broken {
+      0%,100% { background-color: transparent; }
+      30%     { background-color: #fee2e2; border-radius: 3px; }
+    }
+    .spinner       { animation: spin 1s linear infinite; }
+    .pulse         { animation: pulse-dot 1.4s ease-in-out infinite; }
+    .broken-flash  { animation: flash-broken 1.2s ease; }
+    .link-tree-page + .link-tree-page { margin-top: 1.25rem; }
+  </style>
+</head>
+<!-- pb-16 keeps content above the fixed footer -->
+<body class="bg-gray-50 min-h-screen pt-6 pb-20 px-[50px]">
+
+  <div class="w-full">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-7">
+      <div class="flex items-center gap-2">
+        <span class="text-xl">🔗</span>
+        <h1 class="text-xl font-bold text-gray-900 tracking-tight">Fable5 LinkCheck <span class="text-sm font-normal text-gray-400">(V1.3)</span></h1>
+      </div>
+      <a href="/" class="text-sm text-indigo-600 hover:underline">New crawl</a>
+    </div>
+
+    <!-- Seed URL -->
+    <div class="bg-white rounded-xl border border-gray-200 px-5 py-4 mb-5">
+      <div class="flex items-center justify-between mb-1">
+        <p class="text-xs text-gray-400 uppercase tracking-wide font-medium">Starting URL</p>
+        <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-500 border border-indigo-100 font-medium">
+          {{ 'Breadth First' if traversal == 'bfs' else 'Depth First' }}
+        </span>
+      </div>
+      <p class="text-sm font-mono text-gray-800 break-all">{{ start_url }}</p>
+    </div>
+
+    <!-- Status badge -->
+    <div id="status-badge" class="flex items-center gap-2 mb-5">
+      <span id="dot" class="w-2 h-2 rounded-full bg-amber-400 pulse"></span>
+      <span id="status-text" class="text-sm text-gray-500">Starting CloakBrowser…</span>
+    </div>
+
+    <!-- Live progress (shown while running) -->
+    <div id="progress-section" class="bg-white rounded-xl border border-gray-200 px-5 py-4 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <svg id="spinner-icon" class="spinner w-4 h-4 text-indigo-400" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4" stroke-dashoffset="10"/>
+          </svg>
+          <span class="text-xs font-medium text-gray-500 uppercase tracking-wide">Live Progress</span>
+        </div>
+        <span id="elapsed-display" class="text-xs font-mono text-gray-400 tabular-nums">0:00</span>
+      </div>
+      <div class="text-xs text-gray-400 mb-1">Current URL</div>
+      <p id="current-url" class="text-xs font-mono text-gray-700 break-all mb-4 min-h-[1rem]">—</p>
+      <div class="grid grid-cols-3 gap-3">
+        <div class="text-center">
+          <p id="live-checked" class="text-2xl font-bold text-gray-800">0</p>
+          <p class="text-xs text-gray-400">checked</p>
+        </div>
+        <div class="text-center">
+          <p id="live-ok" class="text-2xl font-bold text-green-600">0</p>
+          <p class="text-xs text-gray-400">OK</p>
+        </div>
+        <div class="text-center">
+          <p id="live-broken" class="text-2xl font-bold text-red-500">0</p>
+          <p class="text-xs text-gray-400">broken</p>
+        </div>
+      </div>
+      <div class="mt-4 flex items-center gap-2">
+        <div class="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
+          <div id="queue-bar" class="bg-indigo-400 h-1.5 rounded-full transition-all" style="width:100%"></div>
+        </div>
+        <span id="queue-size" class="text-xs text-gray-400 whitespace-nowrap">… in queue</span>
+      </div>
+    </div>
+
+    <!-- Final summary cards (hidden until done) -->
+    <div id="results-section" class="hidden mb-5">
+      <div class="grid grid-cols-3 gap-4 mb-4">
+        <div class="bg-white rounded-xl border border-gray-200 px-5 py-5 text-center">
+          <p id="res-total" class="text-4xl font-bold text-gray-800">—</p>
+          <p class="text-xs text-gray-400 mt-1">links found</p>
+        </div>
+        <div class="bg-green-50 rounded-xl border border-green-100 px-5 py-5 text-center">
+          <p id="res-ok" class="text-4xl font-bold text-green-600">—</p>
+          <p class="text-xs text-green-500 mt-1">successful</p>
+        </div>
+        <div class="bg-red-50 rounded-xl border border-red-100 px-5 py-5 text-center">
+          <p id="res-broken" class="text-4xl font-bold text-red-500">—</p>
+          <p class="text-xs text-red-400 mt-1">broken</p>
+        </div>
+      </div>
+      <div id="cap-warning"  class="hidden bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-3 text-sm text-amber-700">
+        ⚠ Crawl capped at 2,000 pages. The site may have more links not checked.
+      </div>
+      <div id="error-banner" class="hidden bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-3 text-sm text-red-700"></div>
+    </div>
+
+    <!-- ── Link tree (live, always visible once data arrives) ── -->
+    <div id="tree-section" class="hidden">
+      <div class="flex items-center gap-2 mb-3">
+        <h2 class="text-sm font-semibold text-gray-700">Crawl Detail</h2>
+        <span class="text-xs text-gray-400">— every page and its links</span>
+      </div>
+      <div id="link-tree" class="bg-white rounded-xl border border-gray-200 px-5 py-4 font-mono text-xs space-y-0 overflow-x-auto">
+        <!-- page entries appended here by JS -->
+      </div>
+    </div>
+
+  </div><!-- /max-w-3xl -->
+
+  <!-- ── Sticky footer ────────────────────────────────────────────────────── -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-between z-30 shadow-sm">
+    <span class="text-xs text-gray-900">© Copyright 2026 <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+    <div class="flex items-center gap-1">
+      <button id="broken-prev-btn" disabled onclick="navigatePrev()"
+        title="Previous broken link"
+        class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
+               disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+               enabled:bg-red-50 enabled:text-red-600 enabled:border-red-200 enabled:hover:bg-red-100">
+        ▲
+      </button>
+      <span id="broken-nav-label"
+        class="text-xs font-medium px-3 py-1.5 rounded-lg border bg-gray-100 text-gray-400 border-gray-200 whitespace-nowrap">
+        0 broken
+      </span>
+      <button id="broken-next-btn" disabled onclick="navigateNext()"
+        title="Next broken link"
+        class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
+               disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+               enabled:bg-red-50 enabled:text-red-600 enabled:border-red-200 enabled:hover:bg-red-100">
+        ▼
+      </button>
+    </div>
+  </footer>
+
+  <script>
+    const jobId = "{{ job_id }}";
+    let pollTimer    = null;
+    let elapsedTimer = null;
+    let startTime    = Date.now();
+    let renderedCount = 0;
+    let brokenPos    = 0;   // 0 = not yet navigated; 1 = at first broken item, etc.
+
+    // ── Elapsed time ticker ───────────────────────────────────────────────────
+
+    function fmtElapsed(ms) {
+      const s = Math.floor(ms / 1000);
+      const m = Math.floor(s / 60);
+      return m + ':' + String(s % 60).padStart(2, '0');
+    }
+
+    elapsedTimer = setInterval(() => {
+      document.getElementById('elapsed-display').textContent = fmtElapsed(Date.now() - startTime);
+    }, 1000);
+
+    // ── Broken-link navigator ─────────────────────────────────────────────────
+
+    function getBrokenEls() {
+      return Array.from(document.querySelectorAll('[data-broken="true"]'));
+    }
+
+    function updateBrokenBtn() {
+      const total    = getBrokenEls().length;
+      const prevBtn  = document.getElementById('broken-prev-btn');
+      const nextBtn  = document.getElementById('broken-next-btn');
+      const lbl      = document.getElementById('broken-nav-label');
+      const disabled = total === 0;
+      prevBtn.disabled = disabled;
+      nextBtn.disabled = disabled;
+      if (disabled) {
+        lbl.textContent = '0 broken';
+        lbl.className = 'text-xs font-medium px-3 py-1.5 rounded-lg border bg-gray-100 text-gray-400 border-gray-200 whitespace-nowrap';
+      } else {
+        lbl.textContent = brokenPos + ' of ' + total + ' broken';
+        lbl.className = 'text-xs font-medium px-3 py-1.5 rounded-lg border bg-red-50 text-red-600 border-red-200 whitespace-nowrap';
+      }
+    }
+
+    function flashAndScroll(el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('broken-flash');
+      void el.offsetWidth;
+      el.classList.add('broken-flash');
+    }
+
+    function navigateNext() {
+      const els   = getBrokenEls();
+      const total = els.length;
+      if (total === 0) return;
+      brokenPos = (brokenPos >= total) ? 1 : brokenPos + 1;
+      flashAndScroll(els[brokenPos - 1]);
+      updateBrokenBtn();
+    }
+
+    function navigatePrev() {
+      const els   = getBrokenEls();
+      const total = els.length;
+      if (total === 0) return;
+      brokenPos = (brokenPos <= 1) ? total : brokenPos - 1;
+      flashAndScroll(els[brokenPos - 1]);
+      updateBrokenBtn();
+    }
+
+    // ── HTTP status code descriptions ─────────────────────────────────────────
+
+    const STATUS_NAMES = {
+      400: 'Bad Request',         401: 'Unauthorized',       402: 'Payment Required',
+      403: 'Forbidden',           404: 'Not Found',           405: 'Method Not Allowed',
+      406: 'Not Acceptable',      407: 'Proxy Auth Required', 408: 'Request Timeout',
+      409: 'Conflict',            410: 'Gone',                411: 'Length Required',
+      412: 'Precondition Failed', 413: 'Payload Too Large',   414: 'URI Too Long',
+      415: 'Unsupported Media',   416: 'Range Not Satisfiable',417: 'Expectation Failed',
+      418: "I'm a Teapot",        421: 'Misdirected Request', 422: 'Unprocessable Content',
+      423: 'Locked',              424: 'Failed Dependency',   425: 'Too Early',
+      426: 'Upgrade Required',    428: 'Precondition Required',429: 'Too Many Requests',
+      431: 'Headers Too Large',   451: 'Unavailable For Legal Reasons',
+      500: 'Internal Server Error',501: 'Not Implemented',    502: 'Bad Gateway',
+      503: 'Service Unavailable', 504: 'Gateway Timeout',     505: 'HTTP Version Not Supported',
+      506: 'Variant Also Negotiates',507: 'Insufficient Storage',508: 'Loop Detected',
+      510: 'Not Extended',        511: 'Network Auth Required',
+    };
+
+    function statusLabel(status) {
+      if (status == null) return 'No Response';
+      return STATUS_NAMES[status] || 'Error';
+    }
+
+    // ── HTML helpers ──────────────────────────────────────────────────────────
+
+    function escHtml(s) {
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function linkClass(broken) {
+      if (broken === false) return 'text-gray-900 hover:text-indigo-700';
+      if (broken === true)  return 'text-red-600 hover:text-red-800';
+      return 'text-gray-400 hover:text-gray-600';
+    }
+
+    function brokenAttr(broken) {
+      return broken === true ? ' data-broken="true"' : '';
+    }
+
+    function brokenLabel(broken, status) {
+      if (broken !== true) return '';
+      const code = status ?? 'ERR';
+      return ` <span class="ml-2 text-red-400 font-sans not-italic">(${code} = ${statusLabel(status)})</span>`;
+    }
+
+    function statusBadge(status, success) {
+      if (success) return `<span class="text-green-600 font-sans">${status}</span>`;
+      const col  = status >= 500 ? 'text-orange-500' : status >= 400 ? 'text-red-500' : 'text-gray-400';
+      const code = status ?? 'ERR';
+      return `<span class="${col} font-sans">(${code} = ${statusLabel(status)})</span>`;
+    }
+
+    // ── Tree rendering ────────────────────────────────────────────────────────
+
+    function appendTreePages(pages) {
+      if (!pages || pages.length === 0) return;
+      const tree    = document.getElementById('link-tree');
+      const section = document.getElementById('tree-section');
+      if (pages.length > renderedCount) section.classList.remove('hidden');
+
+      for (let i = renderedCount; i < pages.length; i++) {
+        const p     = pages[i];
+        const entry = document.createElement('div');
+        entry.className = 'link-tree-page py-2 ' + (i > 0 ? 'border-t border-gray-100' : '');
+
+        // Parent page row — mark broken parent pages too
+        const parentBroken = !p.success ? ' data-broken="true"' : '';
+        const parentClass  = p.success  ? 'text-gray-900' : 'text-red-600 hover:text-red-800';
+        let html = `<div class="flex items-baseline gap-2 mb-1">
+          <span class="text-gray-300">●</span>
+          <a href="${escHtml(p.url)}" target="_blank" rel="noopener"${parentBroken}
+             class="font-semibold ${parentClass} hover:underline break-all">${escHtml(p.url)}</a>
+          <span class="text-gray-300 flex-shrink-0">${statusBadge(p.status, p.success)}</span>
+        </div>`;
+
+        // Child link rows
+        if (p.links && p.links.length > 0) {
+          html += '<div class="pl-5 space-y-0.5">';
+          for (const lnk of p.links) {
+            html += `<div class="flex items-baseline gap-1">
+              <span class="text-gray-200 flex-shrink-0 select-none">└─</span>
+              <a href="${escHtml(lnk.url)}" target="_blank" rel="noopener"${brokenAttr(lnk.broken)}
+                 class="${linkClass(lnk.broken)} hover:underline break-all">${escHtml(lnk.url)}</a>${brokenLabel(lnk.broken, lnk.status)}
+            </div>`;
+          }
+          html += '</div>';
+        } else if (p.success) {
+          html += '<div class="pl-5 text-gray-300 italic font-sans">no links found</div>';
+        }
+
+        entry.innerHTML = html;
+        tree.appendChild(entry);
+      }
+
+      renderedCount = pages.length;
+      updateBrokenBtn();
+    }
+
+    function rerenderTree(pages) {
+      const tree = document.getElementById('link-tree');
+      tree.innerHTML = '';
+      renderedCount = 0;
+      brokenPos     = 0;   // reset navigator position since DOM rebuilt
+      appendTreePages(pages);
+    }
+
+    // ── State update functions ────────────────────────────────────────────────
+
+    function applyRunning(data) {
+      document.getElementById('current-url').textContent  = data.current_url || '…';
+      document.getElementById('live-checked').textContent = data.total_checked;
+      document.getElementById('live-ok').textContent      = data.successful;
+      document.getElementById('live-broken').textContent  = data.broken;
+      document.getElementById('queue-size').textContent   = data.queue_size + ' in queue';
+      const phaseLabel = data.phase === 'external' ? 'Probing external links' : 'Crawling';
+      document.getElementById('status-text').textContent  =
+        phaseLabel + ' — ' + data.total_checked + ' checked, ' + data.queue_size + ' queued…';
+      appendTreePages(data.pages);
+    }
+
+    function applyDone(data) {
+      clearInterval(pollTimer);
+      clearInterval(elapsedTimer);
+      document.getElementById('elapsed-display').textContent = fmtElapsed(Date.now() - startTime);
+
+      document.getElementById('progress-section').classList.add('hidden');
+      document.getElementById('results-section').classList.remove('hidden');
+
+      document.getElementById('dot').className = 'w-2 h-2 rounded-full bg-green-400';
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      document.getElementById('status-text').textContent = 'Crawl complete — ' + elapsed + 's';
+
+      document.getElementById('res-total').textContent  = data.total_checked;
+      document.getElementById('res-ok').textContent     = data.successful;
+      document.getElementById('res-broken').textContent = data.broken;
+
+      if (data.capped) document.getElementById('cap-warning').classList.remove('hidden');
+      if (data.error) {
+        const eb = document.getElementById('error-banner');
+        eb.textContent = 'Error: ' + data.error;
+        eb.classList.remove('hidden');
+      }
+
+      rerenderTree(data.pages);
+    }
+
+    // ── Polling ───────────────────────────────────────────────────────────────
+
+    async function poll() {
+      try {
+        const r = await fetch('/api/status/' + jobId);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (data.status === 'done') applyDone(data);
+        else                        applyRunning(data);
+      } catch (e) { console.error('poll error', e); }
+    }
+
+    poll();
+    pollTimer = setInterval(poll, 2000);
+  </script>
+
+</body>
+</html>

@@ -147,7 +147,8 @@ def execute(sql, args=()):
 
 # ── Model sync helper ───────────────────────────────────────────────────────
 
-_MODEL_RE = re.compile(r"^\-\s+\*\*Model:\*\*\s*(opus|sonnet|haiku)\s*$", re.MULTILINE)
+_MODEL_RE = re.compile(r"^\-\s+\*\*Model:\*\*\s*(fable|opus|sonnet|haiku)\s*$", re.MULTILINE)
+_VALID_TIERS = {"fable", "opus", "sonnet", "haiku"}
 
 
 def _sync_team_member_models():
@@ -521,6 +522,49 @@ def team():
     _sync_team_member_models()
     members = query("SELECT * FROM team_members ORDER BY name")
     return render("team.html", members=members)
+
+
+@app.route("/api/team/<int:member_id>/model", methods=["PATCH"])
+def update_team_member_model(member_id):
+    data = request.get_json(force=True, silent=True) or {}
+    tier = data.get("model", "").strip().lower()
+    if tier not in _VALID_TIERS:
+        return jsonify({"error": f"Invalid model tier: {tier!r}"}), 400
+
+    row = query("SELECT * FROM team_members WHERE id=?", (member_id,), one=True)
+    if not row:
+        abort(404)
+
+    db = get_db()
+    db.execute(
+        "UPDATE team_members SET model=?, updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?",
+        (tier, member_id),
+    )
+    db.commit()
+
+    if row["persona_file"]:
+        full_path = os.path.normpath(os.path.join(_REPO_ROOT, row["persona_file"]))
+        try:
+            with open(full_path, encoding="utf-8", errors="replace") as fh:
+                content = fh.read()
+            content = re.sub(r"(- \*\*Model:\*\* )\w+", r"\g<1>" + tier, content)
+            with open(full_path, "w", encoding="utf-8") as fh:
+                fh.write(content)
+        except OSError:
+            pass
+
+    readme_path = os.path.normpath(os.path.join(_REPO_ROOT, "team", "README.md"))
+    try:
+        with open(readme_path, encoding="utf-8") as fh:
+            content = fh.read()
+        pattern = r"(\| \*\*" + re.escape(row["name"]) + r"\*\* \| [^|]+ \| )\w+( \|)"
+        content = re.sub(pattern, r"\g<1>" + tier + r"\2", content)
+        with open(readme_path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+    except OSError:
+        pass
+
+    return jsonify({"id": member_id, "model": tier})
 
 
 @app.route("/tasks")

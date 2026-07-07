@@ -6,7 +6,7 @@ This folder contains persona files for each AI team member. Each file defines a 
 
 | Name | Role | Model | File |
 |------|------|-------|------|
-| **Larry** | Orchestrator & Team Lead | fable | `larry.md` |
+| **Larry** | Orchestrator & Team Lead | sonnet | `larry.md` |
 | **Nolan** | HR & Talent Acquisition | opus | `nolan.md` |
 | **Pax** | Senior Researcher | opus | `pax.md` |
 | **Reed** | Database Engineer (SQLite) | sonnet | `reed.md` |
@@ -16,7 +16,7 @@ This folder contains persona files for each AI team member. Each file defines a 
 | **Cass** | Architectural Visualization Specialist (Photo-Composite Mockups) | opus | `cass.md` |
 | **Vera** | AI Compositing Specialist (Photorealistic Architectural Inpainting & Mockups) | sonnet | `vera.md` |
 | **Kit** | Senior iOS Developer (Swift / SwiftUI) | sonnet | `kit.md` |
-| **Finn** | 3D Print & Slicer Specialist | sonnet | `finn.md` |
+| **Finn** | 3D Print & Slicer Specialist | haiku | `finn.md` |
 | **Zane** | Consumer Storage Reviewer (SSD Specialist) | sonnet | `zane.md` |
 | **Wren** | Voice-First Mac Productivity Specialist (Dictation, Voice Input & Hotkey Automation) | sonnet | `wren.md` |
 | **Mori** | Voice-First iOS Product Engineer (Homunculus Lead — voice I/O, on-device NLP, local calendar, reminder reliability) | opus | `mori.md` |

@@ -2,6 +2,7 @@
 {% block title %}Team — AI Team Workspace{% endblock %}
 {% block content %}
 
+<!-- v1.1 -->
 <div class="mb-8">
   <h1 class="text-[28px] font-bold text-notion-text leading-tight">Team</h1>
   <p class="text-notion-muted mt-1">{{ members|length }} member{{ 's' if members|length != 1 else '' }} in the workspace.</p>
@@ -15,12 +16,63 @@
         {{ m.name[0] }}
       </div>
       <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2.5">
+        <div class="flex items-center gap-2.5 flex-wrap">
           <h3 class="font-semibold text-base text-notion-text">{{ m.name }}</h3>
-          <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full
-            {% if m.model == 'opus' %}bg-purple-50 text-purple-600{% elif m.model == 'sonnet' %}bg-blue-50 text-blue-600{% elif m.model == 'haiku' %}bg-emerald-50 text-emerald-600{% else %}bg-gray-100 text-gray-500{% endif %}">
-            {{ m.model | capitalize if m.model else 'Opus' }}
-          </span>
+
+          <!-- Model tier dropdown -->
+          <div x-data="{
+            model: '{{ m.model or 'opus' }}',
+            open: false,
+            updating: false,
+            tiers: ['fable','opus','sonnet','haiku'],
+            colors: {
+              fable:  'bg-amber-50 text-amber-700 ring-1 ring-amber-200',
+              opus:   'bg-purple-50 text-purple-600',
+              sonnet: 'bg-blue-50 text-blue-600',
+              haiku:  'bg-emerald-50 text-emerald-600'
+            },
+            async setModel(tier) {
+              if (tier === this.model) { this.open = false; return; }
+              this.updating = true;
+              try {
+                const r = await fetch('/api/team/{{ m.id }}/model', {
+                  method: 'PATCH',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({model: tier})
+                });
+                if (r.ok) { this.model = tier; }
+              } finally {
+                this.updating = false;
+                this.open = false;
+              }
+            }
+          }" class="relative" @click.outside="open = false">
+            <button @click="open = !open"
+              :class="colors[model]"
+              class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full cursor-pointer select-none transition-opacity"
+              :disabled="updating">
+              <span x-text="model.charAt(0).toUpperCase() + model.slice(1)"></span>
+              <svg x-show="!updating" class="w-2.5 h-2.5 opacity-50" viewBox="0 0 10 6" fill="none">
+                <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              <svg x-show="updating" class="w-2.5 h-2.5 animate-spin opacity-50" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4" stroke-dashoffset="10"/>
+              </svg>
+            </button>
+            <div x-show="open" x-transition
+              class="absolute left-0 top-full mt-1 z-10 bg-white border border-notion-border rounded-lg shadow-md py-1 min-w-[7rem]">
+              <template x-for="tier in tiers" :key="tier">
+                <button @click="setModel(tier)"
+                  :class="[colors[tier], model === tier ? 'opacity-100' : 'opacity-70 hover:opacity-100']"
+                  class="w-full text-left text-xs px-3 py-1.5 flex items-center gap-2 transition-opacity">
+                  <span class="w-1.5 h-1.5 rounded-full bg-current opacity-60 flex-shrink-0" x-show="model === tier"></span>
+                  <span class="w-1.5 h-1.5 flex-shrink-0" x-show="model !== tier"></span>
+                  <span x-text="tier.charAt(0).toUpperCase() + tier.slice(1)"></span>
+                </button>
+              </template>
+            </div>
+          </div>
+
           <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
             {{ 'bg-green-50 text-green-700' if m.status == 'active' else 'bg-gray-100 text-gray-500' }}">
             <span class="w-1.5 h-1.5 rounded-full {{ 'bg-green-500' if m.status == 'active' else 'bg-gray-400' }}"></span>

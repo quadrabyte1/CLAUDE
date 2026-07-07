@@ -6,7 +6,7 @@ This folder contains persona files for each AI team member. Each file defines a 
 
 | Name | Role | Model | File |
 |------|------|-------|------|
-| **Larry** | Orchestrator & Team Lead | opus | `larry.md` |
+| **Larry** | Orchestrator & Team Lead | fable | `larry.md` |
 | **Nolan** | HR & Talent Acquisition | opus | `nolan.md` |
 | **Pax** | Senior Researcher | opus | `pax.md` |
 | **Reed** | Database Engineer (SQLite) | sonnet | `reed.md` |
@@ -27,6 +27,7 @@ This folder contains persona files for each AI team member. Each file defines a 
 
 ## Model Tiers
 
+- **fable** (`claude-fable-5`) — Anthropic's most capable widely released model (GA 2026-06-09). Reserved for long-running agent workloads and top-of-team orchestration. Note: the Agent sub-agent tool's `model` enum does not yet accept `fable`, so this tier currently applies only to Larry (main conversation, switched via `/model`).
 - **opus** (`claude-opus-4-7`) — Reserved for roles where novel reasoning, ambiguous problem-solving, deep debugging, or architectural judgment is core to the job.
 - **sonnet** (`claude-sonnet-4-6`) — Default for implementation-heavy or well-scoped roles following well-trodden patterns.
 - **haiku** (`claude-haiku-4-5-20251001`) — Narrow mechanical roles only (bulk lookups, simple transforms).

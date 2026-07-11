@@ -1000,7 +1000,15 @@ BOUNDARY_TOUCH_TOL_MM:   float = 0.5     # XY tolerance for "vertex touches fram
 # plaque frame perimeter. Interior vertices keep their natural relief, even if
 # it exceeds BOUNDARY_HEIGHT_CAP_MM. The cap exists only to keep the picture
 # frame edge clean — interior height was never the problem.
-BOUNDARY_CAP_BAND_MM:    float = 1.0     # XY width of edge band where cap applies (hard mode only)
+BOUNDARY_CAP_BAND_MM:    float = 1.0     # XY width of edge band where cap is at FULL strength
+# Task #488 (fringe wall wrinkle): the hard band cap creates a visible cliff
+# where a water/trap polygon reaches the outer edge — cells inside the 1 mm
+# band get clipped to 9 mm while cells 1 mm further in keep natural Z up to
+# ~13 mm. To keep the picture-frame edge tidy without producing that cliff,
+# we linearly taper the clip amount over BOUNDARY_CAP_TAPER_MM: full clip at
+# the outer edge, zero clip at (BAND + TAPER) mm inward. Interior geometry
+# past the taper zone is untouched.
+BOUNDARY_CAP_TAPER_MM:   float = 5.0     # XY width of the taper zone past the full-strength band
 
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
@@ -2065,6 +2073,16 @@ def build_fringe_mesh(
     # Pre-build array of green boundary points in mm for vectorised dist
     gbnd = green_bnd_mm  # (N, 2)
 
+    # Task #488 (fringe wall wrinkle): the primary lerp also has to blend Z
+    # across neighbouring green grid cells, not snap to a single nearest one.
+    # Otherwise adjacent fringe cells jump between Voronoi regions of the
+    # green grid → a piecewise-constant Z sawtooth that reads as a JAGGED
+    # DARK-GREEN WALL along the top of every fringe cutout wall (visible on
+    # FantasyGolfCourse H01 around the trap cutout and on Palmer PGA West H15
+    # around the water cutout). The seam-reseat block above already uses IDW
+    # (K=4); we mirror that here so the two Z sources stay in lockstep.
+    K_LERP_NEIGHBOURS = min(4, len(green_cell_z))
+
     for r in range(fringe_grid_res):
         for c in range(fringe_grid_res):
             x = float(xs_mm[c])
@@ -2096,8 +2114,17 @@ def build_fringe_mesh(
             # green-edge height. Fringe holds that height flat all the way
             # to the frame; no ramp toward a rectangle-edge target.
             _, nx, ny = _min_dist_to_polyline(x, y, gbnd)
-            _, idx_g = green_kd.query([nx, ny], k=1)
-            green_edge_h = float(green_cell_z[idx_g])
+            # IDW-blend green_edge_h from K nearest green grid cells so the
+            # sampled Z varies smoothly with (nx, ny) — no per-cell steps.
+            dists_g, idxs_g = green_kd.query([nx, ny], k=K_LERP_NEIGHBOURS)
+            dists_g = np.atleast_1d(np.asarray(dists_g, dtype=np.float64))
+            idxs_g = np.atleast_1d(np.asarray(idxs_g, dtype=np.int64))
+            if float(dists_g.min()) < 1e-9:
+                green_edge_h = float(green_cell_z[idxs_g[int(np.argmin(dists_g))]])
+            else:
+                w = 1.0 / (dists_g ** 2)
+                w /= w.sum()
+                green_edge_h = float(np.dot(w, green_cell_z[idxs_g]))
 
             z_fringe = max(BASE_THICKNESS_MM, min(green_edge_h, BASE_THICKNESS_MM + _elevation_range_mm))
 
@@ -2161,6 +2188,21 @@ def build_fringe_mesh(
         gbnd_kd_seam = cKDTree(gbnd)
 
         # Build override map: (r, c) -> (x, y, z)
+        # Task #488 (fringe seam sawtooth): the seam cell KEEPS its own fringe-
+        # grid XY. Only Z is overridden, computed as an inverse-square-distance
+        # weighted average of the K nearest green top-boundary vertices' Z.
+        # This eliminates two failure modes visible on FantasyGolfCourse Hole 01
+        # and The Palmer – PGA WEST Hole 15:
+        #   1. XY warp: prior code snapped the seam vertex's XY onto the green
+        #      vertex position. The fringe grid and green grid have different
+        #      resolutions, so adjacent seam cells snapped to different green
+        #      XY positions — the triangles connecting the seam row to the
+        #      non-seam row got twisted, reading as a visible staircase.
+        #   2. Nearest-vertex Z quantization: consecutive seam cells often
+        #      shared the same nearest green vertex, then abruptly flipped to
+        #      the next one, giving Z a piecewise-constant sawtooth along the
+        #      seam. IDW over K neighbours yields a smooth Z curve instead.
+        K_SEAM_NEIGHBOURS = min(4, len(g_bdry_arr))
         seam_override: dict[tuple[int, int], tuple[float, float, float]] = {}
         for r in range(fringe_grid_res):
             for c in range(fringe_grid_res):
@@ -2172,14 +2214,23 @@ def build_fringe_mesh(
                 d_bnd, _ = gbnd_kd_seam.query([x, y], k=1)
                 if d_bnd > seam_radius:
                     continue
-                # snap to nearest green top-boundary mesh vertex
-                _, gi = g_bdry_kd.query([x, y], k=1)
-                gx, gy, gz = g_bdry_arr[gi]
-                seam_override[(r, c)] = (float(gx), float(gy), float(gz))
+                # IDW-blend Z from the K nearest green top-boundary vertices.
+                dists, gi_arr = g_bdry_kd.query([x, y], k=K_SEAM_NEIGHBOURS)
+                dists = np.atleast_1d(np.asarray(dists, dtype=np.float64))
+                gi_arr = np.atleast_1d(np.asarray(gi_arr, dtype=np.int64))
+                if float(dists.min()) < 1e-9:
+                    # Coincident: use that vertex's Z exactly.
+                    gz = float(g_bdry_arr[gi_arr[int(np.argmin(dists))], 2])
+                else:
+                    w = 1.0 / (dists ** 2)
+                    w /= w.sum()
+                    gz = float(np.dot(w, g_bdry_arr[gi_arr, 2]))
+                seam_override[(r, c)] = (x, y, gz)
                 Z_fringe[r, c] = gz  # keep the height array consistent
-        print(f"  Seam-reseat: snapped {len(seam_override)} fringe inner-boundary "
-              f"cells to green's smooth top-boundary ring "
-              f"(fringe always renders smooth)")
+        print(f"  Seam-reseat (IDW-Z, K={K_SEAM_NEIGHBOURS}): "
+              f"blended Z on {len(seam_override)} fringe inner-boundary cells "
+              f"from green's smooth top-boundary ring "
+              f"(fringe XY held on fringe grid — no twisted seam triangles)")
     else:
         seam_override = {}
 
@@ -2920,27 +2971,48 @@ def _apply_lift_and_cap(
     if cap_mm is not None:
         z_top = verts[top_mask, 2]
         if cap_mode == "hard":
-            # Per-vertex edge-band cap (Topo, 2026-05-05). Compute each top
-            # vertex's XY distance to the nearest edge of the plaque frame
-            # rectangle (axis-aligned, centred at origin, ±_half per axis).
-            # For an interior point: dist = min(x - x_min, x_max - x,
-            #                                   y - y_min, y_max - y)
+            # Per-vertex edge-band cap (Topo, 2026-05-05, tapered 2026-07-11).
+            # Compute each top vertex's XY distance to the nearest edge of
+            # the plaque frame rectangle (axis-aligned, centred at origin,
+            # ±_half per axis). For an interior point: dist = min(x - x_min,
+            # x_max - x, y - y_min, y_max - y).
+            #
+            # Cap strength is a piecewise-linear function of dist_to_edge:
+            #   * d ≤ BAND         → strength = 1.0 (hard cap: Z clipped to cap_mm)
+            #   * BAND < d < TOTAL → strength linearly ramps 1.0 → 0.0
+            #   * d ≥ TOTAL        → strength = 0.0 (untouched)
+            # where TOTAL = BAND + TAPER. The tapered clip is applied as
+            #   Z_new = Z - strength * max(Z - cap_mm, 0)
+            # so cells at Z ≤ cap_mm are never touched, and cells with Z > cap_mm
+            # have their EXCESS above the cap scaled by `strength`. This avoids
+            # the hard cliff that showed up when a water/trap polygon reached
+            # the outer edge (task #488).
             _half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
             xy_top = verts[top_mask, :2]
             dx = np.minimum(xy_top[:, 0] - (-_half), _half - xy_top[:, 0])
             dy = np.minimum(xy_top[:, 1] - (-_half), _half - xy_top[:, 1])
             dist_to_edge = np.minimum(dx, dy)
-            in_band = dist_to_edge <= BOUNDARY_CAP_BAND_MM
+            total_mm = BOUNDARY_CAP_BAND_MM + BOUNDARY_CAP_TAPER_MM
+            if BOUNDARY_CAP_TAPER_MM > 0:
+                strength = np.clip(
+                    (total_mm - dist_to_edge) / BOUNDARY_CAP_TAPER_MM,
+                    0.0, 1.0,
+                )
+            else:
+                strength = (dist_to_edge <= BOUNDARY_CAP_BAND_MM).astype(np.float64)
             above_cap = z_top > cap_mm
-            band_verts = int(in_band.sum())
-            uncapped_above_cap = int((above_cap & ~in_band).sum())
-            over = above_cap & in_band
-            n_clipped = int(over.sum())
+            excess = np.maximum(z_top - cap_mm, 0.0)
+            band_verts = int((dist_to_edge <= BOUNDARY_CAP_BAND_MM).sum())
+            uncapped_above_cap = int(
+                (above_cap & (dist_to_edge > total_mm)).sum()
+            )
+            affected = above_cap & (strength > 0.0)
+            n_clipped = int(affected.sum())
             if n_clipped:
                 cap_triggered = True
-                max_clip = float((z_top[over] - cap_mm).max())
-                z_top_new = z_top.copy()
-                z_top_new[over] = cap_mm
+                z_top_new = z_top - strength * excess
+                clip_amounts = (z_top - z_top_new)[affected]
+                max_clip = float(clip_amounts.max()) if clip_amounts.size else 0.0
                 verts[top_mask, 2] = z_top_new
         elif cap_mode == "compress":
             zmax = float(z_top.max())
@@ -2966,7 +3038,8 @@ def _apply_lift_and_cap(
         if cap_mm is not None and cap_mode == "hard":
             n_top = int(top_mask.sum())
             extra = (f", band_verts={band_verts}/{n_top} "
-                     f"(width={BOUNDARY_CAP_BAND_MM:.2f}mm), "
+                     f"(band={BOUNDARY_CAP_BAND_MM:.2f}mm, "
+                     f"taper={BOUNDARY_CAP_TAPER_MM:.2f}mm), "
                      f"uncapped_above_cap={uncapped_above_cap}")
         print(f"    lift+cap [{label}]: lift={lift_mm:.2f} mm, "
               f"cap={'-' if cap_mm is None else f'{cap_mm:.1f} mm ({cap_mode})'}, "
@@ -5381,19 +5454,47 @@ def run_pipeline(
         # surface added to the 3MF is the untextured (flat) version, so any
         # grass bump applied to a fringe seam vertex opens a visible gap
         # against the green's pinned boundary.  We freeze the seam verts here.
+        #
+        # Task #488 (real fix): the trap and water cutout boundaries are ALSO
+        # seams — the fringe wall drops from its top surface to Z=0 along
+        # those cutout edges. Applying a 0.5 mm paraboloid bump to a top
+        # vertex sitting right on that boundary produces a visible wrinkle
+        # on the wall's top edge (previously blamed on water/cap/grid). The
+        # exclude polyline now includes green + all trap + all water dense
+        # polylines so every cutout boundary gets the same seam-freeze that
+        # the green already had.
         _green_bnd_mm_for_grass = _px_to_mm_2d(
             green_boundary_px.copy(), scale_f, centroid_f
         )
+        _cutout_polylines_mm = [_green_bnd_mm_for_grass]
+        for _poly in _egm_data.get("polygons", []):
+            if _poly.get("type") not in ("trap", "water"):
+                continue
+            try:
+                _pts_px = _poly_to_dense_px(_poly)
+            except Exception:
+                _pts_px = np.array(
+                    [[p["x"], p["y"]] for p in _poly.get("points", [])],
+                    dtype=np.float64,
+                )
+            if _pts_px.size == 0:
+                continue
+            _cutout_polylines_mm.append(
+                _px_to_mm_2d(_pts_px, scale_f, centroid_f)
+            )
+        _grass_exclude_polyline = np.vstack(_cutout_polylines_mm)
         # Exclude-radius must cover the seam snap radius used in build_fringe_mesh
         # (≈1.5 × fringe grid step).  A dense grid (200^2 over ±85 mm) gives
         # ~0.86 mm step → ~1.3 mm radius; use 2.0 mm for safety.
         _seam_exclude_radius_mm = 2.0
         print(f"  Applying grass texture to fringe (amplitude={grass_amplitude} mm, spacing={grass_spacing} mm)…")
+        print(f"  Grass seam exclusion: {len(_cutout_polylines_mm)} polyline(s) "
+              f"({len(_grass_exclude_polyline)} points total)")
         apply_grass_texture(
             fringe_mesh,
             amplitude=grass_amplitude,
             bump_spacing=grass_spacing,
-            exclude_polyline_xy=_green_bnd_mm_for_grass,
+            exclude_polyline_xy=_grass_exclude_polyline,
             exclude_radius_mm=_seam_exclude_radius_mm,
         )
 

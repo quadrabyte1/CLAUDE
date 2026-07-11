@@ -7,10 +7,14 @@
     "width": 1179,
     "height": 1659
   },
-  "contourStep": 10,
+  "contourStep": 0.5,
   "grassAmplitude": 0.5,
   "grassSpacing": 2.4,
   "greenStyle": "terraced",
+  "elevationRange": 16,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
   "flagOffsetXMm": 0,
   "flagOffsetYMm": 0,
   "polygons": [

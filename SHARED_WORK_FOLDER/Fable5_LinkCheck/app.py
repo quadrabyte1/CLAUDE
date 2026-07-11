@@ -221,11 +221,19 @@ def start_crawl():
     if traversal not in ("bfs", "dfs"):
         traversal = "bfs"
 
+    try:
+        request_delay = float(request.form.get("request_delay", 0))
+    except (ValueError, TypeError):
+        request_delay = 0.0
+    if request_delay not in (0.0, 0.5, 1.0, 2.0):
+        request_delay = 0.0
+
     job_id = uuid.uuid4().hex[:10]
     _jobs[job_id] = {
         "status": "running",
         "phase": "crawl",
         "traversal": traversal,
+        "request_delay": request_delay,
         "start_url": raw,
         "results": {},
         "current_url": None,
@@ -250,6 +258,7 @@ def results_page(job_id):
         job_id=job_id,
         start_url=_jobs[job_id]["start_url"],
         traversal=_jobs[job_id].get("traversal", "bfs"),
+        request_delay=_jobs[job_id].get("request_delay", 0),
     )
 
 
@@ -297,6 +306,7 @@ def api_status(job_id):
         "status": job["status"],
         "phase": job.get("phase", "crawl"),
         "traversal": job.get("traversal", "bfs"),
+        "request_delay": job.get("request_delay", 0),
         "start_url": job["start_url"],
         "current_url": job["current_url"],
         "queue_size": job["queue_size"],

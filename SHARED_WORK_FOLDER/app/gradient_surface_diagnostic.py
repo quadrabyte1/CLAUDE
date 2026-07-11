@@ -2044,34 +2044,11 @@ def build_fringe_mesh(
     Z_fringe = np.full((fringe_grid_res, fringe_grid_res), np.nan)
 
     # Pre-build KD-tree of valid green grid cells for fast Z lookups.
-    # When the green is terraced, the seam-reseat step (below) snaps fringe
-    # boundary cells to the QUANTIZED Z. If the lerp baseline used the raw
-    # smooth Z_mm here, a seam cell would jump from raw smooth to the next
-    # higher terrace band, and its non-seam neighbour (one cell outward)
-    # would lerp from the smooth value — creating a step of up to one
-    # terrace height. We avoid that by lerping from the same quantized Z
-    # source the seam ends up using. (Smooth-style green: use Z_mm as before.)
-    _green_style_lerp = str(egm_data.get("greenStyle", "smooth")).lower()
-    _contour_step_lerp = float(egm_data.get("contourStep") or 0.0)
-    if _green_style_lerp == "terraced":
-        _valid_vals_lerp = Z_mm[inside_mask]
-        _z_min_lerp = float(_valid_vals_lerp.min())
-        _z_max_lerp = float(_valid_vals_lerp.max())
-        _z_range_lerp = _z_max_lerp - _z_min_lerp
-        if _contour_step_lerp > 0.0 and _z_range_lerp > 1e-9:
-            _n_levels_lerp = max(1, round(_z_range_lerp / _contour_step_lerp))
-            _step_lerp = _z_range_lerp / _n_levels_lerp
-        else:
-            _step_lerp = _z_range_lerp / N_CONTOUR_LEVELS
-        if _step_lerp < 1e-9:
-            _step_lerp = 1.0
-        _Z_lerp_src = np.copy(Z_mm)
-        _Z_lerp_src[inside_mask] = (
-            np.round((_Z_lerp_src[inside_mask] - _z_min_lerp) / _step_lerp)
-            * _step_lerp + _z_min_lerp
-        )
-    else:
-        _Z_lerp_src = Z_mm
+    # Fringe always samples the raw smooth Z_mm — never the terraced
+    # quantization — so the fringe surface prints smooth regardless of the
+    # green's style. Seam-reseat below uses the same smooth source, so the
+    # inner-boundary snap stays continuous with the fringe interior.
+    _Z_lerp_src = Z_mm
 
     # Apply perimeter median filter to the lerp source so it matches the
     # filtered Z_for_seam below (built with the same recipe + filter). This
@@ -2136,47 +2113,20 @@ def build_fringe_mesh(
     valid_z = Z_fringe[fringe_mask]
     print(f"  Fringe Z range: {valid_z.min():.3f} .. {valid_z.max():.3f} mm")
 
-    # ── Seam-reseat: snap fringe's INNER boundary cells to the green mesh's ──
-    # actual top-boundary vertex ring. Without this step the fringe grid and
-    # the green grid are independent, so their seam vertices don't coincide
-    # in either XY or Z — producing a visible crease where the fringe meets
-    # the green (the defect Thomas reported around the 11 o'clock arc).
-    #
-    # The green mesh's top-boundary vertices are exactly those inside_mask
-    # cells that have at least one 4-neighbour outside inside_mask, at
-    # positions (xs_mm_green[c], ys_mm_green[r], Z_for_seam[r, c]).
-    #
-    # If the green is rendered terraced (greenStyle=="terraced" in the EGM),
-    # its boundary Z values are the quantized Z_plot from _build_heightmap_mesh,
-    # not the raw Z_mm. We replicate that quantization here so the seam
-    # exactly matches the green mesh's boundary, whichever style is used.
-    green_style = str(egm_data.get("greenStyle", "smooth")).lower()
-    _contour_step_seam = float(egm_data.get("contourStep") or 0.0)
-    if green_style == "terraced":
-        valid_vals = Z_mm[inside_mask]
-        z_min_g, z_max_g = valid_vals.min(), valid_vals.max()
-        _z_range_g = z_max_g - z_min_g
-        if _contour_step_seam > 0.0 and _z_range_g > 1e-9:
-            _n_levels_g = max(1, round(_z_range_g / _contour_step_seam))
-            step_g = _z_range_g / _n_levels_g
-        else:
-            step_g = _z_range_g / N_CONTOUR_LEVELS
-        if step_g < 1e-9:
-            step_g = 1.0
-        Z_for_seam = np.copy(Z_mm)
-        Z_for_seam[inside_mask] = (
-            np.round((Z_for_seam[inside_mask] - z_min_g) / step_g) * step_g + z_min_g
-        )
-    else:
-        Z_for_seam = Z_mm
+    # ── Seam-reseat: snap fringe's INNER boundary cells to the green's ──
+    # top-boundary Z ring. The fringe is always smooth (never terraced),
+    # so we snap to the raw smooth Z_mm even when the green itself is
+    # rendered terraced — this keeps the fringe interior and its
+    # inner-boundary snap targets in lockstep (no steps on the fringe).
+    # Where a smooth fringe meets a terraced green there may be a small
+    # Z mismatch at the mesh boundary; that is intentional per the
+    # "fringe always prints smooth" design.
+    Z_for_seam = Z_mm
 
     # Apply perimeter median filter to Z_for_seam so the seam Z values match
-    # the green mesh's filtered top-boundary vertices (which had the same
-    # filter applied inside _build_heightmap_mesh). Without this the seam
-    # snap-targets here would not coincide with the green mesh's actual
-    # boundary Z, re-opening the seam crease. Same filter also runs over
-    # the lerp source (since Z_for_seam == _Z_lerp_src after #314 alignment
-    # for terraced style — the smooth case lerp source still tracks Z_mm).
+    # the filtered lerp source (same filter recipe applied above). Without
+    # this the seam snap-targets would drift from the interior lerp baseline
+    # and re-open a step at the fringe's inner boundary.
     Z_for_seam = _perimeter_median_filter(Z_for_seam, inside_mask, window=7)
 
     # Collect green top-boundary ring (mm space, with Z)
@@ -2228,8 +2178,8 @@ def build_fringe_mesh(
                 seam_override[(r, c)] = (float(gx), float(gy), float(gz))
                 Z_fringe[r, c] = gz  # keep the height array consistent
         print(f"  Seam-reseat: snapped {len(seam_override)} fringe inner-boundary "
-              f"cells to green mesh's top-boundary ring "
-              f"(greenStyle={green_style})")
+              f"cells to green's smooth top-boundary ring "
+              f"(fringe always renders smooth)")
     else:
         seam_override = {}
 

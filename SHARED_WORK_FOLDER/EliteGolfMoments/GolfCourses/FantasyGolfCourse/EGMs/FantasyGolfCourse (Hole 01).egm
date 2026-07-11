@@ -7,10 +7,10 @@
     "width": 1179,
     "height": 1418
   },
-  "contourStep": 0.5,
+  "contourStep": 0.25,
   "grassAmplitude": 0.5,
   "grassSpacing": 2.4,
-  "greenStyle": "terraced",
+  "greenStyle": "smooth",
   "elevationRange": 16,
   "fringeEdgeHeight": 10,
   "baseThicknessMm": 1.5,

@@ -134,6 +134,23 @@
         ? 'Explores all links on each level before going deeper.'
         : 'Follows each link as deep as possible before backtracking.';
     }
+
+    function updateDelay() {
+      const val = document.querySelector('input[name="request_delay"]:checked').value;
+      const on  = 'flex-1 text-center cursor-pointer px-3 py-2 bg-indigo-600 text-white font-medium transition-colors select-none';
+      const off = 'flex-1 text-center cursor-pointer px-3 py-2 bg-white text-gray-500 border-l border-gray-300 transition-colors select-none';
+      document.getElementById('lbl-d0').className  = val === '0'   ? on : off + (val === '0'   ? ' border-l-0' : '');
+      document.getElementById('lbl-d05').className = val === '0.5' ? on : off;
+      document.getElementById('lbl-d1').className  = val === '1'   ? on : off;
+      document.getElementById('lbl-d2').className  = val === '2'   ? on : off;
+      const hints = {
+        '0':   'No pause between requests.',
+        '0.5': 'Waits 0.5 s between same-domain requests.',
+        '1':   'Waits 1 s between same-domain requests.',
+        '2':   'Waits 2 s between same-domain requests — polite for rate-limited sites.',
+      };
+      document.getElementById('delay-hint').textContent = hints[val] || '';
+    }
   </script>
 
 </body>

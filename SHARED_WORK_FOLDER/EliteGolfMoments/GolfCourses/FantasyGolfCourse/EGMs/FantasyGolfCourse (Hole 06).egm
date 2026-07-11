@@ -1,0 +1,175 @@
+{
+  "course": "FantasyGolfCourse",
+  "hole": "6",
+  "image": "FantasyGolfCourse (6).png",
+  "imageCourse": "FantasyGolfCourse",
+  "imageSize": {
+    "width": 1074,
+    "height": 1197
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "elevationRange": 16,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 354,
+          "y": 752
+        },
+        {
+          "x": 520,
+          "y": 867
+        },
+        {
+          "x": 712,
+          "y": 709
+        },
+        {
+          "x": 842,
+          "y": 110
+        },
+        {
+          "x": 312,
+          "y": 154
+        }
+      ]
+    },
+    {
+      "name": "Trap 1",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 1031,
+          "y": 0
+        },
+        {
+          "x": 994,
+          "y": 43
+        },
+        {
+          "x": 984,
+          "y": 73
+        },
+        {
+          "x": 948,
+          "y": 165
+        },
+        {
+          "x": 985,
+          "y": 291
+        },
+        {
+          "x": 940,
+          "y": 495
+        },
+        {
+          "x": 943,
+          "y": 611
+        },
+        {
+          "x": 1103,
+          "y": 700
+        },
+        {
+          "x": 1073,
+          "y": 335
+        },
+        {
+          "x": 1073,
+          "y": 146
+        },
+        {
+          "x": 1073,
+          "y": 83
+        },
+        {
+          "x": 1073,
+          "y": 20
+        }
+      ]
+    },
+    {
+      "name": "Water 1",
+      "type": "water",
+      "closed": true,
+      "points": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 0,
+          "y": 152
+        },
+        {
+          "x": 0,
+          "y": 305
+        },
+        {
+          "x": 0,
+          "y": 458
+        },
+        {
+          "x": 0,
+          "y": 610
+        },
+        {
+          "x": 0,
+          "y": 763
+        },
+        {
+          "x": 0,
+          "y": 916
+        },
+        {
+          "x": 85,
+          "y": 938
+        },
+        {
+          "x": 211,
+          "y": 905
+        },
+        {
+          "x": 166,
+          "y": 780
+        },
+        {
+          "x": 110,
+          "y": 651
+        },
+        {
+          "x": 65,
+          "y": 516
+        },
+        {
+          "x": 40,
+          "y": 374
+        },
+        {
+          "x": 53,
+          "y": 228
+        },
+        {
+          "x": 104,
+          "y": 97
+        },
+        {
+          "x": 152,
+          "y": 0
+        }
+      ]
+    }
+  ]
+}

@@ -452,11 +452,11 @@ function polygonEditor() {
     contours: [],          // [{name, direction, points:[{x,y}]}]
     contourMode: false,    // whether we are currently drawing a contour
     contourDraft: [],      // points being drawn in the current session
-    contourStep: 10.0,        // mm elevation increment per contour line
+    contourStep: 0.5,         // mm elevation increment per contour line
     grassAmplitude: 0.5,      // grass bump height in mm
     grassSpacing: 2.4,        // distance between bump centers in mm
     greenStyle: 'terraced',   // 'smooth' or 'terraced'
-    elevationRange: 20.09,    // total Z amplitude of the green's slope (mm)
+    elevationRange: 16,       // total Z amplitude of the green's slope (mm)
     fringeEdgeHeight: 10.0,   // outer wall height of the fringe (mm)
     baseThicknessMm: 1.5,     // flat filament base below the surface topology (mm)
     includeBoundaryRegion: false,  // auto-derive a 5 mm boulders ring from each water polygon
@@ -1741,11 +1741,11 @@ function polygonEditor() {
         this.selectedImageUrl = this.selectedImageCourse
           ? '/egm/images/' + encodeURIComponent(this.selectedImageCourse) + '/' + encodeURIComponent(data.image)
           : '/team_inbox/' + encodeURIComponent(data.image);
-        this.contourStep = data.contourStep != null ? data.contourStep : 10.0;
+        this.contourStep = data.contourStep != null ? data.contourStep : 0.5;
         this.grassAmplitude = data.grassAmplitude != null ? data.grassAmplitude : 0.5;
         this.grassSpacing = data.grassSpacing != null ? data.grassSpacing : 2.4;
         this.greenStyle = data.greenStyle || 'terraced';
-        this.elevationRange = data.elevationRange != null ? data.elevationRange : 20.09;
+        this.elevationRange = data.elevationRange != null ? data.elevationRange : 16;
         this.fringeEdgeHeight = data.fringeEdgeHeight != null ? data.fringeEdgeHeight : 10.0;
         this.baseThicknessMm = data.baseThicknessMm != null ? data.baseThicknessMm : 1.5;
         this.includeBoundaryRegion = data.includeBoundaryRegion === true;
@@ -1781,11 +1781,11 @@ function polygonEditor() {
       this.selectedImageCourse = (matchedImg && matchedImg.course) ? matchedImg.course : '';
       // Reset editor settings to defaults so a new project starts from a clean slate
       // rather than inheriting tweaks from whatever project was open before.
-      this.contourStep = 10.0;
+      this.contourStep = 0.5;
       this.grassAmplitude = 0.5;
       this.grassSpacing = 2.4;
       this.greenStyle = 'terraced';
-      this.elevationRange = 20.09;
+      this.elevationRange = 16;
       this.fringeEdgeHeight = 10.0;
       this.baseThicknessMm = 1.5;
       this.includeBoundaryRegion = false;

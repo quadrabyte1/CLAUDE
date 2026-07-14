@@ -1010,6 +1010,25 @@ BOUNDARY_CAP_BAND_MM:    float = 1.0     # XY width of edge band where cap is at
 # past the taper zone is untouched.
 BOUNDARY_CAP_TAPER_MM:   float = 5.0     # XY width of the taper zone past the full-strength band
 
+# Task #506 (fringe plateau cliff, FantasyGolfCourse H11 [152]): when the
+# green has significant relief the current design ("fringe holds green-edge Z
+# flat all the way to the frame", task 483) projects the green's edge Z
+# radially outward — creating a plateau at up to (BASE + elevation_range) mm
+# that surrounds carve-outs (traps / water) with tall vertical walls. On the
+# steep side of a green (e.g. right side of H11 where green edge Z ≈ 23 mm),
+# this reads as an unnatural cliff at every interior carve-out boundary.
+#
+# Fix: once a fringe cell is more than FRINGE_GREEN_EDGE_TAPER_MM (horizontal
+# XY distance) from the green polygon, its Z is tapered from green_edge_h
+# toward min(green_edge_h, BOUNDARY_HEIGHT_CAP_MM). This preserves the
+# seam-matching behaviour right at the green boundary (weight=0 there) and
+# for gentle greens (green_edge_h <= cap → target == source → no change),
+# but pulls tall plateaus down to the cap over a natural distance so
+# interior carve-out walls stay short and printable. The frame-edge boundary
+# cap (band + taper above) still runs on top of this for any residual
+# excess right at the picture-frame perimeter.
+FRINGE_GREEN_EDGE_TAPER_MM: float = 15.0  # XY distance over which fringe Z tapers from green_edge_h → cap
+
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
     """
@@ -2073,14 +2092,50 @@ def build_fringe_mesh(
     # Pre-build array of green boundary points in mm for vectorised dist
     gbnd = green_bnd_mm  # (N, 2)
 
-    # Task #488 (fringe wall wrinkle): the primary lerp also has to blend Z
-    # across neighbouring green grid cells, not snap to a single nearest one.
-    # Otherwise adjacent fringe cells jump between Voronoi regions of the
-    # green grid → a piecewise-constant Z sawtooth that reads as a JAGGED
-    # DARK-GREEN WALL along the top of every fringe cutout wall (visible on
-    # FantasyGolfCourse H01 around the trap cutout and on Palmer PGA West H15
-    # around the water cutout). The seam-reseat block above already uses IDW
-    # (K=4); we mirror that here so the two Z sources stay in lockstep.
+    # Task #509 (Michelbook H12 [102] concave-polygon flip cliffs, Topo):
+    #
+    # The original design sampled `green_edge_h` by projecting the fringe cell
+    # to the SINGLE nearest boundary point, then IDW-averaging Z from the
+    # K=4 green cells adjacent to that projection. On a concave green polygon
+    # this creates a **hard cliff** in the fringe Z field: as a fringe cell
+    # crosses the medial axis of the concave region, its nearest-boundary
+    # projection jumps from one edge segment to a DIFFERENT edge segment
+    # (potentially on the opposite side of the polygon, at a very different
+    # Z). IDW around that projection point can't smooth the flip because the
+    # 4 sampled cells all sit at the new projection — the *entire* sampled
+    # neighbourhood snaps at once.
+    #
+    # Fix: sample `green_edge_h` as a spatially-smooth field over the fringe
+    # cell's own XY. For each fringe cell, take the K_BND_IDW nearest
+    # **boundary polyline points** (from the cell itself, not the projection)
+    # and IDW-blend their Z. Each boundary polyline point contributes its
+    # closest-green-cell Z. The set of top-K boundary points varies
+    # continuously with (x, y), so the sampled field varies continuously too.
+    #
+    # At the boundary itself (d_to_green → 0) the nearest boundary point has
+    # weight → ∞ and its Z dominates, so the seam-match property (task #483:
+    # fringe Z equals green Z at the shared boundary) is preserved exactly.
+    #
+    # Far from the boundary (into the interior of a concave notch), the K
+    # boundary points span both competing edge segments, so the sampled Z
+    # is a smooth blend of both — no discontinuity.
+    #
+    # K=24 chosen empirically: at ~2 mm boundary-point spacing (typical on a
+    # 300 mm-perimeter green with 176 densified points), 24 pts cover ~50 mm
+    # of arc, wide enough to bridge the concave flip on H12 but narrow enough
+    # to preserve local Z structure on convex greens.
+    K_BND_IDW = min(24, len(gbnd))
+
+    # Pre-compute boundary-point Z by looking up the nearest green cell Z for
+    # each boundary point. This is O(N_bnd) and only runs once per hole.
+    _bnd_nearest_dists, _bnd_nearest_idxs = green_kd.query(gbnd, k=1)
+    bnd_z = green_cell_z[_bnd_nearest_idxs]  # shape (N_bnd,)
+
+    gbnd_kd_lerp = cKDTree(gbnd)
+
+    # Kept for the pre-#509 sanity check / rollback (K=4 green-cell IDW at
+    # the projection). Not used on the fix path but preserved for diagnostic
+    # scripts that want to inspect the old behaviour.
     K_LERP_NEIGHBOURS = min(4, len(green_cell_z))
 
     for r in range(fringe_grid_res):
@@ -2110,21 +2165,42 @@ def build_fringe_mesh(
                 if in_hole:
                     continue
 
-            # Nearest point on the green boundary — used only to sample the
-            # green-edge height. Fringe holds that height flat all the way
-            # to the frame; no ramp toward a rectangle-edge target.
-            _, nx, ny = _min_dist_to_polyline(x, y, gbnd)
-            # IDW-blend green_edge_h from K nearest green grid cells so the
-            # sampled Z varies smoothly with (nx, ny) — no per-cell steps.
-            dists_g, idxs_g = green_kd.query([nx, ny], k=K_LERP_NEIGHBOURS)
-            dists_g = np.atleast_1d(np.asarray(dists_g, dtype=np.float64))
-            idxs_g = np.atleast_1d(np.asarray(idxs_g, dtype=np.int64))
-            if float(dists_g.min()) < 1e-9:
-                green_edge_h = float(green_cell_z[idxs_g[int(np.argmin(dists_g))]])
+            # Nearest point on the green boundary — used to derive
+            # d_to_green (horizontal distance from the green polygon), which
+            # drives the plateau-taper (task #506). We no longer sample
+            # green_edge_h at (nx, ny) — see below for the continuous field
+            # sampling that replaces it (task #509).
+            d_to_green, nx, ny = _min_dist_to_polyline(x, y, gbnd)
+
+            # Task #509: continuous-field green_edge_h sampling. Take the
+            # K_BND_IDW nearest boundary-polyline points to (x, y) itself,
+            # and IDW-blend their pre-computed Z. When K spans multiple edge
+            # segments (which is what happens deep inside a concave notch),
+            # the sampled Z is a smooth blend of both — no cliff on the
+            # medial axis where the SINGLE-nearest projection would flip.
+            dists_b, idxs_b = gbnd_kd_lerp.query([x, y], k=K_BND_IDW)
+            dists_b = np.atleast_1d(np.asarray(dists_b, dtype=np.float64))
+            idxs_b = np.atleast_1d(np.asarray(idxs_b, dtype=np.int64))
+            if float(dists_b.min()) < 1e-9:
+                # On top of a boundary point — snap to its Z exactly to
+                # preserve the seam-match property (task #483).
+                green_edge_h = float(bnd_z[idxs_b[int(np.argmin(dists_b))]])
             else:
-                w = 1.0 / (dists_g ** 2)
+                w = 1.0 / (dists_b ** 2)
                 w /= w.sum()
-                green_edge_h = float(np.dot(w, green_cell_z[idxs_g]))
+                green_edge_h = float(np.dot(w, bnd_z[idxs_b]))
+
+            # Task #506: plateau-taper. When green_edge_h exceeds the boundary
+            # cap, project a decaying blend of green_edge_h → BOUNDARY_HEIGHT_CAP_MM
+            # over FRINGE_GREEN_EDGE_TAPER_MM of XY distance from the green
+            # boundary. Weight is 0 at the boundary (seam matches green exactly)
+            # and 1 once we are FRINGE_GREEN_EDGE_TAPER_MM or more away. For
+            # gentle greens (green_edge_h <= cap) the target equals the source,
+            # so this reduces to the pre-#506 behaviour: no change.
+            _cap_target = min(green_edge_h, BOUNDARY_HEIGHT_CAP_MM)
+            if FRINGE_GREEN_EDGE_TAPER_MM > 0 and green_edge_h > _cap_target:
+                _weight = min(1.0, max(0.0, d_to_green / FRINGE_GREEN_EDGE_TAPER_MM))
+                green_edge_h = (1.0 - _weight) * green_edge_h + _weight * _cap_target
 
             z_fringe = max(BASE_THICKNESS_MM, min(green_edge_h, BASE_THICKNESS_MM + _elevation_range_mm))
 

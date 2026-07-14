@@ -8,7 +8,7 @@
   {# ── Header ─────────────────────────────────────────────── #}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.51</span></h1>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.55</span></h1>
       <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
     </div>
   </div>
@@ -24,42 +24,6 @@
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-white border border-notion-border hover:bg-notion-hover text-notion-text transition-default">
       Open Project
     </button>
-
-    <button @click="generateSTL()"
-            :disabled="!(polygons.length > 0 && courseName && holeName) || generating"
-            :class="(polygons.length > 0 && courseName && holeName) && !generating ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-600/40 cursor-not-allowed'"
-            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
-            x-text="generating ? 'Generating…' : 'Generate'">
-    </button>
-
-    <button @click="addTrap()"
-            :disabled="!imgLoaded"
-            :class="imgLoaded ? 'bg-amber-500 hover:bg-amber-600' : 'bg-amber-500/40 cursor-not-allowed'"
-            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
-      Add Trap
-    </button>
-
-    <button @click="addWater()"
-            :disabled="!imgLoaded"
-            :class="imgLoaded ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-yellow-500/40 cursor-not-allowed'"
-            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
-      Add Water
-    </button>
-
-    <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
-          x-text="courseName + ' — Hole ' + holeName"></span>
-
-    <div class="ml-auto flex items-center gap-1.5">
-      <span x-show="statusMsg" x-text="statusMsg" x-transition
-            :class="statusOk ? 'text-green-600' : 'text-red-500'"
-            class="text-sm font-medium"></span>
-      <span x-show="statusMsg && statusFilename" x-text="statusFilename" x-transition
-            class="text-sm bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"></span>
-      <button x-show="statusMsg" @click="flashDismiss()"
-              title="Dismiss"
-              :class="statusOk ? 'text-green-500 hover:text-green-700' : 'text-red-400 hover:text-red-600'"
-              class="text-sm leading-none px-0.5 transition-colors">&times;</button>
-    </div>
   </div>
 
   {# ── Per-hole settings ─────────────────────────────────── #}
@@ -362,10 +326,43 @@
     </div>
   </div>
 
-  {# ── Help text ──────────────────────────────────────────── #}
-  <div class="text-xs text-notion-muted space-y-0.5 pb-4">
-    <p><strong>Drag</strong> a vertex to move it. <strong>Shift+click</strong> to multi-select. <strong>Right-click</strong> edge to add vertex, right-click vertex to remove. <strong>Cmd+Z</strong> undo, <strong>Cmd+Shift+Z</strong> redo. <strong>Cmd+Delete</strong> removes the selected trap.</p>
-    <p><strong>Contour mode:</strong> click "Add Contour", then click to place points. <strong>Double-click or Enter</strong> to finish. Click the <strong>↑/↓ direction arrow</strong> on a contour to flip its uphill side. Right-click a contour vertex to delete it.</p>
+  {# ── Below-canvas action row ─────────────────────────────── #}
+  <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
+    <button @click="generateSTL()"
+            :disabled="!(polygons.length > 0 && courseName && holeName) || generating"
+            :class="(polygons.length > 0 && courseName && holeName) && !generating ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-600/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
+            x-text="generating ? 'Generating…' : 'Generate'">
+    </button>
+
+    <button @click="addTrap()"
+            :disabled="!imgLoaded"
+            :class="imgLoaded ? 'bg-amber-500 hover:bg-amber-600' : 'bg-amber-500/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+      Add Trap
+    </button>
+
+    <button @click="addWater()"
+            :disabled="!imgLoaded"
+            :class="imgLoaded ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-yellow-500/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+      Add Water
+    </button>
+
+    <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
+          x-text="courseName + ' — Hole ' + holeName"></span>
+
+    <div class="ml-auto flex items-center gap-1.5">
+      <span x-show="statusMsg" x-text="statusMsg" x-transition
+            :class="statusOk ? 'text-green-600' : 'text-red-500'"
+            class="text-sm font-medium"></span>
+      <span x-show="statusMsg && statusFilename" x-text="statusFilename" x-transition
+            class="text-sm bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded"></span>
+      <button x-show="statusMsg" @click="flashDismiss()"
+              title="Dismiss"
+              :class="statusOk ? 'text-green-500 hover:text-green-700' : 'text-red-400 hover:text-red-600'"
+              class="text-sm leading-none px-0.5 transition-colors">&times;</button>
+    </div>
   </div>
 </div>
 

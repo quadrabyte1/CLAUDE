@@ -481,6 +481,18 @@ def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
     if green_poly is None:
         raise ValueError("No green polygon found in EGM")
 
+    # Green scale: XY-only multiplier applied to the green polygon around its own
+    # centroid, in pixel space. Fringe/traps/water/boulders are unaffected because
+    # only the green polygon's control points are transformed. Default 1.0 = no-op.
+    green_scale = float(data.get("greenScale") or 1.0)
+    if green_scale != 1.0 and green_poly["points"]:
+        pts = np.array([[p["x"], p["y"]] for p in green_poly["points"]], dtype=np.float64)
+        cx = float(pts[:, 0].mean())
+        cy = float(pts[:, 1].mean())
+        pts[:, 0] = cx + (pts[:, 0] - cx) * green_scale
+        pts[:, 1] = cy + (pts[:, 1] - cy) * green_scale
+        green_poly["points"] = [{"x": float(x), "y": float(y)} for x, y in pts]
+
     boundary_px = interpolate_catmull_rom(green_poly["points"])
     return data, image_path, boundary_px
 

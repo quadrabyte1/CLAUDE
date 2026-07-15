@@ -8,7 +8,7 @@
   {# ── Header ─────────────────────────────────────────────── #}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.55</span></h1>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.58</span></h1>
       <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
     </div>
   </div>
@@ -16,11 +16,13 @@
   {# ── Action bar ─────────────────────────────────────────── #}
   <div class="flex items-center gap-3 flex-nowrap overflow-x-auto">
     <button @click="openNewProjectDialog()"
+            title="Start a new hole project from a source image (course, hole number, image)."
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-notion-accent hover:bg-blue-600 text-white transition-default">
       New Project
     </button>
 
     <button @click="openProjectDialog()"
+            title="Open a previously saved hole project (.egm file)."
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-white border border-notion-border hover:bg-notion-hover text-notion-text transition-default">
       Open Project
     </button>
@@ -32,7 +34,8 @@
     <div class="flex flex-wrap gap-x-6 gap-y-3 items-end">
 
       {# Green style #}
-      <div class="flex flex-col gap-1 min-w-[130px]">
+      <div class="flex flex-col gap-1 min-w-[130px]"
+           title="How the green's slope is rendered. Terraced = stepped contour bands (Contour step controls the height increment); Smooth = continuous gradient.">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Green style</label>
         <select x-model="greenStyle" @change="autoSave()"
                 class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
@@ -42,15 +45,17 @@
       </div>
 
       {# Contour step #}
-      <div class="flex flex-col gap-1 min-w-[110px]">
+      <div class="flex flex-col gap-1 min-w-[110px]"
+           title="Elevation increment between contour bands when Green style = Terraced. Smaller values give finer stepping.">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Contour step (mm)</label>
         <input type="number" x-model.number="contourStep" @change="autoSave()"
-               step="0.5" min="0.5"
+               step="0.1" min="0.1"
                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
       </div>
 
       {# Grass amplitude #}
-      <div class="flex flex-col gap-1 min-w-[130px]">
+      <div class="flex flex-col gap-1 min-w-[130px]"
+           title="Height of the grass-texture bumps on the green surface. 0 = flat (no grass texture).">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Grass amplitude (mm)</label>
         <input type="number" x-model.number="grassAmplitude" @change="autoSave()"
                step="0.1" min="0"
@@ -58,7 +63,8 @@
       </div>
 
       {# Grass spacing #}
-      <div class="flex flex-col gap-1 min-w-[120px]">
+      <div class="flex flex-col gap-1 min-w-[120px]"
+           title="Center-to-center distance between grass bumps on the green. Smaller = denser texture.">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Grass spacing (mm)</label>
         <input type="number" x-model.number="grassSpacing" @change="autoSave()"
                step="0.1" min="0.5"
@@ -66,15 +72,26 @@
       </div>
 
       {# Elevation range #}
-      <div class="flex flex-col gap-1 min-w-[130px]">
+      <div class="flex flex-col gap-1 min-w-[130px]"
+           title="Total Z variation across the green (highest point minus lowest point).">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Elevation range (mm)</label>
         <input type="number" x-model.number="elevationRange" @change="autoSave()"
                step="0.1" min="0.1"
                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
       </div>
 
+      {# Green scale — XY-only multiplier applied to the green polygon (1.00 = no change) #}
+      <div class="flex flex-col gap-1 min-w-[120px]"
+           title="XY-only multiplier applied to the green polygon around its center (1.00 = no change, 1.05 = 5% larger). Fringe, traps, water, and boulders are unaffected.">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Green scale</label>
+        <input type="number" x-model.number="greenScale" @change="autoSave()"
+               step="0.01" min="0.5"
+               class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
       {# Fringe edge height #}
-      <div class="flex flex-col gap-1 min-w-[140px]">
+      <div class="flex flex-col gap-1 min-w-[140px]"
+           title="Height of the fringe's outer wall around the printed piece.">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Fringe edge height (mm)</label>
         <input type="number" x-model.number="fringeEdgeHeight" @change="autoSave()"
                step="0.5" min="0.5"
@@ -82,7 +99,8 @@
       </div>
 
       {# Base thickness — slab of filament below the surface topology #}
-      <div class="flex flex-col gap-1 min-w-[130px]">
+      <div class="flex flex-col gap-1 min-w-[130px]"
+           title="Thickness of the flat filament base slab that sits under the surface topology.">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Base thickness (mm)</label>
         <input type="number" x-model.number="baseThicknessMm" @change="autoSave()"
                step="0.1" min="0.1"
@@ -90,7 +108,8 @@
       </div>
 
       {# Include boundary region (auto-derived 5 mm boulders ring around water) #}
-      <div class="flex flex-col gap-1 min-w-[180px]">
+      <div class="flex flex-col gap-1 min-w-[180px]"
+           title="When on, the pipeline auto-derives a 5 mm boulders ring around each water polygon (replaces manual boulders polygons).">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Boundary region</label>
         <label class="inline-flex items-center gap-2 text-sm text-notion-text cursor-pointer select-none">
           <input type="checkbox" x-model="includeBoundaryRegion" @change="autoSave()"
@@ -104,7 +123,8 @@
       <div class="hidden sm:block w-px self-stretch bg-notion-border mx-1"></div>
 
       {# Flag offsets #}
-      <div class="flex flex-col gap-1">
+      <div class="flex flex-col gap-1"
+           title="Shift the flagstick away from the green's center. Positive X moves right, positive Y moves up. 0, 0 = anchored at the green center.">
         <div class="flex items-center gap-1.5">
           <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Flag offset</label>
           <span class="text-xs text-notion-muted normal-case tracking-normal">Positive X = right, positive Y = up. Defaults to 0,0 = green center.</span>
@@ -114,12 +134,14 @@
             <label class="text-xs text-notion-muted">X offset (mm)</label>
             <input type="number" x-model.number="flagOffsetXMm" @change="autoSave()"
                    step="0.5"
+                   title="Horizontal flag offset (mm). Positive = right, negative = left."
                    class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
           </div>
           <div class="flex flex-col gap-0.5 min-w-[110px]">
             <label class="text-xs text-notion-muted">Y offset (mm)</label>
             <input type="number" x-model.number="flagOffsetYMm" @change="autoSave()"
                    step="0.5"
+                   title="Vertical flag offset (mm). Positive = up, negative = down."
                    class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
           </div>
         </div>
@@ -332,20 +354,23 @@
             :disabled="!(polygons.length > 0 && courseName && holeName) || generating"
             :class="(polygons.length > 0 && courseName && holeName) && !generating ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-600/40 cursor-not-allowed'"
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
+            title="Run the render pipeline for this hole and produce a 3MF (and STL) output file."
             x-text="generating ? 'Generating…' : 'Generate'">
     </button>
 
     <button @click="addTrap()"
             :disabled="!imgLoaded"
             :class="imgLoaded ? 'bg-amber-500 hover:bg-amber-600' : 'bg-amber-500/40 cursor-not-allowed'"
-            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
+            title="Add a new sand-trap polygon (red) to the canvas — drag its vertices to shape it.">
       Add Trap
     </button>
 
     <button @click="addWater()"
             :disabled="!imgLoaded"
             :class="imgLoaded ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-yellow-500/40 cursor-not-allowed'"
-            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default">
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
+            title="Add a new water polygon (yellow) to the canvas — drag its vertices to shape it.">
       Add Water
     </button>
 
@@ -449,11 +474,12 @@ function polygonEditor() {
     contours: [],          // [{name, direction, points:[{x,y}]}]
     contourMode: false,    // whether we are currently drawing a contour
     contourDraft: [],      // points being drawn in the current session
-    contourStep: 0.5,         // mm elevation increment per contour line
+    contourStep: 0.1,         // mm elevation increment per contour line
     grassAmplitude: 0.5,      // grass bump height in mm
     grassSpacing: 2.4,        // distance between bump centers in mm
     greenStyle: 'terraced',   // 'smooth' or 'terraced'
-    elevationRange: 16,       // total Z amplitude of the green's slope (mm)
+    elevationRange: 14.5,     // total Z amplitude of the green's slope (mm)
+    greenScale: 1.0,          // XY multiplier applied to the green polygon only (fringe/traps/water unaffected)
     fringeEdgeHeight: 10.0,   // outer wall height of the fringe (mm)
     baseThicknessMm: 1.5,     // flat filament base below the surface topology (mm)
     includeBoundaryRegion: false,  // auto-derive a 5 mm boulders ring from each water polygon
@@ -1606,6 +1632,7 @@ function polygonEditor() {
         grassSpacing: this.grassSpacing,
         greenStyle: this.greenStyle,
         elevationRange: this.elevationRange,
+        greenScale: this.greenScale,
         fringeEdgeHeight: this.fringeEdgeHeight,
         baseThicknessMm: this.baseThicknessMm,
         includeBoundaryRegion: this.includeBoundaryRegion,
@@ -1738,11 +1765,12 @@ function polygonEditor() {
         this.selectedImageUrl = this.selectedImageCourse
           ? '/egm/images/' + encodeURIComponent(this.selectedImageCourse) + '/' + encodeURIComponent(data.image)
           : '/team_inbox/' + encodeURIComponent(data.image);
-        this.contourStep = data.contourStep != null ? data.contourStep : 0.5;
+        this.contourStep = data.contourStep != null ? data.contourStep : 0.1;
         this.grassAmplitude = data.grassAmplitude != null ? data.grassAmplitude : 0.5;
         this.grassSpacing = data.grassSpacing != null ? data.grassSpacing : 2.4;
         this.greenStyle = data.greenStyle || 'terraced';
-        this.elevationRange = data.elevationRange != null ? data.elevationRange : 16;
+        this.elevationRange = data.elevationRange != null ? data.elevationRange : 14.5;
+        this.greenScale = data.greenScale != null ? data.greenScale : 1.0;
         this.fringeEdgeHeight = data.fringeEdgeHeight != null ? data.fringeEdgeHeight : 10.0;
         this.baseThicknessMm = data.baseThicknessMm != null ? data.baseThicknessMm : 1.5;
         this.includeBoundaryRegion = data.includeBoundaryRegion === true;
@@ -1778,11 +1806,12 @@ function polygonEditor() {
       this.selectedImageCourse = (matchedImg && matchedImg.course) ? matchedImg.course : '';
       // Reset editor settings to defaults so a new project starts from a clean slate
       // rather than inheriting tweaks from whatever project was open before.
-      this.contourStep = 0.5;
+      this.contourStep = 0.1;
       this.grassAmplitude = 0.5;
       this.grassSpacing = 2.4;
       this.greenStyle = 'terraced';
-      this.elevationRange = 16;
+      this.elevationRange = 14.5;
+      this.greenScale = 1.0;
       this.fringeEdgeHeight = 10.0;
       this.baseThicknessMm = 1.5;
       this.includeBoundaryRegion = false;
@@ -1899,6 +1928,7 @@ function polygonEditor() {
         grassSpacing: this.grassSpacing,
         greenStyle: this.greenStyle,
         elevationRange: this.elevationRange,
+        greenScale: this.greenScale,
         fringeEdgeHeight: this.fringeEdgeHeight,
         baseThicknessMm: this.baseThicknessMm,
         includeBoundaryRegion: this.includeBoundaryRegion,

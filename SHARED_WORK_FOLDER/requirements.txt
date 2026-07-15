@@ -1,0 +1,29 @@
+# Runtime dependencies for the Flask web app (app/) and rendering pipeline
+# (gradient_surface_diagnostic.py). Pinned to the versions currently in use
+# on Thomas's Mac (Python 3.13). If Jim is on a different Python minor
+# version, some pins may need to shift to the nearest wheel.
+
+# Web framework
+Flask==3.1.3
+Jinja2==3.1.6
+Werkzeug==3.1.7
+
+# Numerical / image / geometry
+numpy==2.4.2
+scipy==1.17.1
+matplotlib==3.10.8
+opencv-python==4.13.0.92
+pillow==12.1.1
+scikit-image==0.26.0
+shapely==2.1.2
+trimesh==4.11.5
+numpy-stl==3.2.0
+
+# HTTP / scraping / config
+requests==2.32.5
+beautifulsoup4==4.14.3
+PyYAML==6.0.3
+
+# Optional (used by the LaMa image-clean helper — safe to skip if not needed)
+simple-lama-inpainting==0.1.2
+replicate==1.0.7

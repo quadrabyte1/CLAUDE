@@ -24,9 +24,29 @@ _TASK_COUNT_BASELINE_MAX_ID = 485
 
 # ── Database initialisation ────────────────────────────────────────────────
 
+_SCHEMA_PATH = os.path.normpath(os.path.join(
+    os.path.dirname(__file__), "..", "db", "schema.sql"
+))
+
+
 def init_db():
-    """Ensure all required tables exist and run lightweight migrations."""
+    """Ensure all required tables exist and run lightweight migrations.
+
+    On a fresh clone (no workspace.db), sourcing db/schema.sql creates every
+    table, index, and seed row in one shot. The migrations below remain for
+    the benefit of pre-schema.sql databases where columns were added via
+    ALTER TABLE at different points in history.
+    """
+    # Make sure the containing db/ directory exists before SQLite opens it —
+    # matters on a fresh clone where the folder may not exist yet.
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     db = sqlite3.connect(DB_PATH)
+    # Apply the canonical schema (idempotent — every statement uses IF NOT
+    # EXISTS / INSERT OR IGNORE). This bootstraps a brand-new DB in one call
+    # and is a no-op against an existing one.
+    if os.path.exists(_SCHEMA_PATH):
+        with open(_SCHEMA_PATH) as _f:
+            db.executescript(_f.read())
     db.execute("""
         CREATE TABLE IF NOT EXISTS token_usage (
             id INTEGER PRIMARY KEY,
@@ -364,7 +384,9 @@ def dashboard():
                    dashboard_version=dashboard_version)
 
 
-_HOMUNCULUS_ACTIVITY_PATH = "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault/_activity.jsonl"
+_HOMUNCULUS_ACTIVITY_PATH = os.path.normpath(os.path.join(
+    os.path.dirname(__file__), "..", "Homunculus", "vault", "_activity.jsonl"
+))
 
 
 def _homunculus_stats():

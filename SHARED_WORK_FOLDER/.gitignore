@@ -1,1 +1,21 @@
-path/to/file # optional: stop tracking it
+# Local SQLite workspace DB — each machine keeps its own
+db/workspace.db
+db/workspace.db-shm
+db/workspace.db-wal
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+.pytest_cache/
+
+# macOS
+.DS_Store
+
+# Editor / OS
+*.swp
+.idea/
+.vscode/

@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MovieScanner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; }
+
+    /* Dismiss checkbox — subtle but clearly interactive */
+    .dismiss-cb {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid #d1d5db;
+      border-radius: 3px;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: border-color 150ms, background-color 150ms;
+      position: relative;
+    }
+    .dismiss-cb:hover { border-color: #6b7280; }
+    .dismiss-cb:checked {
+      background-color: #9ca3af;
+      border-color: #9ca3af;
+    }
+    .dismiss-cb:checked::after {
+      content: '';
+      position: absolute;
+      left: 3px; top: 0px;
+      width: 5px; height: 9px;
+      border: 2px solid white;
+      border-top: none;
+      border-left: none;
+      transform: rotate(45deg);
+    }
+
+    /* Dismissed rows — fade in/out */
+    tr.dismissed-row { opacity: 0.45; }
+    tr.dismissed-row .title-cell { text-decoration: line-through; }
+    tr.fading-out { transition: opacity 150ms ease-out; opacity: 0; }
+
+    /* ── Sortable + resizable table headers ─────────────────────────────── */
+    table.sortable-table {
+      table-layout: auto;   /* natural widths until user resizes a column */
+    }
+    table.sortable-table.has-fixed-cols {
+      table-layout: fixed;  /* switch to fixed once any col is resized */
+    }
+    table.sortable-table th.sortable {
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    table.sortable-table th.sortable:hover {
+      background-color: #f3f4f6; /* gray-100 — subtle brightening */
+    }
+    /* Sort direction indicator */
+    table.sortable-table th.sortable .sort-arrow {
+      display: inline-block;
+      margin-left: 4px;
+      font-size: 9px;
+      color: #9ca3af;   /* gray-400 — low-key */
+      vertical-align: middle;
+      line-height: 1;
+    }
+    /* Resize handle — invisible bar on right edge, visible on hover */
+    table.sortable-table th .resize-handle {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 4px;
+      height: 100%;
+      cursor: col-resize;
+      background: transparent;
+      transition: background 120ms;
+      z-index: 1;
+    }
+    table.sortable-table th:hover .resize-handle,
+    table.sortable-table th .resize-handle:hover,
+    table.sortable-table th .resize-handle.dragging {
+      background: #d1d5db; /* gray-300 */
+    }
+    /* Non-sortable th (e.g. the dismiss checkbox col) — still gets handle */
+    table.sortable-table th:not(.sortable) {
+      position: relative;
+    }
+
+    /* ── Movie tooltip ─────────────────────────────────────────────────────── */
+    #movie-tooltip {
+      position: fixed;
+      z-index: 9999;
+      width: 260px;
+      background: #111827;          /* gray-900 */
+      color: #f3f4f6;               /* gray-100 */
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.3);
+      padding: 12px 14px 12px;
+      font-size: 12px;
+      line-height: 1.5;
+      pointer-events: none;         /* allows mouse to pass through while loading */
+      opacity: 0;
+      transition: opacity 120ms ease;
+    }
+    #movie-tooltip.tt-visible {
+      opacity: 1;
+      pointer-events: auto;         /* let user select plot text once shown */
+    }
+    /* Arrow — points upward toward the hovered title */
+    #movie-tooltip::before {
+      content: '';
+      position: absolute;
+      top: -6px;
+      left: 18px;
+      width: 12px;
+      height: 12px;
+      background: #111827;
+      transform: rotate(45deg);
+      border-radius: 2px;
+    }
+    .tt-date    { font-weight: 700; color: #e5e7eb; margin-bottom: 6px; }
+    .tt-badges  { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
+    /* RT pill — muted tomato that fits the dark card */
+    .tt-rt {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #7f1d1d;          /* red-900 */
+      color: #fca5a5;               /* red-300 */
+      border: 1px solid #991b1b;
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .tt-rt.tt-rt-none {
+      background: #374151;
+      color: #9ca3af;
+      border-color: #4b5563;
+      font-weight: 400;
+    }
+    /* Secondary badges (IMDB, Meta) */
+    .tt-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      background: #1f2937;          /* gray-800 */
+      color: #9ca3af;
+      border: 1px solid #374151;
+      border-radius: 5px;
+      padding: 1px 6px;
+      font-size: 10px;
+    }
+    .tt-badge strong { color: #d1d5db; font-weight: 600; }
+    .tt-plot {
+      color: #9ca3af;
+      font-size: 11px;
+      line-height: 1.55;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 4;
+      overflow: hidden;
+    }
+    .tt-loading { color: #6b7280; font-style: italic; }
+    .tt-error   { color: #f87171; font-size: 11px; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-6 pb-20">
+
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <div class="flex items-center gap-2">
+      <span class="text-2xl">🎬</span>
+      <h1 class="text-2xl font-bold text-gray-900 tracking-tight">MovieScanner</h1>
+    </div>
+    <p class="text-sm text-gray-500 -mt-4">
+      Delta-scans IMDB's daily title dumps. Reports newly-seen titles that pass rating + genre filters.
+    </p>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 gap-4">
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+        <p class="text-xs text-gray-400 uppercase tracking-wide font-medium">Titles in DB</p>
+        <p class="text-2xl font-bold text-gray-800 mt-1">{{ "{:,}".format(titles_count) }}</p>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+        <p class="text-xs text-gray-400 uppercase tracking-wide font-medium">Total matches</p>
+        <p class="text-2xl font-bold text-indigo-600 mt-1">{{ "{:,}".format(matches_count) }}</p>
+        {% if dismissed_count > 0 %}
+        <p class="text-xs text-gray-400 mt-1">{{ "{:,}".format(active_count) }} active · {{ "{:,}".format(dismissed_count) }} dismissed</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Config editor -->
+    <form action="/config" method="POST" class="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <h2 class="text-sm font-semibold text-gray-700">Filter configuration</h2>
+
+      <div class="grid grid-cols-2 gap-4">
+        <label class="block">
+          <span class="text-xs text-gray-500 uppercase tracking-wide">Min rating</span>
+          <input type="number" name="min_rating" step="0.1" min="0" max="10"
+                 value="{{ config.min_rating or '7.0' }}"
+                 title="Minimum IMDB average rating (0.0–10.0). Titles below this are skipped."
+                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+        </label>
+        <label class="block">
+          <span class="text-xs text-gray-500 uppercase tracking-wide">Min votes</span>
+          <input type="number" name="min_votes" step="1" min="0"
+                 value="{{ config.min_votes or '100' }}"
+                 title="Sanity floor on the vote count. A 9.5 with 3 votes is noise; 100+ is a safe default."
+                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+        </label>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-gray-500 uppercase tracking-wide">Genres</span>
+          <span class="text-xs text-gray-400">
+            <span class="inline-block w-2 h-2 rounded-sm bg-green-500 align-middle"></span> Include
+            &nbsp;·&nbsp;
+            <span class="inline-block w-2 h-2 rounded-sm bg-gray-300 align-middle"></span> Ignore
+            &nbsp;·&nbsp;
+            <span class="inline-block w-2 h-2 rounded-sm bg-red-500 align-middle"></span> Exclude
+          </span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {% for g in known_genres %}
+            {% set gl = g | lower %}
+            {% set state = 'include' if gl in include_lc else ('exclude' if gl in exclude_lc else 'ignore') %}
+            <div class="flex items-center justify-between text-xs border border-gray-200 rounded-md pl-2.5 pr-1 py-1 bg-white">
+              <span class="text-gray-700 truncate mr-2">{{ g }}</span>
+              <div class="inline-flex rounded-sm border border-gray-200 overflow-hidden text-[11px] flex-shrink-0">
+                <label title="Include — desirable"
+                       class="w-6 text-center cursor-pointer text-gray-400 has-[:checked]:bg-green-500 has-[:checked]:text-white transition-colors">
+                  <input type="radio" name="genre_{{ g }}" value="include" class="sr-only" {% if state == 'include' %}checked{% endif %}>+
+                </label>
+                <label title="Ignore — no effect"
+                       class="w-6 text-center cursor-pointer text-gray-400 border-l border-gray-200 has-[:checked]:bg-gray-300 has-[:checked]:text-gray-700 transition-colors">
+                  <input type="radio" name="genre_{{ g }}" value="ignore"  class="sr-only" {% if state == 'ignore' %}checked{% endif %}>·
+                </label>
+                <label title="Exclude — skip any title tagged with this"
+                       class="w-6 text-center cursor-pointer text-gray-400 border-l border-gray-200 has-[:checked]:bg-red-500 has-[:checked]:text-white transition-colors">
+                  <input type="radio" name="genre_{{ g }}" value="exclude" class="sr-only" {% if state == 'exclude' %}checked{% endif %}>−
+                </label>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+        <p class="text-xs text-gray-400 mt-2">
+          <strong>Include</strong>: title must have at least one of these to match (or leave all Ignore for the tag test to auto-pass).
+          <strong>Exclude</strong>: a single match here skips the title regardless of rating or include tags.
+          Selections persist across restarts.
+        </p>
+      </div>
+
+      <fieldset>
+        <legend class="text-xs text-gray-500 uppercase tracking-wide mb-2">Title types to scan</legend>
+        {% set active_types = (config.title_types or '["movie","tvMovie","tvSeries"]') %}
+        <div class="flex gap-4 text-sm">
+          {% for t, label in [('movie','Movies'), ('tvMovie','TV movies'), ('tvSeries','TV series'), ('short','Shorts')] %}
+          <label class="inline-flex items-center gap-2">
+            <input type="checkbox" name="title_types" value="{{ t }}"
+                   {% if t in active_types %}checked{% endif %}
+                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+            <span class="text-gray-700">{{ label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </fieldset>
+
+      <div class="flex items-center justify-between pt-2 gap-4 flex-wrap">
+        <div class="flex gap-2 flex-wrap">
+          <button type="submit" formaction="/config"
+                  title="Save the config. Applied on the next Run. Doesn't touch already-seen titles."
+                  class="text-sm px-4 py-2 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700">
+            Save config
+          </button>
+          <button type="submit" formaction="/config_and_rescan"
+                  onclick="return confirm('This will DELETE every already-scanned title and match, then start a fresh full scan applying the new config.\n\nRun history is preserved. Continue?');"
+                  title="Wipes the titles + matches tables and starts a fresh scan. Every title in tomorrow's dump gets re-tested against the just-saved config."
+                  class="text-sm px-4 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white">
+            Save config and rescan all
+          </button>
+        </div>
+        <span class="text-xs text-gray-400">
+          <strong>Save</strong>: applied on next Run, doesn't touch seen titles.
+          <strong>Save + rescan</strong>: wipes seen titles and re-tests everything.
+        </span>
+      </div>
+
+      <!-- Run button — sits INSIDE the config form so its submit carries the
+           current radio state. /run saves the config before starting the
+           scan, so unsaved on-screen selections aren't silently dropped. -->
+      <button type="submit" formaction="/run"
+              class="w-full text-sm font-semibold px-4 py-3 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition-colors mt-2"
+              title="Saves the current config (whatever's on-screen) and starts a scan against today's IMDB dumps.">
+        ▶ Run scan now
+      </button>
+    </form>
+
+    <!-- Run history -->
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-sm font-semibold text-gray-700">Recent runs</h2>
+        <form action="/clear" method="POST" class="inline">
+          <button type="submit"
+                  onclick="return confirm('Clear ALL run history and match results, and reset every genre radio to Ignore?\n\nPreserved: the seen-set of already-scanned titles (so the next scan is still a delta, not a full re-test), plus min rating / min votes / title types. Continue?');"
+                  title="Wipes the runs + matches tables and resets both genre lists to empty. Titles seen-set and non-genre config are preserved."
+                  class="text-xs px-2.5 py-1 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
+            Clear all
+          </button>
+        </form>
+      </div>
+      {% if not runs %}
+      <p class="text-sm text-gray-400 italic">No runs yet — hit "Run scan now" to start the first one.</p>
+      {% else %}
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table class="w-full text-xs">
+          <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+            <tr>
+              <th class="text-left px-4 py-2 font-medium">Run</th>
+              <th class="text-left px-4 py-2 font-medium">Started</th>
+              <th class="text-left px-4 py-2 font-medium">Status</th>
+              <th class="text-right px-4 py-2 font-medium">Scanned</th>
+              <th class="text-right px-4 py-2 font-medium">New</th>
+              <th class="text-right px-4 py-2 font-medium">Matched</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {% for r in runs %}
+            <tr data-run-status="{{ r.status }}">
+              <td class="px-4 py-2 font-mono text-gray-400">run {{ r.id }}</td>
+              <td class="px-4 py-2 font-mono text-gray-600">{{ r.started_at }}</td>
+              <td class="px-4 py-2">
+                {% if r.status == 'running' %}
+                  <span class="inline-flex items-center gap-1.5 text-indigo-600">
+                    <svg class="spinner w-3 h-3" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4" stroke-dashoffset="10"/>
+                    </svg>
+                    <span>{{ r.phase or 'running' }}</span>
+                  </span>
+                {% elif r.status == 'done' %}
+                  <span class="text-green-600">✓ done</span>
+                {% elif r.status == 'error' %}
+                  <span class="text-red-600" title="{{ r.error }}">✗ error</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-2 text-right font-mono">{{ "{:,}".format(r.total_downloaded or 0) }}</td>
+              <td class="px-4 py-2 text-right font-mono">{{ "{:,}".format(r.new_titles or 0) }}</td>
+              <td class="px-4 py-2 text-right font-mono font-semibold text-indigo-600">{{ "{:,}".format(r.matched_titles or 0) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Matches (all runs, aggregated) -->
+    <div>
+      <div class="flex items-center justify-between mb-2 gap-3 flex-wrap">
+        <h2 class="text-sm font-semibold text-gray-700">
+          Matches
+          {% if matches %}({{ matches|length }}{% if matches_count > 500 %} of {{ "{:,}".format(matches_count) }}{% endif %}){% endif %}
+        </h2>
+        <div class="flex items-center gap-4 flex-wrap">
+          <!-- Rescan upside candidates button -->
+          <form action="/upside_rescan" method="POST" class="inline">
+            <button type="submit"
+                    title="Sample ~500 titles that were rejected by the filters at scan time and re-test them against the current config. Results appear in the Upside candidates section below."
+                    class="text-xs px-2.5 py-1 rounded-md border border-indigo-300 bg-white text-indigo-600 hover:bg-indigo-50 transition-colors">
+              Rescan upside candidates
+            </button>
+          </form>
+          <!-- Show dismissed toggle -->
+          <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none"
+                 title="Show or hide matches you've dismissed. Dismissed rows appear muted with a strikethrough title.">
+            <input type="checkbox" id="show-dismissed-toggle"
+                   {% if show_dismissed %}checked{% endif %}
+                   onchange="location.search = this.checked ? '?show_dismissed=1' : '?show_dismissed=0'"
+                   class="rounded border-gray-300 text-gray-500 focus:ring-gray-400">
+            <span class="{% if show_dismissed %}text-gray-700 font-medium{% else %}text-gray-400{% endif %}">
+              Show dismissed{% if dismissed_count > 0 %} ({{ dismissed_count }}){% endif %}
+            </span>
+          </label>
+        </div>
+      </div>
+      {% if matches_count > 500 %}
+      <p class="text-xs text-gray-400 italic mb-2">
+        Showing 500 of {{ "{:,}".format(matches_count) }} — sort dropdown reorders these 500 only.
+      </p>
+      {% endif %}
+      {% if not matches %}
+      <p class="text-sm text-gray-400 italic">No matches yet — run a scan to populate this list.</p>
+      {% else %}
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <table id="matches-table" class="sortable-table w-full text-xs">
+          <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+            <tr>
+              <th class="px-3 py-2 w-6" title="Check to dismiss a title from the active list">
+                <span class="resize-handle"></span>
+              </th>
+              <th class="text-left  px-3 py-2 font-medium sortable" data-col="title" data-dir="text">
+                Title<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-right px-3 py-2 font-medium sortable" data-col="year" data-dir="numeric">
+                Year<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-left  px-3 py-2 font-medium sortable" data-col="type" data-dir="text">
+                Type<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-right px-3 py-2 font-medium sortable" data-col="rating" data-dir="numeric">
+                Rating<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-right px-3 py-2 font-medium sortable" data-col="votes" data-dir="numeric">
+                Votes<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-left  px-3 py-2 font-medium">
+                Matched tags<span class="resize-handle"></span>
+              </th>
+              <th class="text-left  px-3 py-2 font-medium">
+                All genres<span class="resize-handle"></span>
+              </th>
+              <th class="text-left  px-3 py-2 font-medium sortable" data-col="matched" data-dir="text">
+                Matched<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="matches-tbody" class="divide-y divide-gray-100">
+            {% for m in matches %}
+            <tr class="hover:bg-gray-50{% if m.dismissed_at %} dismissed-row{% endif %}"
+                data-tconst="{{ m.tconst }}"
+                data-rating="{{ m.rating }}"
+                data-votes="{{ m.num_votes }}"
+                data-year="{{ m.start_year or 0 }}"
+                data-type="{{ m.title_type|lower }}"
+                data-title="{{ m.primary_title|lower }}"
+                data-matched="{{ m.matched_at or '' }}">
+              <td class="px-3 py-1.5 text-center">
+                <input type="checkbox"
+                       class="dismiss-cb"
+                       {% if m.dismissed_at %}checked{% endif %}
+                       title="{% if m.dismissed_at %}Click to restore this title{% else %}Click to dismiss this title{% endif %}"
+                       onchange="handleDismiss('{{ m.tconst }}', this.checked)">
+              </td>
+              <td class="px-3 py-1.5 title-cell">
+                <a href="https://www.imdb.com/title/{{ m.tconst }}/" target="_blank" rel="noopener"
+                   class="text-indigo-600 hover:underline font-medium title-link"
+                   data-tconst="{{ m.tconst }}">{{ m.primary_title }}</a>
+              </td>
+              <td class="px-3 py-1.5 text-right font-mono text-gray-600">{{ m.start_year or '' }}</td>
+              <td class="px-3 py-1.5 text-gray-500">{{ m.title_type }}</td>
+              <td class="px-3 py-1.5 text-right font-mono font-semibold text-green-600">{{ "%.1f"|format(m.rating) }}</td>
+              <td class="px-3 py-1.5 text-right font-mono text-gray-500">{{ "{:,}".format(m.num_votes) }}</td>
+              <td class="px-3 py-1.5 text-gray-700">{{ m.matched_tags }}</td>
+              <td class="px-3 py-1.5 text-gray-400">{{ m.genres or '' }}</td>
+              <td class="px-3 py-1.5 font-mono text-gray-400">{{ (m.matched_at or '')[:10] }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Upside candidates (Stage C) -->
+    <div>
+      <div class="flex items-center justify-between mb-1">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-700">Upside candidates</h2>
+          <p class="text-xs text-gray-400">Titles previously rejected by the filters that would pass under the current config.</p>
+        </div>
+        {% if upside_checked_at %}
+        <span class="text-xs text-gray-400 font-mono">
+          {{ upside_matches|length }} candidates · last rescan {{ upside_checked_at[:10] }}
+        </span>
+        {% endif %}
+      </div>
+      {% if not upside_matches %}
+      <p class="text-sm text-gray-400 italic mt-2">No upside rescan run yet — hit "Rescan upside candidates" above to sample 500 rejected titles.</p>
+      {% else %}
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mt-2">
+        <table id="upside-table" class="sortable-table w-full text-xs">
+          <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
+            <tr>
+              <th class="text-left  px-3 py-2 font-medium sortable" data-col="title" data-dir="text">
+                Title<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-right px-3 py-2 font-medium sortable" data-col="year" data-dir="numeric">
+                Year<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-left  px-3 py-2 font-medium sortable" data-col="type" data-dir="text">
+                Type<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-right px-3 py-2 font-medium sortable" data-col="rating" data-dir="numeric">
+                Rating<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-right px-3 py-2 font-medium sortable" data-col="votes" data-dir="numeric">
+                Votes<span class="sort-arrow"></span><span class="resize-handle"></span>
+              </th>
+              <th class="text-left  px-3 py-2 font-medium">
+                Matched tags<span class="resize-handle"></span>
+              </th>
+              <th class="text-left  px-3 py-2 font-medium">
+                All genres<span class="resize-handle"></span>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="upside-tbody" class="divide-y divide-gray-100">
+            {% for u in upside_matches %}
+            <tr class="hover:bg-gray-50"
+                data-rating="{{ u.rating }}"
+                data-votes="{{ u.num_votes }}"
+                data-year="{{ u.start_year or 0 }}"
+                data-type="{{ u.title_type|lower }}"
+                data-title="{{ u.primary_title|lower }}">
+              <td class="px-3 py-1.5 title-cell">
+                <a href="https://www.imdb.com/title/{{ u.tconst }}/" target="_blank" rel="noopener"
+                   class="text-indigo-600 hover:underline font-medium title-link"
+                   data-tconst="{{ u.tconst }}">{{ u.primary_title }}</a>
+              </td>
+              <td class="px-3 py-1.5 text-right font-mono text-gray-600">{{ u.start_year or '' }}</td>
+              <td class="px-3 py-1.5 text-gray-500">{{ u.title_type }}</td>
+              <td class="px-3 py-1.5 text-right font-mono font-semibold text-green-600">{{ "%.1f"|format(u.rating) }}</td>
+              <td class="px-3 py-1.5 text-right font-mono text-gray-500">{{ "{:,}".format(u.num_votes) }}</td>
+              <td class="px-3 py-1.5 text-gray-700">{{ u.matched_tags or '' }}</td>
+              <td class="px-3 py-1.5 text-gray-400">{{ u.genres or '' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div>
+
+    <p class="text-xs text-gray-400 text-center">
+      Data source: <a href="https://datasets.imdbws.com" target="_blank" class="underline">datasets.imdbws.com</a>
+      (IMDB's free daily-refreshed dumps — no scraping).
+    </p>
+
+  </div>
+
+  <script>
+    // If any run in the recent-runs table is still 'running', reload the
+    // page every 3s so the status flips to 'done' without the user having
+    // to F5. Runs quiet once all rows show a terminal status. The reload
+    // also refreshes the matches table as new matches land during a scan.
+    // Preserve show_dismissed param across auto-reloads.
+    if (document.querySelector('tr[data-run-status="running"]')) {
+      setInterval(() => location.reload(), 3000);
+    }
+
+    // ── enableSortableResizable ─────────────────────────────────────────────
+    // One-call setup for click-to-sort + drag-to-resize on any <table>.
+    // Both tables share this single function.
+    function enableSortableResizable(tableEl) {
+      if (!tableEl) return;
+      const tbody = tableEl.querySelector('tbody');
+
+      // ── SORTING ──────────────────────────────────────────────────────────
+      // Numeric columns sort descending on first click (biggest is most useful).
+      // Text/date columns sort ascending on first click (A–Z).
+      // Clicking a different header clears the previous indicator.
+      const NUMERIC_COLS = new Set(['rating', 'votes', 'year']);
+
+      // Track active sort state per table.
+      let sortCol = null;   // string key or null
+      let sortAsc = null;   // boolean
+
+      function applySort(col, asc) {
+        if (!tbody) return;
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort((a, b) => {
+          let cmp;
+          if (NUMERIC_COLS.has(col)) {
+            cmp = asc
+              ? parseFloat(a.dataset[col] || 0) - parseFloat(b.dataset[col] || 0)
+              : parseFloat(b.dataset[col] || 0) - parseFloat(a.dataset[col] || 0);
+          } else {
+            const av = (a.dataset[col] || '');
+            const bv = (b.dataset[col] || '');
+            cmp = asc ? av.localeCompare(bv) : bv.localeCompare(av);
+          }
+          // Tiebreaker: rating desc for stability
+          if (cmp === 0) {
+            cmp = parseFloat(b.dataset.rating || 0) - parseFloat(a.dataset.rating || 0);
+          }
+          return cmp;
+        });
+        const frag = document.createDocumentFragment();
+        rows.forEach(r => frag.appendChild(r));
+        tbody.appendChild(frag);
+        // Re-attach tooltip listeners after rows are moved.
+        _ttAttach();
+      }
+
+      function updateArrows(activeEl, asc) {
+        tableEl.querySelectorAll('th.sortable').forEach(th => {
+          const arrow = th.querySelector('.sort-arrow');
+          if (!arrow) return;
+          if (th === activeEl) {
+            arrow.textContent = asc ? ' ▲' : ' ▼';
+          } else {
+            arrow.textContent = '';
+          }
+        });
+      }
+
+      tableEl.querySelectorAll('th.sortable').forEach(th => {
+        th.addEventListener('click', (e) => {
+          // Don't trigger sort if the user clicked the resize handle.
+          if (e.target.classList.contains('resize-handle')) return;
+
+          const col = th.dataset.col;
+          const isNumeric = NUMERIC_COLS.has(col);
+
+          if (sortCol === col) {
+            // Same column — flip direction.
+            sortAsc = !sortAsc;
+          } else {
+            // New column — context-aware first direction.
+            sortCol = col;
+            sortAsc = !isNumeric;  // numeric → desc first (false); text → asc first (true)
+          }
+
+          applySort(sortCol, sortAsc);
+          updateArrows(th, sortAsc);
+        });
+      });
+
+      // ── RESIZING ──────────────────────────────────────────────────────────
+      // Mousedown on a resize handle → live-adjust the column's width.
+      // Minimum 60px. After first resize the table switches to fixed layout.
+      const MIN_COL_WIDTH = 60;
+
+      tableEl.querySelectorAll('th').forEach((th, colIndex) => {
+        const handle = th.querySelector('.resize-handle');
+        if (!handle) return;
+
+        handle.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          handle.classList.add('dragging');
+
+          // Snapshot the starting width and mouse X.
+          const startX   = e.clientX;
+          const startW   = th.getBoundingClientRect().width;
+
+          // Switch table to fixed layout so we can control individual col widths.
+          // Set every th to its current pixel width first so the layout doesn't jump.
+          if (!tableEl.classList.contains('has-fixed-cols')) {
+            const allThs = tableEl.querySelectorAll('thead th');
+            allThs.forEach(t => { t.style.width = t.getBoundingClientRect().width + 'px'; });
+            tableEl.classList.add('has-fixed-cols');
+          }
+
+          function onMouseMove(ev) {
+            const delta = ev.clientX - startX;
+            const newW  = Math.max(MIN_COL_WIDTH, startW + delta);
+            th.style.width = newW + 'px';
+          }
+
+          function onMouseUp() {
+            handle.classList.remove('dragging');
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup',   onMouseUp);
+          }
+
+          document.addEventListener('mousemove', onMouseMove);
+          document.addEventListener('mouseup',   onMouseUp);
+        });
+      });
+    }
+
+    // Initialise both tables.
+    enableSortableResizable(document.getElementById('matches-table'));
+    enableSortableResizable(document.getElementById('upside-table'));
+
+    // ── Movie tooltip ───────────────────────────────────────────────────────
+    // Client-side cache: Map<tconst, {data|null}>. null = in-flight.
+    // Once a tconst is in the map it is never re-fetched (server has its own
+    // SQLite cache; we just avoid even hitting the endpoint twice).
+    const _ttCache = new Map();
+
+    const _ttEl    = document.getElementById('movie-tooltip');
+    let _ttHideTimer  = null;   // setTimeout handle for delayed hide
+    let _ttShowTimer  = null;   // setTimeout handle for 200ms debounce
+    let _ttAnchor     = null;   // the <a> currently being hovered
+
+    function _ttPosition(anchor) {
+      // Place the tooltip below the anchor link, vertically offset so the
+      // arrow clears the text baseline.
+      const rect = anchor.getBoundingClientRect();
+      const vpW  = window.innerWidth;
+      let left   = rect.left;
+      // Keep within viewport horizontally (14px breathing room each side).
+      if (left + 260 + 14 > vpW) left = vpW - 260 - 14;
+      if (left < 14) left = 14;
+      _ttEl.style.left = `${left}px`;
+      _ttEl.style.top  = `${rect.bottom + 6 + window.scrollY}px`;
+      // Shift arrow to sit under the link text regardless of tooltip position.
+      const arrowOffset = Math.min(Math.max(rect.left - left + 4, 8), 220);
+      _ttEl.style.setProperty('--arrow-left', `${arrowOffset}px`);
+      _ttEl.style.cssText += `; --arrow-left: ${arrowOffset}px`;
+      // Apply dynamic arrow position via pseudo-element left (inline style hack):
+      // We set it directly on ::before via a CSS custom property trick isn't
+      // possible without a stylesheet injection, so update the static offset
+      // only when it would obviously be wrong (edge-hugging tooltips).
+      // For most cases the default 18px left in the stylesheet is fine.
+    }
+
+    function _ttShow(anchor) {
+      _ttAnchor = anchor;
+      _ttEl.innerHTML = '<span class="tt-loading">Loading…</span>';
+      _ttPosition(anchor);
+      _ttEl.classList.add('tt-visible');
+
+      const tconst = anchor.dataset.tconst;
+      if (!tconst) return;
+
+      // If already fetched, render immediately.
+      if (_ttCache.has(tconst)) {
+        const cached = _ttCache.get(tconst);
+        if (cached) _ttRender(cached);
+        return;
+      }
+
+      // Mark as in-flight.
+      _ttCache.set(tconst, null);
+
+      fetch(`/api/metadata/${tconst}`)
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => {
+          _ttCache.set(tconst, data);
+          // Only update the tooltip if this tconst is still the hovered one.
+          if (_ttAnchor === anchor && _ttEl.classList.contains('tt-visible')) {
+            _ttRender(data);
+          }
+        })
+        .catch(err => {
+          const errData = { error: `Fetch failed (${err})` };
+          _ttCache.set(tconst, errData);
+          if (_ttAnchor === anchor && _ttEl.classList.contains('tt-visible')) {
+            _ttRender(errData);
+          }
+        });
+    }
+
+    function _ttRender(data) {
+      if (data.error && !data.released && !data.plot && !data.rt_score) {
+        // Total failure — show error state.
+        _ttEl.innerHTML = `<span class="tt-error">⚠ ${_esc(data.error)}</span>`;
+        return;
+      }
+
+      let html = '';
+
+      // Release date.
+      if (data.released) {
+        html += `<div class="tt-date">${_esc(data.released)}</div>`;
+      }
+
+      // Badges row.
+      html += '<div class="tt-badges">';
+
+      // RT pill.
+      if (data.rt_score) {
+        html += `<span class="tt-rt">🍅 ${_esc(data.rt_score)}</span>`;
+      } else if (!data.error) {
+        html += `<span class="tt-rt tt-rt-none">No RT score</span>`;
+      }
+
+      // IMDB + Metacritic secondary badges.
+      if (data.imdb_rating) {
+        html += `<span class="tt-badge"><strong>IMDb</strong> ${_esc(data.imdb_rating)}</span>`;
+      }
+      if (data.metascore) {
+        html += `<span class="tt-badge"><strong>Meta</strong> ${_esc(data.metascore)}</span>`;
+      }
+
+      html += '</div>';
+
+      // Plot.
+      if (data.plot) {
+        html += `<div class="tt-plot">${_esc(data.plot)}</div>`;
+      }
+
+      // Partial error note.
+      if (data.error) {
+        html += `<div class="tt-error" style="margin-top:6px">⚠ ${_esc(data.error)}</div>`;
+      }
+
+      _ttEl.innerHTML = html;
+    }
+
+    function _ttHide() {
+      _ttEl.classList.remove('tt-visible');
+      _ttAnchor = null;
+    }
+
+    function _esc(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // Attach listeners to all current title links (and any added dynamically
+    // after a sort / future re-render).
+    function _ttAttach() {
+      document.querySelectorAll('.title-link').forEach(a => {
+        if (a._ttBound) return;
+        a._ttBound = true;
+
+        a.addEventListener('mouseenter', () => {
+          clearTimeout(_ttHideTimer);
+          clearTimeout(_ttShowTimer);
+          // 200ms debounce — don't fetch if mouse is just passing through.
+          _ttShowTimer = setTimeout(() => _ttShow(a), 200);
+        });
+
+        a.addEventListener('mouseleave', () => {
+          clearTimeout(_ttShowTimer);
+          // 300ms delay — lets the user drag the mouse into the tooltip to
+          // select text without it vanishing.
+          _ttHideTimer = setTimeout(_ttHide, 300);
+        });
+      });
+    }
+
+    // Tooltip itself keeps alive while moused-over (so the user can read/copy).
+    _ttEl.addEventListener('mouseenter', () => clearTimeout(_ttHideTimer));
+    _ttEl.addEventListener('mouseleave', () => {
+      _ttHideTimer = setTimeout(_ttHide, 300);
+    });
+
+    // Initial attachment.
+    _ttAttach();
+
+    // ── End tooltip ─────────────────────────────────────────────────────────
+
+    // Dismiss / undismiss a match row. Optimistic UI: update the DOM
+    // immediately; the fetch commits it to the DB in the background.
+    function handleDismiss(tconst, dismissed) {
+      const endpoint = dismissed ? 'dismiss' : 'undismiss';
+      fetch(`/matches/${tconst}/${endpoint}`, { method: 'POST' });
+
+      const row = document.querySelector(`tr[data-tconst="${tconst}"]`);
+      if (!row) return;
+
+      const showDismissed = new URL(location.href).searchParams.get('show_dismissed') === '1';
+
+      if (dismissed && !showDismissed) {
+        // Fade out then remove the row when we're not in "show dismissed" mode.
+        row.classList.add('fading-out');
+        setTimeout(() => row.remove(), 160);
+      } else {
+        // Toggle the muted/strikethrough style in place (works in both modes).
+        row.classList.toggle('dismissed-row', dismissed);
+        const titleCell = row.querySelector('.title-cell');
+        if (titleCell) titleCell.classList.toggle('line-through', dismissed);
+      }
+    }
+  </script>
+
+  <!-- Movie hover tooltip — single shared element, positioned by JS -->
+  <div id="movie-tooltip" role="tooltip" aria-live="polite"></div>
+
+  <!-- Sticky footer -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-between z-30 shadow-sm">
+    <span class="text-xs text-gray-900">© Copyright 2026 <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+    <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
+  </footer>
+
+</body>
+</html>

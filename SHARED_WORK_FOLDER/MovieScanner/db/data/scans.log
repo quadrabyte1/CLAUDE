@@ -1,0 +1,99 @@
+========================================
+Scan run_id=4 — 2026-07-19T16:35:13Z → 2026-07-19T16:35:28Z
+Status: done
+Scanned: 1,210,276 rows | New titles: 1,210,276 | Matches: 52,107
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: (none)
+========================================
+========================================
+Scan run_id=6 — 2026-07-19T16:55:16Z → 2026-07-19T16:55:31Z
+Status: done
+Scanned: 1,210,276 rows | New titles: 1,210,276 | Matches: 49,195
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: Family
+========================================
+========================================
+Scan run_id=8 — 2026-07-19T16:56:06Z → 2026-07-19T16:56:21Z
+Status: done
+Scanned: 1,210,276 rows | New titles: 1,210,276 | Matches: 43,454
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: Animation, Family, Reality-TV, Sport
+========================================
+========================================
+Scan run_id=10 — 2026-07-19T16:56:52Z → 2026-07-19T16:57:07Z
+Status: done
+Scanned: 1,210,334 rows | New titles: 1,210,334 | Matches: 28,376
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: Animation, Documentary, Family, Fantasy, Film-Noir, Horror, Music, News, Reality-TV, Short, Sport, War, Western
+========================================
+========================================
+Scan run_id=12 — 2026-07-19T16:57:43Z → 2026-07-19T16:57:58Z
+Status: done
+Scanned: 1,210,334 rows | New titles: 1,210,334 | Matches: 24,390
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: Animation, Biography, Documentary, Family, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, War, Western
+========================================
+========================================
+Scan run_id=14 — 2026-07-19T16:58:13Z → 2026-07-19T16:58:27Z
+Status: done
+Scanned: 1,210,276 rows | New titles: 1,210,276 | Matches: 2,707
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action
+  exclude_genres: Animation, Biography, Documentary, Family, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, War, Western
+========================================
+========================================
+Scan run_id=16 — 2026-07-19T16:59:07Z → 2026-07-19T16:59:23Z
+Status: done
+Scanned: 1,210,276 rows | New titles: 1,210,276 | Matches: 24,113
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Family, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, War, Western
+========================================
+========================================
+Scan run_id=18 — 2026-07-19T16:59:50Z → 2026-07-19T17:00:06Z
+Status: done
+Scanned: 1,210,276 rows | New titles: 1,210,276 | Matches: 4,577
+Config:
+  min_rating: 8.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Family, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, War, Western
+========================================
+========================================
+Scan run_id=19 — 2026-07-20T07:10:27Z → 2026-07-20T07:10:40Z
+Status: done
+Scanned: 1,210,406 rows | New titles: 155 | Matches: 0
+Config:
+  min_rating: 8.0
+  min_votes: 100
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Family, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, War, Western
+========================================

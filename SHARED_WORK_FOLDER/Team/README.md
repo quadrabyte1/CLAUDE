@@ -6,7 +6,7 @@ This folder contains persona files for each AI team member. Each file defines a 
 
 | Name | Role | Model | File |
 |------|------|-------|------|
-| **Larry** | Orchestrator & Team Lead | fable | `larry.md` |
+| **Larry** | Orchestrator & Team Lead | opus | `larry.md` |
 | **Nolan** | HR & Talent Acquisition | opus | `nolan.md` |
 | **Pax** | Senior Researcher | opus | `pax.md` |
 | **Reed** | Database Engineer (SQLite) | sonnet | `reed.md` |

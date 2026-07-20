@@ -1,4 +1,4 @@
-*/*.pyc
-*/*.DS_Store
-SHARED_WORK_FOLDER/app/__pycache__/*
-SHARED_WORK_FOLDER/MovieScanner/db/data/title.basics.tsv.gz
+*.pyc
+*.DS_Store
+*.gz
+ 

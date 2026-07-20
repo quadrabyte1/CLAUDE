@@ -28,7 +28,7 @@
     <div class="flex items-center justify-between mb-7">
       <div class="flex items-center gap-2">
         <span class="text-xl">🔗</span>
-        <h1 class="text-xl font-bold text-gray-900 tracking-tight">Fable5 LinkCheck <span class="text-sm font-normal text-gray-400">(V1.4)</span></h1>
+        <h1 class="text-xl font-bold text-gray-900 tracking-tight">Fable5 LinkCheck</h1>
       </div>
       <a href="/" class="text-sm text-indigo-600 hover:underline">New crawl</a>
     </div>
@@ -40,6 +40,12 @@
         <div class="flex items-center gap-1.5">
           <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-500 border border-indigo-100 font-medium">
             {{ 'Breadth First' if traversal == 'bfs' else 'Depth First' }}
+          </span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100 font-medium">
+            {% if max_depth %}Depth ≤ {{ max_depth }}{% else %}Depth unlimited{% endif %}
+          </span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-sky-50 text-sky-600 border border-sky-100 font-medium">
+            {{ (wait_timeout_ms // 1000) }}s wait
           </span>
           {% if request_delay and request_delay > 0 %}
           <span class="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100 font-medium">
@@ -68,7 +74,12 @@
         </div>
         <span id="elapsed-display" class="text-xs font-mono text-gray-400 tabular-nums">0:00</span>
       </div>
-      <div class="text-xs text-gray-400 mb-1">Current URL</div>
+      <div class="flex items-baseline justify-between mb-1">
+        <span class="text-xs text-gray-400">Current URL</span>
+        <span id="current-depth-badge" class="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600 border border-violet-100 font-medium hidden">
+          depth <span id="current-depth">0</span>
+        </span>
+      </div>
       <p id="current-url" class="text-xs font-mono text-gray-700 break-all mb-4 min-h-[1rem]">—</p>
       <div class="grid grid-cols-3 gap-3">
         <div class="text-center">
@@ -120,7 +131,10 @@
         <h2 class="text-sm font-semibold text-gray-700">Crawl Detail</h2>
         <span class="text-xs text-gray-400">— every page and its links</span>
       </div>
-      <div id="link-tree" class="bg-white rounded-xl border border-gray-200 px-5 py-4 font-mono text-xs space-y-0 overflow-x-auto">
+      <!-- Fixed-height scrollable window so the URL list can be paged through
+           without pushing the Live Progress box off-screen. max-h-[65vh]
+           keeps it responsive to window size; the tree scrolls internally. -->
+      <div id="link-tree" class="bg-white rounded-xl border border-gray-200 px-5 py-4 font-mono text-xs space-y-0 overflow-x-auto overflow-y-auto max-h-[65vh]">
         <!-- page entries appended here by JS -->
       </div>
     </div>
@@ -129,7 +143,10 @@
 
   <!-- ── Sticky footer ────────────────────────────────────────────────────── -->
   <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-between z-30 shadow-sm">
-    <span class="text-xs text-gray-900">© Copyright 2026 <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+    <div class="flex items-baseline gap-3">
+      <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+      <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
+    </div>
     <div class="flex items-center gap-1">
       <button id="broken-prev-btn" disabled onclick="navigatePrev()"
         title="Previous broken link"
@@ -281,6 +298,13 @@
       const section = document.getElementById('tree-section');
       if (pages.length > renderedCount) section.classList.remove('hidden');
 
+      // "Follow-tail" mode: if the user is currently pinned at the bottom of
+      // the scrollable tree, keep them pinned there as new content arrives.
+      // If they've scrolled up to read something, don't yank them back — the
+      // new content is appended below without moving their view. 4px slack
+      // absorbs sub-pixel rounding across browsers/zoom levels.
+      const wasAtBottom = (tree.scrollHeight - tree.clientHeight - tree.scrollTop) < 4;
+
       for (let i = renderedCount; i < pages.length; i++) {
         const p     = pages[i];
         const entry = document.createElement('div');
@@ -317,6 +341,9 @@
 
       renderedCount = pages.length;
       updateBrokenBtn();
+
+      // Auto-scroll to the new bottom only if the user was already there.
+      if (wasAtBottom) tree.scrollTop = tree.scrollHeight;
     }
 
     function rerenderTree(pages) {
@@ -331,6 +358,10 @@
 
     function applyRunning(data) {
       document.getElementById('current-url').textContent  = data.current_url || '…';
+      if (data.current_depth !== undefined && data.current_url) {
+        document.getElementById('current-depth').textContent = data.current_depth;
+        document.getElementById('current-depth-badge').classList.remove('hidden');
+      }
       document.getElementById('live-checked').textContent = data.total_checked;
       document.getElementById('live-ok').textContent      = data.successful;
       document.getElementById('live-broken').textContent  = data.broken;
@@ -369,9 +400,31 @@
 
     // ── Polling ───────────────────────────────────────────────────────────────
 
+    // Called when polling gets a 404 or otherwise finds the job has vanished
+    // from the server (most common cause: the Flask process auto-reloaded
+    // after a code edit, wiping the in-memory _jobs dict and killing the
+    // crawler thread). Stops the spinner and tells the user honestly instead
+    // of spinning forever.
+    function applyJobLost() {
+      clearInterval(pollTimer);
+      clearInterval(elapsedTimer);
+      document.getElementById('progress-section').classList.add('hidden');
+      document.getElementById('dot').className = 'w-2 h-2 rounded-full bg-red-400';
+      document.getElementById('status-text').textContent =
+        'Crawl interrupted — the server lost this job (likely restarted mid-crawl).';
+      const eb = document.getElementById('error-banner');
+      eb.textContent = 'Job ' + jobId + ' is no longer on the server. '
+        + 'This usually means the Flask process was restarted (e.g. by an '
+        + 'auto-reload after a code edit) while the crawl was running. '
+        + 'Start a new crawl from the landing page.';
+      eb.classList.remove('hidden');
+      document.getElementById('results-section').classList.remove('hidden');
+    }
+
     async function poll() {
       try {
         const r = await fetch('/api/status/' + jobId);
+        if (r.status === 404) { applyJobLost(); return; }
         if (!r.ok) return;
         const data = await r.json();
         if (data.status === 'done') applyDone(data);

@@ -3,6 +3,12 @@ db/workspace.db
 db/workspace.db-shm
 db/workspace.db-wal
 
+# MovieScanner — local scanner DB + downloaded IMDB dataset dumps
+MovieScanner/db/scanner.db
+MovieScanner/db/scanner.db-shm
+MovieScanner/db/scanner.db-wal
+MovieScanner/data/*.tsv.gz
+
 # Python
 __pycache__/
 *.pyc

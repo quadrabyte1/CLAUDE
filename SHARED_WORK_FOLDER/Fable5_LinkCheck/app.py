@@ -17,12 +17,28 @@ from urllib.parse import urlparse, urldefrag
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 
 app = Flask(__name__)
+# Re-read templates from disk on every render so template edits are visible
+# after a browser refresh without needing a server restart (debug=False
+# otherwise leaves Jinja's on-disk cache in place).
+app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.jinja_env.auto_reload = True
+
+# Single source of truth for the version badge shown in the footer of every
+# page. Bump on every change; templates read it via the context processor
+# below, so there's only one place to update.
+APP_VERSION = "V2.5"
+
+
+@app.context_processor
+def _inject_app_version():
+    return {"app_version": APP_VERSION}
 
 # In-memory job store: job_id -> state dict
 _jobs: dict = {}
 
 # Safety caps
-_MAX_PAGES    = 2000   # same-domain pages to crawl
+_MAX_PAGES    = 500    # same-domain pages to crawl (hard ceiling; the
+                       # user's max_depth control usually kicks in first)
 _MAX_EXTERNAL = 500    # external links to probe (no recursion)
 
 
@@ -55,10 +71,15 @@ def _crawl_worker(job_id: str, start_url: str) -> None:
 
     job = _jobs[job_id]
     bfs = job.get("traversal", "bfs") == "bfs"
+    # max_depth = None → unlimited (bounded only by _MAX_PAGES). Otherwise a
+    # child link at depth D+1 is only queued when D+1 <= max_depth. The seed
+    # URL is at depth 0.
+    max_depth = job.get("max_depth")
+    wait_ms   = int(job.get("wait_timeout_ms", 5000))
     start_domain = _root_domain(urlparse(start_url).netloc)
 
     norm_start = _norm(start_url)
-    queue: deque[str] = deque([norm_start])
+    queue: deque[tuple[str, int]] = deque([(norm_start, 0)])
     queued: set[str] = {norm_start}     # mirrors main queue for O(1) lookup
     ext_queue: deque[str] = deque()
     ext_queued: set[str] = set()        # mirrors external queue
@@ -71,14 +92,15 @@ def _crawl_worker(job_id: str, start_url: str) -> None:
 
         # ── Phase 1: crawl same-domain pages, collect external links ──────────
         while queue and len(visited) < _MAX_PAGES:
-            url = queue.popleft() if bfs else queue.pop()
+            url, depth = queue.popleft() if bfs else queue.pop()
             queued.discard(url)
             if url in visited:
                 continue
             visited.add(url)
 
-            job["current_url"] = url
-            job["queue_size"] = len(queue) + len(ext_queue)
+            job["current_url"]   = url
+            job["current_depth"] = depth
+            job["queue_size"]    = len(queue) + len(ext_queue)
 
             status = None
             success = False
@@ -88,8 +110,23 @@ def _crawl_worker(job_id: str, start_url: str) -> None:
             for attempt in range(5):
                 final_attempt = attempt
                 try:
-                    resp = page.goto(url, wait_until="domcontentloaded", timeout=20_000)
+                    # wait_until="load" (not "domcontentloaded") so SPA
+                    # frameworks like React have time to hydrate the nav —
+                    # without this, sites like IMDB return an empty DOM at
+                    # snapshot time and the crawler finds ~0 links.
+                    resp = page.goto(url, wait_until="load", timeout=20_000)
                     status = resp.status if resp else None
+
+                    # Give the page's post-load fetches (React hydration,
+                    # nav data, etc.) up to `wait_ms` to finish. IMDB serves
+                    # a 202 shell and its real anchors only appear ~3s after
+                    # load. Sites with background polling never reach
+                    # networkidle — that's fine, the wait itself is what
+                    # matters. Per-crawl configurable (2s / 5s / 10s).
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=wait_ms)
+                    except Exception:
+                        pass
 
                     if status == 429:
                         # Honour Retry-After if present, else exponential back-off
@@ -118,8 +155,13 @@ def _crawl_worker(job_id: str, start_url: str) -> None:
                             seen_lnks.add(n)
                             all_links.append(n)
                             if _same_domain(n, start_domain):
-                                if n not in visited and n not in queued:
-                                    queue.append(n)
+                                # Depth cap: don't queue children of a page at
+                                # or beyond max_depth. max_depth=None disables
+                                # the cap (only _MAX_PAGES stops the crawl).
+                                if n not in visited and n not in queued and (
+                                    max_depth is None or depth + 1 <= max_depth
+                                ):
+                                    queue.append((n, depth + 1))
                                     queued.add(n)
                             else:
                                 if (
@@ -228,15 +270,34 @@ def start_crawl():
     if request_delay not in (0.0, 0.5, 1.0, 2.0):
         request_delay = 0.0
 
+    # Max recursion depth. 0 (or non-numeric / >99) → unlimited (None).
+    try:
+        md = int(request.form.get("max_depth", "2"))
+    except (ValueError, TypeError):
+        md = 2
+    max_depth = None if md <= 0 or md > 99 else md
+
+    # Per-page networkidle wait (must give SPAs like IMDB time to hydrate).
+    try:
+        wt = int(request.form.get("wait_timeout", "5"))
+    except (ValueError, TypeError):
+        wt = 5
+    if wt not in (2, 5, 10):
+        wt = 5
+    wait_timeout_ms = wt * 1000
+
     job_id = uuid.uuid4().hex[:10]
     _jobs[job_id] = {
         "status": "running",
         "phase": "crawl",
         "traversal": traversal,
         "request_delay": request_delay,
+        "max_depth": max_depth,
+        "wait_timeout_ms": wait_timeout_ms,
         "start_url": raw,
         "results": {},
         "current_url": None,
+        "current_depth": 0,
         "queue_size": 1,
         "capped": False,
         "error": None,
@@ -259,6 +320,8 @@ def results_page(job_id):
         start_url=_jobs[job_id]["start_url"],
         traversal=_jobs[job_id].get("traversal", "bfs"),
         request_delay=_jobs[job_id].get("request_delay", 0),
+        max_depth=_jobs[job_id].get("max_depth"),
+        wait_timeout_ms=_jobs[job_id].get("wait_timeout_ms", 5000),
     )
 
 
@@ -307,8 +370,11 @@ def api_status(job_id):
         "phase": job.get("phase", "crawl"),
         "traversal": job.get("traversal", "bfs"),
         "request_delay": job.get("request_delay", 0),
+        "max_depth": job.get("max_depth"),
+        "wait_timeout_ms": job.get("wait_timeout_ms", 5000),
         "start_url": job["start_url"],
         "current_url": job["current_url"],
+        "current_depth": job.get("current_depth", 0),
         "queue_size": job["queue_size"],
         "total_checked": total,
         "successful": successful,
@@ -321,4 +387,7 @@ def api_status(job_id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5052, debug=False)
+    # debug=True enables Werkzeug's file-watching reloader: any change to a
+    # watched .py file restarts the server automatically. Template edits are
+    # picked up by TEMPLATES_AUTO_RELOAD above (no restart needed).
+    app.run(host="0.0.0.0", port=5052, debug=True)

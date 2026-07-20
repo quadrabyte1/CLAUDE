@@ -8,7 +8,7 @@
   {# ── Header ─────────────────────────────────────────────── #}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.58</span></h1>
+      <h1 class="text-2xl font-bold text-notion-text">Boundary Editor <span class="text-base font-normal text-notion-muted">v3.59</span></h1>
       <p class="text-sm text-notion-muted mt-0.5">Drag vertices to adjust hole boundaries, then save.</p>
     </div>
   </div>
@@ -1752,10 +1752,24 @@ function polygonEditor() {
       this.selectedOpenProject = proj;
       this.showOpenDialog = false;
       try {
+        console.log('loadProject: fetching', proj.filename);
         const resp = await fetch('/api/boundaries/load?filename=' + encodeURIComponent(proj.filename));
+        // fetch() does not throw on 4xx/5xx — check resp.ok explicitly so we
+        // can surface the HTTP status + response body instead of a generic
+        // "Error loading project" toast (which was hiding server 500s on
+        // machines that were missing a heavy import).
+        if (!resp.ok) {
+          let bodyText = '';
+          try { bodyText = await resp.text(); } catch (_) { bodyText = '(could not read body)'; }
+          const snippet = bodyText.length > 400 ? bodyText.slice(0, 400) + '…' : bodyText;
+          console.error('loadProject HTTP error:', resp.status, resp.statusText, 'body:', bodyText, 'filename=', proj.filename);
+          this.flash('HTTP ' + resp.status + ' loading project: ' + snippet, false, '', 15000);
+          return;
+        }
         const data = await resp.json();
         if (data.status !== 'ok') {
-          this.flash('Failed to load project', false);
+          console.error('loadProject server-side error:', data, 'filename=', proj.filename);
+          this.flash('Failed to load project: ' + (data.msg || 'unknown'), false, '', 15000);
           return;
         }
         this.courseName = data.course;
@@ -1788,7 +1802,8 @@ function polygonEditor() {
         this.loadImage();
         this.flash('Loaded: ' + data.course + ' — Hole ' + data.hole, true);
       } catch (err) {
-        this.flash('Error loading project', false);
+        console.error('loadProject failed:', err, 'filename=', proj.filename);
+        this.flash('Error loading project: ' + (err && err.message ? err.message : err), false, '', 15000);
       }
     },
 

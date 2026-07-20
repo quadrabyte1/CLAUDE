@@ -9,7 +9,7 @@
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen flex items-center justify-center p-6">
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-6 pb-20">
 
   <div class="w-full max-w-xl">
 
@@ -18,9 +18,6 @@
       <div class="inline-flex items-center gap-2 mb-2">
         <span class="text-2xl">🔗</span>
         <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Fable5 LinkCheck</h1>
-      </div>
-      <div class="mb-4">
-        <span class="inline-block text-xs font-semibold tracking-widest uppercase px-3 py-1 rounded-full bg-indigo-50 text-indigo-400 border border-indigo-100">V1.4</span>
       </div>
       <p class="text-gray-500 text-sm">
         Crawls all same-domain hyperlinks from a seed URL using CloakBrowser.<br>
@@ -92,6 +89,49 @@
         <p id="delay-hint" class="text-xs text-gray-400 mt-1.5">No pause between requests.</p>
       </div>
 
+      <!-- Max recursion depth -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Max Depth</label>
+        <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm w-full">
+          <label class="flex-1 text-center cursor-pointer px-3 py-2 bg-white text-gray-500 font-medium transition-colors select-none has-[:checked]:bg-indigo-600 has-[:checked]:text-white">
+            <input type="radio" name="max_depth" value="1" class="sr-only">1
+          </label>
+          <label class="flex-1 text-center cursor-pointer px-3 py-2 bg-white text-gray-500 border-l border-gray-300 font-medium transition-colors select-none has-[:checked]:bg-indigo-600 has-[:checked]:text-white">
+            <input type="radio" name="max_depth" value="2" checked class="sr-only">2
+          </label>
+          <label class="flex-1 text-center cursor-pointer px-3 py-2 bg-white text-gray-500 border-l border-gray-300 font-medium transition-colors select-none has-[:checked]:bg-indigo-600 has-[:checked]:text-white">
+            <input type="radio" name="max_depth" value="3" class="sr-only">3
+          </label>
+          <label class="flex-1 text-center cursor-pointer px-3 py-2 bg-white text-gray-500 border-l border-gray-300 font-medium transition-colors select-none has-[:checked]:bg-indigo-600 has-[:checked]:text-white">
+            <input type="radio" name="max_depth" value="0" class="sr-only">Unlimited
+          </label>
+        </div>
+        <p class="text-xs text-gray-400 mt-1.5">
+          How many hops from the seed URL. Depth 1 = only links on the seed page.
+          Depth 2 = also crawl those links' pages. Unlimited is bounded by the 500-page cap.
+        </p>
+      </div>
+
+      <!-- Per-page wait -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-2">Wait Per Page</label>
+        <div class="inline-flex rounded-lg border border-gray-300 overflow-hidden text-sm w-full">
+          <label class="flex-1 text-center cursor-pointer px-3 py-2 bg-white text-gray-500 font-medium transition-colors select-none has-[:checked]:bg-indigo-600 has-[:checked]:text-white">
+            <input type="radio" name="wait_timeout" value="2" class="sr-only">2 s
+          </label>
+          <label class="flex-1 text-center cursor-pointer px-3 py-2 bg-white text-gray-500 border-l border-gray-300 font-medium transition-colors select-none has-[:checked]:bg-indigo-600 has-[:checked]:text-white">
+            <input type="radio" name="wait_timeout" value="5" checked class="sr-only">5 s
+          </label>
+          <label class="flex-1 text-center cursor-pointer px-3 py-2 bg-white text-gray-500 border-l border-gray-300 font-medium transition-colors select-none has-[:checked]:bg-indigo-600 has-[:checked]:text-white">
+            <input type="radio" name="wait_timeout" value="10" class="sr-only">10 s
+          </label>
+        </div>
+        <p class="text-xs text-gray-400 mt-1.5">
+          Extra time per page for JavaScript to render links. 5 s handles most SPAs (IMDB, React sites);
+          drop to 2 s for plain static sites to go 2.5× faster.
+        </p>
+      </div>
+
       <!-- Quick-fill test cases -->
       <div class="flex items-center gap-2 flex-wrap">
         <span class="text-xs text-gray-400">Quick fill:</span>
@@ -106,6 +146,10 @@
         <button type="button" onclick="fill('https://github.com')"
           class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
           github.com
+        </button>
+        <button type="button" onclick="fill('https://www.imdb.com/')"
+          class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-600 transition-colors">
+          imdb.com
         </button>
       </div>
     </form>
@@ -152,6 +196,12 @@
       document.getElementById('delay-hint').textContent = hints[val] || '';
     }
   </script>
+
+  <!-- ── Sticky footer ────────────────────────────────────────────────────── -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-between z-30 shadow-sm">
+    <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+    <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
+  </footer>
 
 </body>
 </html>

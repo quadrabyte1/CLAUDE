@@ -949,10 +949,17 @@ def load_boundaries():
     with open(fpath) as f:
         data = _json.load(f)
     data["status"] = "ok"
-    # Expose print constants so the editor can size the fringe-expansion zone
-    from generate_stl_3mf import PRINT_SIZE_MM, FRINGE_XY_EXPANSION_MM
-    data["print_size_mm"] = PRINT_SIZE_MM
-    data["fringe_xy_expansion_mm"] = FRINGE_XY_EXPANSION_MM
+    # Expose print constants so the editor can size the fringe-expansion zone.
+    # generate_stl_3mf imports trimesh/shapely/numpy at module load; on a fresh
+    # machine missing any of those, this route used to 500 with an ImportError
+    # even though the file itself loaded fine. Fall back to omitting the
+    # constants — the editor tolerates them being null via `if (data.print_size_mm != null)`.
+    try:
+        from generate_stl_3mf import PRINT_SIZE_MM, FRINGE_XY_EXPANSION_MM
+        data["print_size_mm"] = PRINT_SIZE_MM
+        data["fringe_xy_expansion_mm"] = FRINGE_XY_EXPANSION_MM
+    except ImportError as _imp_err:
+        print(f"[load_boundaries] WARN: could not import print constants from generate_stl_3mf: {_imp_err!r}")
     return jsonify(data)
 
 

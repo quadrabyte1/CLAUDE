@@ -12,7 +12,7 @@
       Custom Text Plaque
     </h1>
     <p class="text-sm text-notion-muted mt-1">
-      Enter the three plaque lines below. Generates a Bambu Studio-ready
+      Enter the three plaque lines below. Generates a slicer-ready
       <code class="bg-[#F7F6F3] px-1 rounded">.3mf</code> and emails it to the configured address.
       {% if last_modified %}
         <span class="text-notion-muted">Last updated {{ last_modified }}.</span>
@@ -29,7 +29,6 @@
       </label>
       <textarea
         x-model="plaqueText"
-        @input="if (/^\s*$/m.test($event.target.value)) { plaqueText = $event.target.value.split('\n').map(s => s.trimEnd()).filter(s => s.length > 0).join('\n'); $event.target.value = plaqueText; }"
         rows="3"
         placeholder="Golfer name / event title&#10;Golf course name (used for folder)&#10;Hole · yardage · club · date"
         class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white font-mono
@@ -56,8 +55,8 @@
       </button>
 
       <label class="inline-flex items-center gap-1.5 text-sm text-notion-text cursor-pointer select-none">
-        <input type="checkbox" x-model="openInBambu" class="rounded border-notion-border">
-        Show in Bambu Studio
+        <input type="checkbox" x-model="openInSlicer" class="rounded border-notion-border">
+        Open in default slicer
       </label>
 
       <span x-show="statusMsg"
@@ -66,9 +65,9 @@
             class="text-sm font-medium"
             x-transition></span>
 
-      <span x-show="bambuMsg"
-            x-text="bambuMsg"
-            :class="bambuOk ? 'text-green-600' : 'text-yellow-600'"
+      <span x-show="slicerMsg"
+            x-text="slicerMsg"
+            :class="slicerOk ? 'text-green-600' : 'text-yellow-600'"
             class="text-sm font-medium w-full"
             x-transition></span>
     </div>
@@ -84,7 +83,7 @@
             x-text="sentTo"></code>
     </p>
     <p class="text-xs text-notion-muted mt-1">
-      Check your inbox — download the attachment and open in Bambu Studio to preview and slice.
+      Check your inbox — download the attachment and open in your default slicer to preview and slice.
     </p>
   </div>
 
@@ -108,19 +107,22 @@ function plaqueGen() {
   return {
     plaqueText: '',
     loading: false,
-    openInBambu: true,
+    openInSlicer: true,
     statusMsg: '',
     statusOk: true,
-    bambuMsg: '',
-    bambuOk: true,
+    slicerMsg: '',
+    slicerOk: true,
     sentTo: '',
 
     _parseLines() {
-      const raw = this.plaqueText.split('\n');
+      const cleaned = this.plaqueText
+        .split('\n')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
       return [
-        (raw[0] || '').trim(),
-        (raw[1] || '').trim(),
-        (raw[2] || '').trim(),
+        cleaned[0] || '',
+        cleaned[1] || '',
+        cleaned[2] || '',
       ];
     },
 
@@ -134,14 +136,14 @@ function plaqueGen() {
       }
       this.loading = true;
       this.statusMsg = '';
-      this.bambuMsg = '';
+      this.slicerMsg = '';
       this.sentTo = '';
 
       try {
         const resp = await fetch('/api/generate_plate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ line1, line2, line3, open_in_bambu: this.openInBambu }),
+          body: JSON.stringify({ line1, line2, line3, open_in_slicer: this.openInSlicer }),
         });
         const json = await resp.json();
 
@@ -149,15 +151,15 @@ function plaqueGen() {
           this.sentTo    = json.recipient || json.msg || '';
           this.statusMsg = '✉️ Sent!';
           this.statusOk  = true;
-          if (json.bambu_opened) {
-            this.bambuMsg = `Opened in Bambu Studio: ~/Downloads/${json.stable_path ? json.stable_path.split('/').pop() : ''}`;
-            this.bambuOk  = true;
-          } else if (json.bambu_error) {
-            this.bambuMsg = `Bambu Studio: ${json.bambu_error}`;
-            this.bambuOk  = false;
+          if (json.slicer_opened) {
+            this.slicerMsg = `Opened in default slicer: ~/Downloads/${json.stable_path ? json.stable_path.split('/').pop() : ''}`;
+            this.slicerOk  = true;
+          } else if (json.slicer_error) {
+            this.slicerMsg = `Default slicer: ${json.slicer_error}`;
+            this.slicerOk  = false;
           } else {
-            this.bambuMsg = '';
-            this.bambuOk  = true;
+            this.slicerMsg = '';
+            this.slicerOk  = true;
           }
         } else {
           this.statusMsg = json.msg || 'Generation failed.';

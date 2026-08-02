@@ -358,6 +358,11 @@
             x-text="generating ? 'Generating…' : 'Generate'">
     </button>
 
+    <label class="inline-flex items-center gap-1.5 text-sm text-notion-text cursor-pointer select-none">
+      <input type="checkbox" x-model="openInSlicer" class="rounded border-notion-border">
+      Open in default slicer
+    </label>
+
     <button @click="addTrap()"
             :disabled="!imgLoaded"
             :class="imgLoaded ? 'bg-amber-500 hover:bg-amber-600' : 'bg-amber-500/40 cursor-not-allowed'"
@@ -479,6 +484,7 @@ function polygonEditor() {
     grassSpacing: 2.4,        // distance between bump centers in mm
     greenStyle: 'terraced',   // 'smooth' or 'terraced'
     elevationRange: 14.5,     // total Z amplitude of the green's slope (mm)
+    openInSlicer: true,       // open generated 3MF in the default slicer after generation
     greenScale: 1.0065,       // XY multiplier applied to the green polygon only (fringe/traps/water unaffected)
     fringeEdgeHeight: 10.0,   // outer wall height of the fringe (mm)
     baseThicknessMm: 1.5,     // flat filament base below the surface topology (mm)
@@ -1950,6 +1956,7 @@ function polygonEditor() {
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
+        open_in_slicer: this.openInSlicer,
       };
       this.generating = true;
       try {
@@ -1961,7 +1968,13 @@ function polygonEditor() {
         const result = await resp.json();
         if (result.status === 'ok') {
           const fname = result.file && result.file.name ? result.file.name : '';
-          this.flash('Generated' + (fname ? ':' : ''), true, fname, 8000);
+          let msg = 'Generated' + (fname ? ':' : '');
+          if (result.slicer_opened) {
+            msg += ' · Opened in default slicer';
+          } else if (result.slicer_error) {
+            msg += ' · Slicer open failed: ' + result.slicer_error;
+          }
+          this.flash(msg, result.slicer_error ? false : true, fname, result.slicer_error ? null : 8000);
         } else {
           this.flash('Generation failed: ' + (result.msg || result.error || 'unknown error'), false);
         }

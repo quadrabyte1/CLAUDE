@@ -21,7 +21,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.7"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.10"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks created after this id — bumped 2026-07-03
@@ -1454,6 +1454,7 @@ def generate_models():
     # but we also forward the request-time value here so the route can override
     # the persisted value if the client ever wants to.
     include_boundary_region = bool(data.get("includeBoundaryRegion", False))
+    open_in_slicer = bool(data.get("open_in_slicer", False))
 
     hole_label = hole.zfill(2) if hole.isdigit() else hole
     egm_fname = f"{course} (Hole {hole_label}).egm"
@@ -1507,7 +1508,42 @@ def generate_models():
         "type": "3mf",
     }
 
-    return jsonify({"status": "ok", "file": result})
+    # ── Open in default slicer (macOS file-association) ──────────────────────
+    # Uses `open <file>` so the OS hands the .3mf to whatever app owns the
+    # extension — no hardcoded Bambu path. If `open` fails, surface stderr so
+    # the user knows what went wrong; hint to use Finder as fallback.
+    slicer_opened = None
+    slicer_error  = None
+    if open_in_slicer and three_mf_path and os.path.exists(three_mf_path):
+        import subprocess
+        try:
+            proc = subprocess.run(
+                ["open", three_mf_path],
+                capture_output=True,
+                timeout=10,
+            )
+            if proc.returncode == 0:
+                slicer_opened = True
+            else:
+                slicer_opened = False
+                stderr_text = (proc.stderr or b"").decode(errors="replace").strip()
+                slicer_error = (
+                    stderr_text
+                    or f"`open` exited with code {proc.returncode}. "
+                    "Try opening the file manually in Finder."
+                )
+        except subprocess.TimeoutExpired:
+            slicer_opened = False
+            slicer_error  = (
+                "Timed out waiting for `open` to hand the file to the slicer. "
+                "Try opening it manually in Finder."
+            )
+        except Exception as exc:
+            slicer_opened = False
+            slicer_error  = str(exc)
+
+    return jsonify({"status": "ok", "file": result,
+                    "slicer_opened": slicer_opened, "slicer_error": slicer_error})
 
 
 # ── Arrow Diagnostic ─────────────────────────────────────────────────────────
@@ -2125,7 +2161,7 @@ def api_generate_plate():
     line1 = data.get("line1", "").strip()
     line2 = data.get("line2", "").strip()
     line3 = data.get("line3", "").strip()
-    open_in_bambu = bool(data.get("open_in_bambu"))
+    open_in_slicer = bool(data.get("open_in_slicer"))
     if not (line1 or line2 or line3):
         return jsonify({"status": "error", "msg": "Provide at least one line of text."}), 400
 
@@ -2168,9 +2204,9 @@ def api_generate_plate():
             except OSError:
                 pass
 
-    # ── Optionally write a stable copy for Bambu Studio ──────────────────────
+    # ── Optionally write a stable copy for the default slicer ────────────────
     stable_path = None
-    if open_in_bambu:
+    if open_in_slicer:
         stable_path = os.path.expanduser(f"~/Downloads/{attachment_name}")
         with open(stable_path, "wb") as fh:
             fh.write(attachment_bytes)
@@ -2225,16 +2261,15 @@ def api_generate_plate():
             "msg": f"Network error connecting to {smtp_host}:{smtp_port}: {exc}",
         }), 500
 
-    # ── Open in Bambu Studio ──────────────────────────────────────────────────
-    # Primary: `open <file>` — relies on the .3mf file association and works
-    #   whether Bambu Studio is already running or not (fixes prior silent
-    #   failure where `open -a AppName` foregrounded Bambu without loading
-    #   the new document).
-    # Fallback: `open -a BambuStudio <file>` if the file-association exits
-    #   non-zero (e.g., no .3mf handler registered).
-    bambu_opened = None
-    bambu_error  = None
-    if open_in_bambu and stable_path:
+    # ── Open in default slicer (macOS file-association) ──────────────────────
+    # Uses `open <file>` which honours the OS-registered .3mf handler —
+    # whatever the user has set via Finder → Get Info → Open with → Change All.
+    # If `open` exits non-zero there is no registered handler; surface the
+    # error so the user can fix their file association rather than silently
+    # falling back to a hardcoded app path.
+    slicer_opened = None
+    slicer_error  = None
+    if open_in_slicer and stable_path:
         import subprocess
         try:
             result = subprocess.run(
@@ -2243,25 +2278,21 @@ def api_generate_plate():
                 timeout=10,
             )
             if result.returncode == 0:
-                bambu_opened = True
+                slicer_opened = True
             else:
-                result2 = subprocess.run(
-                    ["open", "-a", "/Applications/BambuStudio.app", stable_path],
-                    capture_output=True,
-                    timeout=10,
+                slicer_opened = False
+                stderr_text = (result.stderr or b"").decode(errors="replace").strip()
+                slicer_error = stderr_text or (
+                    f"`open` exited with code {result.returncode}. "
+                    "Check your .3mf file association: Finder → right-click a .3mf → "
+                    "Get Info → Open with → Change All."
                 )
-                if result2.returncode == 0:
-                    bambu_opened = True
-                else:
-                    bambu_opened = False
-                    stderr_text = (result2.stderr or result.stderr or b"").decode(errors="replace").strip()
-                    bambu_error = stderr_text or f"open exited with code {result2.returncode}"
         except subprocess.TimeoutExpired:
-            bambu_opened = False
-            bambu_error  = "Timed out waiting for `open` to hand file to Bambu Studio."
+            slicer_opened = False
+            slicer_error  = "Timed out waiting for `open` to hand file to the default slicer."
         except Exception as exc:
-            bambu_opened = False
-            bambu_error  = str(exc)
+            slicer_opened = False
+            slicer_error  = str(exc)
 
     if smtp_error_resp is not None:
         return smtp_error_resp
@@ -2271,8 +2302,8 @@ def api_generate_plate():
         "msg": f"Emailed to {smtp_to}",
         "recipient":    smtp_to,
         "stable_path":  stable_path,
-        "bambu_opened": bambu_opened,
-        "bambu_error":  bambu_error,
+        "slicer_opened": slicer_opened,
+        "slicer_error":  slicer_error,
     })
 
 

@@ -7,6 +7,10 @@ import os
 import re
 import sqlite3
 from datetime import datetime, date
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).parent / ".env")
 
 from flask import (
     Flask, render_template, request, redirect, url_for, g, abort, jsonify,
@@ -16,6 +20,8 @@ from flask import (
 app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
+
+APP_VERSION = "v4.5"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks created after this id — bumped 2026-07-03
@@ -285,6 +291,11 @@ def inject_now():
     return {"now": datetime.utcnow(), "today": date.today().isoformat()}
 
 
+@app.context_processor
+def _inject_app_version():
+    return {"app_version": APP_VERSION}
+
+
 def _is_htmx():
     return request.headers.get("HX-Request") == "true"
 
@@ -372,7 +383,6 @@ def dashboard():
 
     homunculus = _homunculus_stats()
 
-    dashboard_version = "v1.8.5"  # bump this when layout/functionality changes
     return render("dashboard.html", team=team,
                    task_counts=task_counts,
                    journal_count=journal_count, updated_at=updated_at,
@@ -380,8 +390,7 @@ def dashboard():
                    member_active_counts=member_active_counts,
                    member_current_tasks=member_current_tasks,
                    member_last_activity=member_last_activity,
-                   homunculus=homunculus,
-                   dashboard_version=dashboard_version)
+                   homunculus=homunculus)
 
 
 _HOMUNCULUS_ACTIVITY_PATH = os.path.normpath(os.path.join(
@@ -2048,7 +2057,7 @@ def plaque_page():
         last_modified = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
     except Exception:
         last_modified = ""
-    return render("plaque.html", plaque_version="v3.4", last_modified=last_modified)
+    return render("plaque.html", last_modified=last_modified)
 
 
 @app.route("/api/fonts")
@@ -2108,44 +2117,136 @@ def _match_courses_from_line(course_line: str) -> list[str]:
 
 @app.route("/api/generate_plate", methods=["POST"])
 def api_generate_plate():
+    import smtplib
+    import tempfile
+    from email.message import EmailMessage
+
     data = request.get_json(force=True)
     line1 = data.get("line1", "").strip()
     line2 = data.get("line2", "").strip()
     line3 = data.get("line3", "").strip()
+    open_in_bambu = bool(data.get("open_in_bambu"))
     if not (line1 or line2 or line3):
         return jsonify({"status": "error", "msg": "Provide at least one line of text."}), 400
 
+    # ── SMTP config from environment ──────────────────────────────────────────
+    smtp_host = os.environ.get("SMTP_HOST", "").strip()
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_pass = os.environ.get("SMTP_PASS", "").strip()
+    if not (smtp_host and smtp_user and smtp_pass):
+        missing = [v for v, k in [("SMTP_HOST", smtp_host), ("SMTP_USER", smtp_user), ("SMTP_PASS", smtp_pass)] if not k]
+        return jsonify({
+            "status": "error",
+            "msg": (
+                f"SMTP not configured. Set {', '.join(missing)} env vars. "
+                "See app/.env.example."
+            ),
+        }), 500
+
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_from = os.environ.get("SMTP_FROM", smtp_user).strip() or smtp_user
+    smtp_to   = os.environ.get("SMTP_TO", "quadrabyte@pm.me").strip()
+
+    # ── Generate 3MF to a temp file ──────────────────────────────────────────
     slug = _slug_from_lines(line1, line2)
-
-    candidates = _match_courses_from_line(line2)
-    if len(candidates) == 0:
-        return jsonify({
-            "status": "no_course_match",
-            "course_line": line2,
-        })
-    if len(candidates) > 1:
-        return jsonify({
-            "status": "ambiguous_course",
-            "course_line": line2,
-            "candidates": candidates,
-        })
-
-    matched = candidates[0]
-    from generate_stl_3mf import course_paths
-    cpaths = course_paths(matched)
-    os.makedirs(cpaths["3mfs"], exist_ok=True)
-    out_path = os.path.join(cpaths["3mfs"], f"{slug}.3mf")
-
-    from plate_text import generate_plate_3mf
+    attachment_name = f"{slug}.3mf"
+    tmp_path = None
     try:
-        generate_plate_3mf(line1, line2, line3, out_path,
+        from plate_text import generate_plate_3mf
+        with tempfile.NamedTemporaryFile(suffix=".3mf", delete=False) as tf:
+            tmp_path = tf.name
+        generate_plate_3mf(line1, line2, line3, tmp_path,
                            font_family="Helvetica", bold=False, italic=False)
+        with open(tmp_path, "rb") as fh:
+            attachment_bytes = fh.read()
     except Exception as exc:
-        return jsonify({"status": "error", "msg": str(exc)}), 500
+        return jsonify({"status": "error", "msg": f"3MF generation failed: {exc}"}), 500
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    # ── Optionally write a stable copy for Bambu Studio ──────────────────────
+    stable_path = None
+    if open_in_bambu:
+        stable_path = os.path.expanduser(f"~/Downloads/{attachment_name}")
+        with open(stable_path, "wb") as fh:
+            fh.write(attachment_bytes)
+
+    # ── Build email ───────────────────────────────────────────────────────────
+    subject_line = line1 or line2 or line3
+    msg = EmailMessage()
+    msg["Subject"] = f"Plaque: {subject_line}"
+    msg["From"]    = smtp_from
+    msg["To"]      = smtp_to
+    body_lines = [f"Line 1: {line1}", f"Line 2: {line2}", f"Line 3: {line3}"]
+    msg.set_content("\n".join(body_lines))
+    msg.add_attachment(
+        attachment_bytes,
+        maintype="application",
+        subtype="octet-stream",
+        filename=attachment_name,
+    )
+
+    # ── Send via STARTTLS ─────────────────────────────────────────────────────
+    smtp_error_resp = None
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+    except smtplib.SMTPAuthenticationError as exc:
+        smtp_error_resp = jsonify({
+            "status": "error",
+            "msg": f"SMTP authentication failed (check SMTP_USER / SMTP_PASS): {exc.smtp_error.decode(errors='replace')}",
+        }), 500
+    except ConnectionRefusedError:
+        smtp_error_resp = jsonify({
+            "status": "error",
+            "msg": f"Connection refused to {smtp_host}:{smtp_port}. Check SMTP_HOST / SMTP_PORT.",
+        }), 500
+    except smtplib.SMTPConnectError as exc:
+        smtp_error_resp = jsonify({
+            "status": "error",
+            "msg": f"Could not connect to {smtp_host}:{smtp_port}: {exc}",
+        }), 500
+    except smtplib.SMTPException as exc:
+        smtp_error_resp = jsonify({
+            "status": "error",
+            "msg": f"SMTP error: {exc}",
+        }), 500
+    except OSError as exc:
+        smtp_error_resp = jsonify({
+            "status": "error",
+            "msg": f"Network error connecting to {smtp_host}:{smtp_port}: {exc}",
+        }), 500
+
+    # ── Open in Bambu Studio (Popen so Flask doesn't block on app launch) ────
+    bambu_opened = None
+    bambu_error  = None
+    if open_in_bambu and stable_path:
+        import subprocess
+        try:
+            subprocess.Popen(["open", "-a", "/Applications/BambuStudio.app", stable_path])
+            bambu_opened = True
+        except Exception as exc:
+            bambu_opened = False
+            bambu_error  = str(exc)
+
+    if smtp_error_resp is not None:
+        return smtp_error_resp
+
     return jsonify({
         "status": "ok",
-        "filename": os.path.basename(out_path),
-        "course": matched,
+        "msg": f"Emailed to {smtp_to}",
+        "recipient":    smtp_to,
+        "stable_path":  stable_path,
+        "bambu_opened": bambu_opened,
+        "bambu_error":  bambu_error,
     })
 
 

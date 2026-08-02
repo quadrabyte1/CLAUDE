@@ -123,6 +123,11 @@
       transform: rotate(45deg);
       border-radius: 2px;
     }
+    /* When tooltip is flipped above the anchor, arrow points downward */
+    #movie-tooltip.tt-above::before {
+      top: auto;
+      bottom: -6px;
+    }
     .tt-date    { font-weight: 700; color: #e5e7eb; margin-bottom: 6px; }
     .tt-badges  { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
     /* RT pill — muted tomato that fits the dark card */
@@ -135,12 +140,6 @@
       padding: 1px 8px;
       font-size: 11px;
       font-weight: 700;
-    }
-    .tt-rt.tt-rt-none {
-      background: #374151;
-      color: #9ca3af;
-      border-color: #4b5563;
-      font-weight: 400;
     }
     /* Secondary badges (IMDB, Meta) */
     .tt-badge {
@@ -168,7 +167,7 @@
 </head>
 <body class="bg-gray-50 min-h-screen p-6 pb-20">
 
-  <div class="max-w-4xl mx-auto space-y-6">
+  <div class="max-w-none space-y-6">
 
     <!-- Header -->
     <div class="flex items-center gap-2">
@@ -176,8 +175,19 @@
       <h1 class="text-2xl font-bold text-gray-900 tracking-tight">MovieScanner</h1>
     </div>
     <p class="text-sm text-gray-500 -mt-4">
-      Delta-scans IMDB's daily title dumps. Reports newly-seen titles that pass rating + genre filters.
+      Delta-scans IMDB's daily title dumps. Reports newly-seen titles that pass rating, year, and genre filters.
     </p>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+        <div class="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-2 rounded-md text-sm">
+          {{ message }}
+        </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
 
     <!-- Stats -->
     <div class="grid grid-cols-2 gap-4">
@@ -198,7 +208,7 @@
     <form action="/config" method="POST" class="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
       <h2 class="text-sm font-semibold text-gray-700">Filter configuration</h2>
 
-      <div class="grid grid-cols-2 gap-4">
+      <div class="grid grid-cols-3 gap-4">
         <label class="block">
           <span class="text-xs text-gray-500 uppercase tracking-wide">Min rating</span>
           <input type="number" name="min_rating" step="0.1" min="0" max="10"
@@ -213,7 +223,23 @@
                  title="Sanity floor on the vote count. A 9.5 with 3 votes is noise; 100+ is a safe default."
                  class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
         </label>
+        <label class="block">
+          <span class="text-xs text-gray-500 uppercase tracking-wide">Min year</span>
+          <input type="number" name="min_year" step="1" min="0" max="2100"
+                 value="{{ config.min_year or current_year }}"
+                 title="Only show titles released in this year or later. 0 disables the filter."
+                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+        </label>
       </div>
+
+      <label class="block sm:col-span-3">
+        <span class="text-xs text-gray-500 uppercase tracking-wide">Exclude countries</span>
+        <input type="text" name="exclude_countries"
+               value="{{ exclude_countries or '' }}"
+               placeholder="India, Pakistan (comma-separated)"
+               title="OMDb Country field must not match any of these. Free-tier OMDb: 1000 lookups/day."
+               class="w-full mt-1 text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+      </label>
 
       <div>
         <div class="flex items-center justify-between mb-2">
@@ -226,7 +252,7 @@
             <span class="inline-block w-2 h-2 rounded-sm bg-red-500 align-middle"></span> Exclude
           </span>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8 gap-2">
           {% for g in known_genres %}
             {% set gl = g | lower %}
             {% set state = 'include' if gl in include_lc else ('exclude' if gl in exclude_lc else 'ignore') %}
@@ -272,21 +298,19 @@
       </fieldset>
 
       <div class="flex items-center justify-between pt-2 gap-4 flex-wrap">
-        <div class="flex gap-2 flex-wrap">
-          <button type="submit" formaction="/config"
-                  title="Save the config. Applied on the next Run. Doesn't touch already-seen titles."
-                  class="text-sm px-4 py-2 rounded-md border border-gray-300 bg-white hover:bg-gray-50 text-gray-700">
-            Save config
-          </button>
+        <div class="flex gap-2 flex-wrap items-center">
+          <!-- Auto-save indicator — fades in on save, out after 2 s -->
+          <span id="autosave-indicator"
+                class="text-xs text-green-600 opacity-0 transition-opacity duration-300 select-none"
+                aria-live="polite">Saved</span>
           <button type="submit" formaction="/config_and_rescan"
-                  onclick="return confirm('This will DELETE every already-scanned title and match, then start a fresh full scan applying the new config.\n\nRun history is preserved. Continue?');"
                   title="Wipes the titles + matches tables and starts a fresh scan. Every title in tomorrow's dump gets re-tested against the just-saved config."
                   class="text-sm px-4 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white">
             Save config and rescan all
           </button>
         </div>
         <span class="text-xs text-gray-400">
-          <strong>Save</strong>: applied on next Run, doesn't touch seen titles.
+          Config saves automatically on change.
           <strong>Save + rescan</strong>: wipes seen titles and re-tests everything.
         </span>
       </div>
@@ -307,8 +331,8 @@
         <h2 class="text-sm font-semibold text-gray-700">Recent runs</h2>
         <form action="/clear" method="POST" class="inline">
           <button type="submit"
-                  onclick="return confirm('Clear ALL run history and match results, and reset every genre radio to Ignore?\n\nPreserved: the seen-set of already-scanned titles (so the next scan is still a delta, not a full re-test), plus min rating / min votes / title types. Continue?');"
-                  title="Wipes the runs + matches tables and resets both genre lists to empty. Titles seen-set and non-genre config are preserved."
+                  onclick="return confirm('Clear all recent runs and their match results?\n\nPreserved: filter configuration (genre selections, min rating, min votes, title types) and the seen-set of already-scanned titles.');"
+                  title="Wipes the runs + matches tables. Filter config and the titles seen-set are preserved."
                   class="text-xs px-2.5 py-1 rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
             Clear all
           </button>
@@ -543,14 +567,32 @@
 
   </div>
 
+  <!-- Movie hover tooltip — single shared element, positioned by JS -->
+  <!-- Must appear BEFORE the <script> block so getElementById finds it at parse time -->
+  <div id="movie-tooltip" role="tooltip" aria-live="polite"></div>
+
   <script>
     // If any run in the recent-runs table is still 'running', reload the
     // page every 3s so the status flips to 'done' without the user having
     // to F5. Runs quiet once all rows show a terminal status. The reload
     // also refreshes the matches table as new matches land during a scan.
     // Preserve show_dismissed param across auto-reloads.
+
+    // Track whether the config form has been touched since load — if it has,
+    // skip the reload so in-progress genre/radio edits aren't silently wiped.
+    const configForm = document.querySelector('form[action="/config"]');
+    let configDirty = false;
+    if (configForm) {
+      configForm.addEventListener('change', () => { configDirty = true; });
+      configForm.addEventListener('input',  () => { configDirty = true; });
+    }
+
     if (document.querySelector('tr[data-run-status="running"]')) {
-      setInterval(() => location.reload(), 3000);
+      setInterval(() => {
+        if (configDirty) return;                                               // user has unsaved edits — don't wipe in-progress radio changes
+        if (configForm && configForm.contains(document.activeElement)) return; // focus is inside the form
+        location.reload();
+      }, 3000);
     }
 
     // ── enableSortableResizable ─────────────────────────────────────────────
@@ -699,7 +741,17 @@
       if (left + 260 + 14 > vpW) left = vpW - 260 - 14;
       if (left < 14) left = 14;
       _ttEl.style.left = `${left}px`;
-      _ttEl.style.top  = `${rect.bottom + 6 + window.scrollY}px`;
+      // #movie-tooltip is position:fixed — rect.bottom is already viewport-relative;
+      // do NOT add window.scrollY (that would double-count scroll offset).
+      const ttH = _ttEl.offsetHeight || 200;  // fallback estimate before first render
+      const flipAbove = rect.bottom + ttH + 14 > window.innerHeight;
+      if (flipAbove) {
+        _ttEl.classList.add('tt-above');
+        _ttEl.style.top = `${rect.top - ttH - 6}px`;
+      } else {
+        _ttEl.classList.remove('tt-above');
+        _ttEl.style.top = `${rect.bottom + 6}px`;
+      }
       // Shift arrow to sit under the link text regardless of tooltip position.
       const arrowOffset = Math.min(Math.max(rect.left - left + 4, 8), 220);
       _ttEl.style.setProperty('--arrow-left', `${arrowOffset}px`);
@@ -765,11 +817,9 @@
       // Badges row.
       html += '<div class="tt-badges">';
 
-      // RT pill.
+      // RT pill — only shown when a score exists.
       if (data.rt_score) {
         html += `<span class="tt-rt">🍅 ${_esc(data.rt_score)}</span>`;
-      } else if (!data.error) {
-        html += `<span class="tt-rt tt-rt-none">No RT score</span>`;
       }
 
       // IMDB + Metacritic secondary badges.
@@ -818,8 +868,8 @@
         a.addEventListener('mouseenter', () => {
           clearTimeout(_ttHideTimer);
           clearTimeout(_ttShowTimer);
-          // 200ms debounce — don't fetch if mouse is just passing through.
-          _ttShowTimer = setTimeout(() => _ttShow(a), 200);
+          // 300ms debounce — don't fetch if mouse is just passing through.
+          _ttShowTimer = setTimeout(() => _ttShow(a), 300);
         });
 
         a.addEventListener('mouseleave', () => {
@@ -827,6 +877,18 @@
           // 300ms delay — lets the user drag the mouse into the tooltip to
           // select text without it vanishing.
           _ttHideTimer = setTimeout(_ttHide, 300);
+        });
+
+        // Keyboard accessibility: show on focus, hide on blur.
+        a.addEventListener('focus', () => {
+          clearTimeout(_ttHideTimer);
+          clearTimeout(_ttShowTimer);
+          _ttShow(a);
+        });
+
+        a.addEventListener('blur', () => {
+          clearTimeout(_ttShowTimer);
+          _ttHideTimer = setTimeout(_ttHide, 150);
         });
       });
     }
@@ -841,6 +903,70 @@
     _ttAttach();
 
     // ── End tooltip ─────────────────────────────────────────────────────────
+
+    // ── Config auto-save ───────────────────────────────────────────────────
+    // Fires on any change to the config form. Text inputs are debounced
+    // 300 ms so we don't hammer the endpoint on every keystroke. Radio
+    // buttons, checkboxes, and selects fire immediately on `change`.
+    (function () {
+      const configForm = document.querySelector('form[action="/config"]');
+      if (!configForm) return;
+
+      const indicator = document.getElementById('autosave-indicator');
+      let _fadeTimer   = null;
+      let _debounce    = null;
+
+      function _showSaved() {
+        if (!indicator) return;
+        clearTimeout(_fadeTimer);
+        indicator.style.opacity = '1';
+        _fadeTimer = setTimeout(() => { indicator.style.opacity = '0'; }, 2000);
+      }
+
+      function _doSave() {
+        const fd = new FormData(configForm);
+        fetch('/config', { method: 'POST', body: fd })
+          .then(() => _showSaved())
+          .catch(() => {}); // silent — a failed autosave doesn't need to alarm the user
+      }
+
+      // Identify config inputs (exclude the Run / rescan submit buttons).
+      function _isConfigInput(el) {
+        const tag = el.tagName;
+        if (tag === 'BUTTON' || (tag === 'INPUT' && el.type === 'submit')) return false;
+        // Skip the form-action buttons.
+        return true;
+      }
+
+      configForm.addEventListener('change', (e) => {
+        if (!_isConfigInput(e.target)) return;
+        const type = e.target.type;
+        // Text/number inputs are handled via the debounced 'input' listener below.
+        // Only fire immediately for checkbox/radio/select.
+        if (type === 'text' || type === 'number' || type === 'email') return;
+        clearTimeout(_debounce);
+        _doSave();
+      });
+
+      configForm.addEventListener('input', (e) => {
+        if (!_isConfigInput(e.target)) return;
+        const type = e.target.type;
+        if (type !== 'text' && type !== 'number' && type !== 'email') return;
+        clearTimeout(_debounce);
+        _debounce = setTimeout(_doSave, 300);
+      });
+
+      // Also save on blur for text/number inputs in case the user tabs away
+      // before the debounce fires (belt-and-suspenders).
+      configForm.addEventListener('blur', (e) => {
+        if (!_isConfigInput(e.target)) return;
+        const type = e.target.type;
+        if (type !== 'text' && type !== 'number' && type !== 'email') return;
+        clearTimeout(_debounce);
+        _doSave();
+      }, true); // capture phase so blur is caught on inputs
+    })();
+    // ── End config auto-save ───────────────────────────────────────────────
 
     // Dismiss / undismiss a match row. Optimistic UI: update the DOM
     // immediately; the fetch commits it to the DB in the background.
@@ -866,14 +992,11 @@
     }
   </script>
 
-  <!-- Movie hover tooltip — single shared element, positioned by JS -->
-  <div id="movie-tooltip" role="tooltip" aria-live="polite"></div>
-
-  <!-- Sticky footer -->
-  <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-between z-30 shadow-sm">
-    <span class="text-xs text-gray-900">© Copyright 2026 <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
-    <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
-  </footer>
+<!-- ── Sticky footer ────────────────────────────────────────────────────── -->
+<footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-center gap-3 z-30 shadow-sm">
+  <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+  <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
+</footer>
 
 </body>
 </html>

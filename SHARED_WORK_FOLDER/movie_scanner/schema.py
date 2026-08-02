@@ -81,6 +81,8 @@ CREATE TABLE IF NOT EXISTS title_metadata (
     rt_score    TEXT,     -- e.g. "83%" or NULL if not on RT
     imdb_rating TEXT,     -- e.g. "8.1/10"
     metascore   TEXT,     -- e.g. "63/100"
+    country     TEXT,     -- OMDb Country field, e.g. "India, USA"
+    language    TEXT,     -- OMDb Language field, e.g. "Kannada, English"
     raw_json    TEXT,     -- full response for future extraction
     fetched_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     error       TEXT      -- if the fetch failed, why (e.g. "Movie not found!")
@@ -131,11 +133,24 @@ def apply_schema(conn: sqlite3.Connection) -> None:
             rt_score    TEXT,
             imdb_rating TEXT,
             metascore   TEXT,
+            country     TEXT,
+            language    TEXT,
             raw_json    TEXT,
             fetched_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
             error       TEXT
         )
     """)
+
+    # Live migration: add country + language to existing title_metadata tables.
+    try:
+        cur = conn.execute("PRAGMA table_info(title_metadata)")
+        tm_cols = [r[1] for r in cur.fetchall()]
+        if "country" not in tm_cols:
+            conn.execute("ALTER TABLE title_metadata ADD COLUMN country TEXT")
+        if "language" not in tm_cols:
+            conn.execute("ALTER TABLE title_metadata ADD COLUMN language TEXT")
+    except sqlite3.OperationalError:
+        pass  # table doesn't exist yet — CREATE TABLE IF NOT EXISTS above handles it
 
     # Live migration: create upside_matches for databases created before V1.4.
     conn.execute("""

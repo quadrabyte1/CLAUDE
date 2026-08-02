@@ -26,7 +26,7 @@ app.jinja_env.auto_reload = True
 # Single source of truth for the version badge shown in the footer of every
 # page. Bump on every change; templates read it via the context processor
 # below, so there's only one place to update.
-APP_VERSION = "V2.5"
+APP_VERSION = "V2.6"
 
 
 @app.context_processor

@@ -24,6 +24,7 @@ Typical usage
 """
 
 import datetime
+from datetime import date
 import gzip
 import json
 import os
@@ -33,6 +34,7 @@ from typing import Callable, Iterable
 
 from .config import ScanConfig
 from .downloader import fetch_dumps
+from .omdb import OMDbClient
 from .schema import apply_schema
 
 # How often (in basics rows) to emit a progress message during ingest.
@@ -76,6 +78,7 @@ def _format_scan_log_entry(
         "Config:",
         f"  min_rating: {cfg.min_rating}",
         f"  min_votes: {cfg.min_votes}",
+        f"  min_year: {cfg.min_year}",
         f"  title_types: {', '.join(cfg.title_types)}",
         f"  include_genres: {', '.join(cfg.include_genres) if cfg.include_genres else '(any)'}",
         f"  exclude_genres: {', '.join(cfg.exclude_genres) if cfg.exclude_genres else '(none)'}",
@@ -189,15 +192,17 @@ class Scanner:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def _resolve_config(self, conn: sqlite3.Connection) -> ScanConfig:
-        """Return the effective ScanConfig: explicit override, or read from DB."""
-        if self._config is not None:
-            return self._config
+    def _resolve_config(self, conn: sqlite3.Connection) -> tuple["ScanConfig", str | None]:
+        """Return (ScanConfig, omdb_api_key): explicit override, or read from DB.
+
+        omdb_api_key is returned alongside the config so the scanner can
+        instantiate an OMDbClient for country filtering without a second DB query.
+        """
         rows = conn.execute("SELECT key, value FROM config").fetchall()
         raw: dict = {}
         for r in rows:
             k, v = r["key"], r["value"]
-            if k in ("tags", "exclude_tags", "title_types"):
+            if k in ("tags", "exclude_tags", "title_types", "exclude_countries"):
                 try:
                     raw[k] = json.loads(v)
                 except json.JSONDecodeError:
@@ -206,13 +211,25 @@ class Scanner:
                 raw[k] = float(v)
             elif k == "min_votes":
                 raw[k] = int(v)
+            elif k == "min_year":
+                raw[k] = int(v)
+            elif k == "omdb_api_key":
+                raw[k] = v
+
+        omdb_api_key: str | None = raw.get("omdb_api_key")
+
+        if self._config is not None:
+            return self._config, omdb_api_key
+
         return ScanConfig(
-            min_rating     = raw.get("min_rating", 7.0),
-            min_votes      = raw.get("min_votes",  100),
-            include_genres = raw.get("tags",         []),
-            exclude_genres = raw.get("exclude_tags", []),
-            title_types    = raw.get("title_types",  ["movie", "tvMovie", "tvSeries"]),
-        )
+            min_rating        = raw.get("min_rating", 7.0),
+            min_votes         = raw.get("min_votes",  100),
+            min_year          = raw.get("min_year",   date.today().year),
+            include_genres    = raw.get("tags",              []),
+            exclude_genres    = raw.get("exclude_tags",      []),
+            title_types       = raw.get("title_types",       ["movie", "tvMovie", "tvSeries"]),
+            exclude_countries = raw.get("exclude_countries", []),
+        ), omdb_api_key
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -255,21 +272,32 @@ class Scanner:
 
         conn = self._connect()
         conn.row_factory = sqlite3.Row  # already set, but be explicit
-        cfg = self._resolve_config(conn)
+        cfg, omdb_api_key = self._resolve_config(conn)
 
-        keep_types = set(cfg.title_types)
-        min_rating = cfg.min_rating
-        min_votes  = cfg.min_votes
-        tags       = [t.strip().lower() for t in cfg.include_genres if t.strip()]
-        exclude    = set(t.strip().lower() for t in cfg.exclude_genres if t.strip())
+        keep_types        = set(cfg.title_types)
+        min_rating        = cfg.min_rating
+        min_votes         = cfg.min_votes
+        min_year          = cfg.min_year
+        tags              = [t.strip().lower() for t in cfg.include_genres if t.strip()]
+        exclude           = set(t.strip().lower() for t in cfg.exclude_genres if t.strip())
+        exclude_countries = [c.strip().lower() for c in cfg.exclude_countries if c.strip()]
+
+        # OMDb client for country filtering — only instantiated when needed.
+        omdb_client: OMDbClient | None = (
+            OMDbClient(api_key=omdb_api_key, db_path=self._db_path)
+            if exclude_countries and omdb_api_key
+            else None
+        )
 
         # Capture a DB-compatible config snapshot (mirrors the Flask app format)
         config_snapshot = json.dumps({
-            "min_rating":   min_rating,
-            "min_votes":    min_votes,
-            "tags":         cfg.include_genres,
-            "exclude_tags": cfg.exclude_genres,
-            "title_types":  cfg.title_types,
+            "min_rating":        min_rating,
+            "min_votes":         min_votes,
+            "min_year":          min_year,
+            "tags":              cfg.include_genres,
+            "exclude_tags":      cfg.exclude_genres,
+            "title_types":       cfg.title_types,
+            "exclude_countries": cfg.exclude_countries,
         })
 
         run_id = conn.execute(
@@ -323,6 +351,11 @@ class Scanner:
                 if exclude and any(g in exclude for g in title_genres_lower):
                     continue
 
+                # Year filter
+                if min_year > 0:
+                    if start_year is None or int(start_year) < min_year:
+                        continue
+
                 # Rating + vote filter
                 rating_row = ratings.get(tconst)
                 if not rating_row:
@@ -338,6 +371,21 @@ class Scanner:
                         continue
                 else:
                     matched_tags = title_genres_lower   # all genres auto-pass
+
+                # Country filter — only when exclude_countries is configured.
+                # Fail OPEN: if OMDb is unavailable or returns an error, include the title.
+                if omdb_client and exclude_countries:
+                    meta = omdb_client.fetch(tconst)
+                    if meta.get("error"):
+                        on_progress(f"OMDb error for {tconst}: {meta['error']} — including title")
+                    elif meta.get("country"):
+                        title_countries = [
+                            c.strip().lower()
+                            for c in meta["country"].split(",")
+                            if c.strip()
+                        ]
+                        if any(ec in tc for ec in exclude_countries for tc in title_countries):
+                            continue
 
                 match_rows.append((
                     tconst, primary_title, start_year, title_type,
@@ -376,16 +424,25 @@ class Scanner:
                 "matches":    len(match_rows),
             }
 
-        except Exception as exc:
+        except BaseException as exc:
+            # Catches Exception (network errors, assertion failures, etc.) AND
+            # BaseException subclasses (KeyboardInterrupt, SystemExit) so the
+            # run row always reaches a terminal state on any exit path that
+            # try/finally can observe. (SIGKILL still requires the startup
+            # reconciliation in app.py — there is no user-space safety net for
+            # that case.)
             log_status = "error"
-            log_error = str(exc)
-            conn.execute(
-                "UPDATE runs SET status='error', phase='error', "
-                "completed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'), "
-                "error=? WHERE id=?",
-                (str(exc), run_id),
-            )
-            conn.commit()
+            log_error = str(exc) or type(exc).__name__
+            try:
+                conn.execute(
+                    "UPDATE runs SET status='error', phase='error', "
+                    "completed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'), "
+                    "error=? WHERE id=?",
+                    (log_error, run_id),
+                )
+                conn.commit()
+            except Exception:
+                pass  # best-effort; don't mask the original exception
             raise
         finally:
             # Append a human-readable entry to <data_dir>/scans.log on every
@@ -508,12 +565,20 @@ class Scanner:
 
         conn = self._connect()
         try:
-            cfg = self._resolve_config(conn)
-            min_rating = cfg.min_rating
-            min_votes  = cfg.min_votes
-            tags       = [t.strip().lower() for t in cfg.include_genres if t.strip()]
-            exclude    = set(t.strip().lower() for t in cfg.exclude_genres if t.strip())
-            keep_types = list(cfg.title_types)
+            cfg, omdb_api_key = self._resolve_config(conn)
+            min_rating        = cfg.min_rating
+            min_votes         = cfg.min_votes
+            min_year          = cfg.min_year
+            tags              = [t.strip().lower() for t in cfg.include_genres if t.strip()]
+            exclude           = set(t.strip().lower() for t in cfg.exclude_genres if t.strip())
+            keep_types        = list(cfg.title_types)
+            exclude_countries = [c.strip().lower() for c in cfg.exclude_countries if c.strip()]
+
+            omdb_client: OMDbClient | None = (
+                OMDbClient(api_key=omdb_api_key, db_path=self._db_path)
+                if exclude_countries and omdb_api_key
+                else None
+            )
 
             # ── Build the pre-filter SQL ───────────────────────────────────
             # Always filter: title_type in keep_types, genres IS NOT NULL,
@@ -596,6 +661,11 @@ class Scanner:
                 if rating < min_rating or votes < min_votes:
                     continue
 
+                # Year filter
+                if min_year > 0:
+                    if start_year is None or int(start_year) < min_year:
+                        continue
+
                 title_genres_lower = [
                     g.lower() for g in (genres_str or "").split(",") if g
                 ]
@@ -607,6 +677,20 @@ class Scanner:
                         continue
                 else:
                     matched_tags = title_genres_lower
+
+                # Country filter — fail OPEN on OMDb errors.
+                if omdb_client and exclude_countries:
+                    meta = omdb_client.fetch(tconst)
+                    if meta.get("error"):
+                        _prog(f"OMDb error for {tconst}: {meta['error']} — including title")
+                    elif meta.get("country"):
+                        title_countries = [
+                            c.strip().lower()
+                            for c in meta["country"].split(",")
+                            if c.strip()
+                        ]
+                        if any(ec in tc for ec in exclude_countries for tc in title_countries):
+                            continue
 
                 upside.append((
                     tconst, primary_title, start_year, title_type,

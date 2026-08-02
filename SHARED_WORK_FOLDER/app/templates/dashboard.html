@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-<!-- Dashboard version: bump dashboard_version in app.py when layout/functionality changes -->
+<!-- Dashboard — version shown in sticky footer via {{ app_version }} -->
 {% block title %}Dashboard — AI Team Workspace{% endblock %}
 
 {# Remove the max-w-4xl cap — dashboard fills the full main column #}
@@ -69,7 +69,7 @@
   }
 </style>
 
-<div class="dashboard-wash">
+<div class="dashboard-wash pb-16">
 <div id="dashboard-poll"
      hx-get="/"
      hx-trigger="every 750ms"
@@ -81,7 +81,7 @@
 {# ── Page header ─────────────────────────────────────────────── #}
 <div class="mb-8 flex items-baseline justify-between">
   <h1 class="text-2xl font-semibold text-notion-text">Dashboard</h1>
-  <span class="text-xs text-notion-muted">{{ dashboard_version }}</span>
+  <span class="text-xs text-notion-muted">{{ app_version }}</span>
 </div>
 
 {# ── Stats cards ─────────────────────────────────────────────── #}
@@ -203,6 +203,9 @@
             </div>
             {% if is_busy %}
             <div class="text-xs text-yellow-700 mt-1">Working for {{ busy_tasks[m.id] | elapsed }}</div>
+            {% if cur_task %}
+            <div class="text-xs text-notion-muted italic truncate mt-0.5" title="{{ cur_task.title }}">{{ cur_task.title }}</div>
+            {% endif %}
             {% elif is_done %}
             <div class="text-xs text-green-700 mt-1">Just finished</div>
             {% endif %}
@@ -240,6 +243,13 @@
 
 <div class="text-xs text-notion-muted text-right mt-6 opacity-50">Last refreshed {{ updated_at }}</div>
 </div>{# /dashboard-poll #}
+
 </div>{# /dashboard-wash #}
+
+{# ── Sticky footer ────────────────────────────────────────────── #}
+<footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-center gap-3 z-30 shadow-sm">
+  <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+  <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
+</footer>
 
 {% endblock %}

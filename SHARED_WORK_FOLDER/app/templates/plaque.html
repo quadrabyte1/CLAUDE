@@ -4,19 +4,16 @@
 {% block content %}
 
 <div x-data="plaqueGen()"
-     @picker-resolved.window="resubmitWithCourse($event.detail.course)"
-     class="space-y-6">
+     class="space-y-6 pb-16">
 
   {# ── Header ─────────────────────────────────────────────── #}
   <div>
     <h1 class="text-2xl font-bold text-notion-text">
       Custom Text Plaque
-      <span class="text-base font-normal text-notion-muted">{{ plaque_version }}</span>
     </h1>
     <p class="text-sm text-notion-muted mt-1">
       Enter the three plaque lines below. Generates a Bambu Studio-ready
-      <code class="bg-[#F7F6F3] px-1 rounded">.3mf</code> file under the matching course's
-      <code class="bg-[#F7F6F3] px-1 rounded">3MFs/</code> folder.
+      <code class="bg-[#F7F6F3] px-1 rounded">.3mf</code> and emails it to the configured address.
       {% if last_modified %}
         <span class="text-notion-muted">Last updated {{ last_modified }}.</span>
       {% endif %}
@@ -32,19 +29,18 @@
       </label>
       <textarea
         x-model="plaqueText"
+        @input="if (/^\s*$/m.test($event.target.value)) { plaqueText = $event.target.value.split('\n').map(s => s.trimEnd()).filter(s => s.length > 0).join('\n'); $event.target.value = plaqueText; }"
         rows="3"
         placeholder="Golfer name / event title&#10;Golf course name (used for folder)&#10;Hole · yardage · club · date"
         class="w-full text-sm border border-notion-border rounded-md px-3 py-2 bg-white font-mono
                focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent
                resize-none leading-relaxed"></textarea>
       <p class="text-xs text-notion-muted mt-1.5">
-        Line 2 is the course name and decides which
-        <code class="bg-[#F7F6F3] px-1 rounded">EliteGolfMoments/GolfCourses/&lt;course&gt;/</code>
-        folder the 3MF is saved into.
+        Up to three lines are engraved. Blank lines are removed automatically.
       </p>
     </div>
 
-    <div class="pt-1 flex items-center gap-4">
+    <div class="pt-1 flex items-center gap-4 flex-wrap">
       <button @click="generate()"
               :disabled="loading"
               :class="loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-teal-700'"
@@ -59,25 +55,36 @@
         <span x-text="loading ? 'Generating…' : 'Generate'"></span>
       </button>
 
+      <label class="inline-flex items-center gap-1.5 text-sm text-notion-text cursor-pointer select-none">
+        <input type="checkbox" x-model="openInBambu" class="rounded border-notion-border">
+        Show in Bambu Studio
+      </label>
+
       <span x-show="statusMsg"
             x-text="statusMsg"
             :class="statusOk ? 'text-green-600' : 'text-red-500'"
             class="text-sm font-medium"
             x-transition></span>
+
+      <span x-show="bambuMsg"
+            x-text="bambuMsg"
+            :class="bambuOk ? 'text-green-600' : 'text-yellow-600'"
+            class="text-sm font-medium w-full"
+            x-transition></span>
     </div>
   </div>
 
   {# ── Result ──────────────────────────────────────────────── #}
-  <div x-show="filename" x-cloak
+  <div x-show="sentTo" x-cloak
        class="bg-[#F0FDF4] border border-green-200 rounded-xl p-5 space-y-2">
-    <p class="text-sm font-semibold text-green-700">3MF generated successfully</p>
+    <p class="text-sm font-semibold text-green-700">&#x2709;&#xFE0F; 3MF sent</p>
     <p class="text-sm text-notion-text">
-      Saved to
+      Emailed to
       <code class="bg-white border border-green-200 rounded px-1.5 py-0.5 text-xs"
-            x-text="'GolfCourses/' + course + '/3MFs/' + filename"></code>
+            x-text="sentTo"></code>
     </p>
     <p class="text-xs text-notion-muted mt-1">
-      Open in Bambu Studio to preview and slice.
+      Check your inbox — download the attachment and open in Bambu Studio to preview and slice.
     </p>
   </div>
 
@@ -85,108 +92,28 @@
   <div class="bg-notion-sidebar border border-notion-border rounded-xl p-5 space-y-2">
     <p class="text-xs font-semibold text-notion-muted uppercase tracking-wide">Tips</p>
     <ul class="text-sm text-notion-muted space-y-1 list-disc list-inside">
-      <li>Leave a line blank if you only need 1 or 2 lines of engraving.</li>
+      <li>Blank lines are stripped automatically — you can leave them in as you type.</li>
       <li>Text is automatically scaled down to fit the plaque width (≤ 130 mm).</li>
-      <li>Line 2 is matched against existing course folders — the dialog will help you pick one or create a new folder if no match is found.</li>
-      <li>If line 2 matches multiple folders, the dialog will show only those candidates so you can pick the right one.</li>
+      <li>The generated <code class="bg-[#F7F6F3] px-1 rounded">.3mf</code> is emailed to the address configured in <code class="bg-[#F7F6F3] px-1 rounded">SMTP_TO</code>.</li>
+      <li>SMTP credentials are set via environment variables — see <code class="bg-[#F7F6F3] px-1 rounded">app/.env.example</code> for the full list.</li>
     </ul>
   </div>
 
 </div>
 
-{# ── Course-picker / Create-folder modal ─────────────────────── #}
-{#
-   Native <dialog> element. Alpine.js drives open/close state and actions.
-
-   Two modes (set by the 'open-picker' custom event):
-     • mode='no_match'  → header "Course not found",            full course list
-     • mode='ambiguous' → header "Multiple matches — pick one", candidates only
-
-   Keyboard:
-     • Esc   → cancel (native <dialog> default also fires 'cancel')
-     • Enter → Create new (when dialog or Create button is focused)
-     • Tab / Arrow keys → navigate the course list
-#}
-<dialog id="coursePicker"
-        x-data="coursePickerDialog()"
-        @open-picker.window="openDialog($event.detail)"
-        @cancel="cancelDialog()"
-        class="p-0 rounded-2xl shadow-2xl border-0 w-full max-w-lg">
-
-  <div class="flex flex-col" style="max-height: min(80vh, 600px);">
-
-    {# Dialog header #}
-    <div class="px-6 pt-6 pb-4 border-b border-notion-border shrink-0">
-      <h2 class="text-lg font-semibold text-notion-text" x-text="heading"></h2>
-      <p class="text-sm text-notion-muted mt-1.5 leading-relaxed">
-        I didn't find a folder matching
-        <strong class=”text-notion-text font-medium”
-                x-text='`“` + typedLine2 + `”`'></strong>.
-        Pick an existing course or create a new folder with that name.
-      </p>
-    </div>
-
-    {# Scrollable course list #}
-    <div class="overflow-y-auto flex-1 px-3 py-3 min-h-0">
-      <template x-for="(c, idx) in courseList" :key="c">
-        <button
-          type="button"
-          :id="'course-item-' + idx"
-          @click="pickCourse(c)"
-          @keydown.arrow-down.prevent="focusItem(idx + 1)"
-          @keydown.arrow-up.prevent="focusItem(idx - 1)"
-          class="w-full text-left text-sm px-3 py-2 rounded-lg text-notion-text
-                 hover:bg-notion-sidebar focus:outline-none focus:bg-notion-sidebar
-                 focus:ring-2 focus:ring-notion-accent/40 transition-colors duration-100"
-          x-text="c">
-        </button>
-      </template>
-    </div>
-
-    {# Footer buttons #}
-    <div class="px-6 py-4 border-t border-notion-border shrink-0
-                flex items-center gap-3 flex-wrap">
-
-      <button
-        type="button"
-        x-ref="createBtn"
-        @click="createAndSubmit()"
-        @keydown.enter.prevent="createAndSubmit()"
-        :disabled="creating"
-        :class="creating ? 'opacity-50 cursor-not-allowed' : 'hover:bg-teal-700'"
-        class="flex-1 min-w-0 inline-flex items-center justify-center gap-2 text-sm px-4 py-2
-               rounded-md bg-teal-600 text-white font-medium transition-colors duration-150 truncate">
-        <svg x-show="creating" class="animate-spin h-4 w-4 text-white shrink-0"
-             xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-        </svg>
-        <span class="truncate" x-text="createBtnLabel"></span>
-      </button>
-
-      <button
-        type="button"
-        @click="cancelDialog()"
-        class="shrink-0 text-sm px-4 py-2 rounded-md border border-notion-border
-               text-notion-muted hover:bg-notion-sidebar transition-colors duration-150 font-medium">
-        Cancel
-      </button>
-
-    </div>
-  </div>
-</dialog>
 
 <script>
 /* ─── Main plaque form component ────────────────────────────────────────── */
 function plaqueGen() {
   return {
-    plaqueText: 'David Bertheau WTO Hole-in-One\nNick Private – PGA West\nHole 7   140 Yards   9 Iron   5-4-23',
+    plaqueText: '',
     loading: false,
+    openInBambu: true,
     statusMsg: '',
     statusOk: true,
-    filename: '',
-    course: '',
+    bambuMsg: '',
+    bambuOk: true,
+    sentTo: '',
 
     _parseLines() {
       const raw = this.plaqueText.split('\n');
@@ -207,43 +134,31 @@ function plaqueGen() {
       }
       this.loading = true;
       this.statusMsg = '';
-      this.filename = '';
+      this.bambuMsg = '';
+      this.sentTo = '';
 
       try {
         const resp = await fetch('/api/generate_plate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ line1, line2, line3 }),
+          body: JSON.stringify({ line1, line2, line3, open_in_bambu: this.openInBambu }),
         });
         const json = await resp.json();
 
         if (json.status === 'ok') {
-          this.filename = json.filename;
-          this.course  = json.course || '';
-          this.statusMsg = 'Done!';
+          this.sentTo    = json.recipient || json.msg || '';
+          this.statusMsg = '✉️ Sent!';
           this.statusOk  = true;
-
-        } else if (json.status === 'no_course_match') {
-          // Fetch full course list, then open dialog
-          const coursesResp = await fetch('/api/courses');
-          const coursesJson = await coursesResp.json();
-          window.dispatchEvent(new CustomEvent('open-picker', {
-            detail: {
-              mode: 'no_match',
-              typedLine2: json.course_line || line2,
-              courseList: coursesJson.courses || [],
-            }
-          }));
-
-        } else if (json.status === 'ambiguous_course') {
-          window.dispatchEvent(new CustomEvent('open-picker', {
-            detail: {
-              mode: 'ambiguous',
-              typedLine2: json.course_line || line2,
-              courseList: json.candidates || [],
-            }
-          }));
-
+          if (json.bambu_opened) {
+            this.bambuMsg = `Opened in Bambu Studio: ~/Downloads/${json.stable_path ? json.stable_path.split('/').pop() : ''}`;
+            this.bambuOk  = true;
+          } else if (json.bambu_error) {
+            this.bambuMsg = `Bambu Studio: ${json.bambu_error}`;
+            this.bambuOk  = false;
+          } else {
+            this.bambuMsg = '';
+            this.bambuOk  = true;
+          }
         } else {
           this.statusMsg = json.msg || 'Generation failed.';
           this.statusOk  = false;
@@ -255,109 +170,15 @@ function plaqueGen() {
         this.loading = false;
       }
     },
-
-    /*
-     * Called when the user picks a course (or creates one) in the dialog.
-     * Rewrites line 2 of the textarea to the resolved course name and
-     * re-submits so generation proceeds without Thomas clicking Generate again.
-     */
-    async resubmitWithCourse(resolvedCourse) {
-      const lines = this.plaqueText.split('\n');
-      // Ensure at least 3 slots so we don't over-trim
-      while (lines.length < 3) lines.push('');
-      lines[1] = resolvedCourse;
-      this.plaqueText = lines.join('\n');
-      // Wait a tick so Alpine propagates the model update before generate() reads it
-      await this.$nextTick();
-      await this.generate();
-    },
   };
 }
 
-/* ─── Course picker dialog component ────────────────────────────────────── */
-function coursePickerDialog() {
-  return {
-    heading: 'Course not found',
-    typedLine2: '',
-    courseList: [],
-    creating: false,
-
-    get createBtnLabel() {
-      return this.creating
-        ? 'Creating…'
-        : `Create new course folder: ‘${this.typedLine2}’`;
-    },
-
-    openDialog(detail) {
-      this.typedLine2 = detail.typedLine2 || '';
-      this.courseList = detail.courseList || [];
-      this.creating   = false;
-      this.heading    = detail.mode === 'ambiguous'
-        ? 'Multiple matches — pick one'
-        : 'Course not found';
-
-      const dlg = document.getElementById('coursePicker');
-      dlg.showModal();
-
-      // Default focus: Create button (primary action)
-      this.$nextTick(() => {
-        if (this.$refs.createBtn) this.$refs.createBtn.focus();
-      });
-    },
-
-    cancelDialog() {
-      document.getElementById('coursePicker').close();
-    },
-
-    focusItem(idx) {
-      const clamped = Math.max(0, Math.min(idx, this.courseList.length - 1));
-      const el = document.getElementById('course-item-' + clamped);
-      if (el) el.focus();
-    },
-
-    /*
-     * User picks an existing course from the list.
-     * Closes the dialog and fires picker-resolved so plaqueGen rewrites
-     * line 2 and re-submits.
-     */
-    pickCourse(courseName) {
-      document.getElementById('coursePicker').close();
-      window.dispatchEvent(new CustomEvent('picker-resolved', {
-        detail: { course: courseName }
-      }));
-    },
-
-    /*
-     * User clicks "Create new course folder".
-     * POSTs to /api/courses, then fires picker-resolved on success.
-     */
-    async createAndSubmit() {
-      if (this.creating) return;
-      this.creating = true;
-      try {
-        const resp = await fetch('/api/courses', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: this.typedLine2 }),
-        });
-        const json = await resp.json();
-        if (json.status === 'ok') {
-          document.getElementById('coursePicker').close();
-          window.dispatchEvent(new CustomEvent('picker-resolved', {
-            detail: { course: json.course }
-          }));
-        } else {
-          // Keep dialog open; surface the server error
-          alert('Could not create folder: ' + (json.msg || 'Unknown error'));
-        }
-      } catch (err) {
-        alert('Request failed: ' + err.message);
-      } finally {
-        this.creating = false;
-      }
-    },
-  };
-}
 </script>
+
+{# ── Page footer ─────────────────────────────────────────────── #}
+<footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-center gap-3 z-30 shadow-sm">
+  <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+  <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
+</footer>
 
 {% endblock %}

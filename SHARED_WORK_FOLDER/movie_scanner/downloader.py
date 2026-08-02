@@ -136,7 +136,21 @@ def _download(url: str, dest: str, on_progress: Callable[[str], None]) -> None:
                 while gz.read(1 << 20):
                     pass
         except (EOFError, _gzip.BadGzipFile, OSError) as exc:
+            # Peek at the first bytes to distinguish a rate-limit/block page
+            # (no gzip magic) from a truncated-but-valid gzip stream.
+            peek = b""
+            try:
+                with open(part, "rb") as fh:
+                    peek = fh.read(20)
+            except OSError:
+                pass
             os.remove(part)
+            if len(peek) < 2 or peek[:2] != b"\x1f\x8b":
+                peek_str = peek.decode("latin-1")
+                raise IOError(
+                    f"downloaded {name} is not gzip — server returned {peek_str!r}"
+                    " (likely IMDB rate-limit or block page). Wait 1-2 minutes and retry."
+                )
             raise IOError(f"downloaded {name} failed gzip check: {exc}")
 
     os.replace(part, dest)   # atomic on POSIX

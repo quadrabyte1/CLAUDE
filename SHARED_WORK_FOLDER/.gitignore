@@ -18,6 +18,10 @@ venv/
 env/
 .pytest_cache/
 
+# Env files — may contain SMTP or other credentials
+.env
+app/.env
+
 # macOS
 .DS_Store
 

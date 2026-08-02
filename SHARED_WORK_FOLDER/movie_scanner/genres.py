@@ -1,8 +1,8 @@
-"""genres.py — canonical list of IMDB genre values.
+"""genres.py — tokens exposed as genre toggles in the UI.
 
-Every genre value that appears in IMDB's title.basics.tsv dataset. If IMDB
-ever adds a new genre, add it here; both the Flask UI and any programmatic
-consumer (e.g. Homunculus) will pick it up automatically.
+Most entries come from IMDb's title.basics genres field, but user-defined
+tokens (e.g. language names like "Tamil") can be added freely. Non-IMDb
+tokens will simply not match any title unless a corresponding filter is built.
 """
 
 KNOWN_GENRES: list[str] = [
@@ -10,5 +10,5 @@ KNOWN_GENRES: list[str] = [
     "Crime", "Documentary", "Drama", "Family", "Fantasy", "Film-Noir",
     "Game-Show", "History", "Horror", "Music", "Musical", "Mystery",
     "News", "Reality-TV", "Romance", "Sci-Fi", "Short", "Sport",
-    "Talk-Show", "Thriller", "War", "Western",
+    "Talk-Show", "Tamil", "Thriller", "War", "Western",
 ]

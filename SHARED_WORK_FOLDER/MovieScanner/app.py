@@ -11,8 +11,9 @@ import os
 import sqlite3
 import sys
 import threading
+from datetime import date
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, flash, get_flashed_messages
 
 # Ensure the repo root (parent of MovieScanner/) is on the path so the
 # movie_scanner package can be imported as a sibling folder.
@@ -26,8 +27,9 @@ from movie_scanner.schema import apply_schema
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
+app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V1.5"
+APP_VERSION = "V3.3"
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "db", "scanner.db")
 
@@ -56,15 +58,60 @@ def _init_db() -> None:
 _init_db()
 
 
-# ── Live-progress store (in-memory; wiped on Werkzeug restart) ─────────────
+def _reconcile_orphaned_runs() -> None:
+    """Mark any non-terminal runs as error on startup.
 
-_run_progress: dict[int, str] = {}   # run_id -> latest progress message
+    If the app (or a scan worker thread) was killed mid-scan — by SIGKILL,
+    Werkzeug reloader, OOM, or any other unclean exit — the runs row is left
+    with status='running' and a non-terminal phase (e.g. 'downloading').
+    No try/finally in the worker can catch SIGKILL, so this startup sweep is
+    the only reliable safety net.
+
+    Any run still in status='running' at startup-time has no live worker (the
+    process that owned it is gone), so we mark it 'error' with a clear note.
+    Called once at module load time, before any route can serve the page.
+    """
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT id FROM runs WHERE status='running'"
+    ).fetchall()
+    if rows:
+        ids = [r["id"] for r in rows]
+        conn.execute(
+            f"UPDATE runs SET status='error', phase='error', "
+            f"completed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'), "
+            f"error='orphaned — process died before scan completed' "
+            f"WHERE id IN ({','.join('?' * len(ids))})",
+            ids,
+        )
+        conn.commit()
+        print(
+            f"[MovieScanner] reconciled {len(ids)} orphaned run(s): "
+            + ", ".join(f"#{i}" for i in ids)
+        )
+    conn.close()
 
 
-def _progress_for(run_id: int):
-    def cb(msg: str):
-        _run_progress[run_id] = msg
-    return cb
+_reconcile_orphaned_runs()
+
+
+# ── Concurrency guard ──────────────────────────────────────────────────────
+
+def _scan_in_progress() -> bool:
+    """Return True if a live scan worker is running.
+
+    The startup reconciler clears orphaned 'running' rows on every restart,
+    so a row with status='running' here means a real live thread owns it.
+    """
+    conn = _conn()
+    row = conn.execute(
+        "SELECT 1 FROM runs WHERE status='running' LIMIT 1"
+    ).fetchone()
+    conn.close()
+    return row is not None
+
+
+_SCAN_BUSY_MSG = "A scan is already running — wait for it to finish before starting another."
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -124,10 +171,13 @@ def index():
     except json.JSONDecodeError: include_lc = set()
     try: exclude_lc = set(t.lower() for t in json.loads(cfg.get("exclude_tags", "[]")))
     except json.JSONDecodeError: exclude_lc = set()
+    try: exclude_countries_str = ", ".join(json.loads(cfg.get("exclude_countries", "[]")))
+    except json.JSONDecodeError: exclude_countries_str = ""
 
     return render_template(
         "index.html",
         config=cfg,
+        current_year=date.today().year,
         runs=runs,
         titles_count=titles_count,
         matches_count=matches_count,
@@ -138,6 +188,7 @@ def index():
         known_genres=KNOWN_GENRES,
         include_lc=include_lc,
         exclude_lc=exclude_lc,
+        exclude_countries=exclude_countries_str,
         upside_matches=upside_matches,
         upside_checked_at=upside_checked_at,
     )
@@ -145,39 +196,12 @@ def index():
 
 @app.route("/config", methods=["POST"])
 def save_config():
-    """Save the config form. Values arrive as plain strings; we coerce+store."""
-    db = _conn()
-    try:
-        min_rating = float(request.form.get("min_rating", "7.0"))
-    except ValueError:
-        min_rating = 7.0
-    try:
-        min_votes = int(request.form.get("min_votes", "100"))
-    except ValueError:
-        min_votes = 100
-
-    tags_raw = request.form.get("tags", "").strip()
-    tags = [t.strip() for t in tags_raw.split(",") if t.strip()]
-
-    exclude_raw = request.form.get("exclude_tags", "").strip()
-    exclude_tags = [t.strip() for t in exclude_raw.split(",") if t.strip()]
-
-    title_types = request.form.getlist("title_types") or ["movie", "tvMovie", "tvSeries"]
-
-    for k, v in [
-        ("min_rating",   str(min_rating)),
-        ("min_votes",    str(min_votes)),
-        ("tags",         json.dumps(tags)),
-        ("exclude_tags", json.dumps(exclude_tags)),
-        ("title_types",  json.dumps(title_types)),
-    ]:
-        db.execute(
-            "INSERT INTO config (key, value) VALUES (?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (k, v),
-        )
-    db.commit()
-    db.close()
+    """Save the config form. Delegates to _save_config_from_form() so the
+    Save button honours the same per-genre 3-state radio grid that /run and
+    /config_and_rescan already read. Previous implementation looked for a
+    comma-separated `tags`/`exclude_tags` field that the template no longer
+    posts, silently wiping every include/exclude selection on each Save."""
+    _save_config_from_form()
     return redirect(url_for("index"))
 
 
@@ -192,6 +216,10 @@ def _save_config_from_form():
         min_votes = int(request.form.get("min_votes", "100"))
     except ValueError:
         min_votes = 100
+    try:
+        min_year = int(request.form.get("min_year", str(date.today().year)))
+    except ValueError:
+        min_year = date.today().year
 
     # Per-genre 3-state grid: each known genre has a radio group
     # `genre_<name>` with values include|ignore|exclude. Missing values
@@ -205,13 +233,18 @@ def _save_config_from_form():
 
     title_types = request.form.getlist("title_types") or ["movie", "tvMovie", "tvSeries"]
 
+    exclude_countries_raw = request.form.get("exclude_countries", "").strip()
+    exclude_countries = [c.strip() for c in exclude_countries_raw.split(",") if c.strip()]
+
     db = _conn()
     for k, v in [
-        ("min_rating",   str(min_rating)),
-        ("min_votes",    str(min_votes)),
-        ("tags",         json.dumps(tags)),
-        ("exclude_tags", json.dumps(exclude_tags)),
-        ("title_types",  json.dumps(title_types)),
+        ("min_rating",        str(min_rating)),
+        ("min_votes",         str(min_votes)),
+        ("min_year",          str(min_year)),
+        ("tags",              json.dumps(tags)),
+        ("exclude_tags",      json.dumps(exclude_tags)),
+        ("title_types",       json.dumps(title_types)),
+        ("exclude_countries", json.dumps(exclude_countries)),
     ]:
         db.execute(
             "INSERT INTO config (key, value) VALUES (?, ?) "
@@ -234,23 +267,26 @@ def _spawn_scan_worker() -> None:
 
 @app.route("/clear", methods=["POST"])
 def clear_all():
-    """Wipe run history + match results + reset genre selections to Ignore.
+    """Wipe run history + match results. Filter/config settings are preserved.
 
-    Preserved intentionally:
+    Per Thomas's V1.7 correction: this button lives in the "Recent runs"
+    section and should only clear the run history and its associated
+    matches. It must NOT touch the config row — the previous version reset
+    every genre radio to Ignore on each click, which surprised the user.
+
+    Preserved:
       - `titles` table (the seen-set — scanner won't re-test old tconsts).
-      - `min_rating`, `min_votes`, `title_types` config (only genre radios
-        get reset per the user's spec).
+      - `config` table in full (min rating, min votes, title types,
+        include/exclude genre selections, omdb_api_key, everything).
 
-    If you also want to reset the seen-set so the next scan retests every
-    title, use "Save config and rescan all" instead.
+    To also reset the seen-set + rerun against saved config, use
+    "Save config and rescan all" instead.
     """
     db = _conn()
     # matches has FK REFERENCES runs(id) ON DELETE CASCADE, so wiping runs
     # takes matches with it. Explicit DELETE FROM matches too as a belt.
     db.execute("DELETE FROM matches")
     db.execute("DELETE FROM runs")
-    # Reset both genre lists to empty JSON arrays → every radio renders as Ignore.
-    db.execute("UPDATE config SET value='[]' WHERE key IN ('tags', 'exclude_tags')")
     db.commit()
     db.close()
     return redirect(url_for("index"))
@@ -266,6 +302,10 @@ def save_config_and_rescan():
     marker row for this wipe) survives — matches for those old runs are
     dropped along with the titles they referenced.
     """
+    if _scan_in_progress():
+        flash(_SCAN_BUSY_MSG)
+        return redirect(url_for("index"))
+
     _save_config_from_form()
 
     db = _conn()
@@ -294,26 +334,20 @@ def start_run():
     The Run button lives inside the config form and submits the same fields
     as Save, so the user's on-screen state is what actually runs — no
     "you had to click Save first" trap.
-    """
-    _save_config_from_form()
 
-    # Create a stub run row so we have a run_id even if the thread is slow
-    db = _conn()
-    run_id = db.execute(
-        "INSERT INTO runs (status, phase) VALUES ('running', 'queued')"
-    ).lastrowid
-    db.commit()
-    db.close()
+    NOTE: Scanner.scan() creates and owns its own runs row. We must NOT
+    insert a stub row here — doing so causes two rows to appear in Recent
+    Runs (the empty stub and the real one from Scanner.scan()).
+    """
+    if _scan_in_progress():
+        flash(_SCAN_BUSY_MSG)
+        return redirect(url_for("index"))
+
+    _save_config_from_form()
 
     def worker():
         try:
-            # Scanner.scan() creates its own runs row; delete the stub so
-            # the recent-runs list doesn't show a duplicate.
-            db = _conn()
-            db.execute("DELETE FROM runs WHERE id=?", (run_id,))
-            db.commit()
-            db.close()
-            Scanner(db_path=DB_PATH).scan(on_progress=_progress_for(run_id))
+            Scanner(db_path=DB_PATH).scan(on_progress=lambda msg: None)
         except Exception as e:
             print(f"[MovieScanner] scan error: {e}")
 
@@ -346,7 +380,7 @@ def api_status(run_id):
         return jsonify({"status": "not_found"}), 404
     return jsonify({
         **dict(run),
-        "message": _run_progress.get(run_id, ""),
+        "message": run["phase"] or "",
     })
 
 

@@ -235,3 +235,99 @@ Config:
   include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller
   exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War, Western
 ========================================
+========================================
+Scan run_id=6 — 2026-08-02T10:55:16Z → 2026-08-02T10:55:32Z
+Status: done
+Scanned: 1,212,508 rows | New titles: 1,212,508 | Matches: 164
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War, Western
+========================================
+========================================
+Scan run_id=8 — 2026-08-02T11:01:19Z → 2026-08-02T11:01:35Z
+Status: done
+Scanned: 1,212,508 rows | New titles: 1,212,508 | Matches: 164
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War, Western
+========================================
+========================================
+Scan run_id=9 — 2026-08-02T11:27:20Z → 2026-08-02T11:27:36Z
+Status: done
+Scanned: 1,212,508 rows | New titles: 0 | Matches: 0
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War, Western
+========================================
+========================================
+Scan run_id=11 — 2026-08-02T11:28:23Z → 2026-08-02T11:28:39Z
+Status: done
+Scanned: 1,212,508 rows | New titles: 1,212,508 | Matches: 148
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller, Western
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War
+========================================
+========================================
+Scan run_id=13 — 2026-08-02T11:29:11Z → 2026-08-02T11:29:27Z
+Status: done
+Scanned: 1,212,508 rows | New titles: 1,212,508 | Matches: 146
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War, Western
+========================================
+========================================
+Scan run_id=15 — 2026-08-02T11:35:40Z → 2026-08-02T11:35:56Z
+Status: done
+Scanned: 1,212,508 rows | New titles: 1,212,508 | Matches: 146
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War, Western
+========================================
+========================================
+Scan run_id=1 — 2026-08-02T11:36:21Z → 2026-08-02T11:36:34Z
+Status: done
+Scanned: 1,212,508 rows | New titles: 0 | Matches: 0
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War, Western
+========================================
+========================================
+Scan run_id=3 — 2026-08-02T11:36:48Z → 2026-08-02T11:37:03Z
+Status: done
+Scanned: 1,212,508 rows | New titles: 1,212,508 | Matches: 146
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, History, Mystery, Romance, Thriller
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, War, Western
+========================================

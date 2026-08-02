@@ -102,6 +102,13 @@ CREATE TABLE IF NOT EXISTS upside_matches (
     matched_tags   TEXT,
     checked_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
+
+-- Persistent dismissal store — survives DELETE FROM matches and rescan-all.
+-- Written by /matches/<tconst>/dismiss; read via LEFT JOIN in all match SELECTs.
+CREATE TABLE IF NOT EXISTS dismissed_tconsts (
+    tconst        TEXT PRIMARY KEY,
+    dismissed_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
 """
 
 
@@ -167,5 +174,23 @@ def apply_schema(conn: sqlite3.Connection) -> None:
             checked_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
         )
     """)
+
+    # Live migration: create dismissed_tconsts for databases created before V1.5
+    # and back-fill any existing dismissals from matches.dismissed_at.
+    # INSERT OR IGNORE + idempotent CREATE TABLE make this safe to run on every
+    # startup (Werkzeug reloader fires apply_schema repeatedly).
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS dismissed_tconsts (
+            tconst        TEXT PRIMARY KEY,
+            dismissed_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )
+    """)
+    try:
+        conn.execute("""
+            INSERT OR IGNORE INTO dismissed_tconsts (tconst, dismissed_at)
+            SELECT tconst, dismissed_at FROM matches WHERE dismissed_at IS NOT NULL
+        """)
+    except sqlite3.OperationalError:
+        pass  # matches table may not exist on brand-new DB
 
     conn.commit()

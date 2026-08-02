@@ -497,16 +497,29 @@ class Scanner:
         """
         conn = self._connect()
         try:
-            where = "matched_at >= ?"
-            if not include_dismissed:
-                where += " AND dismissed_at IS NULL"
-            rows = conn.execute(
-                "SELECT tconst, primary_title, start_year, title_type, "
-                "rating, num_votes, genres, matched_tags, matched_at, dismissed_at "
-                f"FROM matches WHERE {where} "
-                "ORDER BY rating DESC, num_votes DESC",
-                (iso_date,),
-            ).fetchall()
+            # Read dismissal state from the persistent dismissed_tconsts table
+            # so that "rescan all" and "clear runs" don't resurrect dismissed titles.
+            if include_dismissed:
+                where = "m.matched_at >= ?"
+                rows = conn.execute(
+                    "SELECT m.tconst, m.primary_title, m.start_year, m.title_type, "
+                    "m.rating, m.num_votes, m.genres, m.matched_tags, m.matched_at, "
+                    "d.dismissed_at "
+                    "FROM matches m LEFT JOIN dismissed_tconsts d ON d.tconst = m.tconst "
+                    f"WHERE {where} "
+                    "ORDER BY m.rating DESC, m.num_votes DESC",
+                    (iso_date,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT m.tconst, m.primary_title, m.start_year, m.title_type, "
+                    "m.rating, m.num_votes, m.genres, m.matched_tags, m.matched_at, "
+                    "d.dismissed_at "
+                    "FROM matches m LEFT JOIN dismissed_tconsts d ON d.tconst = m.tconst "
+                    "WHERE m.matched_at >= ? AND d.tconst IS NULL "
+                    "ORDER BY m.rating DESC, m.num_votes DESC",
+                    (iso_date,),
+                ).fetchall()
             return [dict(r) for r in rows]
         finally:
             conn.close()

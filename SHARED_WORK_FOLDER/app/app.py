@@ -21,7 +21,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.5"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.6"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks created after this id — bumped 2026-07-03
@@ -2225,14 +2225,40 @@ def api_generate_plate():
             "msg": f"Network error connecting to {smtp_host}:{smtp_port}: {exc}",
         }), 500
 
-    # ── Open in Bambu Studio (Popen so Flask doesn't block on app launch) ────
+    # ── Open in Bambu Studio ──────────────────────────────────────────────────
+    # Primary: `open <file>` — relies on the .3mf file association and works
+    #   whether Bambu Studio is already running or not (fixes prior silent
+    #   failure where `open -a AppName` foregrounded Bambu without loading
+    #   the new document).
+    # Fallback: `open -a BambuStudio <file>` if the file-association exits
+    #   non-zero (e.g., no .3mf handler registered).
     bambu_opened = None
     bambu_error  = None
     if open_in_bambu and stable_path:
         import subprocess
         try:
-            subprocess.Popen(["open", "-a", "/Applications/BambuStudio.app", stable_path])
-            bambu_opened = True
+            result = subprocess.run(
+                ["open", stable_path],
+                capture_output=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                bambu_opened = True
+            else:
+                result2 = subprocess.run(
+                    ["open", "-a", "/Applications/BambuStudio.app", stable_path],
+                    capture_output=True,
+                    timeout=10,
+                )
+                if result2.returncode == 0:
+                    bambu_opened = True
+                else:
+                    bambu_opened = False
+                    stderr_text = (result2.stderr or result.stderr or b"").decode(errors="replace").strip()
+                    bambu_error = stderr_text or f"open exited with code {result2.returncode}"
+        except subprocess.TimeoutExpired:
+            bambu_opened = False
+            bambu_error  = "Timed out waiting for `open` to hand file to Bambu Studio."
         except Exception as exc:
             bambu_opened = False
             bambu_error  = str(exc)

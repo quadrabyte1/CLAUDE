@@ -29,7 +29,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.3"
+APP_VERSION = "V3.5"
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "db", "scanner.db")
 
@@ -133,22 +133,26 @@ def index():
     titles_count  = db.execute("SELECT COUNT(*) FROM titles").fetchone()[0]
     matches_count = db.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
     active_count    = db.execute(
-        "SELECT COUNT(*) FROM matches WHERE dismissed_at IS NULL"
+        "SELECT COUNT(*) FROM matches m "
+        "LEFT JOIN dismissed_tconsts d ON d.tconst = m.tconst "
+        "WHERE d.tconst IS NULL"
     ).fetchone()[0]
     dismissed_count = matches_count - active_count
 
     if show_dismissed:
         matches = db.execute(
-            "SELECT tconst, primary_title, start_year, title_type, rating, num_votes, "
-            "genres, matched_tags, matched_at, dismissed_at "
-            "FROM matches ORDER BY rating DESC, num_votes DESC LIMIT 500"
+            "SELECT m.tconst, m.primary_title, m.start_year, m.title_type, m.rating, m.num_votes, "
+            "m.genres, m.matched_tags, m.matched_at, d.dismissed_at "
+            "FROM matches m LEFT JOIN dismissed_tconsts d ON d.tconst = m.tconst "
+            "ORDER BY m.rating DESC, m.num_votes DESC LIMIT 500"
         ).fetchall()
     else:
         matches = db.execute(
-            "SELECT tconst, primary_title, start_year, title_type, rating, num_votes, "
-            "genres, matched_tags, matched_at, dismissed_at "
-            "FROM matches WHERE dismissed_at IS NULL "
-            "ORDER BY rating DESC, num_votes DESC LIMIT 500"
+            "SELECT m.tconst, m.primary_title, m.start_year, m.title_type, m.rating, m.num_votes, "
+            "m.genres, m.matched_tags, m.matched_at, d.dismissed_at "
+            "FROM matches m LEFT JOIN dismissed_tconsts d ON d.tconst = m.tconst "
+            "WHERE d.tconst IS NULL "
+            "ORDER BY m.rating DESC, m.num_votes DESC LIMIT 500"
         ).fetchall()
 
     upside_matches = db.execute(
@@ -401,6 +405,13 @@ def dismiss_match(tconst: str):
     """Mark a match as dismissed. The row is hidden from the default view but
     still counts in the Total matches stat. Returns 204 No Content."""
     db = _conn()
+    # Write to the persistent dismissal table (survives DELETE FROM matches).
+    db.execute(
+        "INSERT OR REPLACE INTO dismissed_tconsts (tconst, dismissed_at) "
+        "VALUES (?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))",
+        (tconst,),
+    )
+    # Also keep matches.dismissed_at in sync for any code that still reads it directly.
     db.execute(
         "UPDATE matches SET dismissed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now') "
         "WHERE tconst=?",
@@ -416,6 +427,9 @@ def undismiss_match(tconst: str):
     """Clear a match's dismissed_at timestamp, restoring it to the active list.
     Returns 204 No Content."""
     db = _conn()
+    # Remove from the persistent dismissal table.
+    db.execute("DELETE FROM dismissed_tconsts WHERE tconst=?", (tconst,))
+    # Also clear matches.dismissed_at for any code that still reads it directly.
     db.execute(
         "UPDATE matches SET dismissed_at=NULL WHERE tconst=?",
         (tconst,),

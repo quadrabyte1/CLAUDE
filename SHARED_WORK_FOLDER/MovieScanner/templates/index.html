@@ -199,7 +199,7 @@
         <p class="text-xs text-gray-400 uppercase tracking-wide font-medium">Total matches</p>
         <p class="text-2xl font-bold text-indigo-600 mt-1">{{ "{:,}".format(matches_count) }}</p>
         {% if dismissed_count > 0 %}
-        <p class="text-xs text-gray-400 mt-1">{{ "{:,}".format(active_count) }} active · {{ "{:,}".format(dismissed_count) }} dismissed</p>
+        <p class="text-xs text-gray-400 mt-1"><span id="stat-active-count">{{ "{:,}".format(active_count) }}</span> active · <span id="stat-dismissed-count">{{ "{:,}".format(dismissed_count) }}</span> dismissed</p>
         {% endif %}
       </div>
     </div>
@@ -388,7 +388,7 @@
       <div class="flex items-center justify-between mb-2 gap-3 flex-wrap">
         <h2 class="text-sm font-semibold text-gray-700">
           Matches
-          {% if matches %}({{ matches|length }}{% if matches_count > 500 %} of {{ "{:,}".format(matches_count) }}{% endif %}){% endif %}
+          {% if matches %}(<span id="matches-visible-count">{{ matches|length }}</span>{% if matches_count > 500 %} of {{ "{:,}".format(matches_count) }}{% endif %}){% endif %}
         </h2>
         <div class="flex items-center gap-4 flex-wrap">
           <!-- Rescan upside candidates button -->
@@ -407,7 +407,7 @@
                    onchange="location.search = this.checked ? '?show_dismissed=1' : '?show_dismissed=0'"
                    class="rounded border-gray-300 text-gray-500 focus:ring-gray-400">
             <span class="{% if show_dismissed %}text-gray-700 font-medium{% else %}text-gray-400{% endif %}">
-              Show dismissed{% if dismissed_count > 0 %} ({{ dismissed_count }}){% endif %}
+              Show dismissed{% if dismissed_count > 0 %} (<span id="show-dismissed-count">{{ dismissed_count }}</span>){% endif %}
             </span>
           </label>
         </div>
@@ -988,6 +988,34 @@
         row.classList.toggle('dismissed-row', dismissed);
         const titleCell = row.querySelector('.title-cell');
         if (titleCell) titleCell.classList.toggle('line-through', dismissed);
+      }
+
+      // Update visible count in the "Matches (N)" heading and the top stats card.
+      const matchesVisible = document.getElementById('matches-visible-count');
+      const statActive     = document.getElementById('stat-active-count');
+      const statDismissed  = document.getElementById('stat-dismissed-count');
+      const showToggleCnt  = document.getElementById('show-dismissed-count');
+      const delta = dismissed ? -1 : +1;
+
+      // The heading count reflects visible-in-table rows. In default view (!showDismissed),
+      // dismissing hides the row so the count drops. In show_dismissed=1 view, rows stay
+      // visible when dismissed (just muted), so the count is unchanged either way.
+      if (matchesVisible && !showDismissed) {
+        const n = parseInt(matchesVisible.textContent.replace(/,/g, ''), 10) || 0;
+        matchesVisible.textContent = (n + delta).toLocaleString('en-US');
+      }
+      // Stats card always reflects DB truth (active decreases when dismissed, dismissed increases).
+      if (statActive) {
+        const n = parseInt(statActive.textContent.replace(/,/g, ''), 10) || 0;
+        statActive.textContent = (n + delta).toLocaleString('en-US');
+      }
+      if (statDismissed) {
+        const n = parseInt(statDismissed.textContent.replace(/,/g, ''), 10) || 0;
+        statDismissed.textContent = (n - delta).toLocaleString('en-US');
+      }
+      if (showToggleCnt) {
+        const n = parseInt(showToggleCnt.textContent, 10) || 0;
+        showToggleCnt.textContent = String(n - delta);
       }
     }
   </script>

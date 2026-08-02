@@ -80,12 +80,12 @@
                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
       </div>
 
-      {# Green scale — XY-only multiplier applied to the green polygon (1.00 = no change) #}
+      {# Green scale — XY-only multiplier applied to the green polygon (1.0065 = default, ~0.65% larger) #}
       <div class="flex flex-col gap-1 min-w-[120px]"
-           title="XY-only multiplier applied to the green polygon around its center (1.00 = no change, 1.05 = 5% larger). Fringe, traps, water, and boulders are unaffected.">
+           title="XY-only multiplier applied to the green polygon around its center (default 1.0065 = ~0.65% larger; 1.0 = no change; 1.05 = 5% larger). Fringe, traps, water, and boulders are unaffected.">
         <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Green scale</label>
         <input type="number" x-model.number="greenScale" @change="autoSave()"
-               step="0.01" min="0.5"
+               step="0.001" min="0.5"
                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
       </div>
 
@@ -479,7 +479,7 @@ function polygonEditor() {
     grassSpacing: 2.4,        // distance between bump centers in mm
     greenStyle: 'terraced',   // 'smooth' or 'terraced'
     elevationRange: 14.5,     // total Z amplitude of the green's slope (mm)
-    greenScale: 1.0,          // XY multiplier applied to the green polygon only (fringe/traps/water unaffected)
+    greenScale: 1.0065,       // XY multiplier applied to the green polygon only (fringe/traps/water unaffected)
     fringeEdgeHeight: 10.0,   // outer wall height of the fringe (mm)
     baseThicknessMm: 1.5,     // flat filament base below the surface topology (mm)
     includeBoundaryRegion: false,  // auto-derive a 5 mm boulders ring from each water polygon
@@ -1784,7 +1784,7 @@ function polygonEditor() {
         this.grassSpacing = data.grassSpacing != null ? data.grassSpacing : 2.4;
         this.greenStyle = data.greenStyle || 'terraced';
         this.elevationRange = data.elevationRange != null ? data.elevationRange : 14.5;
-        this.greenScale = data.greenScale != null ? data.greenScale : 1.0;
+        this.greenScale = data.greenScale != null ? data.greenScale : 1.0065;
         this.fringeEdgeHeight = data.fringeEdgeHeight != null ? data.fringeEdgeHeight : 10.0;
         this.baseThicknessMm = data.baseThicknessMm != null ? data.baseThicknessMm : 1.5;
         this.includeBoundaryRegion = data.includeBoundaryRegion === true;
@@ -1826,7 +1826,7 @@ function polygonEditor() {
       this.grassSpacing = 2.4;
       this.greenStyle = 'terraced';
       this.elevationRange = 14.5;
-      this.greenScale = 1.0;
+      this.greenScale = 1.0065;
       this.fringeEdgeHeight = 10.0;
       this.baseThicknessMm = 1.5;
       this.includeBoundaryRegion = false;

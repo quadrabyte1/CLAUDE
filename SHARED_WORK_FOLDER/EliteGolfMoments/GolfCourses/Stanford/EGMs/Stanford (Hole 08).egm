@@ -12,6 +12,7 @@
   "grassSpacing": 2.4,
   "greenStyle": "terraced",
   "elevationRange": 16,
+  "greenScale": 1,
   "fringeEdgeHeight": 10,
   "baseThicknessMm": 1.5,
   "includeBoundaryRegion": false,

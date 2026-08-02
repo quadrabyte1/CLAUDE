@@ -484,7 +484,7 @@ def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
     # Green scale: XY-only multiplier applied to the green polygon around its own
     # centroid, in pixel space. Fringe/traps/water/boulders are unaffected because
     # only the green polygon's control points are transformed. Default 1.0 = no-op.
-    green_scale = float(data.get("greenScale") or 1.0)
+    green_scale = float(data.get("greenScale") or 1.0065)
     if green_scale != 1.0 and green_poly["points"]:
         pts = np.array([[p["x"], p["y"]] for p in green_poly["points"]], dtype=np.float64)
         cx = float(pts[:, 0].mean())

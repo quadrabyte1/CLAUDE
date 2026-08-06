@@ -13,10 +13,52 @@
       0%,100% { background-color: transparent; }
       30%     { background-color: #fee2e2; border-radius: 3px; }
     }
-    .spinner       { animation: spin 1s linear infinite; }
-    .pulse         { animation: pulse-dot 1.4s ease-in-out infinite; }
-    .broken-flash  { animation: flash-broken 1.2s ease; }
+    @keyframes flash-missing {
+      0%,100% { background-color: transparent; }
+      30%     { background-color: #ffedd5; border-radius: 3px; }
+    }
+    /* V3.3 — flash for the blue self-link nav. Same 1.2s ease, blue-100
+       tint (#dbeafe) to match the blue counter card & nav palette. */
+    @keyframes flash-selflink {
+      0%,100% { background-color: transparent; }
+      30%     { background-color: #dbeafe; border-radius: 3px; }
+    }
+    /* V2.9 — brief red border flash on the section search input when its
+       substring matches nothing. Keeps the affordance quiet: no alerts,
+       no layout shift, just a 900ms tint of the border. */
+    @keyframes flash-nomatch {
+      0%,100% { border-color: #e5e7eb; box-shadow: none; }
+      30%     { border-color: #ef4444; box-shadow: 0 0 0 2px rgba(239,68,68,0.15); }
+    }
+    .spinner        { animation: spin 1s linear infinite; }
+    .pulse          { animation: pulse-dot 1.4s ease-in-out infinite; }
+    .broken-flash   { animation: flash-broken 1.2s ease; }
+    .missing-flash  { animation: flash-missing 1.2s ease; }
+    .selflink-flash { animation: flash-selflink 1.2s ease; }
+    .nomatch-flash  { animation: flash-nomatch 0.9s ease; }
     .link-tree-page + .link-tree-page { margin-top: 1.25rem; }
+    /* V3.2 — When the crawl finishes, the crawl-detail block swaps its white
+       background for a soft grass-green wash: a gentle diagonal gradient from
+       green-50 → emerald-50 → lime-50 that reads as "done, all clear" without
+       competing with the red/orange counters. The fade-in is a 500ms keyframe
+       so the transition covers both `background-color` (the base white the
+       block starts with) and `background-image` (the new gradient) —
+       Tailwind's transition-colors alone doesn't animate gradients. On a
+       page-reload of an already-completed job the class is applied before
+       first paint, so the wash is simply already there (no fade replay). */
+    @keyframes crawl-complete-fade {
+      from { background-color: #ffffff;
+             background-image: none; }
+      to   { background-color: #f0fdf4;
+             background-image: linear-gradient(to bottom right, #f0fdf4, #ecfdf5, #f7fee7); }
+    }
+    #link-tree.crawl-complete {
+      background-color: #f0fdf4;
+      background-image: linear-gradient(to bottom right, #f0fdf4, #ecfdf5, #f7fee7);
+      animation: crawl-complete-fade 500ms ease-out;
+    }
+    /* Skip the fade for reload-into-completed so nothing "flashes" on load. */
+    #link-tree.crawl-complete.no-fade { animation: none; }
   </style>
 </head>
 <!-- pb-16 keeps content above the fixed footer -->
@@ -81,7 +123,7 @@
         </span>
       </div>
       <p id="current-url" class="text-xs font-mono text-gray-700 break-all mb-4 min-h-[1rem]">—</p>
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-4 gap-3">
         <div class="text-center">
           <p id="live-checked" class="text-2xl font-bold text-gray-800">0</p>
           <p class="text-xs text-gray-400">checked</p>
@@ -94,6 +136,10 @@
           <p id="live-broken" class="text-2xl font-bold text-red-500">0</p>
           <p class="text-xs text-gray-400">broken</p>
         </div>
+        <div class="text-center">
+          <p id="live-unique-missing" class="text-2xl font-bold text-orange-500">0</p>
+          <p class="text-xs text-gray-400">unique missing</p>
+        </div>
       </div>
       <div class="mt-4 flex items-center gap-2">
         <div class="flex-1 bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -103,9 +149,15 @@
       </div>
     </div>
 
-    <!-- Final summary cards (hidden until done) -->
+    <!-- Final summary cards (hidden until done)
+         V3.3 — grew to 5 cards with the new blue "self-links" tile. Grid
+         goes 2 cols on phones, 3 cols on tablets, 5 across on lg+ so
+         nothing feels cramped at any width. The blue card is last (so
+         the row reads: totals → healthy → problems, coldest → warmest
+         → new bug class), keeping the pink & orange cards in the same
+         visual position they've held since V2.7. -->
     <div id="results-section" class="hidden mb-5">
-      <div class="grid grid-cols-3 gap-4 mb-4">
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-4">
         <div class="bg-white rounded-xl border border-gray-200 px-5 py-5 text-center">
           <p id="res-total" class="text-4xl font-bold text-gray-800">—</p>
           <p class="text-xs text-gray-400 mt-1">links found</p>
@@ -117,6 +169,17 @@
         <div class="bg-red-50 rounded-xl border border-red-100 px-5 py-5 text-center">
           <p id="res-broken" class="text-4xl font-bold text-red-500">—</p>
           <p class="text-xs text-red-400 mt-1">broken</p>
+        </div>
+        <div class="bg-orange-50 rounded-xl border border-orange-100 px-5 py-5 text-center">
+          <p id="res-unique-missing" class="text-4xl font-bold text-orange-500">—</p>
+          <p class="text-xs text-orange-400 mt-1">unique missing URLs</p>
+        </div>
+        <!-- V3.3 — blue self-link tile. Same shape as the others; palette
+             stays inside the blue-50 / blue-100 / blue-500 band so it
+             reads distinctly from red and orange without overpowering. -->
+        <div class="bg-blue-50 rounded-xl border border-blue-100 px-5 py-5 text-center">
+          <p id="res-self-links" class="text-4xl font-bold text-blue-600">—</p>
+          <p class="text-xs text-blue-500 mt-1">self-links</p>
         </div>
       </div>
       <div id="cap-warning"  class="hidden bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-3 text-sm text-amber-700">
@@ -139,33 +202,112 @@
       </div>
     </div>
 
+    <!-- ── V3.0 — Nav + search controls (moved out of the footer, placed
+         directly below the Crawl Detail). Two grouped clusters:
+           • red broken-links up/down + broken-search
+           • orange unique-missing-URLs up/down + missing-search
+         IDs, onclick/onblur handlers and Tailwind classes are unchanged
+         from V2.9 so all JS (updateBrokenBtn, updateMissingBtn,
+         navigateNext/Prev, navigateMissingNext/Prev, searchBroken,
+         searchMissing, jumpToMissingKey, syncMissingList, flash animations,
+         nomatch-flash) keeps working with no code changes — only the DOM
+         parent moved. A light border-t + vertical padding keeps the block
+         from looking cramped against the tree above. ── -->
+    <div class="mt-5 pt-4 border-t border-gray-200 flex flex-wrap items-center gap-4">
+      <div class="flex items-center gap-1">
+        <button id="broken-prev-btn" disabled onclick="navigatePrev()"
+          title="Previous broken link"
+          class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
+                 disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+                 enabled:bg-red-50 enabled:text-red-600 enabled:border-red-200 enabled:hover:bg-red-100">
+          ▲
+        </button>
+        <span id="broken-nav-label"
+          class="text-xs font-medium px-3 py-1.5 rounded-lg border bg-gray-100 text-gray-400 border-gray-200 whitespace-nowrap">
+          0 broken
+        </span>
+        <button id="broken-next-btn" disabled onclick="navigateNext()"
+          title="Next broken link"
+          class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
+                 disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+                 enabled:bg-red-50 enabled:text-red-600 enabled:border-red-200 enabled:hover:bg-red-100">
+          ▼
+        </button>
+        <!-- V2.9 — broken-links substring search. Blur-only trigger; jumps to
+             first broken URL containing the (lowercased, trimmed) fragment.
+             Empty on blur is a no-op; no-match briefly flashes red border. -->
+        <input id="broken-search" type="text" placeholder="search…"
+          onblur="searchBroken(this)"
+          class="text-xs px-2 py-1 w-32 rounded-lg border border-gray-200 bg-white text-gray-700 placeholder-gray-400
+                 focus:outline-none focus:border-red-300 focus:ring-1 focus:ring-red-200">
+      </div>
+      <div class="flex items-center gap-1">
+        <button id="missing-prev-btn" disabled onclick="navigateMissingPrev()"
+          title="Previous unique missing URL"
+          class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
+                 disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+                 enabled:bg-orange-50 enabled:text-orange-600 enabled:border-orange-200 enabled:hover:bg-orange-100">
+          ▲
+        </button>
+        <span id="missing-nav-label"
+          class="text-xs font-medium px-3 py-1.5 rounded-lg border bg-gray-100 text-gray-400 border-gray-200 whitespace-nowrap">
+          0 unique missing
+        </span>
+        <button id="missing-next-btn" disabled onclick="navigateMissingNext()"
+          title="Next unique missing URL"
+          class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
+                 disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+                 enabled:bg-orange-50 enabled:text-orange-600 enabled:border-orange-200 enabled:hover:bg-orange-100">
+          ▼
+        </button>
+        <!-- V2.9 — unique-missing substring search. Same blur-only semantics
+             as the broken-links input, but scoped to the sorted unique-missing
+             key list so hits jump via the existing jumpToMissingKey path. -->
+        <input id="missing-search" type="text" placeholder="search…"
+          onblur="searchMissing(this)"
+          class="text-xs px-2 py-1 w-32 rounded-lg border border-gray-200 bg-white text-gray-700 placeholder-gray-400
+                 focus:outline-none focus:border-orange-300 focus:ring-1 focus:ring-orange-200">
+      </div>
+      <!-- V3.3 — blue self-link nav pair + search. Same DOM/JS pattern as
+           the red and orange clusters above: up/down arrows walk every
+           `[data-self-link="true"]` anchor in DOM order; the search input
+           does a blur-only substring jump against the same set. Empty on
+           blur = no-op; no-match briefly tints the input border red via
+           flashInputNoMatch. -->
+      <div class="flex items-center gap-1">
+        <button id="selflink-prev-btn" disabled onclick="navigateSelfLinkPrev()"
+          title="Previous self-link"
+          class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
+                 disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+                 enabled:bg-blue-50 enabled:text-blue-600 enabled:border-blue-200 enabled:hover:bg-blue-100">
+          ▲
+        </button>
+        <span id="selflink-nav-label"
+          class="text-xs font-medium px-3 py-1.5 rounded-lg border bg-gray-100 text-gray-400 border-gray-200 whitespace-nowrap">
+          0 self-links
+        </span>
+        <button id="selflink-next-btn" disabled onclick="navigateSelfLinkNext()"
+          title="Next self-link"
+          class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
+                 disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+                 enabled:bg-blue-50 enabled:text-blue-600 enabled:border-blue-200 enabled:hover:bg-blue-100">
+          ▼
+        </button>
+        <input id="selflink-search" type="text" placeholder="search…"
+          onblur="searchSelfLink(this)"
+          class="text-xs px-2 py-1 w-32 rounded-lg border border-gray-200 bg-white text-gray-700 placeholder-gray-400
+                 focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200">
+      </div>
+    </div>
+
   </div><!-- /max-w-3xl -->
 
-  <!-- ── Sticky footer ────────────────────────────────────────────────────── -->
+  <!-- ── Sticky footer — V3.0: nav + search moved out to sit below the crawl
+       detail. Footer keeps only the copyright + version badge. ── -->
   <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-center gap-3 z-30 shadow-sm">
     <div class="flex items-baseline gap-3">
-      <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a></span>
+      <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a>. All Rights Reserved</span>
       <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
-    </div>
-    <div class="flex items-center gap-1">
-      <button id="broken-prev-btn" disabled onclick="navigatePrev()"
-        title="Previous broken link"
-        class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
-               disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
-               enabled:bg-red-50 enabled:text-red-600 enabled:border-red-200 enabled:hover:bg-red-100">
-        ▲
-      </button>
-      <span id="broken-nav-label"
-        class="text-xs font-medium px-3 py-1.5 rounded-lg border bg-gray-100 text-gray-400 border-gray-200 whitespace-nowrap">
-        0 broken
-      </span>
-      <button id="broken-next-btn" disabled onclick="navigateNext()"
-        title="Next broken link"
-        class="flex items-center justify-center w-7 h-7 rounded-lg border text-xs font-bold transition-colors
-               disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
-               enabled:bg-red-50 enabled:text-red-600 enabled:border-red-200 enabled:hover:bg-red-100">
-        ▼
-      </button>
     </div>
   </footer>
 
@@ -176,6 +318,15 @@
     let startTime    = Date.now();
     let renderedCount = 0;
     let brokenPos    = 0;   // 0 = not yet navigated; 1 = at first broken item, etc.
+    let missingPos   = 0;   // same convention, but for unique-missing-URL nav
+    let selfLinkPos  = 0;   // V3.3 — same convention, but for the blue self-link nav
+    let uniqueMissingKeys = [];  // most recent server-supplied sorted key list
+    // V3.2 — tracks whether we've already seen a poll. On the FIRST poll, if
+    // the job is already 'done' (page reload of a completed crawl), we apply
+    // the green wash with the .no-fade modifier so it just renders in place
+    // instead of playing the 500ms fade-in. Any subsequent 'done' transition
+    // (crawl finishing while the user watches) fades in normally.
+    let firstPollHandled = false;
 
     // ── Elapsed time ticker ───────────────────────────────────────────────────
 
@@ -237,6 +388,177 @@
       updateBrokenBtn();
     }
 
+    // ── Unique-missing-URL navigator (orange) ─────────────────────────────────
+    //
+    // Mirrors the red broken-links nav but steps through *distinct* URLs
+    // (server-normalized: lowercased host, no query, no fragment). The
+    // server hands us the sorted key list in `unique_missing_urls`; the DOM
+    // holds one anchor per broken *reference*, so a single missing URL that
+    // appears on 5 pages produces 5 anchors sharing the same
+    // data-missing-key. For each step we jump to the FIRST occurrence of
+    // the next key and flash it orange.
+
+    function updateMissingBtn() {
+      const total    = uniqueMissingKeys.length;
+      const prevBtn  = document.getElementById('missing-prev-btn');
+      const nextBtn  = document.getElementById('missing-next-btn');
+      const lbl      = document.getElementById('missing-nav-label');
+      const disabled = total === 0;
+      prevBtn.disabled = disabled;
+      nextBtn.disabled = disabled;
+      if (disabled) {
+        lbl.textContent = '0 unique missing';
+        lbl.className = 'text-xs font-medium px-3 py-1.5 rounded-lg border bg-gray-100 text-gray-400 border-gray-200 whitespace-nowrap';
+      } else {
+        lbl.textContent = missingPos + ' of ' + total + ' unique missing';
+        lbl.className = 'text-xs font-medium px-3 py-1.5 rounded-lg border bg-orange-50 text-orange-600 border-orange-200 whitespace-nowrap';
+      }
+    }
+
+    function flashMissingAndScroll(el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('missing-flash');
+      void el.offsetWidth;
+      el.classList.add('missing-flash');
+    }
+
+    function jumpToMissingKey(key) {
+      // Find the first anchor tagged with this normalized key. Using
+      // CSS.escape here so keys with special chars (":", "/", "?", etc.)
+      // survive the selector unmangled.
+      const sel = '[data-missing-key="' + CSS.escape(key) + '"]';
+      const el  = document.querySelector(sel);
+      if (el) flashMissingAndScroll(el);
+    }
+
+    function navigateMissingNext() {
+      const total = uniqueMissingKeys.length;
+      if (total === 0) return;
+      missingPos = (missingPos >= total) ? 1 : missingPos + 1;
+      jumpToMissingKey(uniqueMissingKeys[missingPos - 1]);
+      updateMissingBtn();
+    }
+
+    function navigateMissingPrev() {
+      const total = uniqueMissingKeys.length;
+      if (total === 0) return;
+      missingPos = (missingPos <= 1) ? total : missingPos - 1;
+      jumpToMissingKey(uniqueMissingKeys[missingPos - 1]);
+      updateMissingBtn();
+    }
+
+    // ── V3.3 — Reflexive self-link navigator (blue) ─────────────────────────
+    //
+    // Walks every `[data-self-link="true"]` anchor in DOM order and flashes
+    // the target blue when we land on it. Deliberately mirrors the red nav
+    // (not the orange one) because self-links are per-occurrence bugs — a
+    // page with two `<a href="">` should show up as two entries, both worth
+    // fixing individually.
+
+    function getSelfLinkEls() {
+      return Array.from(document.querySelectorAll('[data-self-link="true"]'));
+    }
+
+    function updateSelfLinkBtn() {
+      const total    = getSelfLinkEls().length;
+      const prevBtn  = document.getElementById('selflink-prev-btn');
+      const nextBtn  = document.getElementById('selflink-next-btn');
+      const lbl      = document.getElementById('selflink-nav-label');
+      const disabled = total === 0;
+      prevBtn.disabled = disabled;
+      nextBtn.disabled = disabled;
+      if (disabled) {
+        lbl.textContent = '0 self-links';
+        lbl.className = 'text-xs font-medium px-3 py-1.5 rounded-lg border bg-gray-100 text-gray-400 border-gray-200 whitespace-nowrap';
+      } else {
+        lbl.textContent = selfLinkPos + ' of ' + total + ' self-links';
+        lbl.className = 'text-xs font-medium px-3 py-1.5 rounded-lg border bg-blue-50 text-blue-600 border-blue-200 whitespace-nowrap';
+      }
+    }
+
+    function flashSelfLinkAndScroll(el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('selflink-flash');
+      void el.offsetWidth;   // reflow so re-adding the class replays it
+      el.classList.add('selflink-flash');
+    }
+
+    function navigateSelfLinkNext() {
+      const els   = getSelfLinkEls();
+      const total = els.length;
+      if (total === 0) return;
+      selfLinkPos = (selfLinkPos >= total) ? 1 : selfLinkPos + 1;
+      flashSelfLinkAndScroll(els[selfLinkPos - 1]);
+      updateSelfLinkBtn();
+    }
+
+    function navigateSelfLinkPrev() {
+      const els   = getSelfLinkEls();
+      const total = els.length;
+      if (total === 0) return;
+      selfLinkPos = (selfLinkPos <= 1) ? total : selfLinkPos - 1;
+      flashSelfLinkAndScroll(els[selfLinkPos - 1]);
+      updateSelfLinkBtn();
+    }
+
+    // ── V2.9 — per-section substring search (blur-only) ───────────────────────
+    //
+    // Two tiny inputs sit next to the red and orange nav pairs. On blur we
+    // trim + lowercase the value, find the FIRST matching entry in that
+    // section's list, scroll to it, and reuse the existing flash animation.
+    // Empty on blur is a no-op. No match briefly tints the input's border
+    // red — no alert, no layout shift. Prev/next arrows deliberately keep
+    // walking the full unfiltered list (Thomas asked for the search to be
+    // scoped but the nav to stay global).
+    //
+    // The broken-link input scans the DOM (data-broken="true" anchors —
+    // same set navigatePrev/Next walks). The missing input scans the
+    // server-supplied sorted key list (uniqueMissingKeys) so we honour the
+    // canonical dedupe order rather than the DOM occurrence order.
+    function flashInputNoMatch(inputEl) {
+      inputEl.classList.remove('nomatch-flash');
+      void inputEl.offsetWidth;   // reflow so re-adding the class replays it
+      inputEl.classList.add('nomatch-flash');
+    }
+
+    function searchBroken(inputEl) {
+      const q = (inputEl.value || '').trim().toLowerCase();
+      if (!q) return;   // empty on blur = no-op
+      const els = getBrokenEls();
+      const hit = els.find(a => (a.href || a.textContent || '').toLowerCase().includes(q));
+      if (hit) {
+        flashAndScroll(hit);
+      } else {
+        flashInputNoMatch(inputEl);
+      }
+    }
+
+    function searchMissing(inputEl) {
+      const q = (inputEl.value || '').trim().toLowerCase();
+      if (!q) return;   // empty on blur = no-op
+      const hitKey = uniqueMissingKeys.find(k => k.toLowerCase().includes(q));
+      if (hitKey) {
+        jumpToMissingKey(hitKey);
+      } else {
+        flashInputNoMatch(inputEl);
+      }
+    }
+
+    // V3.3 — self-link substring search. Scans the DOM (same set the blue
+    // up/down nav walks) and jumps to the first `<a>` whose href or text
+    // contains the (lowercased, trimmed) fragment.
+    function searchSelfLink(inputEl) {
+      const q = (inputEl.value || '').trim().toLowerCase();
+      if (!q) return;   // empty on blur = no-op
+      const els = getSelfLinkEls();
+      const hit = els.find(a => (a.href || a.textContent || '').toLowerCase().includes(q));
+      if (hit) {
+        flashSelfLinkAndScroll(hit);
+      } else {
+        flashInputNoMatch(inputEl);
+      }
+    }
+
     // ── HTTP status code descriptions ─────────────────────────────────────────
 
     const STATUS_NAMES = {
@@ -273,8 +595,27 @@
       return 'text-gray-400 hover:text-gray-600';
     }
 
+    // V3.3 — dedicated blue treatment for self-link rows. Blue-600 for the
+    // resting state (matches the counter card number), hover deepens to
+    // blue-800 for parity with the red broken-link hover step.
+    function selfLinkClass() {
+      return 'text-blue-600 hover:text-blue-800';
+    }
+
     function brokenAttr(broken) {
       return broken === true ? ' data-broken="true"' : '';
+    }
+
+    // V3.3 — mark self-link anchors so the blue nav's querySelectorAll and
+    // the substring search can find them.
+    function selfLinkAttr() {
+      return ' data-self-link="true"';
+    }
+
+    function missingKeyAttr(key) {
+      // Attach the server-computed dedupe key to broken anchors so the
+      // "Unique Missing URLs" navigator can group DOM occurrences by key.
+      return key ? ` data-missing-key="${escHtml(key)}"` : '';
     }
 
     function brokenLabel(broken, status) {
@@ -283,11 +624,157 @@
       return ` <span class="ml-2 text-red-400 font-sans not-italic">(${code} = ${statusLabel(status)})</span>`;
     }
 
+    // V3.3 — small blue "self" tag rendered next to each self-link URL,
+    // mirroring brokenLabel's placement/typography but in blue.
+    function selfLinkLabel() {
+      return ' <span class="ml-2 text-blue-400 font-sans not-italic">(self)</span>';
+    }
+
+    // V3.4 — anchor-text annotation. The server ships the FULL captured
+    // text (innerText → img alt → aria-label → ""). We truncate client-side
+    // at 60 chars with an ellipsis, so the API payload stays clean and
+    // presentation stays a template concern. Rendered right of the URL in
+    // a subdued gray so it doesn't compete with the URL itself. Whitespace-
+    // only or empty text renders nothing (no empty "()" placeholder).
+    const ANCHOR_TEXT_LIMIT = 60;
+    function truncateAnchorText(text) {
+      if (text == null) return '';
+      const trimmed = String(text).trim();
+      if (!trimmed) return '';
+      if (trimmed.length <= ANCHOR_TEXT_LIMIT) return trimmed;
+      return trimmed.slice(0, ANCHOR_TEXT_LIMIT) + '…';
+    }
+
+    // V3.5 — surrounding-context snippet. The server ships the FULL
+    // innerText of the anchor's nearest block-level ancestor (or "" if
+    // there is none). We return a ~120-char window centered on the first
+    // case-insensitive occurrence of the anchor text within the block —
+    // so `Ctrl+F "…here for more…"` in the browser lands right on it.
+    // If the anchor text isn't literally in the block (came from an
+    // `alt`/`aria-label`, or is empty), we fall back to the first ~120
+    // chars of the block. Leading/trailing "…" mark truncation.
+    // Whitespace-only / empty context returns "".
+    const CONTEXT_SNIPPET_LIMIT = 120;
+    function contextSnippet(context, anchorText) {
+      if (context == null) return '';
+      const full = String(context).replace(/\s+/g, ' ').trim();
+      if (!full) return '';
+      if (full.length <= CONTEXT_SNIPPET_LIMIT) return full;
+
+      const anchor = (anchorText == null) ? '' : String(anchorText).trim();
+      // Try to center on the anchor text's first case-insensitive
+      // occurrence. If not found (empty anchor, or came from alt/aria-
+      // label that doesn't literally appear in prose), fall through to
+      // "first N chars".
+      let start = 0;
+      if (anchor) {
+        const idx = full.toLowerCase().indexOf(anchor.toLowerCase());
+        if (idx >= 0) {
+          // Center the window on the anchor's midpoint. Clamp so we
+          // don't spill off either end of the block.
+          const anchorMid = idx + Math.floor(anchor.length / 2);
+          start = Math.max(0, anchorMid - Math.floor(CONTEXT_SNIPPET_LIMIT / 2));
+          start = Math.min(start, Math.max(0, full.length - CONTEXT_SNIPPET_LIMIT));
+        }
+      }
+      const end = Math.min(full.length, start + CONTEXT_SNIPPET_LIMIT);
+      let snippet = full.slice(start, end);
+      if (start > 0) snippet = '…' + snippet;
+      if (end < full.length) snippet = snippet + '…';
+      return snippet;
+    }
+
+    // V3.4 — anchor-text-only label (used when there's no surrounding
+    // context, or when we fall through to legacy shape). Left as-is so
+    // V3.4 fixtures/tests continue to pass unchanged.
+    function anchorTextLabel(text) {
+      const shown = truncateAnchorText(text);
+      if (!shown) return '';
+      return ` <span class="ml-1 text-gray-500 text-xs font-sans not-italic">(${escHtml(shown)})</span>`;
+    }
+
+    // V3.5 — combined "(anchor | \"context\")" annotation. The context
+    // is straight-quoted (not smart-quotes) so Thomas can Ctrl+F the
+    // exact substring in his browser. All four states handled:
+    //   • anchor + context → (anchor | "context")
+    //   • anchor only      → (anchor)                — matches V3.4
+    //   • context only     → ("context")             — anchor text was ""
+    //   • neither          → ""                       — bare URL, no annotation
+    function anchorContextLabel(text, context) {
+      const shownAnchor  = truncateAnchorText(text);
+      const shownContext = contextSnippet(context, text);
+      if (!shownAnchor && !shownContext) return '';
+      let inner;
+      if (shownAnchor && shownContext) {
+        inner = `${escHtml(shownAnchor)} | &quot;${escHtml(shownContext)}&quot;`;
+      } else if (shownAnchor) {
+        inner = escHtml(shownAnchor);
+      } else {
+        inner = `&quot;${escHtml(shownContext)}&quot;`;
+      }
+      return ` <span class="ml-1 text-gray-500 text-xs font-sans not-italic">(${inner})</span>`;
+    }
+
+    // V3.4 — combined "(self, text)" label for self-links that also have
+    // anchor text — keeps a single parenthetical instead of two adjacent
+    // groups, which reads much cleaner ("… (self, Home)" vs "… (self) (Home)").
+    // Bare self-links (no text) still render "(self)" unchanged.
+    // V3.5 — extends to a third piece for the surrounding context:
+    //   (self)                          — no text, no context
+    //   (self, Home)                    — text only        (V3.4 behavior)
+    //   (self | "context")              — context only, no text
+    //   (self, Home | "context")        — both present
+    function selfLinkCombinedLabel(text, context) {
+      const shownAnchor  = truncateAnchorText(text);
+      const shownContext = contextSnippet(context, text);
+      let inner = 'self';
+      if (shownAnchor && shownContext) {
+        inner = `self, ${escHtml(shownAnchor)} | &quot;${escHtml(shownContext)}&quot;`;
+      } else if (shownAnchor) {
+        inner = `self, ${escHtml(shownAnchor)}`;
+      } else if (shownContext) {
+        inner = `self | &quot;${escHtml(shownContext)}&quot;`;
+      } else {
+        // No text, no context — legacy "(self)" tag unchanged.
+        return selfLinkLabel();
+      }
+      return ` <span class="ml-2 text-blue-400 font-sans not-italic">(${inner})</span>`;
+    }
+
     function statusBadge(status, success) {
       if (success) return `<span class="text-green-600 font-sans">${status}</span>`;
       const col  = status >= 500 ? 'text-orange-500' : status >= 400 ? 'text-red-500' : 'text-gray-400';
       const code = status ?? 'ERR';
       return `<span class="${col} font-sans">(${code} = ${statusLabel(status)})</span>`;
+    }
+
+    // ── Retry badge ───────────────────────────────────────────────────────────
+    // Small, tooltip-driven marker that surfaces V2.8's retry-before-flag
+    // policy at a glance:
+    //   • Successful on retry (attempts ≥ 2) → amber "R2" / "R3" pill so
+    //     Thomas can see which links needed help before being trusted.
+    //   • Escalated to browser UA & succeeded → the pill reads "UA" and
+    //     hovers to "Recovered with browser UA".
+    //   • Broken after all retries → red "×3" pill hovering to the reason.
+    // First-attempt successes render nothing — the clean path stays quiet.
+    function retryBadge(attempts, succeededWith, failureReason, broken) {
+      if (attempts == null) return '';
+      // Broken: show the terminal attempt count + reason on hover.
+      if (broken === true) {
+        const reason = failureReason || 'unknown';
+        return ` <span class="ml-1 inline-block px-1 rounded text-[10px] font-sans align-middle bg-red-50 text-red-700 border border-red-200"
+                        title="Failed after ${attempts} attempt${attempts===1?'':'s'} — ${reason}">×${attempts}</span>`;
+      }
+      // Success on first hit: silent.
+      if (attempts <= 1) return '';
+      // Success on retry: amber, distinguishing UA escalation from a same-UA recovery.
+      const isUA = succeededWith === 'browser';
+      const label   = isUA ? 'UA' : `R${attempts}`;
+      const tooltip = isUA
+        ? `Recovered with browser UA (attempt ${attempts})`
+        : `Recovered on retry (attempt ${attempts})`;
+      return ` <span class="ml-1 inline-block px-1 rounded text-[10px] font-sans align-middle bg-amber-50 text-amber-700 border border-amber-200"
+                      title="${tooltip}">${label}</span>`;
     }
 
     // ── Tree rendering ────────────────────────────────────────────────────────
@@ -315,19 +802,49 @@
         const parentClass  = p.success  ? 'text-gray-900' : 'text-red-600 hover:text-red-800';
         let html = `<div class="flex items-baseline gap-2 mb-1">
           <span class="text-gray-300">●</span>
-          <a href="${escHtml(p.url)}" target="_blank" rel="noopener"${parentBroken}
+          <a href="${escHtml(p.url)}" target="_blank" rel="noopener"${parentBroken}${missingKeyAttr(p.missing_key)}
              class="font-semibold ${parentClass} hover:underline break-all">${escHtml(p.url)}</a>
           <span class="text-gray-300 flex-shrink-0">${statusBadge(p.status, p.success)}</span>
+          ${retryBadge(p.attempts, p.succeeded_with, p.failure_reason, !p.success)}
         </div>`;
 
-        // Child link rows
-        if (p.links && p.links.length > 0) {
+        // Child link rows — regular links first, then self-links (rendered
+        // uniformly, distinguished only by blue color + "(self)" tag +
+        // data-self-link attribute for the blue nav). Self-links are
+        // grouped after the normal links so scanning down a page reads
+        // "here's what this page links to → and by the way, N of these
+        // pointed back to itself".
+        const regularLinks = (p.links && p.links.length > 0) ? p.links : [];
+        const selfLinks    = (p.self_links && p.self_links.length > 0) ? p.self_links : [];
+        if (regularLinks.length > 0 || selfLinks.length > 0) {
           html += '<div class="pl-5 space-y-0.5">';
-          for (const lnk of p.links) {
+          for (const lnk of regularLinks) {
+            // V3.4 — append `(anchor text)` after the URL in subdued gray.
+            //         Truncated client-side at 60 chars; empty text renders nothing.
+            // V3.5 — annotation grew to `(anchor | "context")` when the
+            //         server ships a nearest-block-level ancestor snippet.
+            //         `anchorContextLabel` handles all four presence combos
+            //         (both/anchor-only/context-only/neither) and falls
+            //         through to V3.4's "(anchor)" shape when `lnk.context`
+            //         is missing (legacy payloads).
             html += `<div class="flex items-baseline gap-1">
               <span class="text-gray-200 flex-shrink-0 select-none">└─</span>
-              <a href="${escHtml(lnk.url)}" target="_blank" rel="noopener"${brokenAttr(lnk.broken)}
-                 class="${linkClass(lnk.broken)} hover:underline break-all">${escHtml(lnk.url)}</a>${brokenLabel(lnk.broken, lnk.status)}
+              <a href="${escHtml(lnk.url)}" target="_blank" rel="noopener"${brokenAttr(lnk.broken)}${missingKeyAttr(lnk.missing_key)}
+                 class="${linkClass(lnk.broken)} hover:underline break-all">${escHtml(lnk.url)}</a>${brokenLabel(lnk.broken, lnk.status)}${retryBadge(lnk.attempts, lnk.succeeded_with, lnk.failure_reason, lnk.broken)}${anchorContextLabel(lnk.text, lnk.context)}
+            </div>`;
+          }
+          for (const sl of selfLinks) {
+            // V3.3 — self-link row: blue anchor, "(self)" tag, no retry
+            // badge (they never hit the retry ladder), no missing_key.
+            // V3.4 — when anchor text is present, collapse the two tags
+            // into a single "(self, <text>)" parenthetical for readability.
+            // V3.5 — same collapse extends to context: "(self, Home | "…")"
+            // or "(self | "…")" if only context is present. `sl.context`
+            // may be undefined on legacy payloads; helper handles that.
+            html += `<div class="flex items-baseline gap-1">
+              <span class="text-gray-200 flex-shrink-0 select-none">└─</span>
+              <a href="${escHtml(sl.url)}" target="_blank" rel="noopener"${selfLinkAttr()}
+                 class="${selfLinkClass()} hover:underline break-all">${escHtml(sl.url)}</a>${selfLinkCombinedLabel(sl.text, sl.context)}
             </div>`;
           }
           html += '</div>';
@@ -341,6 +858,7 @@
 
       renderedCount = pages.length;
       updateBrokenBtn();
+      updateSelfLinkBtn();
 
       // Auto-scroll to the new bottom only if the user was already there.
       if (wasAtBottom) tree.scrollTop = tree.scrollHeight;
@@ -351,7 +869,20 @@
       tree.innerHTML = '';
       renderedCount = 0;
       brokenPos     = 0;   // reset navigator position since DOM rebuilt
+      missingPos    = 0;
+      selfLinkPos   = 0;   // V3.3 — reset the blue nav cursor too
       appendTreePages(pages);
+    }
+
+    // Called on every poll — takes the server's authoritative sorted list of
+    // unique missing URL keys and rebinds the orange nav to it.
+    function syncMissingList(data) {
+      const items = data.unique_missing_urls || [];
+      uniqueMissingKeys = items.map(x => x.url);
+      // If the list shrank (server recovered a URL on retry, or job
+      // reset), clamp the cursor back into range.
+      if (missingPos > uniqueMissingKeys.length) missingPos = 0;
+      updateMissingBtn();
     }
 
     // ── State update functions ────────────────────────────────────────────────
@@ -365,11 +896,13 @@
       document.getElementById('live-checked').textContent = data.total_checked;
       document.getElementById('live-ok').textContent      = data.successful;
       document.getElementById('live-broken').textContent  = data.broken;
+      document.getElementById('live-unique-missing').textContent = data.unique_missing_count || 0;
       document.getElementById('queue-size').textContent   = data.queue_size + ' in queue';
       const phaseLabel = data.phase === 'external' ? 'Probing external links' : 'Crawling';
       document.getElementById('status-text').textContent  =
         phaseLabel + ' — ' + data.total_checked + ' checked, ' + data.queue_size + ' queued…';
       appendTreePages(data.pages);
+      syncMissingList(data);
     }
 
     function applyDone(data) {
@@ -384,9 +917,30 @@
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       document.getElementById('status-text').textContent = 'Crawl complete — ' + elapsed + 's';
 
+      // V3.2 — swap the crawl-detail block's background to the soft grass-green
+      // wash. If this is the very first poll (page-reload of an already-
+      // completed job) we tack on .no-fade so the wash is simply already there
+      // instead of playing the 500ms fade. Otherwise (crawl finished live while
+      // the user was watching) the keyframe fades it in smoothly.
+      const tree = document.getElementById('link-tree');
+      if (tree) {
+        if (!firstPollHandled) tree.classList.add('no-fade');
+        tree.classList.add('crawl-complete');
+      }
+
       document.getElementById('res-total').textContent  = data.total_checked;
       document.getElementById('res-ok').textContent     = data.successful;
-      document.getElementById('res-broken').textContent = data.broken;
+      // V3.1 — pink card shows TOTAL broken references (duplicates across
+      // pages counted), matching the red up/down nav's "N of M broken"
+      // label. The orange card next door still shows unique missing URLs
+      // (dedupe). Falls back to `data.broken` only if a stale server
+      // hasn't shipped the new field yet.
+      document.getElementById('res-broken').textContent =
+        (data.broken_references != null ? data.broken_references : data.broken);
+      document.getElementById('res-unique-missing').textContent = data.unique_missing_count || 0;
+      // V3.3 — blue self-links tile. Falls back to 0 if a stale server
+      // hasn't shipped `self_reference_count` yet.
+      document.getElementById('res-self-links').textContent = data.self_reference_count || 0;
 
       if (data.capped) document.getElementById('cap-warning').classList.remove('hidden');
       if (data.error) {
@@ -396,6 +950,7 @@
       }
 
       rerenderTree(data.pages);
+      syncMissingList(data);
     }
 
     // ── Polling ───────────────────────────────────────────────────────────────
@@ -429,7 +984,14 @@
         const data = await r.json();
         if (data.status === 'done') applyDone(data);
         else                        applyRunning(data);
-      } catch (e) { console.error('poll error', e); }
+      } catch (e) {
+        console.error('poll error', e);
+      } finally {
+        // V3.2 — flip the first-poll flag AFTER apply* runs so applyDone can
+        // detect "this is the initial page load and the job's already done"
+        // and skip the fade-in animation.
+        firstPollHandled = true;
+      }
     }
 
     poll();

@@ -11,7 +11,7 @@ This folder contains persona files for each AI team member. Each file defines a 
 | **Pax** | Senior Researcher | opus | `pax.md` |
 | **Reed** | Database Engineer (SQLite) | sonnet | `reed.md` |
 | **Gemma** | Technical Diagramming Specialist | sonnet | `gemma.md` |
-| **Sienna** | Full-Stack Application Developer (Local-First Web UIs) | sonnet | `sienna.md` |
+| **Sienna** | Full-Stack Application Developer (Local-First Web UIs) | opus | `sienna.md` |
 | **Topo** | 3D Modeling / Computational Geometry Specialist | opus | `topo.md` |
 | **Cass** | Architectural Visualization Specialist (Photo-Composite Mockups) | opus | `cass.md` |
 | **Vera** | AI Compositing Specialist (Photorealistic Architectural Inpainting & Mockups) | sonnet | `vera.md` |

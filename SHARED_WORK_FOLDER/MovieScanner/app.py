@@ -29,7 +29,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.5"
+APP_VERSION = "V3.7"
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "db", "scanner.db")
 
@@ -201,17 +201,17 @@ def index():
 @app.route("/config", methods=["POST"])
 def save_config():
     """Save the config form. Delegates to _save_config_from_form() so the
-    Save button honours the same per-genre 3-state radio grid that /run and
-    /config_and_rescan already read. Previous implementation looked for a
-    comma-separated `tags`/`exclude_tags` field that the template no longer
-    posts, silently wiping every include/exclude selection on each Save."""
+    Save button honours the same per-genre 3-state radio grid that /run
+    already reads. Previous implementation looked for a comma-separated
+    `tags`/`exclude_tags` field that the template no longer posts,
+    silently wiping every include/exclude selection on each Save."""
     _save_config_from_form()
     return redirect(url_for("index"))
 
 
 def _save_config_from_form():
     """Persist the config form to the DB. Extracted so both /config and
-    /config_and_rescan can share the same coercion logic."""
+    /run can share the same coercion logic."""
     try:
         min_rating = float(request.form.get("min_rating", "7.0"))
     except ValueError:
@@ -284,7 +284,7 @@ def clear_all():
         include/exclude genre selections, omdb_api_key, everything).
 
     To also reset the seen-set + rerun against saved config, use
-    "Save config and rescan all" instead.
+    "Run scan now" instead — it wipes titles + matches then scans.
     """
     db = _conn()
     # matches has FK REFERENCES runs(id) ON DELETE CASCADE, so wiping runs
@@ -296,15 +296,19 @@ def clear_all():
     return redirect(url_for("index"))
 
 
-@app.route("/config_and_rescan", methods=["POST"])
-def save_config_and_rescan():
-    """Save the config, wipe the seen-titles + matches tables, and start a
-    fresh scan. Every title in tomorrow's dump will be treated as new and
-    re-tested against the just-saved config.
+@app.route("/run", methods=["POST"])
+def start_run():
+    """Save the config, wipe seen-titles + matches, and kick off a fresh
+    scan in a background thread. Every title in today's IMDB dump gets
+    re-tested against the just-saved on-screen config — no "you had to
+    click Save first" trap.
 
     Deliberately preserves `runs` history so the audit trail (including a
-    marker row for this wipe) survives — matches for those old runs are
+    marker row for this wipe) survives; matches for those old runs are
     dropped along with the titles they referenced.
+
+    NOTE: Scanner.scan() creates and owns its own runs row — the marker
+    row inserted here is a separate 'wiped' row, not a stub for the scan.
     """
     if _scan_in_progress():
         flash(_SCAN_BUSY_MSG)
@@ -321,41 +325,12 @@ def save_config_and_rescan():
     db.execute(
         "INSERT INTO runs (status, phase, completed_at, config_snapshot) "
         "VALUES ('done', 'wiped', strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?)",
-        (json.dumps({"note": "titles + matches wiped by 'Save config and rescan all'"}),),
+        (json.dumps({"note": "titles + matches wiped by 'Run scan now'"}),),
     )
     db.commit()
     db.close()
 
     _spawn_scan_worker()
-    return redirect(url_for("index"))
-
-
-@app.route("/run", methods=["POST"])
-def start_run():
-    """Save whatever config values are in the form (so unsaved radio clicks
-    aren't silently dropped), then kick off a scan in a background thread.
-
-    The Run button lives inside the config form and submits the same fields
-    as Save, so the user's on-screen state is what actually runs — no
-    "you had to click Save first" trap.
-
-    NOTE: Scanner.scan() creates and owns its own runs row. We must NOT
-    insert a stub row here — doing so causes two rows to appear in Recent
-    Runs (the empty stub and the real one from Scanner.scan()).
-    """
-    if _scan_in_progress():
-        flash(_SCAN_BUSY_MSG)
-        return redirect(url_for("index"))
-
-    _save_config_from_form()
-
-    def worker():
-        try:
-            Scanner(db_path=DB_PATH).scan(on_progress=lambda msg: None)
-        except Exception as e:
-            print(f"[MovieScanner] scan error: {e}")
-
-    threading.Thread(target=worker, daemon=True).start()
     return redirect(url_for("index"))
 
 

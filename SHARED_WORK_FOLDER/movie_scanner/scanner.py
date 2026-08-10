@@ -147,7 +147,10 @@ def _iter_basics(path: str, keep_types: set[str]) -> Iterable[tuple]:
             )
 
 
-def _load_episode_years(path: str) -> dict[str, int]:
+def _load_episode_years(
+    path: str,
+    on_progress: Callable[[str], None] | None = None,
+) -> dict[str, int]:
     """Return a dict of ``{tconst -> startYear}`` for every ``tvEpisode`` row
     in the basics dump. Used by the V3.13 season-year aggregation.
 
@@ -157,11 +160,22 @@ def _load_episode_years(path: str) -> dict[str, int]:
     have their own titleType (``tvEpisode``), so they're never yielded by
     the main iterator. We take a second, tighter pass here that only reads
     tconst + titleType + startYear (columns 0, 1, 5) to keep the cost down.
+
+    If ``on_progress`` is supplied, emits a heartbeat every 2 M scanned rows
+    so the seasons phase doesn't look hung during its ~8-15 s of silent
+    streaming (see V3.19 seasons perf fix).
     """
     out: dict[str, int] = {}
+    scanned = 0
     with gzip.open(path, "rt", encoding="utf-8", errors="replace") as f:
         f.readline()  # skip header
         for line in f:
+            scanned += 1
+            if on_progress and scanned % 2_000_000 == 0:
+                on_progress(
+                    f"  …scanned {scanned:,} basics rows for episode years "
+                    f"({len(out):,} tvEpisode rows so far)"
+                )
             parts = line.rstrip("\n").split("\t")
             if len(parts) < 6:
                 continue
@@ -198,6 +212,33 @@ def _iter_episodes(path: str) -> Iterable[tuple[str, str, int | None]]:
             except ValueError:
                 continue
             yield (tconst, parent_tconst, season_num)
+
+
+def _seasons_cache_key(basics_path: str, episodes_path: str) -> str:
+    """Build a cache-key string from the downloader's ``.last_modified``
+    sidecar files. Used by the seasons phase (V3.19 perf fix) to skip a
+    ~15 s rebuild when neither dump has changed since the last successful
+    scan. Falls back to file mtime when the sidecar is missing (older DBs
+    that predated the sidecar writer).
+
+    Returns e.g. ``"basics:<lm>|episodes:<lm>"`` — opaque; equality-checked
+    only. We deliberately avoid hashing file *contents* (a 215 MB read on
+    every scan would defeat the whole optimization).
+    """
+    def _sig(p: str) -> str:
+        lm_path = p + ".last_modified"
+        try:
+            with open(lm_path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except OSError:
+            # No sidecar (unit tests, hand-copied dumps, older DBs): fall
+            # back to (size, mtime_ns). Slightly weaker but still stable.
+            try:
+                st = os.stat(p)
+                return f"size={st.st_size},mtime={st.st_mtime_ns}"
+            except OSError:
+                return "unknown"
+    return f"basics:{_sig(basics_path)}|episodes:{_sig(episodes_path)}"
 
 
 def _load_ratings(path: str) -> dict[str, tuple[float, int]]:
@@ -622,53 +663,103 @@ class Scanner:
             on_progress(f"loaded {len(ratings):,} rating rows")
             self._check_cancel("cancelled after loading ratings")
 
-            # 2b. Seasons (V3.13) — build the per-series season air-year cache
-            # so the per-series year filter can consult it during matching.
-            # We need every episode's startYear, but title.basics's main
-            # iterator drops tvEpisode rows, so we take a second pass here
-            # that only reads (tconst, titleType, startYear). ~30–40 s on a
-            # typical laptop for the current ~11 M-row basics dump.
+            # 2b. Seasons (V3.13, cache-optimized in V3.19) — build the
+            # per-series season air-year cache so the per-series filter can
+            # consult it during matching.
+            #
+            # PERF (V3.19): this phase costs ~15 s on M-series / ~30-60 s on
+            # older hardware: it streams the 215 MB basics dump to build an
+            # 8.5M-key ``{tvEpisode → startYear}`` map, then streams the
+            # 52 MB episode dump to aggregate. Result is deterministic from
+            # the two source files alone — so if neither has changed since
+            # last successful scan, the on-disk ``series_seasons`` rows are
+            # still valid. We short-circuit via a config cache key
+            # (``seasons_cache_key``) built from the downloader's
+            # ``.last_modified`` sidecars. Thomas re-runs frequently and
+            # IMDb dumps refresh ~daily, so most scans hit the fast path.
             phase("seasons", "aggregating per-season air years…")
-            episode_years = _load_episode_years(basics_path)
-            on_progress(f"loaded {len(episode_years):,} episode air years")
-            self._check_cancel("cancelled during season aggregation")
+            cache_key = _seasons_cache_key(basics_path, episodes_path)
+            cache_row = conn.execute(
+                "SELECT value FROM config WHERE key='seasons_cache_key'"
+            ).fetchone()
+            existing_rows = conn.execute(
+                "SELECT COUNT(*) FROM series_seasons"
+            ).fetchone()[0]
+            if (
+                cache_row is not None
+                and cache_row["value"] == cache_key
+                and existing_rows > 0
+            ):
+                on_progress(
+                    f"seasons cache hit — reusing {existing_rows:,} rows "
+                    f"(episode/basics dumps unchanged); skipping rebuild"
+                )
+            else:
+                # Cache miss — rebuild from scratch. Emit heartbeats during
+                # the two silent ~7-10 s stream passes so the phase doesn't
+                # look hung (this was the visible symptom Thomas hit).
+                episode_years = _load_episode_years(
+                    basics_path, on_progress=on_progress
+                )
+                on_progress(f"loaded {len(episode_years):,} episode air years")
+                self._check_cancel("cancelled during season aggregation")
 
-            # Aggregate: for each (parent_tconst, season_number), take the
-            # MIN of its episodes' startYear as season_air_year, and count
-            # episodes. Streamed — never holds the full episode file in RAM.
-            season_agg: dict[tuple[str, int], list[int | None]] = {}
-            # value: [min_year_or_None, episode_count]
-            for _ep_tconst, parent_tconst, season_num in _iter_episodes(episodes_path):
-                key = (parent_tconst, season_num)
-                slot = season_agg.get(key)
-                ep_year = episode_years.get(_ep_tconst)
-                if slot is None:
-                    season_agg[key] = [ep_year, 1]
-                else:
-                    slot[1] += 1
-                    if ep_year is not None:
-                        cur = slot[0]
-                        if cur is None or ep_year < cur:
-                            slot[0] = ep_year
+                # Aggregate: for each (parent_tconst, season_number), take
+                # the MIN of its episodes' startYear as season_air_year,
+                # and count episodes. Streamed — the ep-file iterator never
+                # holds the full episode file in RAM.
+                season_agg: dict[tuple[str, int], list[int | None]] = {}
+                # value: [min_year_or_None, episode_count]
+                ep_scanned = 0
+                for _ep_tconst, parent_tconst, season_num in _iter_episodes(
+                    episodes_path
+                ):
+                    ep_scanned += 1
+                    if ep_scanned % 2_000_000 == 0:
+                        on_progress(
+                            f"  …aggregated {ep_scanned:,} episode rows "
+                            f"({len(season_agg):,} seasons so far)"
+                        )
+                    key = (parent_tconst, season_num)
+                    slot = season_agg.get(key)
+                    ep_year = episode_years.get(_ep_tconst)
+                    if slot is None:
+                        season_agg[key] = [ep_year, 1]
+                    else:
+                        slot[1] += 1
+                        if ep_year is not None:
+                            cur = slot[0]
+                            if cur is None or ep_year < cur:
+                                slot[0] = ep_year
 
-            # Bulk INSERT OR REPLACE — the whole table is rebuilt on every
-            # scan, so a full replace is correct and keeps stale rows from
-            # accumulating when episodes get renumbered upstream.
-            conn.executemany(
-                "INSERT OR REPLACE INTO series_seasons "
-                "(parent_tconst, season_number, air_year, episode_count) "
-                "VALUES (?, ?, ?, ?)",
-                (
-                    (parent, season, slot[0], slot[1])
-                    for (parent, season), slot in season_agg.items()
-                ),
-            )
-            conn.commit()
-            on_progress(f"cached {len(season_agg):,} (series, season) rows")
-            # Free the episode year dict + agg map — we won't need them again
-            # in this scan and title.basics streaming below allocates a lot.
-            episode_years.clear()
-            season_agg.clear()
+                # Bulk INSERT OR REPLACE inside an explicit transaction so
+                # the write hits disk as one fsync instead of ~375K.
+                # series_seasons has no FKs (see schema.py), so the
+                # PRAGMA foreign_keys=ON default doesn't add work here.
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute("DELETE FROM series_seasons")  # full replace
+                conn.executemany(
+                    "INSERT INTO series_seasons "
+                    "(parent_tconst, season_number, air_year, episode_count) "
+                    "VALUES (?, ?, ?, ?)",
+                    (
+                        (parent, season, slot[0], slot[1])
+                        for (parent, season), slot in season_agg.items()
+                    ),
+                )
+                # Record the cache key so the NEXT scan can short-circuit.
+                conn.execute(
+                    "INSERT OR REPLACE INTO config (key, value) "
+                    "VALUES ('seasons_cache_key', ?)",
+                    (cache_key,),
+                )
+                conn.commit()
+                on_progress(f"cached {len(season_agg):,} (series, season) rows")
+                # Free the episode year dict + agg map — we won't need them
+                # again in this scan and title.basics streaming below
+                # allocates a lot.
+                episode_years.clear()
+                season_agg.clear()
             self._check_cancel("cancelled after season aggregation")
 
             # 3. Basics — stream + diff

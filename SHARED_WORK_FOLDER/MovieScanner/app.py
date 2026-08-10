@@ -30,7 +30,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.17"
+APP_VERSION = "V3.18"
 
 # V3.15 — allow verification runs and Herman / external tools to redirect
 # the scanner at a temporary DB without touching Thomas's live data. The
@@ -426,6 +426,42 @@ def start_run():
 
     _spawn_scan_worker()
     return redirect(url_for("index"))
+
+
+@app.route("/cancel/<int:run_id>", methods=["POST"])
+def cancel_run(run_id: int):
+    """Cooperatively cancel a running scan.
+
+    V3.18 — Thomas asked for a UI-level cancel affordance after run #4
+    got stuck for hours with no way to abort. The Scanner already has a
+    cooperative cancel mechanism (V3.13); this route just exposes it.
+
+    Behaviour:
+      * If ``_active_scanner`` is set AND ``run_id`` matches the row
+        currently in ``status='running'``, call ``.cancel()`` and 200.
+      * Otherwise 404 (nothing to cancel, or stale UI state).
+
+    The worker thread's except-clause translates ScanCancelled into a
+    terminal row with ``status='error', phase='cancelled'``; no DB writes
+    are needed here. The 3-second poll on the Recent runs table picks
+    up the state change on its next tick.
+    """
+    global _active_scanner
+
+    # Defensive: only cancel if the run_id the caller quoted actually
+    # matches the row that's live right now. Protects against stale UI
+    # state (e.g. user reopened an old tab).
+    db = _conn()
+    row = db.execute(
+        "SELECT id FROM runs WHERE id=? AND status='running'",
+        (run_id,),
+    ).fetchone()
+    db.close()
+    if row is None or _active_scanner is None:
+        return ("no active scan matches", 404)
+
+    _active_scanner.cancel()
+    return ("cancelling", 200)
 
 
 @app.route("/run/latest")

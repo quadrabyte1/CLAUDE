@@ -703,33 +703,40 @@ class Scanner:
                 if exclude and any(g in exclude for g in title_genres_lower):
                     continue
 
-                # Year filter — split by title type.
-                #   * Series (tvSeries / tvMiniSeries): look up season air
-                #     years in series_seasons. Series passes if ANY season
-                #     has air_year >= min_year. We also capture the full
-                #     list of qualifying seasons so the UI can expand them.
-                #   * Everything else: classic startYear >= min_year.
+                # Year filter — V3.17 STRICT (reverts V3.13 per-season branch).
+                #
+                # Every title type — movies AND series — must have
+                # ``startYear >= min_year``. V3.13's "series passes if ANY
+                # season has air_year >= min_year" leaked long-running shows
+                # (Formula 1 1950, Great Performances 1971, Law & Order 1990)
+                # into min_year=2026 scans; Thomas rejected the results and
+                # picked Option A "strict" on 2026-08-10.
+                #
+                # We still capture qualifying seasons for series that PASS
+                # the gate so the UI can show ``▼ N season matches (…)``
+                # inline. That's display data only — it never affects the
+                # match decision.
                 qualifying_seasons: list[tuple[int, int | None, int]] = []
                 is_series = title_type in self._SERIES_TYPES
                 if min_year > 0:
-                    if is_series:
-                        rows_s = conn.execute(
-                            "SELECT season_number, air_year, episode_count "
-                            "FROM series_seasons "
-                            "WHERE parent_tconst=? AND air_year IS NOT NULL "
-                            "AND air_year >= ? "
-                            "ORDER BY season_number ASC",
-                            (tconst, min_year),
-                        ).fetchall()
-                        if not rows_s:
-                            continue
-                        qualifying_seasons = [
-                            (r["season_number"], r["air_year"], r["episode_count"])
-                            for r in rows_s
-                        ]
-                    else:
-                        if start_year is None or int(start_year) < min_year:
-                            continue
+                    if start_year is None or int(start_year) < min_year:
+                        continue
+                if is_series and min_year > 0:
+                    # Display-only: show which seasons meet the min_year gate
+                    # so the UI can render ``▼ N season matches (…)`` inline.
+                    # No longer affects the match decision (V3.17 strict).
+                    rows_s = conn.execute(
+                        "SELECT season_number, air_year, episode_count "
+                        "FROM series_seasons "
+                        "WHERE parent_tconst=? AND air_year IS NOT NULL "
+                        "AND air_year >= ? "
+                        "ORDER BY season_number ASC",
+                        (tconst, min_year),
+                    ).fetchall()
+                    qualifying_seasons = [
+                        (r["season_number"], r["air_year"], r["episode_count"])
+                        for r in rows_s
+                    ]
 
                 # Rating + vote filter
                 rating_row = ratings.get(tconst)

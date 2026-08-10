@@ -30,7 +30,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.16"
+APP_VERSION = "V3.17"
 
 # V3.15 — allow verification runs and Herman / external tools to redirect
 # the scanner at a temporary DB without touching Thomas's live data. The

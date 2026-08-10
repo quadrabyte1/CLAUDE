@@ -9,8 +9,13 @@
        inline scripts below finish parsing first (they set up sortable/
        tooltip listeners synchronously on document-ready). -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-  <!-- V3.18 — htmx powers the cancel button in Recent runs (hx-post /cancel/<id>). -->
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <!-- V3.20 — cancel button now uses a self-contained vanilla-JS fetch() call
+       (see cancelRun() in the <script> block below). Removed the htmx CDN
+       dependency: it was ONLY used for one button, and when unpkg.com was
+       unreachable (offline, firewall, intermittent CDN failure) the button
+       rendered but did nothing — silent breakage. Local-first project;
+       critical UX shouldn't hinge on a remote script that may not load. -->
+
   <style>
     /* ── V3.16 page decoration ─────────────────────────────────────────────
        Palette: blue, gray, black, white. Quiet, local-first polish — no
@@ -497,17 +502,17 @@
               <td class="px-4 py-2 text-right font-mono font-semibold text-blue-600">{{ "{:,}".format(r.matched_titles or 0) }}</td>
               <td class="px-4 py-2 text-right">
                 {% if r.status == 'running' %}
-                  {# V3.18 — cooperative cancel. htmx POST to /cancel/<id>; the
-                     3s poll refreshes the row, so no swap needed. onclick
-                     stopPropagation guards against future row-level handlers. #}
+                  {# V3.20 — cooperative cancel. Vanilla-JS fetch() (see
+                     cancelRun below). The 3s poll refreshes the row so no
+                     swap is needed. `data-cancel-run` marks the button so
+                     the test suite can find it without depending on the
+                     hx-* attribute vocabulary that we deliberately dropped. #}
                   <button type="button"
-                          hx-post="/cancel/{{ r.id }}"
-                          hx-swap="none"
-                          hx-confirm="Cancel this scan?"
-                          onclick="event.stopPropagation()"
+                          data-cancel-run="{{ r.id }}"
+                          onclick="event.stopPropagation(); cancelRun({{ r.id }}, this)"
                           title="Cancel this scan"
                           aria-label="Cancel run {{ r.id }}"
-                          class="text-xs text-gray-400 hover:text-red-600 transition-colors leading-none">
+                          class="text-xs text-gray-400 hover:text-red-600 transition-colors leading-none cursor-pointer px-1">
                     ✕
                   </button>
                 {% endif %}
@@ -688,9 +693,33 @@
       setInterval(() => {
         if (configDirty) return;                                               // user has unsaved edits — don't wipe in-progress radio changes
         if (configForm && configForm.contains(document.activeElement)) return; // focus is inside the form
+        if (window.__cancelInFlight) return;                                   // V3.20 — don't yank the DOM while a /cancel POST is pending
         location.reload();
       }, 3000);
     }
+
+    // ── cancelRun ──────────────────────────────────────────────────────────
+    // V3.20 — bugfix for V3.18. The cancel-X button used to be htmx-driven
+    // (an hx dash post attr plus hx dash confirm). When the htmx.org CDN
+    // failed to load (offline, firewall, unpkg hiccup) the button rendered
+    // but had NO handler attached — clicking it did nothing, silently.
+    // Local-first app; critical UX cannot depend on a remote script. This
+    // vanilla-JS handler is 10 lines and has zero external deps.
+    //
+    // Suppresses the 3s auto-reload during the request via __cancelInFlight
+    // so the DOM doesn't get torn out mid-fetch on slow networks.
+    window.cancelRun = function (runId, btn) {
+      if (!confirm('Cancel this scan?')) return;
+      if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; }
+      window.__cancelInFlight = true;
+      fetch('/cancel/' + runId, { method: 'POST', headers: { 'X-Requested-With': 'cancelRun' } })
+        .catch(err => console.warn('[cancelRun] network error:', err))
+        .finally(() => {
+          window.__cancelInFlight = false;
+          // The 3s poller will pick up the state flip on its next tick;
+          // no need to reload immediately.
+        });
+    };
 
     // ── enableSortableResizable ─────────────────────────────────────────────
     // One-call setup for click-to-sort + drag-to-resize on any <table>.

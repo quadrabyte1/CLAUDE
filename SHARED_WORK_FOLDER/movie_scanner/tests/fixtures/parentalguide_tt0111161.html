@@ -1,0 +1,73 @@
+<!--
+  Synthetic fixture — mirrors the 2026-era IMDb parental-guide DOM.
+
+  The live page was captured from a normal browser session on Thomas's
+  Mac (AWS WAF blocks Sienna's headless / curl requests, so this fixture
+  is authored from the well-documented structural pattern of the live
+  page).
+
+  If IMDb changes its DOM and the parser starts returning all-unknown for
+  real titles, capture a real page HTML into this same path and re-run
+  the tests — the parser is designed to fall back gracefully but its
+  structural expectations live here.
+-->
+<!DOCTYPE html>
+<html lang="en"><head><title>Parents Guide - The Shawshank Redemption</title></head>
+<body>
+  <main>
+    <h1>Parents Guide</h1>
+
+    <section id="advisory-nudity">
+      <h3>Sex &amp; Nudity</h3>
+      <div class="advisory-severity-vote__container">
+        <span class="ipl-status-pill ipl-status-pill--rating-mild">Mild</span>
+        <span class="advisory-severity-vote__message">324 of 512 found this Mild</span>
+      </div>
+      <ul class="advisory-content">
+        <li>A woman is briefly seen in silhouette.</li>
+      </ul>
+    </section>
+
+    <section id="advisory-violence">
+      <h3>Violence &amp; Gore</h3>
+      <div class="advisory-severity-vote__container">
+        <span class="ipl-status-pill ipl-status-pill--rating-severe">Severe</span>
+        <span class="advisory-severity-vote__message">210 of 300 found this Severe</span>
+      </div>
+      <ul class="advisory-content">
+        <li>A prison beating is shown in detail.</li>
+        <li>Reference to sexual assault.</li>
+      </ul>
+    </section>
+
+    <section id="advisory-profanity">
+      <h3>Profanity</h3>
+      <div class="advisory-severity-vote__container">
+        <span class="ipl-status-pill ipl-status-pill--rating-severe">Severe</span>
+      </div>
+      <ul class="advisory-content">
+        <li>Frequent use of strong language throughout.</li>
+      </ul>
+    </section>
+
+    <section id="advisory-alcohol">
+      <h3>Alcohol, Drugs &amp; Smoking</h3>
+      <div class="advisory-severity-vote__container">
+        <span class="ipl-status-pill ipl-status-pill--rating-moderate">Moderate</span>
+      </div>
+      <ul class="advisory-content">
+        <li>Characters smoke and drink throughout.</li>
+      </ul>
+    </section>
+
+    <section id="advisory-frightening">
+      <h3>Frightening &amp; Intense Scenes</h3>
+      <div class="advisory-severity-vote__container">
+        <span class="ipl-status-pill ipl-status-pill--rating-moderate">Moderate</span>
+      </div>
+      <ul class="advisory-content">
+        <li>Intense scenes of confinement and mistreatment.</li>
+      </ul>
+    </section>
+  </main>
+</body></html>

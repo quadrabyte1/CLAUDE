@@ -11,6 +11,7 @@ import os
 import sqlite3
 import sys
 import threading
+import time
 from datetime import date
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, flash, get_flashed_messages
@@ -29,9 +30,18 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.7"
+APP_VERSION = "V3.16"
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "db", "scanner.db")
+# V3.15 — allow verification runs and Herman / external tools to redirect
+# the scanner at a temporary DB without touching Thomas's live data. The
+# ``MOVIESCANNER_DB_PATH`` env var, if set, wins; otherwise fall back to
+# the historical default (``MovieScanner/db/scanner.db`` next to app.py).
+# Motivation: specialists doing ``app.test_client()`` verification runs
+# have twice wiped Thomas's live config. Setting this env var to a mktemp
+# path before importing ``app`` makes verification structurally safe.
+DB_PATH = os.environ.get("MOVIESCANNER_DB_PATH") or os.path.join(
+    os.path.dirname(__file__), "db", "scanner.db"
+)
 
 
 @app.context_processor
@@ -77,10 +87,13 @@ def _reconcile_orphaned_runs() -> None:
     ).fetchall()
     if rows:
         ids = [r["id"] for r in rows]
+        # Preserve the original `phase` so the UI can still show how far the
+        # scan got before it died; fold that phase into the error message too.
         conn.execute(
-            f"UPDATE runs SET status='error', phase='error', "
+            f"UPDATE runs SET status='error', "
             f"completed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'), "
-            f"error='orphaned — process died before scan completed' "
+            f"error='orphaned during ' || COALESCE(phase, 'unknown') || "
+            f"' — process died before scan completed' "
             f"WHERE id IN ({','.join('?' * len(ids))})",
             ids,
         )
@@ -111,7 +124,14 @@ def _scan_in_progress() -> bool:
     return row is not None
 
 
-_SCAN_BUSY_MSG = "A scan is already running — wait for it to finish before starting another."
+# V3.13 — module-level handle to the currently-running Scanner, set by
+# _spawn_scan_worker() and cleared by the worker on exit. Used by /run to
+# call cancel() on the previous scan before spawning a fresh one. Access
+# is not synchronised because /run always runs on the main Flask thread
+# and _active_scanner is only WRITTEN there (or in the worker's finally,
+# which is a same-thread callback fired by threading), but we keep the
+# access pattern write-once / read-once and short-lived.
+_active_scanner: "Scanner | None" = None
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────
@@ -140,32 +160,50 @@ def index():
     dismissed_count = matches_count - active_count
 
     if show_dismissed:
-        matches = db.execute(
-            "SELECT m.tconst, m.primary_title, m.start_year, m.title_type, m.rating, m.num_votes, "
-            "m.genres, m.matched_tags, m.matched_at, d.dismissed_at "
+        matches_raw = db.execute(
+            "SELECT m.id, m.tconst, m.primary_title, m.start_year, m.title_type, "
+            "m.rating, m.num_votes, m.genres, m.matched_tags, m.matched_at, "
+            "d.dismissed_at "
             "FROM matches m LEFT JOIN dismissed_tconsts d ON d.tconst = m.tconst "
             "ORDER BY m.rating DESC, m.num_votes DESC LIMIT 500"
         ).fetchall()
     else:
-        matches = db.execute(
-            "SELECT m.tconst, m.primary_title, m.start_year, m.title_type, m.rating, m.num_votes, "
-            "m.genres, m.matched_tags, m.matched_at, d.dismissed_at "
+        matches_raw = db.execute(
+            "SELECT m.id, m.tconst, m.primary_title, m.start_year, m.title_type, "
+            "m.rating, m.num_votes, m.genres, m.matched_tags, m.matched_at, "
+            "d.dismissed_at "
             "FROM matches m LEFT JOIN dismissed_tconsts d ON d.tconst = m.tconst "
             "WHERE d.tconst IS NULL "
             "ORDER BY m.rating DESC, m.num_votes DESC LIMIT 500"
         ).fetchall()
 
-    upside_matches = db.execute(
-        "SELECT tconst, primary_title, start_year, title_type, rating, num_votes, "
-        "genres, matched_tags, checked_at "
-        "FROM upside_matches ORDER BY rating DESC"
-    ).fetchall()
+    # V3.13 — attach the qualifying-season list to each match row so the
+    # template can render the "▼ N season(s) match" affordance under
+    # series. One query total, indexed by match_id. Movies get an empty
+    # list (they don't have match_seasons entries).
+    match_ids = [row["id"] for row in matches_raw]
+    seasons_by_match_id: dict[int, list[dict]] = {}
+    if match_ids:
+        placeholders = ",".join("?" * len(match_ids))
+        for r in db.execute(
+            f"SELECT match_id, season_number, air_year, episode_count "
+            f"FROM match_seasons WHERE match_id IN ({placeholders}) "
+            f"ORDER BY match_id ASC, season_number ASC",
+            match_ids,
+        ).fetchall():
+            seasons_by_match_id.setdefault(r["match_id"], []).append({
+                "season_number": r["season_number"],
+                "air_year":      r["air_year"],
+                "episode_count": r["episode_count"],
+            })
 
-    # Most recent checked_at from upside_matches (for the section badge)
-    upside_checked_at_row = db.execute(
-        "SELECT MAX(checked_at) FROM upside_matches"
-    ).fetchone()
-    upside_checked_at = upside_checked_at_row[0] if upside_checked_at_row else None
+    # Convert sqlite3.Row rows into plain dicts so we can attach the
+    # seasons list without upsetting Jinja's attribute access rules.
+    matches = []
+    for r in matches_raw:
+        d = dict(r)
+        d["seasons"] = seasons_by_match_id.get(r["id"], [])
+        matches.append(d)
 
     db.close()
 
@@ -193,8 +231,6 @@ def index():
         include_lc=include_lc,
         exclude_lc=exclude_lc,
         exclude_countries=exclude_countries_str,
-        upside_matches=upside_matches,
-        upside_checked_at=upside_checked_at,
     )
 
 
@@ -240,6 +276,25 @@ def _save_config_from_form():
     exclude_countries_raw = request.form.get("exclude_countries", "").strip()
     exclude_countries = [c.strip() for c in exclude_countries_raw.split(",") if c.strip()]
 
+    # Parental-guide ceilings (V3.12). Coerce to one of the four allowed
+    # levels; anything unexpected → 'severe' (filter inactive) so a
+    # tampered form can't smuggle in unranked values.
+    # COMPLIANCE EXCEPTION — see movie_scanner/parental_guide.py.
+    _ALLOWED = {"none", "mild", "moderate", "severe"}
+    def _pg_level(name: str) -> str:
+        v = (request.form.get(name, "severe") or "severe").strip().lower()
+        return v if v in _ALLOWED else "severe"
+
+    max_sex_nudity    = _pg_level("max_sex_nudity")
+    max_violence_gore = _pg_level("max_violence_gore")
+    max_profanity     = _pg_level("max_profanity")
+    max_alcohol_drugs = _pg_level("max_alcohol_drugs")
+    max_frightening   = _pg_level("max_frightening")
+    exclude_unknown_parental = "1" if request.form.get("exclude_unknown_parental") else "0"
+    # V3.14 — master switch for the parental-guide phase. Unchecked (missing
+    # from form payload) → '0' → scanner skips the whole phase.
+    parental_apply = "1" if request.form.get("parental_apply") else "0"
+
     db = _conn()
     for k, v in [
         ("min_rating",        str(min_rating)),
@@ -249,6 +304,13 @@ def _save_config_from_form():
         ("exclude_tags",      json.dumps(exclude_tags)),
         ("title_types",       json.dumps(title_types)),
         ("exclude_countries", json.dumps(exclude_countries)),
+        ("max_sex_nudity",    max_sex_nudity),
+        ("max_violence_gore", max_violence_gore),
+        ("max_profanity",     max_profanity),
+        ("max_alcohol_drugs", max_alcohol_drugs),
+        ("max_frightening",   max_frightening),
+        ("exclude_unknown_parental", exclude_unknown_parental),
+        ("parental_apply",    parental_apply),
     ]:
         db.execute(
             "INSERT INTO config (key, value) VALUES (?, ?) "
@@ -260,12 +322,30 @@ def _save_config_from_form():
 
 
 def _spawn_scan_worker() -> None:
-    """Start a background thread running the scanner. Same pattern as /run."""
+    """Start a background thread running the scanner.
+
+    Creates a fresh Scanner instance and stashes it in the module-level
+    ``_active_scanner`` handle so ``/run`` can call ``cancel()`` on it when
+    the user hits Run while a scan is still in flight. The handle is
+    cleared in the worker's ``finally`` clause so a subsequent /run without
+    a running scan doesn't attempt to cancel a completed scanner.
+    """
+    global _active_scanner
+    scanner = Scanner(db_path=DB_PATH)
+    _active_scanner = scanner
+
     def worker():
+        global _active_scanner
         try:
-            Scanner(db_path=DB_PATH).scan(on_progress=lambda msg: None)
+            scanner.scan(on_progress=lambda msg: None)
         except Exception as e:
             print(f"[MovieScanner] scan error: {e}")
+        finally:
+            # Only clear if we're still the active scanner — a concurrent
+            # /run may have already installed a replacement.
+            if _active_scanner is scanner:
+                _active_scanner = None
+
     threading.Thread(target=worker, daemon=True).start()
 
 
@@ -303,16 +383,36 @@ def start_run():
     re-tested against the just-saved on-screen config — no "you had to
     click Save first" trap.
 
-    Deliberately preserves `runs` history so the audit trail (including a
-    marker row for this wipe) survives; matches for those old runs are
-    dropped along with the titles they referenced.
+    Deliberately preserves the `runs` history so the audit trail survives;
+    matches for those old runs are dropped along with the titles they
+    referenced. Scanner.scan() creates and owns the runs row for the fresh
+    scan we're about to spawn.
 
-    NOTE: Scanner.scan() creates and owns its own runs row — the marker
-    row inserted here is a separate 'wiped' row, not a stub for the scan.
+    V3.13 — cancel-and-restart: if a scan is already running, cancel it
+    (cooperative — the scanner polls a threading.Event between phases)
+    and wait up to 3 seconds for the old run row to leave ``'running'``,
+    then proceed to spawn a fresh scan. If the wait expires we log a
+    warning and proceed anyway; the old thread will observe cancel and
+    self-clean into ``status='error', phase='cancelled'`` shortly after.
     """
+    global _active_scanner
     if _scan_in_progress():
-        flash(_SCAN_BUSY_MSG)
-        return redirect(url_for("index"))
+        # Cooperative cancel — signal the running scan to bail at its
+        # next checkpoint. If _active_scanner is None here it means the
+        # worker has already cleared its handle (race with the finally
+        # block); the scan is essentially done, so we just proceed.
+        prev = _active_scanner
+        if prev is not None:
+            prev.cancel()
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline and _scan_in_progress():
+                time.sleep(0.1)
+            if _scan_in_progress():
+                print(
+                    "[MovieScanner] /run: previous scan did not observe "
+                    "cancel within 3s — proceeding anyway; old thread "
+                    "will self-clean on its next checkpoint."
+                )
 
     _save_config_from_form()
 
@@ -321,12 +421,6 @@ def start_run():
     # runs table is intentionally kept so history isn't lost.
     db.execute("DELETE FROM matches")
     db.execute("DELETE FROM titles")
-    # Insert a marker run row so the history shows what happened.
-    db.execute(
-        "INSERT INTO runs (status, phase, completed_at, config_snapshot) "
-        "VALUES ('done', 'wiped', strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?)",
-        (json.dumps({"note": "titles + matches wiped by 'Run scan now'"}),),
-    )
     db.commit()
     db.close()
 
@@ -436,28 +530,6 @@ def api_metadata(tconst: str):
     client = OMDbClient(api_key=row["value"], db_path=DB_PATH)
     data = client.fetch(tconst)
     return jsonify(data)
-
-
-@app.route("/upside_rescan", methods=["POST"])
-def upside_rescan():
-    """Kick off a background rescan of ~500 filter rejects.
-
-    Spawns a daemon thread that calls Scanner.rescan_upside(); the page
-    reloads via the redirect while work proceeds in the background.
-    Werkzeug auto-reload is safe here — the thread is daemon so it won't
-    block on Werkzeug's reloader process exit.
-    """
-    def worker():
-        try:
-            Scanner(db_path=DB_PATH).rescan_upside(
-                sample_size=500,
-                on_progress=lambda msg: print(f"[upside_rescan] {msg}"),
-            )
-        except Exception as e:
-            print(f"[MovieScanner] upside_rescan error: {e}")
-
-    threading.Thread(target=worker, daemon=True).start()
-    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":

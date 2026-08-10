@@ -28,17 +28,40 @@ from datetime import date
 import gzip
 import json
 import os
+import random
 import sqlite3
+import threading
 import time
 from typing import Callable, Iterable
 
 from .config import ScanConfig
 from .downloader import fetch_dumps
 from .omdb import OMDbClient
+# COMPLIANCE EXCEPTION — parental_guide scrapes imdb.com. Isolated import;
+# only used in the explicit filter step below. See parental_guide.py header.
+from .parental_guide import (
+    BASE_DELAY_SEC as _PG_BASE_DELAY,
+    CATEGORIES     as _PG_CATEGORIES,
+    JITTER_FRAC    as _PG_JITTER,
+    fetch_parental_guide,
+    severity_le,
+)
 from .schema import apply_schema
 
 # How often (in basics rows) to emit a progress message during ingest.
 _PROGRESS_EVERY = 100_000
+
+
+class ScanCancelled(Exception):
+    """Raised inside :meth:`Scanner.scan` when the cancel event fires.
+
+    Recognised by the scan()'s try/except: the current run row is marked
+    ``status='error'`` with ``phase='cancelled'`` and a short error string.
+    We deliberately reuse ``status='error'`` rather than introducing a new
+    terminal status value — that avoids a schema migration on the runs
+    CHECK constraint. The distinguishing signal is ``phase='cancelled'``.
+    """
+    pass
 
 # Filename of the append-only human-readable scan log. Lives inside data_dir
 # so it sits next to the cached IMDB dumps and the DB.
@@ -124,6 +147,59 @@ def _iter_basics(path: str, keep_types: set[str]) -> Iterable[tuple]:
             )
 
 
+def _load_episode_years(path: str) -> dict[str, int]:
+    """Return a dict of ``{tconst -> startYear}`` for every ``tvEpisode`` row
+    in the basics dump. Used by the V3.13 season-year aggregation.
+
+    A separate streaming pass over title.basics is unavoidable because the
+    main scan loop's ``_iter_basics`` filters to ``keep_types`` (movie /
+    tvMovie / tvSeries / tvMiniSeries) and drops episodes early. Episodes
+    have their own titleType (``tvEpisode``), so they're never yielded by
+    the main iterator. We take a second, tighter pass here that only reads
+    tconst + titleType + startYear (columns 0, 1, 5) to keep the cost down.
+    """
+    out: dict[str, int] = {}
+    with gzip.open(path, "rt", encoding="utf-8", errors="replace") as f:
+        f.readline()  # skip header
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 6:
+                continue
+            if parts[1] != "tvEpisode":
+                continue
+            sy = parts[5]
+            if sy == "\\N":
+                continue
+            try:
+                out[parts[0]] = int(sy)
+            except ValueError:
+                continue
+    return out
+
+
+def _iter_episodes(path: str) -> Iterable[tuple[str, str, int | None]]:
+    """Yield ``(tconst, parentTconst, seasonNumber)`` for every episode row.
+
+    Rows whose ``seasonNumber`` is ``\\N`` are skipped — an episode that has
+    no assigned season can't be aggregated by season. Rows whose
+    ``parentTconst`` is ``\\N`` are also skipped (orphan episodes).
+    """
+    with gzip.open(path, "rt", encoding="utf-8", errors="replace") as f:
+        f.readline()  # skip header
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 4:
+                continue
+            tconst, parent_tconst, season_s, _ep_s = parts[0], parts[1], parts[2], parts[3]
+            if parent_tconst == "\\N" or season_s == "\\N":
+                continue
+            try:
+                season_num = int(season_s)
+            except ValueError:
+                continue
+            yield (tconst, parent_tconst, season_num)
+
+
 def _load_ratings(path: str) -> dict[str, tuple[float, int]]:
     """Load ratings.tsv into a dict: ``tconst -> (rating, num_votes)``."""
     out: dict[str, tuple[float, int]] = {}
@@ -169,6 +245,11 @@ class Scanner:
       Do not share a Scanner instance across threads without your own lock.
     """
 
+    # Title types treated as "series-like" for the V3.13 per-season year
+    # filter. Anything else (movie, tvMovie, short) uses the classic
+    # startYear >= min_year check.
+    _SERIES_TYPES = frozenset({"tvSeries", "tvMiniSeries"})
+
     def __init__(
         self,
         db_path: str,
@@ -179,10 +260,38 @@ class Scanner:
         self._data_dir = data_dir or os.path.join(os.path.dirname(db_path), "data")
         self._config   = config   # None → read from DB at scan time
 
+        # V3.13 cooperative cancel — set by Scanner.cancel(), polled between
+        # phases and inside the download progress callback. Cannot force-kill
+        # a Python thread, so cancellation is best-effort: the flag is
+        # observed at safe checkpoints and raises ScanCancelled.
+        self._cancel_event = threading.Event()
+
         # Ensure DB and schema exist
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
         with sqlite3.connect(db_path) as conn:
             apply_schema(conn)
+
+    # ── Cancellation (V3.13) ───────────────────────────────────────────────
+
+    def cancel(self) -> None:
+        """Signal the running :meth:`scan` to abort at the next checkpoint.
+
+        Safe to call from any thread. The scan observes this flag between
+        phases and inside the download progress callback; on observation it
+        raises :class:`ScanCancelled`, which the scan's except-clause
+        translates to a terminal run row with ``phase='cancelled'``.
+
+        Calling ``cancel()`` on a Scanner whose scan has already finished
+        is a no-op — the flag stays set but nothing consumes it. The next
+        ``scan()`` call on the same instance would immediately abort, so
+        the /run route creates a fresh Scanner instance for each run.
+        """
+        self._cancel_event.set()
+
+    def _check_cancel(self, msg: str = "cancelled") -> None:
+        """Raise :class:`ScanCancelled` if the cancel flag has been set."""
+        if self._cancel_event.is_set():
+            raise ScanCancelled(msg)
 
     # ── Private helpers ────────────────────────────────────────────────────
 
@@ -215,6 +324,16 @@ class Scanner:
                 raw[k] = int(v)
             elif k == "omdb_api_key":
                 raw[k] = v
+            elif k in (
+                "max_sex_nudity", "max_violence_gore", "max_profanity",
+                "max_alcohol_drugs", "max_frightening",
+            ):
+                raw[k] = (v or "severe").strip().lower()
+            elif k == "exclude_unknown_parental":
+                raw[k] = str(v).strip() in ("1", "true", "yes", "on")
+            elif k == "parental_apply":
+                # V3.14 — master switch for the parental-guide phase.
+                raw[k] = str(v).strip() in ("1", "true", "yes", "on")
 
         omdb_api_key: str | None = raw.get("omdb_api_key")
 
@@ -229,7 +348,166 @@ class Scanner:
             exclude_genres    = raw.get("exclude_tags",      []),
             title_types       = raw.get("title_types",       ["movie", "tvMovie", "tvSeries"]),
             exclude_countries = raw.get("exclude_countries", []),
+            # COMPLIANCE EXCEPTION — parental-guide ceilings (V3.12).
+            max_sex_nudity    = raw.get("max_sex_nudity",    "severe"),
+            max_violence_gore = raw.get("max_violence_gore", "severe"),
+            max_profanity     = raw.get("max_profanity",     "severe"),
+            max_alcohol_drugs = raw.get("max_alcohol_drugs", "severe"),
+            max_frightening   = raw.get("max_frightening",   "severe"),
+            exclude_unknown_parental = raw.get("exclude_unknown_parental", False),
+            # V3.14 — Apply-filters master switch. Off by default so a
+            # fresh scan never pays the ~2s/title parental-guide tax.
+            apply_parental    = raw.get("parental_apply", False),
         ), omdb_api_key
+
+    # ── Parental-guide filter (COMPLIANCE EXCEPTION — V3.12) ──────────────
+    #
+    # Isolated in its own helper so the entire feature can be excised with a
+    # single method deletion + one call-site removal in scan(). If you find
+    # yourself entangling this into the main loop or omdb.py, stop — the
+    # compliance boundary depends on grep-ability.
+
+    def _apply_parental_guide_filter(
+        self,
+        conn:        sqlite3.Connection,
+        match_rows:  list[tuple],
+        cfg:         "ScanConfig",
+        phase:       Callable[[str, str], None],
+        on_progress: Callable[[str], None],
+    ) -> tuple[list[tuple], int, int]:
+        """Filter ``match_rows`` against the parental-guide ceilings in ``cfg``.
+
+        Returns
+        -------
+        (kept_rows, scraped_count, dropped_count)
+
+        - ``kept_rows`` is a new list containing only titles that pass every
+          ceiling (respecting the ``exclude_unknown_parental`` toggle).
+        - ``scraped_count`` is the number of live imdb.com fetches performed
+          (excludes cache hits).
+        - ``dropped_count`` is the number of titles removed by the filter.
+
+        Notes
+        -----
+        - If every ceiling is ``severe`` AND ``exclude_unknown_parental`` is
+          False, the filter is a no-op and NO scraping is performed. This
+          keeps the "no filter set" scan fast.
+        - Rate limit: sleeps :data:`_PG_BASE_DELAY` ± :data:`_PG_JITTER`
+          between live fetches (not between cache hits). Sleep happens
+          BEFORE the request so the first fetch is also throttled from any
+          prior activity by the caller.
+        """
+        # V3.14 — Master switch. The "Apply filters" checkbox next to the
+        # Content-severity heading is authoritative: when it is off, we
+        # never touch imdb.com/parentalguide, never read the cache, and
+        # never apply any ceiling. The 5 severity dropdowns are ignored.
+        # This is the fast default; opt-in only.
+        if not getattr(cfg, "apply_parental", False):
+            phase("saving matches", "parental_guide filter disabled (Apply filters off) — skipping")
+            return match_rows, 0, 0
+
+        ceilings = {
+            "sex_nudity":    cfg.max_sex_nudity,
+            "violence_gore": cfg.max_violence_gore,
+            "profanity":     cfg.max_profanity,
+            "alcohol_drugs": cfg.max_alcohol_drugs,
+            "frightening":   cfg.max_frightening,
+        }
+        # Secondary short-circuit: even with the master switch ON, if every
+        # ceiling is 'severe' AND unknown-passes, nothing can be filtered,
+        # so skip the phase (and the scrape). Keeps a mis-configured "on
+        # but no ceilings set" state from wasting time.
+        filter_is_active = (
+            any(c != "severe" for c in ceilings.values())
+            or bool(cfg.exclude_unknown_parental)
+        )
+        if not filter_is_active:
+            phase("saving matches", "parental_guide filter inactive — skipping")
+            return match_rows, 0, 0
+
+        phase("parental_guide", "checking parental-guide severities…")
+
+        # Import requests lazily so tests / minimal installs that don't hit
+        # the network never pay the import cost.
+        import requests  # type: ignore
+        session = requests.Session()
+
+        kept:    list[tuple] = []
+        scraped = 0
+        dropped = 0
+
+        stale_cutoff = "date('now', '-90 days')"  # used in the SQL below
+
+        for i, row in enumerate(match_rows, start=1):
+            tconst = row[0]
+
+            cached = conn.execute(
+                "SELECT sex_nudity, violence_gore, profanity, "
+                "alcohol_drugs, frightening, "
+                f"CASE WHEN date(fetched_at) >= {stale_cutoff} THEN 1 ELSE 0 END AS fresh "
+                "FROM parental_guide WHERE tconst=?",
+                (tconst,),
+            ).fetchone()
+
+            if cached is not None and cached["fresh"]:
+                pg = {k: cached[k] for k in _PG_CATEGORIES}
+            else:
+                # Rate limit BEFORE the request (not after) so a KeyboardInterrupt
+                # during the sleep doesn't leave us mid-request.
+                jitter = 1.0 + random.uniform(-_PG_JITTER, _PG_JITTER)
+                time.sleep(_PG_BASE_DELAY * jitter)
+                pg = fetch_parental_guide(tconst, session)
+                scraped += 1
+                # Upsert every fetch — even all-unknown results — so we don't
+                # retry a broken tconst on every scan.
+                conn.execute(
+                    """
+                    INSERT INTO parental_guide
+                        (tconst, sex_nudity, violence_gore, profanity,
+                         alcohol_drugs, frightening, fetched_at)
+                    VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+                    ON CONFLICT(tconst) DO UPDATE SET
+                        sex_nudity    = excluded.sex_nudity,
+                        violence_gore = excluded.violence_gore,
+                        profanity     = excluded.profanity,
+                        alcohol_drugs = excluded.alcohol_drugs,
+                        frightening   = excluded.frightening,
+                        fetched_at    = excluded.fetched_at
+                    """,
+                    (
+                        tconst,
+                        pg["sex_nudity"], pg["violence_gore"],
+                        pg["profanity"], pg["alcohol_drugs"], pg["frightening"],
+                    ),
+                )
+                conn.commit()
+
+                if scraped % 10 == 0:
+                    on_progress(
+                        f"parental_guide: scraped {scraped} title(s) so far "
+                        f"({i}/{len(match_rows)} checked)"
+                    )
+
+            # Apply ceilings. `unknown` handling is the caller's rule, not
+            # severity_le's — see parental_guide.severity_le docstring.
+            title_passes = True
+            for cat, ceiling in ceilings.items():
+                value = pg.get(cat, "unknown")
+                if value == "unknown":
+                    if cfg.exclude_unknown_parental:
+                        title_passes = False
+                        break
+                    continue  # unknown passes any ceiling by default
+                if not severity_le(value, ceiling):
+                    title_passes = False
+                    break
+
+            if title_passes:
+                kept.append(row)
+            else:
+                dropped += 1
+
+        return kept, scraped, dropped
 
     # ── Public API ─────────────────────────────────────────────────────────
 
@@ -267,6 +545,12 @@ class Scanner:
         scanned = 0
         new_title_rows: list[tuple] = []
         match_rows:     list[tuple] = []
+        # Parallel to match_rows: qualifying seasons per series (V3.13). Aligned
+        # by index; movies/tvMovies have an empty list. Persisted to
+        # match_seasons after the matches rows are inserted (so the FK match_id
+        # resolves). A None slot means "series, but no season lookup ran" —
+        # shouldn't happen in normal flow, defensive.
+        match_seasons_by_idx: list[list[tuple[int, int | None, int]]] = []
         log_status = "error"
         log_error: str | None = None
 
@@ -313,14 +597,79 @@ class Scanner:
             on_progress(msg or name)
 
         try:
-            # 1. Download
+            # 1. Download.
+            #
+            # The download progress callback is the ONE hook that can bail
+            # mid-fetch (fetch_dumps is a single blocking call otherwise),
+            # so we wrap the caller's on_progress to poll the cancel flag
+            # on every message. When cancel is set, raising from inside the
+            # callback tears down the urllib request cleanly.
             phase("downloading", "downloading dumps from datasets.imdbws.com…")
-            basics_path, ratings_path = fetch_dumps(self._data_dir, on_progress)
+
+            def _cancellable_progress(msg: str) -> None:
+                if self._cancel_event.is_set():
+                    raise ScanCancelled("cancelled during download")
+                on_progress(msg)
+
+            basics_path, ratings_path, episodes_path = fetch_dumps(
+                self._data_dir, _cancellable_progress
+            )
+            self._check_cancel("cancelled after download")
 
             # 2. Ratings — small enough to load fully into RAM (~50 MB)
             phase("loading ratings")
             ratings = _load_ratings(ratings_path)
             on_progress(f"loaded {len(ratings):,} rating rows")
+            self._check_cancel("cancelled after loading ratings")
+
+            # 2b. Seasons (V3.13) — build the per-series season air-year cache
+            # so the per-series year filter can consult it during matching.
+            # We need every episode's startYear, but title.basics's main
+            # iterator drops tvEpisode rows, so we take a second pass here
+            # that only reads (tconst, titleType, startYear). ~30–40 s on a
+            # typical laptop for the current ~11 M-row basics dump.
+            phase("seasons", "aggregating per-season air years…")
+            episode_years = _load_episode_years(basics_path)
+            on_progress(f"loaded {len(episode_years):,} episode air years")
+            self._check_cancel("cancelled during season aggregation")
+
+            # Aggregate: for each (parent_tconst, season_number), take the
+            # MIN of its episodes' startYear as season_air_year, and count
+            # episodes. Streamed — never holds the full episode file in RAM.
+            season_agg: dict[tuple[str, int], list[int | None]] = {}
+            # value: [min_year_or_None, episode_count]
+            for _ep_tconst, parent_tconst, season_num in _iter_episodes(episodes_path):
+                key = (parent_tconst, season_num)
+                slot = season_agg.get(key)
+                ep_year = episode_years.get(_ep_tconst)
+                if slot is None:
+                    season_agg[key] = [ep_year, 1]
+                else:
+                    slot[1] += 1
+                    if ep_year is not None:
+                        cur = slot[0]
+                        if cur is None or ep_year < cur:
+                            slot[0] = ep_year
+
+            # Bulk INSERT OR REPLACE — the whole table is rebuilt on every
+            # scan, so a full replace is correct and keeps stale rows from
+            # accumulating when episodes get renumbered upstream.
+            conn.executemany(
+                "INSERT OR REPLACE INTO series_seasons "
+                "(parent_tconst, season_number, air_year, episode_count) "
+                "VALUES (?, ?, ?, ?)",
+                (
+                    (parent, season, slot[0], slot[1])
+                    for (parent, season), slot in season_agg.items()
+                ),
+            )
+            conn.commit()
+            on_progress(f"cached {len(season_agg):,} (series, season) rows")
+            # Free the episode year dict + agg map — we won't need them again
+            # in this scan and title.basics streaming below allocates a lot.
+            episode_years.clear()
+            season_agg.clear()
+            self._check_cancel("cancelled after season aggregation")
 
             # 3. Basics — stream + diff
             phase("diffing basics")
@@ -336,6 +685,9 @@ class Scanner:
                         f"scanned {scanned:,} basics rows, "
                         f"{len(new_title_rows):,} new so far"
                     )
+                    # Cancel check inside the main streaming loop — cheap,
+                    # once per 100k rows, keeps latency to abort < ~1 s.
+                    self._check_cancel("cancelled during basics diff")
                 tconst = row[0]
                 if tconst in seen:
                     continue
@@ -351,10 +703,33 @@ class Scanner:
                 if exclude and any(g in exclude for g in title_genres_lower):
                     continue
 
-                # Year filter
+                # Year filter — split by title type.
+                #   * Series (tvSeries / tvMiniSeries): look up season air
+                #     years in series_seasons. Series passes if ANY season
+                #     has air_year >= min_year. We also capture the full
+                #     list of qualifying seasons so the UI can expand them.
+                #   * Everything else: classic startYear >= min_year.
+                qualifying_seasons: list[tuple[int, int | None, int]] = []
+                is_series = title_type in self._SERIES_TYPES
                 if min_year > 0:
-                    if start_year is None or int(start_year) < min_year:
-                        continue
+                    if is_series:
+                        rows_s = conn.execute(
+                            "SELECT season_number, air_year, episode_count "
+                            "FROM series_seasons "
+                            "WHERE parent_tconst=? AND air_year IS NOT NULL "
+                            "AND air_year >= ? "
+                            "ORDER BY season_number ASC",
+                            (tconst, min_year),
+                        ).fetchall()
+                        if not rows_s:
+                            continue
+                        qualifying_seasons = [
+                            (r["season_number"], r["air_year"], r["episode_count"])
+                            for r in rows_s
+                        ]
+                    else:
+                        if start_year is None or int(start_year) < min_year:
+                            continue
 
                 # Rating + vote filter
                 rating_row = ratings.get(tconst)
@@ -391,6 +766,45 @@ class Scanner:
                     tconst, primary_title, start_year, title_type,
                     rating, votes, genres_str, ",".join(matched_tags), run_id,
                 ))
+                # Parallel list — same index as the just-appended match row.
+                # Empty for movies / tvMovies; populated for series.
+                match_seasons_by_idx.append(qualifying_seasons)
+
+            self._check_cancel("cancelled after diff/match phase")
+
+            # 3b. Parental-guide filter (COMPLIANCE EXCEPTION — V3.12).
+            #
+            # Runs only on rows that survived rating/vote/year/genre/country
+            # filters, so the scrape volume is bounded (Thomas's typical set
+            # hits ~150 titles → ~5 min at 2s/req). Anything blocked here is
+            # dropped from ``match_rows`` before persistence so the runs row
+            # and Herman-visible match list both reflect the ceilings.
+            #
+            # V3.13: capture the pre-PG {tconst -> qualifying_seasons} map
+            # BEFORE the filter runs so we can realign the parallel season
+            # list to the post-filter match_rows without depending on the
+            # filter preserving row order.
+            seasons_by_tconst: dict[str, list[tuple[int, int | None, int]]] = {
+                row[0]: seasons
+                for row, seasons in zip(match_rows, match_seasons_by_idx)
+            }
+            match_rows, pg_scraped, pg_dropped = self._apply_parental_guide_filter(
+                conn         = conn,
+                match_rows   = match_rows,
+                cfg          = cfg,
+                phase        = phase,
+                on_progress  = on_progress,
+            )
+            on_progress(
+                f"parental_guide: scraped {pg_scraped} title(s), "
+                f"dropped {pg_dropped} for exceeding ceilings"
+            )
+            match_seasons_by_idx = [seasons_by_tconst[r[0]] for r in match_rows]
+            assert len(match_seasons_by_idx) == len(match_rows), (
+                f"season index desync: {len(match_seasons_by_idx)} vs {len(match_rows)}"
+            )
+
+            self._check_cancel("cancelled after parental_guide filter")
 
             # 4. Persist
             phase("saving new titles")
@@ -408,6 +822,34 @@ class Scanner:
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 match_rows,
             )
+
+            # 4b. Persist match_seasons (V3.13). Look up each match row's
+            # freshly-assigned id, then bulk-insert its qualifying seasons.
+            # Only series with a non-empty seasons list get rows; movies
+            # skip this branch entirely.
+            season_insert_rows: list[tuple] = []
+            for match_row, seasons in zip(match_rows, match_seasons_by_idx):
+                if not seasons:
+                    continue
+                match_tconst = match_row[0]
+                mid_row = conn.execute(
+                    "SELECT id FROM matches WHERE tconst=?",
+                    (match_tconst,),
+                ).fetchone()
+                if not mid_row:
+                    continue  # shouldn't happen — INSERT OR IGNORE succeeded
+                match_id = mid_row["id"]
+                for season_num, air_year, ep_count in seasons:
+                    season_insert_rows.append(
+                        (match_id, season_num, air_year, ep_count)
+                    )
+            if season_insert_rows:
+                conn.executemany(
+                    "INSERT OR IGNORE INTO match_seasons "
+                    "(match_id, season_number, air_year, episode_count) "
+                    "VALUES (?, ?, ?, ?)",
+                    season_insert_rows,
+                )
             conn.execute(
                 "UPDATE runs SET status='done', phase='done', "
                 "completed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'), "
@@ -422,6 +864,38 @@ class Scanner:
                 "scanned":    scanned,
                 "new_titles": len(new_title_rows),
                 "matches":    len(match_rows),
+            }
+
+        except ScanCancelled as exc:
+            # V3.13 — cooperative cancel. Reuse status='error' (see
+            # ScanCancelled docstring) but set phase='cancelled' so the
+            # UI can distinguish this from a real failure. The error
+            # column carries Thomas's requested "superseded" wording so
+            # the recent-runs table shows a clear reason.
+            log_status = "error"
+            log_error = str(exc) or "cancelled"
+            error_msg = "cancelled — superseded by new scan request"
+            try:
+                conn.execute(
+                    "UPDATE runs SET status='error', phase='cancelled', "
+                    "completed_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'), "
+                    "error=? WHERE id=?",
+                    (error_msg, run_id),
+                )
+                conn.commit()
+            except Exception:
+                pass
+            # Overwrite log_error with the friendlier message for scans.log.
+            log_error = error_msg
+            # Do NOT re-raise: cancellation is a normal, user-initiated
+            # exit path, and the worker thread is about to be replaced.
+            # Returning a summary dict lets callers see counts-so-far.
+            return {
+                "run_id":     run_id,
+                "scanned":    scanned,
+                "new_titles": len(new_title_rows),
+                "matches":    len(match_rows),
+                "cancelled":  True,
             }
 
         except BaseException as exc:
@@ -545,198 +1019,7 @@ class Scanner:
         finally:
             conn.close()
 
-    def rescan_upside(
-        self,
-        sample_size: int = 500,
-        on_progress: Callable[[str], None] | None = None,
-    ) -> dict:
-        """Sample rejected titles and re-test them against the current config.
-
-        Queries the ``titles`` table for tconsts NOT in ``matches``,
-        pre-filters in SQL using the current config's title_type / genre
-        settings, random-samples *sample_size* rows, downloads (or reuses
-        today's cached copy of) ``title.ratings.tsv.gz``, tests each
-        candidate against ``min_rating`` / ``min_votes``, and persists the
-        passing rows to ``upside_matches`` (replacing prior contents).
-
-        A marker row with ``phase='upside_rescan'`` is also inserted into
-        ``runs`` so the audit trail on the landing page shows activity.
-
-        Parameters
-        ----------
-        sample_size : int
-            Number of pre-filtered candidates to random-sample. Default 500.
-        on_progress : Callable[[str], None] | None
-            Optional progress callback. No-op if omitted.
-
-        Returns
-        -------
-        dict
-            ``{'sampled': int, 'matched': int, 'run_marker_id': int}``
-        """
-        _prog = on_progress or (lambda _: None)
-
-        conn = self._connect()
-        try:
-            cfg, omdb_api_key = self._resolve_config(conn)
-            min_rating        = cfg.min_rating
-            min_votes         = cfg.min_votes
-            min_year          = cfg.min_year
-            tags              = [t.strip().lower() for t in cfg.include_genres if t.strip()]
-            exclude           = set(t.strip().lower() for t in cfg.exclude_genres if t.strip())
-            keep_types        = list(cfg.title_types)
-            exclude_countries = [c.strip().lower() for c in cfg.exclude_countries if c.strip()]
-
-            omdb_client: OMDbClient | None = (
-                OMDbClient(api_key=omdb_api_key, db_path=self._db_path)
-                if exclude_countries and omdb_api_key
-                else None
-            )
-
-            # ── Build the pre-filter SQL ───────────────────────────────────
-            # Always filter: title_type in keep_types, genres IS NOT NULL,
-            # tconst NOT IN matches.
-            placeholders = ",".join("?" * len(keep_types))
-            params: list = list(keep_types)
-
-            genre_clauses: list[str] = []
-
-            # exclude_genres: skip any title whose genres contain one of these
-            for excl in exclude:
-                genre_clauses.append("LOWER(genres) NOT LIKE ?")
-                params.append(f"%{excl}%")
-
-            # include_genres: keep only titles that have at least one — build
-            # an OR group. If no include_genres are set, this clause is omitted
-            # (any genre auto-passes, matching scan behaviour).
-            if tags:
-                include_or = " OR ".join(
-                    ["LOWER(genres) LIKE ?"] * len(tags)
-                )
-                genre_clauses.append(f"({include_or})")
-                for tag in tags:
-                    params.append(f"%{tag}%")
-
-            where_extra = ""
-            if genre_clauses:
-                where_extra = " AND " + " AND ".join(genre_clauses)
-
-            sql = f"""
-                SELECT tconst, title_type, primary_title, start_year, genres
-                FROM titles
-                WHERE title_type IN ({placeholders})
-                  AND genres IS NOT NULL
-                  AND tconst NOT IN (SELECT tconst FROM matches)
-                  {where_extra}
-                ORDER BY RANDOM()
-                LIMIT ?
-            """
-            params.append(sample_size)
-
-            _prog(f"sampling up to {sample_size} pre-filtered rejected titles…")
-            rows = conn.execute(sql, params).fetchall()
-            pre_filtered_count = len(rows)
-            _prog(f"pre-filter yielded {pre_filtered_count} candidates; downloading ratings…")
-
-            # ── Download (or reuse today's cached) ratings file ────────────
-            ratings_path = os.path.join(self._data_dir, "title.ratings.tsv.gz")
-            today_epoch  = time.mktime(time.strptime(
-                time.strftime("%Y-%m-%d"), "%Y-%m-%d"
-            ))
-            cache_hit = (
-                os.path.exists(ratings_path)
-                and os.path.getmtime(ratings_path) >= today_epoch
-            )
-            if cache_hit:
-                _prog("ratings file is from today — using cache (no re-download)")
-            else:
-                _prog("ratings file is stale or missing — downloading…")
-                from .downloader import RATINGS_URL, _download
-                os.makedirs(self._data_dir, exist_ok=True)
-                _download(RATINGS_URL, ratings_path, _prog)
-
-            _prog("loading ratings into memory…")
-            ratings = _load_ratings(ratings_path)
-
-            # ── Test each candidate against current rating/vote thresholds ─
-            upside: list[tuple] = []
-            for row in rows:
-                tconst        = row["tconst"]
-                title_type    = row["title_type"]
-                primary_title = row["primary_title"]
-                start_year    = row["start_year"]
-                genres_str    = row["genres"]
-
-                rating_row = ratings.get(tconst)
-                if not rating_row:
-                    continue
-                rating, votes = rating_row
-                if rating < min_rating or votes < min_votes:
-                    continue
-
-                # Year filter
-                if min_year > 0:
-                    if start_year is None or int(start_year) < min_year:
-                        continue
-
-                title_genres_lower = [
-                    g.lower() for g in (genres_str or "").split(",") if g
-                ]
-
-                # include_genres filter (re-run full logic for correctness)
-                if tags:
-                    matched_tags = [g for g in title_genres_lower if g in tags]
-                    if not matched_tags:
-                        continue
-                else:
-                    matched_tags = title_genres_lower
-
-                # Country filter — fail OPEN on OMDb errors.
-                if omdb_client and exclude_countries:
-                    meta = omdb_client.fetch(tconst)
-                    if meta.get("error"):
-                        _prog(f"OMDb error for {tconst}: {meta['error']} — including title")
-                    elif meta.get("country"):
-                        title_countries = [
-                            c.strip().lower()
-                            for c in meta["country"].split(",")
-                            if c.strip()
-                        ]
-                        if any(ec in tc for ec in exclude_countries for tc in title_countries):
-                            continue
-
-                upside.append((
-                    tconst, primary_title, start_year, title_type,
-                    rating, votes, genres_str, ",".join(matched_tags),
-                ))
-
-            _prog(f"{len(upside)} upside candidates found; persisting…")
-
-            # ── Persist — replace prior contents wholesale ─────────────────
-            conn.execute("DELETE FROM upside_matches")
-            conn.executemany(
-                "INSERT INTO upside_matches "
-                "(tconst, primary_title, start_year, title_type, rating, "
-                " num_votes, genres, matched_tags) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                upside,
-            )
-
-            # ── Audit-trail row in runs ────────────────────────────────────
-            run_marker_id = conn.execute(
-                "INSERT INTO runs (status, phase, completed_at, matched_titles) "
-                "VALUES ('done', 'upside_rescan', "
-                "        strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?)",
-                (len(upside),),
-            ).lastrowid
-            conn.commit()
-
-            _prog(f"upside rescan complete — {len(upside)} candidates saved")
-            return {
-                "sampled":        pre_filtered_count,
-                "matched":        len(upside),
-                "run_marker_id":  run_marker_id,
-            }
-
-        finally:
-            conn.close()
+    # NOTE (V3.8): rescan_upside() and the upside_matches table were removed
+    # entirely. Thomas found the feature wasn't worth using; the button, DB
+    # table, and route are all gone. See schema.py for the DROP TABLE
+    # migration that cleans up existing databases.

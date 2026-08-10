@@ -1,0 +1,19 @@
+<!--
+  Partial fixture — only 2 categories are present. Exercises the
+  "missing category → unknown" default so the parser never zeroes out
+  the whole scrape just because one section is gone.
+-->
+<!DOCTYPE html>
+<html><body>
+  <h1>Parents Guide</h1>
+
+  <section id="advisory-nudity">
+    <h3>Sex &amp; Nudity</h3>
+    <span class="ipl-status-pill ipl-status-pill--rating-moderate">Moderate</span>
+  </section>
+
+  <section id="advisory-frightening">
+    <h3>Frightening &amp; Intense Scenes</h3>
+    <span class="ipl-status-pill ipl-status-pill--rating-none">None</span>
+  </section>
+</body></html>

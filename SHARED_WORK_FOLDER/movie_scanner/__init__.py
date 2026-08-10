@@ -20,6 +20,9 @@ __version__ = "1.0.0"
 from .config  import ScanConfig
 from .genres  import KNOWN_GENRES
 from .omdb    import OMDbClient
-from .scanner import Scanner
+from .scanner import Scanner, ScanCancelled
 
-__all__ = ["Scanner", "ScanConfig", "KNOWN_GENRES", "OMDbClient", "__version__"]
+__all__ = [
+    "Scanner", "ScanCancelled", "ScanConfig", "KNOWN_GENRES", "OMDbClient",
+    "__version__",
+]

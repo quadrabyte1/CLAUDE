@@ -23,15 +23,23 @@ BASICS_HEADER = (
     "startYear\tendYear\truntimeMinutes\tgenres\n"
 )
 
+# Use a year that is comfortably in the future relative to today so the
+# min_year filter (which defaults to the current calendar year) never
+# rejects the fixture row simply because the calendar rolled forward.
+# The test explicitly overrides min_year in ScanConfig below, but keeping
+# the fixture year "future-proof" makes the data self-consistent and
+# reduces surprise if the test config ever changes.
+_FIXTURE_YEAR = "2099"
+
 # One row that should match (Sci-Fi, high rating/votes), one that should not
 # (Horror, excluded), plus a short film that fails the title_type filter.
 BASICS_ROWS = [
     # matches: movie, Sci-Fi, in ratings dump with 8.5 / 5000
-    "tt0000001\tmovie\tGood Sci-Fi\tGood Sci-Fi\t0\t2024\t\\N\t120\tSci-Fi,Drama\n",
+    f"tt0000001\tmovie\tGood Sci-Fi\tGood Sci-Fi\t0\t{_FIXTURE_YEAR}\t\\N\t120\tSci-Fi,Drama\n",
     # skipped: Horror is in exclude_genres
-    "tt0000002\tmovie\tBad Horror\tBad Horror\t0\t2024\t\\N\t95\tHorror\n",
+    f"tt0000002\tmovie\tBad Horror\tBad Horror\t0\t{_FIXTURE_YEAR}\t\\N\t95\tHorror\n",
     # skipped: title_type not in keep list
-    "tt0000003\tshort\tShort Film\tShort Film\t0\t2024\t\\N\t10\tDrama\n",
+    f"tt0000003\tshort\tShort Film\tShort Film\t0\t{_FIXTURE_YEAR}\t\\N\t10\tDrama\n",
 ]
 
 RATINGS_HEADER = "tconst\taverageRating\tnumVotes\n"
@@ -40,6 +48,12 @@ RATINGS_ROWS = [
     "tt0000002\t7.9\t2000\n",
     "tt0000003\t8.0\t500\n",
 ]
+
+# V3.13 — title.episode.tsv.gz shape. Empty for these tests (no series in
+# the basics fixture), but the file must exist so fetch_dumps can return
+# the tuple the scanner destructures.
+EPISODES_HEADER = "tconst\tparentTconst\tseasonNumber\tepisodeNumber\n"
+EPISODES_ROWS: list[str] = []
 
 
 def _write_gz(path: str, header: str, rows: list[str]) -> None:
@@ -61,18 +75,26 @@ def tmp_paths():
 
 @pytest.fixture
 def fake_fetch_dumps(tmp_paths, monkeypatch):
-    """Monkeypatch fetch_dumps to return two tiny gzip TSVs in data_dir."""
+    """Monkeypatch fetch_dumps to return three tiny gzip TSVs in data_dir.
+
+    V3.13 — fetch_dumps returns a 3-tuple (basics, ratings, episodes) so
+    the scanner can build the per-season air-year cache. The episodes
+    file is empty for the log-format tests (no series in the fixture),
+    but must exist so the scanner's second-pass streamer opens cleanly.
+    """
     _, data_dir = tmp_paths
-    basics_path  = os.path.join(data_dir, "title.basics.tsv.gz")
-    ratings_path = os.path.join(data_dir, "title.ratings.tsv.gz")
-    _write_gz(basics_path,  BASICS_HEADER,  BASICS_ROWS)
-    _write_gz(ratings_path, RATINGS_HEADER, RATINGS_ROWS)
+    basics_path   = os.path.join(data_dir, "title.basics.tsv.gz")
+    ratings_path  = os.path.join(data_dir, "title.ratings.tsv.gz")
+    episodes_path = os.path.join(data_dir, "title.episode.tsv.gz")
+    _write_gz(basics_path,   BASICS_HEADER,   BASICS_ROWS)
+    _write_gz(ratings_path,  RATINGS_HEADER,  RATINGS_ROWS)
+    _write_gz(episodes_path, EPISODES_HEADER, EPISODES_ROWS)
 
     def _fake(_data_dir, _on_progress):
-        return basics_path, ratings_path
+        return basics_path, ratings_path, episodes_path
 
     monkeypatch.setattr(scanner_module, "fetch_dumps", _fake)
-    return basics_path, ratings_path
+    return basics_path, ratings_path, episodes_path
 
 
 # ── Tests ──────────────────────────────────────────────────────────────────
@@ -83,6 +105,7 @@ def test_scan_log_written_on_success(tmp_paths, fake_fetch_dumps):
     cfg = ScanConfig(
         min_rating=7.5,
         min_votes=500,
+        min_year=0,   # disable year filter so the fixture year is irrelevant
         include_genres=["Sci-Fi", "Drama"],
         exclude_genres=["Horror"],
         title_types=["movie", "tvMovie", "tvSeries"],
@@ -162,7 +185,7 @@ def test_scan_log_appends_across_runs(tmp_paths, fake_fetch_dumps):
     """Two successive scans should produce two log blocks, not overwrite."""
     db_path, data_dir = tmp_paths
     cfg = ScanConfig(
-        min_rating=7.5, min_votes=500,
+        min_rating=7.5, min_votes=500, min_year=0,
         include_genres=["Sci-Fi"], exclude_genres=["Horror"],
     )
     sc = Scanner(db_path=db_path, data_dir=data_dir, config=cfg)

@@ -5,8 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MovieScanner</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Alpine.js for the V3.13 season-expansion toggle. Defer so the
+       inline scripts below finish parsing first (they set up sortable/
+       tooltip listeners synchronously on document-ready). -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    /* ── V3.16 page decoration ─────────────────────────────────────────────
+       Palette: blue, gray, black, white. Quiet, local-first polish — no
+       loud gradients, no drop shadows anywhere except the sticky footer.
+       The body backdrop is a whisper-thin cool wash so cards read as
+       distinct planes without visible borders having to do all the work. */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background:
+        radial-gradient(1200px 700px at 15% -10%, #eff6ff 0%, transparent 55%),
+        radial-gradient(1000px 600px at 100% 110%, #f1f5f9 0%, transparent 55%),
+        #f9fafb;
+      background-attachment: fixed;
+      color: #111827;               /* gray-900 body text — same as headings */
+    }
+    /* Slightly softer card borders + a 1-px inner highlight so cards feel
+       lifted without a real shadow (which would clash with local-first). */
+    .card-surface {
+      background: #ffffff;
+      border: 1px solid #e5e7eb;    /* gray-200 */
+      box-shadow: inset 0 1px 0 #ffffff, 0 1px 0 rgba(15, 23, 42, 0.02);
+      border-radius: 12px;
+    }
+    /* Form inputs — thin, cool focus ring. Applies to every input/select in
+       the config form so the whole page focuses consistently. */
+    .card-surface input[type="text"],
+    .card-surface input[type="number"],
+    .card-surface select {
+      transition: border-color 150ms ease, box-shadow 150ms ease;
+    }
+    .card-surface input[type="text"]:focus,
+    .card-surface input[type="number"]:focus,
+    .card-surface select:focus {
+      outline: none;
+      border-color: #2563eb;                       /* blue-600 */
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+    /* Alpine.js — hide x-show elements before Alpine boots so the season
+       expansion doesn't flash open on first paint. */
+    [x-cloak] { display: none !important; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { animation: spin 1s linear infinite; }
 
@@ -165,7 +207,7 @@
     .tt-error   { color: #f87171; font-size: 11px; }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen p-6 pb-20">
+<body class="min-h-screen p-6 pb-20">
 
   <div class="max-w-none space-y-6">
 
@@ -191,13 +233,13 @@
 
     <!-- Stats -->
     <div class="grid grid-cols-2 gap-4">
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <div class="card-surface px-5 py-4">
         <p class="text-xs text-gray-400 uppercase tracking-wide font-medium">Titles in DB</p>
         <p class="text-2xl font-bold text-gray-800 mt-1">{{ "{:,}".format(titles_count) }}</p>
       </div>
-      <div class="bg-white rounded-xl border border-gray-200 px-5 py-4">
+      <div class="card-surface px-5 py-4">
         <p class="text-xs text-gray-400 uppercase tracking-wide font-medium">Total matches</p>
-        <p class="text-2xl font-bold text-indigo-600 mt-1">{{ "{:,}".format(matches_count) }}</p>
+        <p class="text-2xl font-bold text-blue-600 mt-1">{{ "{:,}".format(matches_count) }}</p>
         {% if dismissed_count > 0 %}
         <p class="text-xs text-gray-400 mt-1"><span id="stat-active-count">{{ "{:,}".format(active_count) }}</span> active · <span id="stat-dismissed-count">{{ "{:,}".format(dismissed_count) }}</span> dismissed</p>
         {% endif %}
@@ -205,7 +247,7 @@
     </div>
 
     <!-- Config editor -->
-    <form action="/config" method="POST" class="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+    <form action="/config" method="POST" class="card-surface p-5 space-y-4">
       <h2 class="text-sm font-semibold text-gray-700">Filter configuration</h2>
 
       <div class="grid grid-cols-3 gap-4">
@@ -214,21 +256,21 @@
           <input type="number" name="min_rating" step="0.1" min="0" max="10"
                  value="{{ config.min_rating or '7.0' }}"
                  title="Minimum IMDB average rating (0.0–10.0). Titles below this are skipped."
-                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
         </label>
         <label class="block">
           <span class="text-xs text-gray-500 uppercase tracking-wide">Min votes</span>
           <input type="number" name="min_votes" step="1" min="0"
                  value="{{ config.min_votes or '100' }}"
                  title="Sanity floor on the vote count. A 9.5 with 3 votes is noise; 100+ is a safe default."
-                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
         </label>
         <label class="block">
           <span class="text-xs text-gray-500 uppercase tracking-wide">Min year</span>
           <input type="number" name="min_year" step="1" min="0" max="2100"
                  value="{{ config.min_year or current_year }}"
                  title="Only show titles released in this year or later. 0 disables the filter."
-                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+                 class="mt-1 w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
         </label>
       </div>
 
@@ -238,7 +280,7 @@
                value="{{ exclude_countries or '' }}"
                placeholder="India, Pakistan (comma-separated)"
                title="OMDb Country field must not match any of these. Free-tier OMDb: 1000 lookups/day."
-               class="w-full mt-1 text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500">
+               class="w-full mt-1 text-sm border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
       </label>
 
       <div>
@@ -282,6 +324,67 @@
         </p>
       </div>
 
+      <!-- Content-severity filters (V3.12) — collapsible.
+           COMPLIANCE EXCEPTION: this section drives the imdb.com parental-guide
+           scraper. Personal-use only. See movie_scanner/parental_guide.py.
+           V3.14: "Apply filters" master switch lives in the summary row so the
+           checkbox is visible whether the section is expanded or collapsed. -->
+      <details class="border border-gray-200 rounded-md bg-gray-50/50">
+        <summary class="cursor-pointer select-none px-3 py-2 flex items-center justify-between text-xs text-gray-500 uppercase tracking-wide hover:bg-gray-100 rounded-md">
+          <span class="flex items-center gap-3">
+            <span>Content-severity filters</span>
+            {# V3.14 — Apply-filters master switch. stopPropagation keeps the
+               checkbox click from toggling the <details> disclosure. #}
+            <label class="normal-case tracking-normal inline-flex items-center gap-1.5 text-[11px] text-gray-700 font-normal cursor-pointer"
+                   onclick="event.stopPropagation()">
+              <input type="checkbox" name="parental_apply" value="1"
+                     {% if (config.parental_apply or '0') == '1' %}checked{% endif %}
+                     class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                     title="When off, the scanner skips the parental-guide fetch entirely (fast). When on, the 5 ceilings below are enforced.">
+              <span>Apply filters</span>
+            </label>
+          </span>
+          <span class="normal-case tracking-normal text-[10px] text-gray-400 font-normal italic">
+            Personal use only · adds ~2s/title to scans
+          </span>
+        </summary>
+        <div class="p-3 space-y-3">
+          <p class="text-xs text-gray-500 leading-relaxed">
+            For each category, set the maximum allowed severity. Default <strong>Severe (no limit)</strong>
+            means the filter is inactive. Titles with no user-submitted rating in a category
+            pass by default — flip the checkbox below to exclude them instead.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {% set pg_cats = [
+              ('max_sex_nudity',    'Sex & Nudity'),
+              ('max_violence_gore', 'Violence & Gore'),
+              ('max_profanity',     'Profanity'),
+              ('max_alcohol_drugs', 'Alcohol, Drugs & Smoking'),
+              ('max_frightening',   'Frightening & Intense Scenes'),
+            ] %}
+            {% for key, label in pg_cats %}
+              {% set current = (config[key] or 'severe') | lower %}
+              <label class="block">
+                <span class="text-[11px] text-gray-600">{{ label }}</span>
+                <select name="{{ key }}"
+                        class="mt-1 w-full text-xs border border-gray-300 rounded-md px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500">
+                  <option value="none"     {% if current == 'none' %}selected{% endif %}>None only</option>
+                  <option value="mild"     {% if current == 'mild' %}selected{% endif %}>Up to Mild</option>
+                  <option value="moderate" {% if current == 'moderate' %}selected{% endif %}>Up to Moderate</option>
+                  <option value="severe"   {% if current == 'severe' %}selected{% endif %}>Up to Severe (no limit)</option>
+                </select>
+              </label>
+            {% endfor %}
+          </div>
+          <label class="inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+            <input type="checkbox" name="exclude_unknown_parental" value="1"
+                   {% if (config.exclude_unknown_parental or '0') == '1' %}checked{% endif %}
+                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+            <span>Exclude titles with missing parental-guide data</span>
+          </label>
+        </div>
+      </details>
+
       <fieldset>
         <legend class="text-xs text-gray-500 uppercase tracking-wide mb-2">Title types to scan</legend>
         {% set active_types = (config.title_types or '["movie","tvMovie","tvSeries"]') %}
@@ -290,7 +393,7 @@
           <label class="inline-flex items-center gap-2">
             <input type="checkbox" name="title_types" value="{{ t }}"
                    {% if t in active_types %}checked{% endif %}
-                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
             <span class="text-gray-700">{{ label }}</span>
           </label>
           {% endfor %}
@@ -314,7 +417,7 @@
            matches, and starts a fresh scan, so unsaved on-screen selections
            always take effect. -->
       <button type="submit" formaction="/run"
-              class="w-full text-sm font-semibold px-4 py-3 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition-colors mt-2"
+              class="w-full text-sm font-semibold px-4 py-3 rounded-md bg-blue-600 hover:bg-blue-700 text-white transition-colors mt-2"
               title="Saves the current config, wipes the seen-titles + matches tables, and starts a fresh scan against today's IMDB dumps.">
         ▶ Run scan now
       </button>
@@ -336,7 +439,7 @@
       {% if not runs %}
       <p class="text-sm text-gray-400 italic">No runs yet — hit "Run scan now" to start the first one.</p>
       {% else %}
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="card-surface overflow-hidden">
         <table class="w-full text-xs">
           <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
             <tr>
@@ -350,12 +453,12 @@
           </thead>
           <tbody class="divide-y divide-gray-100">
             {% for r in runs %}
-            <tr data-run-status="{{ r.status }}">
+            <tr data-run-status="{{ r.status }}"{% if r.status == 'error' and r.error %} class="error-row cursor-pointer hover:bg-red-50" onclick="this.nextElementSibling.classList.toggle('hidden')"{% endif %}>
               <td class="px-4 py-2 font-mono text-gray-400">run {{ r.id }}</td>
               <td class="px-4 py-2 font-mono text-gray-600">{{ r.started_at }}</td>
               <td class="px-4 py-2">
                 {% if r.status == 'running' %}
-                  <span class="inline-flex items-center gap-1.5 text-indigo-600">
+                  <span class="inline-flex items-center gap-1.5 text-blue-600">
                     <svg class="spinner w-3 h-3" viewBox="0 0 24 24" fill="none">
                       <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="31.4" stroke-dashoffset="10"/>
                     </svg>
@@ -364,13 +467,25 @@
                 {% elif r.status == 'done' %}
                   <span class="text-green-600">✓ done</span>
                 {% elif r.status == 'error' %}
-                  <span class="text-red-600" title="{{ r.error }}">✗ error</span>
+                  <span class="text-red-600 inline-flex items-center gap-1" title="Click the row to expand the error message">
+                    ✗ error
+                    <span class="text-[10px] text-red-400 font-normal">▼ click to expand</span>
+                  </span>
                 {% endif %}
               </td>
               <td class="px-4 py-2 text-right font-mono">{{ "{:,}".format(r.total_downloaded or 0) }}</td>
               <td class="px-4 py-2 text-right font-mono">{{ "{:,}".format(r.new_titles or 0) }}</td>
-              <td class="px-4 py-2 text-right font-mono font-semibold text-indigo-600">{{ "{:,}".format(r.matched_titles or 0) }}</td>
+              <td class="px-4 py-2 text-right font-mono font-semibold text-blue-600">{{ "{:,}".format(r.matched_titles or 0) }}</td>
             </tr>
+            {% if r.status == 'error' and r.error %}
+            <tr class="hidden error-detail-row bg-red-50">
+              <td colspan="6" class="px-4 py-3">
+                <div class="text-xs text-red-800 font-mono whitespace-pre-wrap break-words leading-relaxed">
+                  <span class="font-sans font-semibold text-red-700 not-italic mr-2">Error:</span>{{ r.error }}
+                </div>
+              </td>
+            </tr>
+            {% endif %}
             {% endfor %}
           </tbody>
         </table>
@@ -386,14 +501,6 @@
           {% if matches %}(<span id="matches-visible-count">{{ matches|length }}</span>{% if matches_count > 500 %} of {{ "{:,}".format(matches_count) }}{% endif %}){% endif %}
         </h2>
         <div class="flex items-center gap-4 flex-wrap">
-          <!-- Rescan upside candidates button -->
-          <form action="/upside_rescan" method="POST" class="inline">
-            <button type="submit"
-                    title="Sample ~500 titles that were rejected by the filters at scan time and re-test them against the current config. Results appear in the Upside candidates section below."
-                    class="text-xs px-2.5 py-1 rounded-md border border-indigo-300 bg-white text-indigo-600 hover:bg-indigo-50 transition-colors">
-              Rescan upside candidates
-            </button>
-          </form>
           <!-- Show dismissed toggle -->
           <label class="inline-flex items-center gap-1.5 text-xs cursor-pointer select-none"
                  title="Show or hide matches you've dismissed. Dismissed rows appear muted with a strikethrough title.">
@@ -415,7 +522,7 @@
       {% if not matches %}
       <p class="text-sm text-gray-400 italic">No matches yet — run a scan to populate this list.</p>
       {% else %}
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="card-surface overflow-hidden">
         <table id="matches-table" class="sortable-table w-full text-xs">
           <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
             <tr>
@@ -450,6 +557,7 @@
           </thead>
           <tbody id="matches-tbody" class="divide-y divide-gray-100">
             {% for m in matches %}
+            {% set season_count = m.seasons|length %}
             <tr class="hover:bg-gray-50{% if m.dismissed_at %} dismissed-row{% endif %}"
                 data-tconst="{{ m.tconst }}"
                 data-rating="{{ m.rating }}"
@@ -457,96 +565,53 @@
                 data-year="{{ m.start_year or 0 }}"
                 data-type="{{ m.title_type|lower }}"
                 data-title="{{ m.primary_title|lower }}"
-                data-matched="{{ m.matched_at or '' }}">
-              <td class="px-3 py-1.5 text-center">
+                data-matched="{{ m.matched_at or '' }}"
+                {% if season_count > 1 %}x-data="{ open: false }"{% endif %}>
+              <td class="px-3 py-1.5 text-center align-top">
                 <input type="checkbox"
                        class="dismiss-cb"
                        {% if m.dismissed_at %}checked{% endif %}
                        title="{% if m.dismissed_at %}Click to restore this title{% else %}Click to dismiss this title{% endif %}"
                        onchange="handleDismiss('{{ m.tconst }}', this.checked)">
               </td>
-              <td class="px-3 py-1.5 title-cell">
+              <td class="px-3 py-1.5 title-cell align-top">
                 <a href="https://www.imdb.com/title/{{ m.tconst }}/" target="_blank" rel="noopener"
-                   class="text-indigo-600 hover:underline font-medium title-link"
+                   class="text-blue-600 hover:underline font-medium title-link"
                    data-tconst="{{ m.tconst }}">{{ m.primary_title }}</a>
+                {# V3.13 — per-season match hint. Only shown for series with at
+                   least one qualifying season. One-season collapsed row shows
+                   the season inline; multi-season row toggles the expansion. #}
+                {% if season_count == 1 %}
+                  {% set s = m.seasons[0] %}
+                  <div class="text-[10px] text-gray-400 font-normal mt-0.5 select-none">
+                    ▼ 1 season matches (Season {{ s.season_number }}{% if s.air_year %} — {{ s.air_year }}{% endif %})
+                  </div>
+                {% elif season_count > 1 %}
+                  <div class="text-[10px] text-gray-400 font-normal mt-0.5 cursor-pointer select-none hover:text-gray-600"
+                       @click="open = !open"
+                       :title="open ? 'Click to collapse' : 'Click to expand'">
+                    <span x-text="open ? '▲' : '▼'">▼</span>
+                    <span>{{ season_count }} seasons match</span>
+                  </div>
+                  <ul x-show="open" x-cloak x-transition
+                      class="mt-1 space-y-0.5 text-[11px] text-gray-500 font-mono pl-3 border-l border-gray-200">
+                    {% for s in m.seasons %}
+                    <li>
+                      Season {{ s.season_number }}
+                      {% if s.air_year %}— {{ s.air_year }}{% else %}— (year unknown){% endif %}
+                      · {{ s.episode_count }} episode{% if s.episode_count != 1 %}s{% endif %}
+                    </li>
+                    {% endfor %}
+                  </ul>
+                {% endif %}
               </td>
-              <td class="px-3 py-1.5 text-right font-mono text-gray-600">{{ m.start_year or '' }}</td>
-              <td class="px-3 py-1.5 text-gray-500">{{ m.title_type }}</td>
-              <td class="px-3 py-1.5 text-right font-mono font-semibold text-green-600">{{ "%.1f"|format(m.rating) }}</td>
-              <td class="px-3 py-1.5 text-right font-mono text-gray-500">{{ "{:,}".format(m.num_votes) }}</td>
-              <td class="px-3 py-1.5 text-gray-700">{{ m.matched_tags }}</td>
-              <td class="px-3 py-1.5 text-gray-400">{{ m.genres or '' }}</td>
-              <td class="px-3 py-1.5 font-mono text-gray-400">{{ (m.matched_at or '')[:10] }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% endif %}
-    </div>
-
-    <!-- Upside candidates (Stage C) -->
-    <div>
-      <div class="flex items-center justify-between mb-1">
-        <div>
-          <h2 class="text-sm font-semibold text-gray-700">Upside candidates</h2>
-          <p class="text-xs text-gray-400">Titles previously rejected by the filters that would pass under the current config.</p>
-        </div>
-        {% if upside_checked_at %}
-        <span class="text-xs text-gray-400 font-mono">
-          {{ upside_matches|length }} candidates · last rescan {{ upside_checked_at[:10] }}
-        </span>
-        {% endif %}
-      </div>
-      {% if not upside_matches %}
-      <p class="text-sm text-gray-400 italic mt-2">No upside rescan run yet — hit "Rescan upside candidates" above to sample 500 rejected titles.</p>
-      {% else %}
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mt-2">
-        <table id="upside-table" class="sortable-table w-full text-xs">
-          <thead class="bg-gray-50 text-gray-500 uppercase tracking-wide">
-            <tr>
-              <th class="text-left  px-3 py-2 font-medium sortable" data-col="title" data-dir="text">
-                Title<span class="sort-arrow"></span><span class="resize-handle"></span>
-              </th>
-              <th class="text-right px-3 py-2 font-medium sortable" data-col="year" data-dir="numeric">
-                Year<span class="sort-arrow"></span><span class="resize-handle"></span>
-              </th>
-              <th class="text-left  px-3 py-2 font-medium sortable" data-col="type" data-dir="text">
-                Type<span class="sort-arrow"></span><span class="resize-handle"></span>
-              </th>
-              <th class="text-right px-3 py-2 font-medium sortable" data-col="rating" data-dir="numeric">
-                Rating<span class="sort-arrow"></span><span class="resize-handle"></span>
-              </th>
-              <th class="text-right px-3 py-2 font-medium sortable" data-col="votes" data-dir="numeric">
-                Votes<span class="sort-arrow"></span><span class="resize-handle"></span>
-              </th>
-              <th class="text-left  px-3 py-2 font-medium">
-                Matched tags<span class="resize-handle"></span>
-              </th>
-              <th class="text-left  px-3 py-2 font-medium">
-                All genres<span class="resize-handle"></span>
-              </th>
-            </tr>
-          </thead>
-          <tbody id="upside-tbody" class="divide-y divide-gray-100">
-            {% for u in upside_matches %}
-            <tr class="hover:bg-gray-50"
-                data-rating="{{ u.rating }}"
-                data-votes="{{ u.num_votes }}"
-                data-year="{{ u.start_year or 0 }}"
-                data-type="{{ u.title_type|lower }}"
-                data-title="{{ u.primary_title|lower }}">
-              <td class="px-3 py-1.5 title-cell">
-                <a href="https://www.imdb.com/title/{{ u.tconst }}/" target="_blank" rel="noopener"
-                   class="text-indigo-600 hover:underline font-medium title-link"
-                   data-tconst="{{ u.tconst }}">{{ u.primary_title }}</a>
-              </td>
-              <td class="px-3 py-1.5 text-right font-mono text-gray-600">{{ u.start_year or '' }}</td>
-              <td class="px-3 py-1.5 text-gray-500">{{ u.title_type }}</td>
-              <td class="px-3 py-1.5 text-right font-mono font-semibold text-green-600">{{ "%.1f"|format(u.rating) }}</td>
-              <td class="px-3 py-1.5 text-right font-mono text-gray-500">{{ "{:,}".format(u.num_votes) }}</td>
-              <td class="px-3 py-1.5 text-gray-700">{{ u.matched_tags or '' }}</td>
-              <td class="px-3 py-1.5 text-gray-400">{{ u.genres or '' }}</td>
+              <td class="px-3 py-1.5 text-right font-mono text-gray-600 align-top">{{ m.start_year or '' }}</td>
+              <td class="px-3 py-1.5 text-gray-500 align-top">{{ m.title_type }}</td>
+              <td class="px-3 py-1.5 text-right font-mono font-semibold text-green-600 align-top">{{ "%.1f"|format(m.rating) }}</td>
+              <td class="px-3 py-1.5 text-right font-mono text-gray-500 align-top">{{ "{:,}".format(m.num_votes) }}</td>
+              <td class="px-3 py-1.5 text-gray-700 align-top">{{ m.matched_tags }}</td>
+              <td class="px-3 py-1.5 text-gray-400 align-top">{{ m.genres or '' }}</td>
+              <td class="px-3 py-1.5 font-mono text-gray-400 align-top">{{ (m.matched_at or '')[:10] }}</td>
             </tr>
             {% endfor %}
           </tbody>
@@ -556,8 +621,9 @@
     </div>
 
     <p class="text-xs text-gray-400 text-center">
-      Data source: <a href="https://datasets.imdbws.com" target="_blank" class="underline">datasets.imdbws.com</a>
-      (IMDB's free daily-refreshed dumps — no scraping).
+      Data source: <a href="https://datasets.imdbws.com" target="_blank" class="underline"><strong>datasets.imdbws.com</strong></a>
+      — IMDb non-commercial dataset. Parental-guide severities are fetched from
+      imdb.com for personal use only.
     </p>
 
   </div>
@@ -711,9 +777,8 @@
       });
     }
 
-    // Initialise both tables.
+    // Initialise the matches table.
     enableSortableResizable(document.getElementById('matches-table'));
-    enableSortableResizable(document.getElementById('upside-table'));
 
     // ── Movie tooltip ───────────────────────────────────────────────────────
     // Client-side cache: Map<tconst, {data|null}>. null = in-flight.
@@ -1018,7 +1083,7 @@
 <!-- ── Sticky footer ────────────────────────────────────────────────────── -->
 <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-center gap-3 z-30 shadow-sm">
   <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">FourierFlight.com</a>. All Rights Reserved</span>
-  <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
+  <span class="text-[11px] font-mono text-gray-600 bg-gray-100 border border-gray-200 rounded-full px-2 py-0.5">{{ app_version }}</span>
 </footer>
 
 </body>

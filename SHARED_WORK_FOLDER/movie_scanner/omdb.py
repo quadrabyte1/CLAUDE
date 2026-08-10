@@ -6,6 +6,21 @@ the OMDb API (http://www.omdbapi.com/).  Cached rows live in the
 fetches (network errors, OMDb "not found", quota exceeded) are also cached
 so repeated hovers on the same missing title never hit the network again.
 
+Compliance boundary
+-------------------
+Enrichment MUST go through OMDb (or another licensed API). Never fetch
+imdb.com/* pages — prohibited by IMDb site TOS. Dataset dumps come from
+``datasets.imdbws.com`` (personal/non-commercial license) via
+``downloader.py``. If a future feature needs a data point OMDb doesn't
+expose, add another licensed provider — do NOT scrape imdb.com HTML.
+
+See also: ``movie_scanner/parental_guide.py``. That module is the ONE
+sanctioned exception to this rule — it scrapes the parental-guide page
+for personal-use severity data. It is deliberately isolated (no imports
+from here, and vice-versa) so that a future removal is a single
+``git rm``. Do not import it from this file or ``scanner.py``'s main
+flow-of-control except at the explicit parental-guide filter step.
+
 Usage::
 
     from movie_scanner import OMDbClient
@@ -105,6 +120,10 @@ class OMDbClient:
         On any failure (network, quota, not found) the returned dict has all
         data fields as None and ``error`` set to a descriptive string.
         """
+        # COMPLIANCE: Only the OMDb licensed endpoint is called here.
+        # If OMDb doesn't return the field you need, add another licensed
+        # provider — do NOT reach for imdb.com/title/<id>/ HTML. That is a
+        # TOS violation and would poison our right to redistribute anything.
         url = f"{_OMDB_BASE}?i={tconst}&apikey={self._api_key}&plot=short"
         try:
             req = urllib.request.Request(url, headers={"Accept": "application/json"})

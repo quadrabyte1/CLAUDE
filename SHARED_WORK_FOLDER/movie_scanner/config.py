@@ -49,3 +49,25 @@ class ScanConfig:
     """Titles whose OMDb Country matches (case-insensitive, substring OK —
     e.g. 'India' matches 'India, USA') any of these are skipped.
     Empty list means no country filter."""
+
+    # ── Parental-guide severity ceilings (V3.12) ────────────────────────────
+    # COMPLIANCE EXCEPTION — these fields drive the imdb.com parentalguide
+    # scraper in ``movie_scanner/parental_guide.py``. Personal use only.
+    # Default 'severe' means the filter is inactive (all titles pass).
+    max_sex_nudity:    str = "severe"
+    max_violence_gore: str = "severe"
+    max_profanity:     str = "severe"
+    max_alcohol_drugs: str = "severe"
+    max_frightening:   str = "severe"
+    exclude_unknown_parental: bool = False
+    """If True, any category with severity ``unknown`` fails the filter
+    (title excluded). Default False = ``unknown`` PASSES any ceiling."""
+
+    # ── V3.14 — master switch for the parental-guide phase ──────────────────
+    # When False (the default), Scanner skips the parental_guide phase
+    # entirely — no scraping, no cache lookups, no ceilings applied. The
+    # 5 severity ceilings above are IGNORED. When True, the ceilings are
+    # honoured as before. This mirrors the "Apply filters" checkbox next
+    # to the Content-severity heading in the web UI. Keeps the default
+    # scan fast (no ~2s/title penalty) while letting Thomas opt in.
+    apply_parental: bool = False

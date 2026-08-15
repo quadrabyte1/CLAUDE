@@ -122,6 +122,17 @@ CREATE TABLE IF NOT EXISTS dismissed_tconsts (
     dismissed_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
 );
 
+-- Snapshot of the tconst set produced by the IMMEDIATELY-PREVIOUS scan run
+-- (V3.21). We need this because /run does DELETE FROM matches before every
+-- fresh scan, which would otherwise wipe the only record of what the prior
+-- run produced. Written by /run just before that DELETE. Read by the index
+-- route to flag matches as "NEW since last scan" in the UI. Empty on first
+-- ever scan (or after /clear), which is the correct signal for "there is
+-- no previous run to diff against — don't flag anything as new".
+CREATE TABLE IF NOT EXISTS previous_match_tconsts (
+    tconst  TEXT PRIMARY KEY
+);
+
 -- Per-season air-year cache (V3.13). Populated during the scan's
 -- 'seasons' phase from title.episode.tsv.gz + the startYear on each
 -- episode's basics row. One row per (parent_tconst, season_number);
@@ -297,6 +308,18 @@ def apply_schema(conn: sqlite3.Connection) -> None:
     """)
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_match_seasons_match ON match_seasons(match_id)
+    """)
+
+    # V3.21 migration: previous-run match snapshot table. Enables the
+    # "NEW since last scan" pill in the Matches table. Idempotent —
+    # CREATE IF NOT EXISTS is safe on every startup. No back-fill needed:
+    # on the very first scan after upgrade the table is empty, so nothing
+    # gets flagged as new (correct — we can't retroactively know what the
+    # pre-upgrade run produced).
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS previous_match_tconsts (
+            tconst  TEXT PRIMARY KEY
+        )
     """)
 
     # V3.12 migration: seed the new parental-guide config keys on DBs whose

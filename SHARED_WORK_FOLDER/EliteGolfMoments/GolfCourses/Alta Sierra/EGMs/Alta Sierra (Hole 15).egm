@@ -1,0 +1,137 @@
+{
+  "course": "Alta Sierra",
+  "hole": "15",
+  "image": "Alta Sierra (15).png",
+  "imageCourse": "Alta Sierra",
+  "imageSize": {
+    "width": 1179,
+    "height": 1365
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "elevationRange": 14.5,
+  "greenScale": 1.0065,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 578,
+          "y": 41
+        },
+        {
+          "x": 326,
+          "y": 141
+        },
+        {
+          "x": 138,
+          "y": 415
+        },
+        {
+          "x": 68,
+          "y": 715
+        },
+        {
+          "x": 206,
+          "y": 877
+        },
+        {
+          "x": 428,
+          "y": 850
+        },
+        {
+          "x": 637,
+          "y": 754
+        },
+        {
+          "x": 836,
+          "y": 528
+        },
+        {
+          "x": 839,
+          "y": 199
+        }
+      ]
+    },
+    {
+      "name": "Trap 1",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 998,
+          "y": 698
+        },
+        {
+          "x": 912,
+          "y": 745
+        },
+        {
+          "x": 833,
+          "y": 829
+        },
+        {
+          "x": 754,
+          "y": 915
+        },
+        {
+          "x": 675,
+          "y": 1002
+        },
+        {
+          "x": 611,
+          "y": 1096
+        },
+        {
+          "x": 599,
+          "y": 1205
+        },
+        {
+          "x": 661,
+          "y": 1296
+        },
+        {
+          "x": 772,
+          "y": 1318
+        },
+        {
+          "x": 857,
+          "y": 1294
+        },
+        {
+          "x": 968,
+          "y": 1188
+        },
+        {
+          "x": 1042,
+          "y": 1078
+        },
+        {
+          "x": 1090,
+          "y": 968
+        },
+        {
+          "x": 1116,
+          "y": 864
+        },
+        {
+          "x": 1119,
+          "y": 776
+        },
+        {
+          "x": 1070,
+          "y": 714
+        }
+      ]
+    }
+  ]
+}

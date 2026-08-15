@@ -93,6 +93,37 @@
     tr.dismissed-row .title-cell { text-decoration: line-through; }
     tr.fading-out { transition: opacity 150ms ease-out; opacity: 0; }
 
+    /* ── "NEW since last scan" pill (V3.21) ────────────────────────────────
+       Sits inline next to the title link when the match's tconst was NOT
+       present in the immediately-previous run. Warm amber to signal
+       freshness without shouting — matches the flash-message palette so it
+       feels part of the family. 180ms transition so a re-sort that moves
+       the row fades the pill in cleanly rather than snapping. */
+    .new-pill {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 8px;
+      padding: 1px 6px;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #92400e;                 /* amber-800 */
+      background-color: #fef3c7;      /* amber-100 */
+      border: 1px solid #fde68a;      /* amber-200 */
+      border-radius: 999px;
+      line-height: 1.4;
+      vertical-align: middle;
+      transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+    }
+    /* When the row is dismissed the pill fades further so it doesn't fight
+       the strikethrough. */
+    tr.dismissed-row .new-pill {
+      color: #a16207;
+      background-color: #fef9c3;
+      border-color: #fef08a;
+    }
+
     /* ── Sortable + resizable table headers ─────────────────────────────── */
     table.sortable-table {
       table-layout: auto;   /* natural widths until user resizes a column */
@@ -607,6 +638,7 @@
                 data-type="{{ m.title_type|lower }}"
                 data-title="{{ m.primary_title|lower }}"
                 data-matched="{{ m.matched_at or '' }}"
+                data-new="{{ '1' if m.is_new else '0' }}"
                 {% if season_count > 1 %}x-data="{ open: false }"{% endif %}>
               <td class="px-3 py-1.5 text-center align-top">
                 <input type="checkbox"
@@ -619,6 +651,13 @@
                 <a href="https://www.imdb.com/title/{{ m.tconst }}/" target="_blank" rel="noopener"
                    class="text-blue-600 hover:underline font-medium title-link"
                    data-tconst="{{ m.tconst }}">{{ m.primary_title }}</a>
+                {# V3.21 — "NEW since last scan" affordance. Rendered only when
+                   the backend flagged this match as absent from the immediately-
+                   previous run's tconst set. First-ever scan (no baseline) →
+                   is_new is False for every row, so the pill never appears. #}
+                {% if m.is_new %}
+                <span class="new-pill" title="Not present in the immediately-previous scan">New</span>
+                {% endif %}
                 {# V3.13 — per-season match hint. Only shown for series with at
                    least one qualifying season. One-season collapsed row shows
                    the season inline; multi-season row toggles the expansion. #}

@@ -30,7 +30,14 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.20"
+APP_VERSION = "V3.21"
+# V3.21 — Matches table now flags each row that is NEW since the
+# immediately-previous scan. Snapshot of the outgoing tconst set is
+# taken in /run right before DELETE FROM matches, into the new
+# previous_match_tconsts table; index() diffs it into a per-row
+# is_new boolean and the template renders a small amber "NEW" pill
+# next to the title. Empty snapshot (first scan, or post-Clear) →
+# nothing flagged, so the first-scan experience stays clean.
 
 # V3.15 — allow verification runs and Herman / external tools to redirect
 # the scanner at a temporary DB without touching Thomas's live data. The
@@ -197,12 +204,28 @@ def index():
                 "episode_count": r["episode_count"],
             })
 
+    # V3.21 — load the tconst set produced by the immediately-previous
+    # scan. Used below to flag each current-run match as new/not-new.
+    # Empty set on first-ever scan (or post /clear) → nothing flagged,
+    # which is the correct "no baseline to compare against" behaviour.
+    previous_tconsts = {
+        r["tconst"] for r in db.execute(
+            "SELECT tconst FROM previous_match_tconsts"
+        ).fetchall()
+    }
+    has_previous_run = bool(previous_tconsts)
+
     # Convert sqlite3.Row rows into plain dicts so we can attach the
     # seasons list without upsetting Jinja's attribute access rules.
     matches = []
     for r in matches_raw:
         d = dict(r)
         d["seasons"] = seasons_by_match_id.get(r["id"], [])
+        # V3.21 — a match is "new since the previous scan" when there
+        # WAS a previous scan AND its tconst is not in that scan's set.
+        # No previous scan → never flag (avoids the first-run everything-
+        # is-new noise).
+        d["is_new"] = has_previous_run and (r["tconst"] not in previous_tconsts)
         matches.append(d)
 
     db.close()
@@ -371,6 +394,10 @@ def clear_all():
     # takes matches with it. Explicit DELETE FROM matches too as a belt.
     db.execute("DELETE FROM matches")
     db.execute("DELETE FROM runs")
+    # V3.21 — Clear-all wipes the "NEW since last scan" baseline too. Once
+    # the user asks to start fresh, there is no prior run to compare
+    # against; the very next scan's rows should NOT be flagged as new.
+    db.execute("DELETE FROM previous_match_tconsts")
     db.commit()
     db.close()
     return redirect(url_for("index"))
@@ -417,6 +444,17 @@ def start_run():
     _save_config_from_form()
 
     db = _conn()
+    # V3.21 — snapshot the OUTGOING run's match tconsts before we DELETE
+    # them. This is the only chance to preserve "what the previous scan
+    # produced" across the wipe, and index() reads it to flag NEW rows in
+    # the fresh run's results. We fully replace the snapshot on every /run
+    # so it always represents the immediately-previous run, not an older
+    # one. If matches is already empty (no prior run) the snapshot stays
+    # empty and nothing gets flagged as new in the next scan — correct.
+    db.execute("DELETE FROM previous_match_tconsts")
+    db.execute(
+        "INSERT INTO previous_match_tconsts (tconst) SELECT tconst FROM matches"
+    )
     # Matches first (they reference titles + runs); titles second.
     # runs table is intentionally kept so history isn't lost.
     db.execute("DELETE FROM matches")

@@ -21,7 +21,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.10"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.14"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks created after this id — bumped 2026-07-03
@@ -2310,4 +2310,5 @@ def api_generate_plate():
 # ── Run ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5051)
+    # use_reloader explicit so edits pick up regardless of how the process is launched
+    app.run(debug=True, host="0.0.0.0", port=5051, use_reloader=True)

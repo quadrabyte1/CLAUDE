@@ -2407,15 +2407,169 @@ def build_fringe_mesh(
                           f"xy=({x:+.2f},{y:+.2f}) "
                           f"z={z:.3f} 8nbr-med={med:.3f} Δ={d:+.3f}")
 
+    # ── User-placed elevation spikes (task 663, Topo) ────────────────────────
+    # Boundary Editor persists spikes at the top level of the EGM:
+    #   data["elevationSpikes"] = [{"x": <px>, "y": <px>, "mm": <float>}, ...]
+    # where (x, y) are in image-pixel coords (same convention as polygon
+    # vertices) and `mm` is the desired fringe height ABOVE THE BASE PLATE
+    # (z=0), i.e. an absolute Z value in the same mm coord system used by
+    # `Z_fringe`. See owner_inbox/boundary_editor_elevation_spike_integration.md
+    # for the design decision (option 1: absolute Z above build plate).
+    #
+    # Falloff:  Gaussian in model-space mm.  σ = SPIKE_SIGMA_MM (default 8 mm)
+    # is wide enough to bridge ~10 fringe grid cells at 200-cell / ±85 mm
+    # resolution, so the ramp reads as smooth terrain rather than a needle
+    # crater, and narrow enough that a spike does not swamp the whole fringe.
+    #
+    # Blend model: MAX of per-spike bumps (not additive), so two overlapping
+    # spikes of 10 mm and 10 mm do not become 20 mm.  Each spike contributes
+    #     bump_i(x,y) = (z_target_i - z_natural(x,y)) * exp(-d_i²/(2σ²))
+    # and we set
+    #     z_new(x,y)  = z_natural(x,y) + max_i(bump_i)
+    # so the peak equals `z_target` exactly at the spike centre and decays
+    # smoothly back to the natural fringe elevation far away.  We deliberately
+    # apply spikes AFTER the mask-aware median filter so that filter cannot
+    # dampen our engineered peaks — the median exists to kill *unintentional*
+    # interpolation spikes, not user-requested ones.
+    #
+    # Seam interaction:  a spike whose falloff extends into the fringe's
+    # inner boundary (seam) cells also updates `seam_override` — otherwise the
+    # top-vertex loop below would restore the seam Z and swallow the bump.
+    #
+    # Spike-in-green:  spikes are meant for the fringe.  If a spike centre
+    # falls inside the green polygon we still let its Gaussian tail reach
+    # nearby fringe cells (the fringe near the green edge deserves to rise
+    # if the user asked for elevation right at the edge), but we log a
+    # warning so Thomas / Jim know the spike centre itself is unused.
+    #
+    # Post-`build_fringe_mesh` interaction:  `_apply_lift_and_cap` only fires
+    # for water holes and only clips top verts within BOUNDARY_CAP_BAND_MM
+    # (1 mm at full strength, tapering out to ~4 mm) of the plaque frame edge.
+    # Spikes placed further than ~4 mm from the frame are unaffected.  Spikes
+    # near the frame on a water hole will be capped at BOUNDARY_HEIGHT_CAP_MM
+    # (9 mm) — this is intentional and matches the same rule that governs
+    # tall trap/water pieces on water holes.
+    from shapely.geometry import Point as _SpikeShapelyPoint
+    _raw_spikes = egm_data.get("elevationSpikes") or egm_data.get("elevation_spikes") or []
+    SPIKE_SIGMA_MM = 8.0             # Gaussian σ in mm (~9-cell FWHM on 200-grid)
+    SPIKE_INFLUENCE_MM = 3.5 * SPIKE_SIGMA_MM   # cutoff for near-zero contribution
+    SPIKE_HARD_MAX_MM = 50.0         # matches editor ±50 mm clamp; safety net
+    spike_touched_cells = 0
+    spike_seam_cells = 0
+    spikes_mm: list[tuple[float, float, float]] = []
+    if _raw_spikes:
+        _skipped_in_green = 0
+        for _sp in _raw_spikes:
+            try:
+                _px = float(_sp["x"]); _py = float(_sp["y"])
+                _mm = float(_sp["mm"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            # px → mm using the same transform the polygons use.
+            _xy_mm = _px_to_mm_2d(
+                np.array([[_px, _py]], dtype=np.float64), scale, centroid_px
+            )[0]
+            _sx_mm, _sy_mm = float(_xy_mm[0]), float(_xy_mm[1])
+            # Absolute Z above build plate, clamped to a sane range so a
+            # runaway 999-mm spike can never break the mesh.  Never dip below
+            # the base plate itself (would create a negative-height region).
+            _z_target = max(0.0, min(_mm, SPIKE_HARD_MAX_MM))
+            _z_target = max(_z_target, BASE_THICKNESS_MM)
+            # Warn if the spike centre lives inside the green polygon.
+            if green_shapely.contains(_SpikeShapelyPoint(_sx_mm, _sy_mm)):
+                _skipped_in_green += 1
+            spikes_mm.append((_sx_mm, _sy_mm, _z_target))
+        if _skipped_in_green:
+            print(f"  Elevation spikes: {_skipped_in_green} spike centre(s) "
+                  f"inside green polygon — centre value ignored, "
+                  f"Gaussian tails still influence adjacent fringe cells")
+
+    if spikes_mm:
+        print(f"  Elevation spikes: applying {len(spikes_mm)} spike(s) "
+              f"(σ={SPIKE_SIGMA_MM} mm Gaussian, MAX blend)")
+        _two_sigma_sq = 2.0 * SPIKE_SIGMA_MM * SPIKE_SIGMA_MM
+        # Precompute mm-space coords for the seam override cells for quick
+        # spike-touched-seam updates.
+        _seam_updated: dict[tuple[int, int], tuple[float, float, float]] = {}
+        for r in range(fringe_grid_res):
+            for c in range(fringe_grid_res):
+                if not fringe_mask[r, c]:
+                    continue
+                cell_x = float(xs_mm[c]); cell_y = float(ys_mm[r])
+                z_base = float(Z_fringe[r, c])
+                if (r, c) in seam_override:
+                    # Seam cells derive their true Z from seam_override, not
+                    # from Z_fringe, so we must bump from the seam z-value.
+                    z_base = float(seam_override[(r, c)][2])
+                best_bump = 0.0
+                for _sx_mm, _sy_mm, _z_target in spikes_mm:
+                    _dx = cell_x - _sx_mm
+                    _dy = cell_y - _sy_mm
+                    _d2 = _dx * _dx + _dy * _dy
+                    if _d2 > SPIKE_INFLUENCE_MM * SPIKE_INFLUENCE_MM:
+                        continue
+                    _bump = (_z_target - z_base) * math.exp(-_d2 / _two_sigma_sq)
+                    if _bump > best_bump:
+                        best_bump = _bump
+                if best_bump > 0.0:
+                    z_new = z_base + best_bump
+                    Z_fringe[r, c] = z_new
+                    if (r, c) in seam_override:
+                        _sx, _sy, _ = seam_override[(r, c)]
+                        _seam_updated[(r, c)] = (_sx, _sy, z_new)
+                        spike_seam_cells += 1
+                    spike_touched_cells += 1
+        # Fold seam updates back into seam_override so the top-vertex builder
+        # (which consults seam_override) uses the bumped Z, not the original.
+        seam_override.update(_seam_updated)
+        # Report the achieved peak so a coordinate-space bug is loud.
+        _peaks = []
+        for (_sx_mm, _sy_mm, _z_target) in spikes_mm:
+            # Nearest fringe grid cell
+            _c = int(round((_sx_mm - xs_mm[0]) / (xs_mm[1] - xs_mm[0])))
+            _r = int(round((_sy_mm - ys_mm[0]) / (ys_mm[1] - ys_mm[0])))
+            _c = max(0, min(fringe_grid_res - 1, _c))
+            _r = max(0, min(fringe_grid_res - 1, _r))
+            if fringe_mask[_r, _c]:
+                _achieved = float(seam_override[(_r, _c)][2]) if (_r, _c) in seam_override else float(Z_fringe[_r, _c])
+                _peaks.append((_sx_mm, _sy_mm, _z_target, _achieved))
+            else:
+                _peaks.append((_sx_mm, _sy_mm, _z_target, float("nan")))
+        for _sx_mm, _sy_mm, _tgt, _got in _peaks:
+            print(f"    spike xy=({_sx_mm:+.2f},{_sy_mm:+.2f}) mm  "
+                  f"target={_tgt:.3f} mm  achieved={_got:.3f} mm  "
+                  f"(NaN = spike outside fringe mask, only tail influence)")
+        print(f"  Elevation spikes: {spike_touched_cells} fringe cell(s) raised "
+              f"({spike_seam_cells} of which are seam cells)")
+
     # FINAL spike scan on the array that actually becomes top vertices:
     # filtered Z_fringe combined with seam_override (since seam cells get
     # their Z from the override, not Z_fringe, when top_verts is built).
     Z_final_top = Z_fringe.copy()
     for (sr, sc), (_sx, _sy, sz) in seam_override.items():
         Z_final_top[sr, sc] = sz
-    final_spikes = _count_fringe_spikes(Z_final_top, fringe_mask, 1.5)
-    print(f"  FINAL fringe top surface (Z_fringe + seam_override) "
-          f"spikes >1.5mm above 8-nbr median: {final_spikes}")
+    # Exclude cells within one influence radius of any user spike from the
+    # diagnostic spike-scan — those cells are engineered peaks, not natural-
+    # interpolation outliers, and would produce noisy warnings that mask real
+    # anomalies. The scan is diagnostic only; excluded cells still render.
+    if spikes_mm:
+        _mask_for_scan = fringe_mask.copy()
+        for _sx_mm, _sy_mm, _z_target in spikes_mm:
+            for r in range(fringe_grid_res):
+                for c in range(fringe_grid_res):
+                    if not _mask_for_scan[r, c]:
+                        continue
+                    _dx = float(xs_mm[c]) - _sx_mm
+                    _dy = float(ys_mm[r]) - _sy_mm
+                    if _dx * _dx + _dy * _dy <= SPIKE_INFLUENCE_MM * SPIKE_INFLUENCE_MM:
+                        _mask_for_scan[r, c] = False
+        final_spikes = _count_fringe_spikes(Z_final_top, _mask_for_scan, 1.5)
+        print(f"  FINAL fringe top surface spikes >1.5mm above 8-nbr median: "
+              f"{final_spikes} (natural-only; user-spike neighbourhoods excluded)")
+    else:
+        final_spikes = _count_fringe_spikes(Z_final_top, fringe_mask, 1.5)
+        print(f"  FINAL fringe top surface (Z_fringe + seam_override) "
+              f"spikes >1.5mm above 8-nbr median: {final_spikes}")
 
     # --- Build mesh using the same grid-triangulation approach as _build_heightmap_mesh ---
     # We reuse that function by passing our fringe grid and mask.

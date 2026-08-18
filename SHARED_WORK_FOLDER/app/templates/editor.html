@@ -344,8 +344,63 @@
           <span class="inline-block w-3 h-3 rounded-sm flex-shrink-0" style="background:#FFE600;"></span>
           <span class="text-[11px] text-gray-600 leading-none">Contour</span>
         </div>
+        <div class="flex items-center gap-1.5">
+          <span class="inline-block w-3 h-3 rounded-sm flex-shrink-0" style="background:#F5C77E; border:1px solid #B8763A;"></span>
+          <span class="text-[11px] text-gray-600 leading-none">Elev spike</span>
+        </div>
       </div>
     </div>
+
+    {# ── Elevation-spike overlays ────────────────────────────
+       Rendered as absolutely-positioned HTML on top of the canvas
+       (canvas is a raster surface; interactive rectangles live here).
+       Position uses editor.scale + offsetX/Y so spikes track the image
+       as the canvas resizes. #}
+    <template x-for="(sp, sIdx) in elevationSpikes" :key="'spike-' + sIdx">
+      <div class="absolute select-none"
+           x-show="imgLoaded"
+           :style="`left:${sp.x * scale + offsetX}px; top:${sp.y * scale + offsetY}px; transform:translate(-50%,-50%); z-index:20;`">
+        <div @pointerdown="spikePointerDown($event, sIdx)"
+             :title="'Elevation spike ' + (sIdx + 1) + ' — drag to reposition. Wanted fringe height at this point (mm).'"
+             class="flex items-stretch gap-0 rounded-md shadow-sm border cursor-grab active:cursor-grabbing"
+             style="background:#FFF7ED; border-color:#B8763A; transition: box-shadow 180ms ease-in-out, transform 180ms ease-in-out;">
+          <div class="flex items-center justify-center px-1.5 border-r"
+               style="background:#F5C77E; border-color:#B8763A; color:#7A4A15; font-weight:600; font-size:11px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+            E
+          </div>
+          <div class="flex items-center px-2 py-1"
+               style="color:#4A2C08; font-size:14px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-variant-numeric: tabular-nums; min-width:52px;"
+               x-text="sp.mm.toFixed(1) + ' mm'">
+          </div>
+          <div class="flex flex-col border-l" style="border-color:#B8763A;">
+            <button type="button"
+                    @pointerdown.stop
+                    @click.stop="spikeBump(sIdx, +0.1)"
+                    title="Increase wanted fringe height by 0.1 mm"
+                    class="px-1.5 leading-none hover:bg-orange-100 transition-default border-b"
+                    style="border-color:#B8763A; color:#7A4A15; font-size:9px; height:14px;">
+              &#9650;
+            </button>
+            <button type="button"
+                    @pointerdown.stop
+                    @click.stop="spikeBump(sIdx, -0.1)"
+                    title="Decrease wanted fringe height by 0.1 mm"
+                    class="px-1.5 leading-none hover:bg-orange-100 transition-default"
+                    style="color:#7A4A15; font-size:9px; height:14px;">
+              &#9660;
+            </button>
+          </div>
+          <button type="button"
+                  @pointerdown.stop
+                  @click.stop="removeElevationSpike(sIdx)"
+                  title="Remove this elevation spike"
+                  class="px-1.5 border-l hover:bg-red-50 transition-default"
+                  style="border-color:#B8763A; color:#B04A2A; font-size:12px; line-height:1;">
+            &times;
+          </button>
+        </div>
+      </div>
+    </template>
   </div>
 
   {# ── Below-canvas action row ─────────────────────────────── #}
@@ -377,6 +432,14 @@
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
             title="Add a new water polygon (yellow) to the canvas — drag its vertices to shape it.">
       Add Water
+    </button>
+
+    <button @click="addElevationSpike()"
+            :disabled="!imgLoaded"
+            :class="imgLoaded ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-500/40 cursor-not-allowed'"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
+            title="Add an elevation spike — drops a draggable marker on the fringe with the wanted fringe height in mm. Use the ▲/▼ buttons to adjust in 0.1 mm steps.">
+      Add Elevation Spike
     </button>
 
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
@@ -473,13 +536,23 @@ function polygonEditor() {
     printSizeMm: 171.45,
     fringeXyExpansionMm: -1.057,
     // Derived: extra padding on each side in image-pixel units (set by resizeCanvas)
-    fringePadPx: 0,
+    fringePadPx: 0,     // max(fringePadX, fringePadY) — used for polygon-vertex clamping
+    fringePadXpx: 0,    // per-axis X pad — used for spike spawn / drag clamp
+    fringePadYpx: 0,    // per-axis Y pad — used for spike spawn / drag clamp
+
+    // Elevation spikes — draggable point markers stating the "wanted"
+    // fringe elevation (mm above base) at a specific (x,y) image-pixel
+    // location. Rendered as HTML overlays on top of the canvas.
+    // Persisted at the top level of the .egm payload as `elevationSpikes`.
+    // Geometry pipeline (Topo) will consume these in a follow-up task.
+    elevationSpikes: [],   // [{x, y, mm}] — x,y in image-pixel coords
+    _spikeDrag: null,      // {idx, startClientX, startClientY, startX, startY, moved} during drag
 
     // Contour lines — open polylines (type: "contour", closed: false)
     contours: [],          // [{name, direction, points:[{x,y}]}]
     contourMode: false,    // whether we are currently drawing a contour
     contourDraft: [],      // points being drawn in the current session
-    contourStep: 0.1,         // mm elevation increment per contour line
+    contourStep: 0.5,         // mm elevation increment per contour line
     grassAmplitude: 0.5,      // grass bump height in mm
     grassSpacing: 2.4,        // distance between bump centers in mm
     greenStyle: 'terraced',   // 'smooth' or 'terraced'
@@ -687,8 +760,14 @@ function polygonEditor() {
       // Per-axis pad (may differ because image may not be square):
       const fringePadX = Math.max(0, fringeReachPx - this.imgW / 2);
       const fringePadY = Math.max(0, fringeReachPx - this.imgH / 2);
-      // Store a single fringePadPx (used for drag clamping) — use the larger of x/y
+      // Store a single fringePadPx (used for polygon-vertex clamping) — use the larger of x/y
       this.fringePadPx = Math.max(fringePadX, fringePadY);
+      // Per-axis pads: elevation-spike overlays are HTML positioned via offsetY, so their
+      // Y-visibility is bounded by fringePadY (not fringePadPx). Using the max value on the
+      // Y axis pushed spawn coords above the container top edge on portrait images and got
+      // clipped by the canvas container's overflow-hidden.
+      this.fringePadXpx = fringePadX;
+      this.fringePadYpx = fringePadY;
 
       // Expanded canvas dimensions in image-pixel units
       const expandedImgW = this.imgW + 2 * fringePadX;
@@ -1589,6 +1668,108 @@ function polygonEditor() {
       this.autoSave();
     },
 
+    // ── Elevation spikes ─────────────────────────────────────
+    // Spawn a spike on the fringe area (above the image, inside the
+    // fringe padding zone the canvas already visualizes). Multiple
+    // spikes are staggered so they don't overlap on spawn.
+    // Initial mm value = current elevationRange setting per Thomas's spec.
+    addElevationSpike() {
+      if (!this.imgLoaded) return;
+      const n = this.elevationSpikes.length;
+      // Spawn inside the visible fringe-Y zone, staggered right so multiple
+      // spikes don't stack. The overlay is an HTML element inside a container
+      // with overflow-hidden, positioned via CSS-Y = imgY * scale + offsetY
+      // where offsetY = fringePadYpx * scale. Visible CSS-Y therefore
+      // requires imgY ∈ [-fringePadYpx, imgH + fringePadYpx].
+      //
+      // When fringePadYpx > 0 (fringe wraps above the image on Y): spawn in
+      //   the fringe pad above the image at imgY = -fringePadYpx * 0.5.
+      // When fringePadYpx == 0 (no Y-axis fringe pad — typical for portrait
+      //   images given the current fringeXyExpansionMm): spawn just inside
+      //   the top of the image itself at imgY = imgH * 0.05, so the spike
+      //   lands on the fringe/green edge and is immediately visible. This
+      //   was the v4.11 bug: spawn used a negative imgY unconditionally, so
+      //   for portrait images the overlay landed above the container top
+      //   edge and was clipped by overflow-hidden — hence "no rectangle."
+      const spawnY = this.fringePadYpx > 0
+        ? -this.fringePadYpx * 0.5
+        :  this.imgH * 0.05;
+      const spawnX = Math.max(20, Math.min(this.imgW - 20,
+        this.imgW / 2 - 90 + (n * 30)));
+      this.elevationSpikes.push({
+        x: Math.round(spawnX),
+        y: Math.round(spawnY),
+        mm: Math.round((this.elevationRange || 0) * 10) / 10,
+      });
+      this.flash('Elevation spike added — drag to place, use ▲/▼ to tune mm', true);
+      this.autoSave();
+    },
+
+    removeElevationSpike(idx) {
+      if (idx < 0 || idx >= this.elevationSpikes.length) return;
+      this.elevationSpikes.splice(idx, 1);
+      this.flash('Elevation spike removed', true);
+      this.autoSave();
+    },
+
+    spikeBump(idx, delta) {
+      if (idx < 0 || idx >= this.elevationSpikes.length) return;
+      // Keep to 1-decimal precision — avoid 14.5 + 0.1 = 14.600000000001
+      const cur = this.elevationSpikes[idx].mm || 0;
+      const next = Math.round((cur + delta) * 10) / 10;
+      // Allow negative wanted values in principle (recessed fringe) but
+      // clamp at -50/+50 so a stuck button doesn't run away.
+      this.elevationSpikes[idx].mm = Math.max(-50, Math.min(50, next));
+      this.autoSave();
+    },
+
+    // Drag: uses pointer events on the overlay div itself, not the
+    // canvas mousedown pipeline (which is polygon-vertex-specific).
+    spikePointerDown(e, idx) {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      const sp = this.elevationSpikes[idx];
+      if (!sp) return;
+      this._spikeDrag = {
+        idx,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startX: sp.x,
+        startY: sp.y,
+        moved: false,
+      };
+      const onMove = (ev) => {
+        const d = this._spikeDrag;
+        if (!d) return;
+        const dpr = 1; // scale/offset are already in CSS px, so no DPR here
+        const dx = (ev.clientX - d.startClientX) / this.scale / dpr;
+        const dy = (ev.clientY - d.startClientY) / this.scale / dpr;
+        if (Math.abs(dx) + Math.abs(dy) > 1) d.moved = true;
+        const sp2 = this.elevationSpikes[d.idx];
+        if (!sp2) return;
+        // Clamp within the fringe-expanded zone (allows fringe placement).
+        // Use per-axis pads so the overlay stays inside the canvas container
+        // (the parent has overflow-hidden; symmetric fringePadPx on Y would
+        // let a dragged spike escape above/below the visible zone on
+        // non-square images).
+        const minX = -this.fringePadXpx;
+        const maxX = this.imgW + this.fringePadXpx;
+        const minY = -this.fringePadYpx;
+        const maxY = this.imgH + this.fringePadYpx;
+        sp2.x = Math.max(minX, Math.min(maxX, d.startX + dx));
+        sp2.y = Math.max(minY, Math.min(maxY, d.startY + dy));
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        const d = this._spikeDrag;
+        this._spikeDrag = null;
+        if (d && d.moved) this.autoSave();
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+
     removePoly(idx) {
       if (this.polygons[idx].type !== 'trap' && this.polygons[idx].type !== 'water' && this.polygons[idx].type !== 'boulders') return;
       this.pushUndo();
@@ -1645,6 +1826,11 @@ function polygonEditor() {
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
+        elevationSpikes: this.elevationSpikes.map(sp => ({
+          x: Math.round(sp.x * 100) / 100,
+          y: Math.round(sp.y * 100) / 100,
+          mm: Math.round(sp.mm * 10) / 10,
+        })),
       };
       try {
         await fetch('/api/boundaries', {
@@ -1785,7 +1971,7 @@ function polygonEditor() {
         this.selectedImageUrl = this.selectedImageCourse
           ? '/egm/images/' + encodeURIComponent(this.selectedImageCourse) + '/' + encodeURIComponent(data.image)
           : '/team_inbox/' + encodeURIComponent(data.image);
-        this.contourStep = data.contourStep != null ? data.contourStep : 0.1;
+        this.contourStep = data.contourStep != null ? data.contourStep : 0.5;
         this.grassAmplitude = data.grassAmplitude != null ? data.grassAmplitude : 0.5;
         this.grassSpacing = data.grassSpacing != null ? data.grassSpacing : 2.4;
         this.greenStyle = data.greenStyle || 'terraced';
@@ -1804,6 +1990,13 @@ function polygonEditor() {
         this.selectedVerts = [];
         this.polygons = [];
         this.contours = [];
+        this.elevationSpikes = Array.isArray(data.elevationSpikes)
+          ? data.elevationSpikes.map(sp => ({
+              x: Number(sp.x) || 0,
+              y: Number(sp.y) || 0,
+              mm: (typeof sp.mm === 'number') ? sp.mm : 0,
+            }))
+          : [];
         this._pendingRestore = data.polygons;
         this.loadImage();
         this.flash('Loaded: ' + data.course + ' — Hole ' + data.hole, true);
@@ -1827,7 +2020,7 @@ function polygonEditor() {
       this.selectedImageCourse = (matchedImg && matchedImg.course) ? matchedImg.course : '';
       // Reset editor settings to defaults so a new project starts from a clean slate
       // rather than inheriting tweaks from whatever project was open before.
-      this.contourStep = 0.1;
+      this.contourStep = 0.5;
       this.grassAmplitude = 0.5;
       this.grassSpacing = 2.4;
       this.greenStyle = 'terraced';
@@ -1852,6 +2045,7 @@ function polygonEditor() {
       this.redoStack = [];
       this.selectedVerts = [];
       this.polygons = [];
+      this.elevationSpikes = [];
       this._pendingDetect = true;
       this.loadImage();
     },
@@ -1956,6 +2150,11 @@ function polygonEditor() {
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
+        elevationSpikes: this.elevationSpikes.map(sp => ({
+          x: Math.round(sp.x * 100) / 100,
+          y: Math.round(sp.y * 100) / 100,
+          mm: Math.round(sp.mm * 10) / 10,
+        })),
         open_in_slicer: this.openInSlicer,
       };
       this.generating = true;

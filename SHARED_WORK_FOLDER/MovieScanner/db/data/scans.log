@@ -523,3 +523,39 @@ Config:
   include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, Mystery, Romance
   exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, Thriller, War, Western
 ========================================
+========================================
+Scan run_id=10 — 2026-08-16T07:04:21Z → 2026-08-16T07:04:47Z
+Status: done
+Scanned: 1,213,792 rows | New titles: 0 | Matches: 0
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, Mystery, Romance
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, Thriller, War, Western
+========================================
+========================================
+Scan run_id=11 — 2026-08-17T07:09:41Z → 2026-08-17T07:10:11Z
+Status: done
+Scanned: 1,213,918 rows | New titles: 137 | Matches: 0
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, Mystery, Romance
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, Thriller, War, Western
+========================================
+========================================
+Scan run_id=12 — 2026-08-18T07:00:06Z → 2026-08-18T08:09:00Z
+Status: done
+Scanned: 1,213,925 rows | New titles: 109 | Matches: 0
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adult, Adventure, Comedy, Crime, Drama, Family, Mystery, Romance
+  exclude_genres: Animation, Biography, Documentary, Fantasy, Film-Noir, Game-Show, History, Horror, Music, Musical, News, Reality-TV, Sci-Fi, Short, Sport, Talk-Show, Tamil, Thriller, War, Western
+========================================

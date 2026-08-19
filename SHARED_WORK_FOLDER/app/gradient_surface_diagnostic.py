@@ -5329,6 +5329,7 @@ def _build_pipe_circle(cx: float, cy: float) -> ShapelyPolygon:
 def run_pipeline(
     egm_path: str,
     include_boundary_region: bool | None = None,
+    apply_fringe_frame_cap: bool | None = None,
 ) -> str:
     """Run the full gradient surface pipeline for a given EGM file path.
 
@@ -5342,6 +5343,14 @@ def run_pipeline(
         meshes inward by 5 mm to create the gap the ring fills. When False,
         skip the derivation. When None (default), fall back to the
         ``includeBoundaryRegion`` flag persisted inside the EGM file.
+    apply_fringe_frame_cap : bool | None, optional
+        When True (default), the water-hole rule clips fringe top vertices
+        within BOUNDARY_CAP_BAND_MM of the plaque frame perimeter to
+        BOUNDARY_HEIGHT_CAP_MM (preserves legacy behavior). When False, the
+        fringe cap is skipped and the fringe rises to its natural height even
+        where it exceeds the frame. Green/trap/water caps are unaffected.
+        When None, fall back to the ``applyFringeFrameCap`` flag persisted
+        inside the EGM file (missing → True).
 
     Returns the absolute path to the generated .3mf file.
     """
@@ -5402,6 +5411,15 @@ def run_pipeline(
 
     if include_boundary_region:
         _apply_boundary_region_derivation(_egm_data, green_boundary_px)
+
+    # Resolve applyFringeFrameCap (task 669). Default True on missing key
+    # preserves the legacy always-cap behavior; explicit False from either
+    # the caller or the EGM disables the fringe cap in step 7c.
+    if apply_fringe_frame_cap is None:
+        apply_fringe_frame_cap = bool(_egm_data.get("applyFringeFrameCap", True))
+    else:
+        _egm_data["applyFringeFrameCap"] = bool(apply_fringe_frame_cap)
+    print(f"    Apply fringe frame cap: {apply_fringe_frame_cap}")
 
     img = cv2.imread(image_path)
     if img is None:
@@ -5849,11 +5867,18 @@ def run_pipeline(
                 stepped_mesh, lift_mm=WATER_HOLE_LIFT_MM,
                 cap_mm=None, label="green_stepped",
             )
-        # Fringe: ALWAYS touches the frame by construction → lift + cap.
+        # Fringe: ALWAYS touches the frame by construction → lift + cap
+        # (cap gated by applyFringeFrameCap — task 669). When the cap is
+        # disabled, we still apply the water-hole lift so the fringe sits on
+        # the 2 mm base slab; only the per-vertex boundary-band clip is
+        # skipped, allowing fringe verts near the frame to keep their
+        # natural terrain height.
         if isinstance(fringe_mesh, trimesh.Trimesh):
+            _fringe_cap = BOUNDARY_HEIGHT_CAP_MM if apply_fringe_frame_cap else None
+            _fringe_label = "fringe" if apply_fringe_frame_cap else "fringe (cap disabled)"
             _apply_lift_and_cap(
                 fringe_mesh, lift_mm=WATER_HOLE_LIFT_MM,
-                cap_mm=BOUNDARY_HEIGHT_CAP_MM, label="fringe",
+                cap_mm=_fringe_cap, label=_fringe_label,
             )
     else:
         print("\n[7c] Water-hole rule: SKIPPED (no water polygons in EGM)")

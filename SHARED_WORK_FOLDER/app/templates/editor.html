@@ -119,6 +119,18 @@
         <span class="text-xs text-notion-muted">Auto-derives a 5 mm boulders ring around each water polygon.</span>
       </div>
 
+      {# Cap fringe at frame height — clip fringe top vertices near the frame perimeter so the fringe doesn't rise above the plaque frame on water holes #}
+      <div class="flex flex-col gap-1 min-w-[200px]"
+           title="On water holes, clip fringe top vertices near the frame perimeter so the fringe never rises above the frame. Uncheck to let the fringe rise to its natural height (may exceed the frame).">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Fringe cap</label>
+        <label class="inline-flex items-center gap-2 text-sm text-notion-text cursor-pointer select-none">
+          <input type="checkbox" x-model="applyFringeFrameCap" @change="autoSave()"
+                 class="h-4 w-4 rounded border-notion-border text-notion-accent focus:ring-2 focus:ring-notion-accent/30">
+          <span>Cap fringe at frame height</span>
+        </label>
+        <span class="text-xs text-notion-muted">Prevents the fringe from rising above the plaque frame near the edges (water holes only).</span>
+      </div>
+
       {# Divider #}
       <div class="hidden sm:block w-px self-stretch bg-notion-border mx-1"></div>
 
@@ -562,6 +574,7 @@ function polygonEditor() {
     fringeEdgeHeight: 10.0,   // outer wall height of the fringe (mm)
     baseThicknessMm: 1.5,     // flat filament base below the surface topology (mm)
     includeBoundaryRegion: false,  // auto-derive a 5 mm boulders ring from each water polygon
+    applyFringeFrameCap: true,     // clip fringe top vertices near the frame perimeter (water-hole rule); default ON preserves legacy behavior
     flagOffsetXMm: 0.0,    // mm: move flag right (+) or left (-)
     flagOffsetYMm: 0.0,    // mm: move flag up (+) or down (-)
     selectedContour: -1,   // index into contours[]
@@ -1823,6 +1836,7 @@ function polygonEditor() {
         fringeEdgeHeight: this.fringeEdgeHeight,
         baseThicknessMm: this.baseThicknessMm,
         includeBoundaryRegion: this.includeBoundaryRegion,
+        applyFringeFrameCap: this.applyFringeFrameCap,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
@@ -1980,6 +1994,9 @@ function polygonEditor() {
         this.fringeEdgeHeight = data.fringeEdgeHeight != null ? data.fringeEdgeHeight : 10.0;
         this.baseThicknessMm = data.baseThicknessMm != null ? data.baseThicknessMm : 1.5;
         this.includeBoundaryRegion = data.includeBoundaryRegion === true;
+        // Legacy .egm files without applyFringeFrameCap must default to true
+        // (preserves the historical always-on behavior).
+        this.applyFringeFrameCap = data.applyFringeFrameCap !== false;
         this.flagOffsetXMm = data.flagOffsetXMm != null ? data.flagOffsetXMm : 0.0;
         this.flagOffsetYMm = data.flagOffsetYMm != null ? data.flagOffsetYMm : 0.0;
         // Absorb print constants from server (avoids hardcoding in JS)
@@ -2029,6 +2046,7 @@ function polygonEditor() {
       this.fringeEdgeHeight = 10.0;
       this.baseThicknessMm = 1.5;
       this.includeBoundaryRegion = false;
+      this.applyFringeFrameCap = true;
       this.flagOffsetXMm = 0.0;
       this.flagOffsetYMm = 0.0;
       this.showNewDialog = false;
@@ -2147,6 +2165,7 @@ function polygonEditor() {
         fringeEdgeHeight: this.fringeEdgeHeight,
         baseThicknessMm: this.baseThicknessMm,
         includeBoundaryRegion: this.includeBoundaryRegion,
+        applyFringeFrameCap: this.applyFringeFrameCap,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,

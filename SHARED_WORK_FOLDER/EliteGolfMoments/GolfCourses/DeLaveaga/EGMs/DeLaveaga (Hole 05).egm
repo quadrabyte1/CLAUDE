@@ -16,6 +16,7 @@
   "fringeEdgeHeight": 10,
   "baseThicknessMm": 1.5,
   "includeBoundaryRegion": false,
+  "applyFringeFrameCap": true,
   "flagOffsetXMm": 0,
   "flagOffsetYMm": 0,
   "polygons": [
@@ -25,8 +26,8 @@
       "closed": true,
       "points": [
         {
-          "x": 524,
-          "y": 264
+          "x": 531,
+          "y": 259
         },
         {
           "x": 284,
@@ -242,5 +243,6 @@
         }
       ]
     }
-  ]
+  ],
+  "elevationSpikes": []
 }

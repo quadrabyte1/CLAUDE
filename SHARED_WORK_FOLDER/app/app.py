@@ -21,7 +21,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.14"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.15"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks created after this id — bumped 2026-07-03
@@ -1454,6 +1454,12 @@ def generate_models():
     # but we also forward the request-time value here so the route can override
     # the persisted value if the client ever wants to.
     include_boundary_region = bool(data.get("includeBoundaryRegion", False))
+    # Fringe-frame cap toggle (task 669): default True preserves legacy behavior.
+    # When False, the water-hole rule at gradient_surface_diagnostic line ~5854
+    # skips the per-vertex boundary cap for the fringe mesh, letting the fringe
+    # rise to its natural height even where it exceeds the plaque frame.
+    # Missing key → True (legacy .egm files never persisted this flag).
+    apply_fringe_frame_cap = bool(data.get("applyFringeFrameCap", True))
     open_in_slicer = bool(data.get("open_in_slicer", False))
 
     hole_label = hole.zfill(2) if hole.isdigit() else hole
@@ -1481,6 +1487,7 @@ def generate_models():
         three_mf_path = run_pipeline(
             egm_path,
             include_boundary_region=include_boundary_region,
+            apply_fringe_frame_cap=apply_fringe_frame_cap,
         )
     except Exception as exc:
         return jsonify({"status": "error", "msg": str(exc)}), 500

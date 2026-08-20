@@ -946,7 +946,7 @@ def generate_from_egm(
 
     image_size = egm_data.get("imageSize", {"width": 600, "height": 600})
     polygons = egm_data.get("polygons", [])
-    contour_step_mm: float = float(egm_data.get("contourStep", 10.0))
+    contour_step_mm: float = float(egm_data.get("contourStep", 0.5))
 
     if not polygons:
         return []

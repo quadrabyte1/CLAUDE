@@ -1,0 +1,18 @@
+# Close-Session Audit -- 2026-08-26
+
+🟦 **IMPORTANT** -- Daily 06:00 ET read-only audit + journal append.
+
+🟧 **NEEDS YOUR INPUT**
+> **Stale in_progress tasks (>24h):**
+> - None
+>
+> **Uncatalogued owner_inbox files (last 24h, no matching task):**
+> - `close_session_2026-08-25.md` — yesterday's audit report has no linked task row
+
+🟩 **AGENT REPORT**
+**Yesterday's completed work (2026-08-25):**
+- No tasks marked done yesterday
+
+**Journal entry:** Skipped (no completions).
+
+**Audit runtime:** ~3s.

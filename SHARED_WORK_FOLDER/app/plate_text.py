@@ -42,7 +42,7 @@ ET.register_namespace("p", _NS_PROD)
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_HERE)
 _DEFAULT_TEMPLATE = os.path.join(
-    _PROJECT_ROOT, "EliteGolfMoments", "Frames", "Mike Kallbrier.3mf"
+    _PROJECT_ROOT, "ItWentIn", "Frames", "Mike Kallbrier.3mf"
 )
 # Backwards-compat fallback: team_inbox copy
 if not os.path.exists(_DEFAULT_TEMPLATE):

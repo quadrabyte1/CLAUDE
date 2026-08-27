@@ -66,7 +66,7 @@ Ran `/tmp/test_elevation_spike_657.py` with `DB_PATH` and `_EGM_BASE` both monke
 - **[2/3]** `POST /api/boundaries` persists a payload with 2 spikes to a `.egm` in the temp EGM tree (verified path prefix) — **PASS**
 - **[3/3]** `GET /api/boundaries/load` round-trips both spikes with exact `x/y/mm` values intact — **PASS**
 
-Neither the real `db/workspace.db` nor any real `EliteGolfMoments/GolfCourses/*/EGMs/` folder was touched.
+Neither the real `db/workspace.db` nor any real `ItWentIn/GolfCourses/*/EGMs/` folder was touched.
 
 ## Surprises
 

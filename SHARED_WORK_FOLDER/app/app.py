@@ -700,7 +700,7 @@ def activity():
 # ── Editor routes ──────────────────────────────────────────────────────────
 
 _EGM_BASE = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "EliteGolfMoments", "GolfCourses")
+    os.path.join(os.path.dirname(__file__), "..", "ItWentIn", "GolfCourses")
 )
 _TEAM_INBOX = os.path.join(os.path.dirname(__file__), "..", "team_inbox")
 
@@ -1065,7 +1065,7 @@ def detect_boundaries():
     # >=130 keeps pale/sky-blue UI overlays out. Value 130-220 excludes the
     # darker dark-blue gradient arrows (V~60-90) that sit on the green and
     # also excludes near-white reflections (V>220).
-    # Tuned against EliteGolfMoments/GolfCourses/PGA West-Arnold Palmer/
+    # Tuned against ItWentIn/GolfCourses/PGA West-Arnold Palmer/
     # Images/PGA West - Arnold Palmer.png — water samples there register as
     # H=104-105, S~172, V=164-184. Stanford Hole 8 contains no water and
     # produces 0 polygons after morphology + 500 px area filter.

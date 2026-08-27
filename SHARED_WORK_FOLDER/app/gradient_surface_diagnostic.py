@@ -391,7 +391,7 @@ def limit_max_slope(
 def find_egm(search_term: str = "Moffett") -> str:
     """Pick an EGM file matching the search term.
 
-    Searches all EliteGolfMoments/GolfCourses/*/EGMs/ directories first,
+    Searches all ItWentIn/GolfCourses/*/EGMs/ directories first,
     then falls back to owner_inbox/ for backwards compatibility.
     """
     # Search new course EGMs/ folders

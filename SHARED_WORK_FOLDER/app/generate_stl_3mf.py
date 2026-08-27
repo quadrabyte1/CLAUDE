@@ -100,7 +100,7 @@ OWNER_INBOX: str = os.path.join(
 # ---------------------------------------------------------------------------
 
 EGM_BASE: str = os.path.normpath(
-    os.path.join(os.path.dirname(__file__), "..", "EliteGolfMoments", "GolfCourses")
+    os.path.join(os.path.dirname(__file__), "..", "ItWentIn", "GolfCourses")
 )
 
 

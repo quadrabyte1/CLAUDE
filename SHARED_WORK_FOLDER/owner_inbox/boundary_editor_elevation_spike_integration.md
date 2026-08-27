@@ -226,7 +226,7 @@ Spike at pixel (600, 664) → mm (1.35, 0.06), deep inside DeLaveaga's green.
 All three isolated tests monkey-patched **both**
 `generate_stl_3mf.EGM_BASE` and `gradient_surface_diagnostic.EGM_BASE` to a
 `tempfile.mkdtemp()` root. Confirmed via `assert out_3mf.startswith(td)` in
-the test harness. **No writes to the live `EliteGolfMoments/` tree or the
+the test harness. **No writes to the live `ItWentIn/` tree or the
 live `db/workspace.db`** during verification.
 
 (Full disclosure: my very first Test-A draft only patched

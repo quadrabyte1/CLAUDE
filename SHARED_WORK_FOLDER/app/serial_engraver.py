@@ -69,7 +69,7 @@ ENGRAVE_OFFSET_XY: tuple = (0.0, 0.0)
 # ── Course path resolution ───────────────────────────────────────────────────
 
 def _course_dir(course: str) -> str:
-    """Resolve a course's root directory under EliteGolfMoments/GolfCourses/.
+    """Resolve a course's root directory under ItWentIn/GolfCourses/.
 
     Falls back to owner_inbox/ if the course directory doesn't exist (e.g. a
     test run with an unknown course name).

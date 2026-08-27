@@ -24,12 +24,12 @@ The following is assumed to be already in place on your machine:
 - **Bambu Studio** installed for slicing and printing.
 - **Source imagery** — a top-down aerial/GolfLogix image of the hole already placed in the correct folder:
   ```
-  EliteGolfMoments/GolfCourses/<Course Name>/Images/
+  ItWentIn/GolfCourses/<Course Name>/Images/
   ```
   The image filename can be anything; it just needs to be in that folder before you start.
 - **Folder structure** — each course has four subfolders that the app reads and writes automatically:
   ```
-  EliteGolfMoments/GolfCourses/<Course Name>/
+  ItWentIn/GolfCourses/<Course Name>/
   ├── Images/    ← source imagery (you put it here)
   ├── EGMs/      ← boundary project files (auto-saved by the editor)
   ├── STLs/      ← individual piece STLs (written by the generator)
@@ -119,7 +119,7 @@ If the status turns red with an error message, check the Flask terminal for a tr
 
 After a successful generation the following files will have been written:
 
-**STLs** (`EliteGolfMoments/GolfCourses/<Course>/STLs/`):
+**STLs** (`ItWentIn/GolfCourses/<Course>/STLs/`):
 
 | File | Description |
 |------|-------------|
@@ -132,7 +132,7 @@ After a successful generation the following files will have been written:
 
 Where `<slug>` is the lowercased, underscore-separated version of `<course>_hole_<number>`, e.g. `moffett_field_hole_7`.
 
-**3MF assembly** (`EliteGolfMoments/GolfCourses/<Course>/3MFs/`):
+**3MF assembly** (`ItWentIn/GolfCourses/<Course>/3MFs/`):
 
 ```
 <Course> (Hole <N>).3mf
@@ -140,7 +140,7 @@ Where `<slug>` is the lowercased, underscore-separated version of `<course>_hole
 
 e.g. `Moffett Field (Hole 7).3mf`
 
-**Diagnostic images** (`EliteGolfMoments/GolfCourses/<Course>/Images/`):
+**Diagnostic images** (`ItWentIn/GolfCourses/<Course>/Images/`):
 
 ```
 <slug>_arrow_directions.png   ← slope arrows overlaid on the green
@@ -198,7 +198,7 @@ The filename is derived from Line 2 (or Line 1 if Line 2 is blank), with special
 ## 3. Where the Outputs Live
 
 ```
-EliteGolfMoments/
+ItWentIn/
 ├── GolfCourses/
 │   └── <Course Name>/
 │       ├── Images/
@@ -273,7 +273,7 @@ cd /path/to/SHARED_WORK_FOLDER
 
 **Source image does not appear in the New Project dropdown**
 
-The image must be in `EliteGolfMoments/GolfCourses/<Course>/Images/` (or `team_inbox/`). Add it there and reload the editor page.
+The image must be in `ItWentIn/GolfCourses/<Course>/Images/` (or `team_inbox/`). Add it there and reload the editor page.
 
 **Generate button is greyed out**
 
@@ -285,4 +285,4 @@ The editor's auto-save may not have completed before you clicked Generate. Click
 
 **Plaque generation fails**
 
-Check that the `EliteGolfMoments/Frames/Mike Kallbrier.3mf` template file exists. The plaque generator uses it as a base. If it is missing, report it — the template must be restored from version control.
+Check that the `ItWentIn/Frames/Mike Kallbrier.3mf` template file exists. The plaque generator uses it as a base. If it is missing, report it — the template must be restored from version control.

@@ -75,7 +75,7 @@ refers to one or more of these interpretable paths:
 `plaque.html` → `POST /api/generate_plate` (app.py:2155) → `plate_text.generate_plate_3mf()` → trimesh + shapely + numpy → writes `.3mf` to disk → SMTP email + optional `open` subprocess (Bambu Studio)
 
 **Boundary Editor / Hole Renderer flow:**
-`editor.html` → multiple `/api/*` calls (detect_boundaries, find_contours, generate_models) → `gradient_surface_diagnostic.run_pipeline()` → `generate_stl_3mf.*` → trimesh + scipy + cv2 + shapely + skimage → writes `.3mf` to `EliteGolfMoments/GolfCourses/<Course>/3MFs/`
+`editor.html` → multiple `/api/*` calls (detect_boundaries, find_contours, generate_models) → `gradient_surface_diagnostic.run_pipeline()` → `generate_stl_3mf.*` → trimesh + scipy + cv2 + shapely + skimage → writes `.3mf` to `ItWentIn/GolfCourses/<Course>/3MFs/`
 
 ### Coupling assessment
 
@@ -91,7 +91,7 @@ refers to one or more of these interpretable paths:
 ### Output destinations (current)
 
 - Plaques: `.3mf` file emailed via SMTP + optional local slicer open (`subprocess` → `open` command, macOS-only)
-- Hole renders: `.3mf` saved to `EliteGolfMoments/GolfCourses/<Course>/3MFs/` on Thomas's local disk
+- Hole renders: `.3mf` saved to `ItWentIn/GolfCourses/<Course>/3MFs/` on Thomas's local disk
 
 Neither output mechanism works inside Claude Design's sandboxed browser environment. Any skillification
 must handle output differently (downloadable file via HTTP response, or push to external storage).
@@ -149,7 +149,7 @@ Steps are ordered: validate platform → extract core libraries → wrap as skil
 
 9. **Write `.claude/commands/golf-render.md`** — the Claude Code skill definition. Instructs Claude to resolve the course name to an EGM file, invoke `golf_render_skill.py`, and report the output path.
 
-10. **Smoke-test `/golf-render`** in a Claude Code session with an existing EGM file. Confirm the 3MF is generated at `EliteGolfMoments/GolfCourses/<Course>/3MFs/`.
+10. **Smoke-test `/golf-render`** in a Claude Code session with an existing EGM file. Confirm the 3MF is generated at `ItWentIn/GolfCourses/<Course>/3MFs/`.
 
 11. **DECISION POINT — open question #1 (see below).** The pipeline currently opens the file in Bambu Studio via `subprocess`. Decide whether the skill should do this automatically or just report the path and let Thomas open it. Recommendation: report path only; keep the slicer-open as an optional `--open-slicer` flag.
 
@@ -177,7 +177,7 @@ Steps are ordered: validate platform → extract core libraries → wrap as skil
 
 20. **Add output confirmation to `/golf-plaque`:** after generating, print a summary line: `"Plaque saved to <path>. Email delivery: <yes/no>."` Skills should not silently succeed.
 
-21. **Update `.gitignore`** to exclude any temp 3MF files written by the skills (if they write outside the existing `EliteGolfMoments/` tree).
+21. **Update `.gitignore`** to exclude any temp 3MF files written by the skills (if they write outside the existing `ItWentIn/` tree).
 
 ---
 
@@ -187,7 +187,7 @@ Steps are ordered: validate platform → extract core libraries → wrap as skil
 |---|----------|--------------|
 | 1 | **Does your Claude plan (Pro/Max/Team/Enterprise) give you access to claude.ai/design?** It launched in beta for Pro+. If not, Phase 0 is blocked. | Steps 1–3 |
 | 2 | **Can Claude Design sessions invoke Claude Code Skills directly via the MCP bridge, or does that require a separate Claude Code session?** The docs describe MCP as a terminal integration, not an in-Design trigger. | Steps 16–17 |
-| 3 | **Where should skill-generated 3MFs land?** Currently `EliteGolfMoments/GolfCourses/<Course>/3MFs/`. For the plaque skill, there's no course folder — should plaques go to `owner_inbox/_plaques/` or a new `EliteGolfMoments/Plaques/` folder? | Step 5–6 |
+| 3 | **Where should skill-generated 3MFs land?** Currently `ItWentIn/GolfCourses/<Course>/3MFs/`. For the plaque skill, there's no course folder — should plaques go to `owner_inbox/_plaques/` or a new `ItWentIn/Plaques/` folder? | Step 5–6 |
 | 4 | **Is there an Anthropic third-party plugin SDK in private beta** that Thomas could apply for? The launch announcement says more integrations are coming. If so, skip path A and go straight to a proper plugin. | Changes entire plan |
 | 5 | **Should `/golf-render` support multi-hole batch rendering,** or one EGM at a time? The current pipeline is one EGM → one 3MF. | Step 9 |
 

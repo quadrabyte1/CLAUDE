@@ -422,6 +422,38 @@ def find_egm(search_term: str = "Moffett") -> str:
     return os.path.join(OWNER_INBOX, chosen)
 
 
+def _chaikin_smooth_closed(polyline: np.ndarray, iterations: int) -> np.ndarray:
+    """
+    Chaikin corner-cutting on a CLOSED 2D polyline. Each iteration replaces
+    every corner with two new points at the 1/4 and 3/4 marks along the
+    two incident edges — the polyline doubles in length per pass and
+    converges to a quadratic B-spline in the limit.
+
+    Preserves closure (first vertex ≠ last vertex convention on input and
+    output) and does not require the input to be uniformly spaced.
+
+    Used by `load_egm` on the interpolated green boundary polyline to
+    remove the scallops that read at print scale where fringe meets green.
+    See GREEN_BOUNDARY_SMOOTH_ITERATIONS.
+    """
+    if iterations <= 0 or polyline.shape[0] < 3:
+        return polyline
+    pts = np.asarray(polyline, dtype=np.float64)
+    for _ in range(iterations):
+        n = pts.shape[0]
+        # Vectorised: for each edge i → (i+1)%n, emit Q = 0.75*P_i + 0.25*P_next
+        # and R = 0.25*P_i + 0.75*P_next. Result has 2n points.
+        nxt = np.roll(pts, -1, axis=0)
+        q = 0.75 * pts + 0.25 * nxt
+        r = 0.25 * pts + 0.75 * nxt
+        # Interleave: [Q_0, R_0, Q_1, R_1, ...] preserves loop ordering
+        interleaved = np.empty((2 * n, 2), dtype=np.float64)
+        interleaved[0::2] = q
+        interleaved[1::2] = r
+        pts = interleaved
+    return pts
+
+
 def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
     """
     Load EGM file.
@@ -494,6 +526,17 @@ def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
         green_poly["points"] = [{"x": float(x), "y": float(y)} for x, y in pts]
 
     boundary_px = interpolate_catmull_rom(green_poly["points"])
+    # Chaikin corner-cutting to remove print-scale scallops at the green/fringe
+    # seam (task 677, Topo 2026-08-28). Applied AFTER Catmull-Rom on the dense
+    # interpolated polyline — control points are untouched, editor behaviour
+    # unchanged. 2 iterations converges to a visibly smooth curve while
+    # keeping area change under ~0.5% on typical golf-green shapes.
+    if GREEN_BOUNDARY_SMOOTH_ITERATIONS > 0:
+        _n_before = boundary_px.shape[0]
+        boundary_px = _chaikin_smooth_closed(boundary_px, GREEN_BOUNDARY_SMOOTH_ITERATIONS)
+        print(f"  Green boundary Chaikin smoothing: "
+              f"{_n_before} → {boundary_px.shape[0]} pts "
+              f"({GREEN_BOUNDARY_SMOOTH_ITERATIONS} iters)")
     return data, image_path, boundary_px
 
 
@@ -1040,6 +1083,48 @@ BOUNDARY_CAP_TAPER_MM:   float = 5.0     # XY width of the taper zone past the f
 # cap (band + taper above) still runs on top of this for any residual
 # excess right at the picture-frame perimeter.
 FRINGE_GREEN_EDGE_TAPER_MM: float = 15.0  # XY distance over which fringe Z tapers from green_edge_h → cap
+
+# ---------------------------------------------------------------------------
+# Green boundary XY smoothing (Topo, 2026-08-28 per Thomas — task 677)
+#
+# The green polygon's outer edge is Catmull-Rom interpolated (16 segments per
+# control-edge) but still reads as SCALLOPED at print scale: each Catmull-Rom
+# segment is a straight line between spline vertices, and when the polygon is
+# rasterized onto the 200×200 fringe/green grids the boundary shows visible
+# cell-scale stair-steps where green and fringe meet. Thomas wants the mating
+# edge to read as a smooth curve.
+#
+# Fix: run 2 passes of **Chaikin's corner-cutting** on the interpolated
+# boundary polyline BEFORE it is used by any downstream stage (green mesh,
+# fringe carve, seam-reseat KD-trees). Chaikin replaces every corner with two
+# points at the 1/4 and 3/4 marks of the incident edges — no parametric fit,
+# preserves overall shape, converges to a quadratic B-spline in the limit.
+# 2 iterations is enough to eliminate visible scallops at typical print scale
+# without meaningful area shrinkage (~0.5% at 2 iters on convex loops).
+#
+# The smoothing is applied to the DENSE polyline returned by
+# `interpolate_catmull_rom`, so control-point count and editor behaviour are
+# untouched. Existing EGM files render smoother without re-drawing.
+GREEN_BOUNDARY_SMOOTH_ITERATIONS: int = 2  # Chaikin passes on the interpolated green polyline
+
+# ---------------------------------------------------------------------------
+# Green → fringe XY gap (Topo, 2026-08-28 per Thomas — task 677)
+#
+# BEFORE this constant: there was NO explicit code-side gap between the
+# green's outer edge and the fringe's inner edge. `build_fringe_mesh` tests
+# each fringe grid cell with `green_shapely.contains(sp)` and skips cells
+# that fall inside the green polygon. The green mesh and fringe mesh
+# therefore share the same nominal boundary. The effective physical gap
+# they printed with was ONLY grid-quantization noise — the fringe grid cell
+# is ≈(PRINT_SIZE_MM + |FRINGE_XY_EXPANSION_MM|) / 200 ≈ 0.86 mm, so the
+# mean unpredictable gap ran ~0.43 mm and the worst-case ~0.86 mm.
+#
+# AFTER: an explicit `GREEN_FRINGE_GAP_MM` is added to the shapely test:
+#   `green_shapely.buffer(+GAP).contains(sp)` → the fringe stops GAP mm
+# outside the green polygon, leaving a deterministic slit for the physical
+# pieces to slide together. Halving the prior effective grid-mean gap
+# (~0.43 mm) puts the target near 0.2 mm.
+GREEN_FRINGE_GAP_MM: float = 0.2  # Halved 2026-08-28 per Thomas (was ~0.43 mm grid-quantization mean)
 
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
@@ -2046,6 +2131,19 @@ def build_fringe_mesh(
     if not green_shapely.is_valid:
         green_shapely = green_shapely.buffer(0)
 
+    # Task 677 (Topo, 2026-08-28): expand the green polygon by GREEN_FRINGE_GAP_MM
+    # for the fringe-exclusion test ONLY. This carves a deterministic slit
+    # between the green outer edge and the fringe inner edge so the printed
+    # pieces slide together instead of interfering at the seam. `green_shapely`
+    # itself is left unmodified because downstream code (seam-Z sampling,
+    # bnd_z lookups) needs the exact green edge to preserve seam-match Z.
+    if GREEN_FRINGE_GAP_MM > 0:
+        green_shapely_exclusion = green_shapely.buffer(+GREEN_FRINGE_GAP_MM)
+        if not green_shapely_exclusion.is_valid:
+            green_shapely_exclusion = green_shapely_exclusion.buffer(0)
+    else:
+        green_shapely_exclusion = green_shapely
+
     # Union all traps + water + boulders-annuli polygons.  They share the same
     # carve-out role: any fringe cell falling inside any of these shapes is
     # excluded so the corresponding slab can drop into a real recess.
@@ -2156,12 +2254,13 @@ def build_fringe_mesh(
             y = float(ys_mm[r])
 
             # Must be INSIDE the print rectangle (always true by construction)
-            # Must be OUTSIDE the green
+            # Must be OUTSIDE the (gap-expanded) green — task 677 leaves a
+            # deterministic GREEN_FRINGE_GAP_MM slit at the green/fringe seam.
             # Use Shapely contains for green check (faster than cv2 here)
             from shapely.geometry import Point as ShapelyPoint
             sp = ShapelyPoint(x, y)
-            if green_shapely.contains(sp):
-                continue  # inside green → skip
+            if green_shapely_exclusion.contains(sp):
+                continue  # inside green (or in the seam gap) → skip
 
             # Must be OUTSIDE all traps and water polygons (carve-out region)
             if traps_union is not None and traps_union.contains(sp):

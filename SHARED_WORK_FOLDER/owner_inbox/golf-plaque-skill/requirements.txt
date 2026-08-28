@@ -1,0 +1,4 @@
+trimesh
+numpy
+matplotlib
+shapely

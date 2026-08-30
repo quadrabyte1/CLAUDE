@@ -33,6 +33,7 @@ from scipy.sparse import lil_matrix
 from scipy.sparse.linalg import spsolve
 from scipy.spatial import cKDTree
 from scipy.ndimage import gaussian_filter, uniform_filter, median_filter
+from scipy.interpolate import splprep, splev
 import trimesh
 from shapely.geometry import Polygon as ShapelyPolygon, box as shapely_box, MultiPolygon as ShapelyMultiPolygon
 from skimage import measure
@@ -422,6 +423,69 @@ def find_egm(search_term: str = "Moffett") -> str:
     return os.path.join(OWNER_INBOX, chosen)
 
 
+def _spline_smooth_closed(
+    polyline: np.ndarray,
+    smoothing_px: float,
+    resample_spacing_px: float = 1.5,
+) -> np.ndarray:
+    """
+    Cubic periodic B-spline smoothing of a CLOSED 2D polyline.
+
+    Uses `scipy.interpolate.splprep` with `per=1` (periodic) and a smoothing
+    factor `s` that controls how tightly the spline follows the input points.
+    A larger `s` means MORE smoothing — the spline deviates further from the
+    control points to achieve a smoother curve. `s = 0` reproduces exact
+    interpolation (no smoothing).
+
+    After fitting, the spline is resampled at approximately uniform arc-length
+    spacing `resample_spacing_px` in the same pixel space as the input.
+
+    This is a much stronger smoother than Chaikin corner-cutting: it fits a
+    continuous C² curve that dampens noise below the smoothing scale, which is
+    what we need to make the green boundary read as a truly smooth curve
+    rather than a densely-sampled polyline with sub-pixel jitter.
+
+    Parameters
+    ----------
+    polyline           : (N, 2) closed polyline (first ≠ last vertex).
+    smoothing_px       : scipy `s` parameter — RMS pixel deviation the spline
+                         may take from the input to smooth. Set from mm-space
+                         target scale via caller-side px/mm conversion.
+    resample_spacing_px: desired output vertex spacing in pixels.
+
+    Returns
+    -------
+    Smoothed closed polyline (M, 2), first ≠ last vertex, uniformly spaced.
+    Falls back to the input on any splprep failure (degenerate polygon,
+    duplicate vertices, insufficient points).
+    """
+    if polyline.shape[0] < 8:
+        return polyline
+    pts = np.asarray(polyline, dtype=np.float64)
+    # Deduplicate consecutive coincident points (splprep dislikes them)
+    diffs = np.linalg.norm(np.diff(pts, axis=0, append=pts[:1]), axis=1)
+    keep = diffs > 1e-6
+    pts = pts[keep]
+    if pts.shape[0] < 8:
+        return polyline
+    try:
+        # per=1 → periodic (closed) spline; k=3 → cubic
+        tck, _u = splprep([pts[:, 0], pts[:, 1]], s=smoothing_px, per=1, k=3)
+    except Exception:
+        return polyline
+    # Estimate perimeter to choose an output vertex count
+    seg = np.linalg.norm(np.diff(pts, axis=0, append=pts[:1]), axis=1)
+    perimeter = float(seg.sum())
+    n_out = max(64, int(round(perimeter / max(resample_spacing_px, 0.25))))
+    u_new = np.linspace(0.0, 1.0, n_out, endpoint=False)
+    try:
+        xs_new, ys_new = splev(u_new, tck)
+    except Exception:
+        return polyline
+    smoothed = np.column_stack([np.asarray(xs_new), np.asarray(ys_new)]).astype(np.float64)
+    return smoothed
+
+
 def _chaikin_smooth_closed(polyline: np.ndarray, iterations: int) -> np.ndarray:
     """
     Chaikin corner-cutting on a CLOSED 2D polyline. Each iteration replaces
@@ -526,11 +590,29 @@ def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
         green_poly["points"] = [{"x": float(x), "y": float(y)} for x, y in pts]
 
     boundary_px = interpolate_catmull_rom(green_poly["points"])
-    # Chaikin corner-cutting to remove print-scale scallops at the green/fringe
-    # seam (task 677, Topo 2026-08-28). Applied AFTER Catmull-Rom on the dense
-    # interpolated polyline — control points are untouched, editor behaviour
-    # unchanged. 2 iterations converges to a visibly smooth curve while
-    # keeping area change under ~0.5% on typical golf-green shapes.
+
+    # Hard spline smoothing (task 679, Topo 2026-08-30). Runs BEFORE the
+    # Chaikin polish and BEFORE any downstream stage sees the boundary.
+    # Fits a cubic periodic B-spline with a smoothing factor that dampens
+    # sub-mm raggedness. This is what makes the 0.5 mm green→fringe gap
+    # actually show up in the print — the prior 0.2 mm gap (task 677) was
+    # invisible because raw Catmull-Rom raggedness swamped it.
+    if GREEN_BOUNDARY_SPLINE_SMOOTHING_PX > 0.0:
+        _n_before_spl = boundary_px.shape[0]
+        boundary_px = _spline_smooth_closed(
+            boundary_px,
+            smoothing_px=GREEN_BOUNDARY_SPLINE_SMOOTHING_PX,
+            resample_spacing_px=GREEN_BOUNDARY_SPLINE_RESAMPLE_PX,
+        )
+        print(f"  Green boundary spline smoothing: "
+              f"{_n_before_spl} → {boundary_px.shape[0]} pts "
+              f"(s={GREEN_BOUNDARY_SPLINE_SMOOTHING_PX} px, "
+              f"resample={GREEN_BOUNDARY_SPLINE_RESAMPLE_PX} px)")
+
+    # Chaikin corner-cutting to polish any residual scallops
+    # (task 677, Topo 2026-08-28). Applied AFTER the spline pass so it
+    # smooths corners that survive resampling. 2 iterations keeps area
+    # change under ~0.5% on typical golf-green shapes.
     if GREEN_BOUNDARY_SMOOTH_ITERATIONS > 0:
         _n_before = boundary_px.shape[0]
         boundary_px = _chaikin_smooth_closed(boundary_px, GREEN_BOUNDARY_SMOOTH_ITERATIONS)
@@ -1107,24 +1189,50 @@ FRINGE_GREEN_EDGE_TAPER_MM: float = 15.0  # XY distance over which fringe Z tape
 # untouched. Existing EGM files render smoother without re-drawing.
 GREEN_BOUNDARY_SMOOTH_ITERATIONS: int = 2  # Chaikin passes on the interpolated green polyline
 
+# Hard-spline smoothing pass (Topo, 2026-08-30 per Thomas — task 679).
+#
+# Thomas's diagnosis: the prior GREEN_FRINGE_GAP_MM=0.2 tweak (task 677) had
+# NO visible effect because the raw Catmull-Rom polyline is still sub-pixel
+# ragged. A 0.2 mm gap gets swamped by the raggedness plus the fringe grid
+# quantization (~0.88 mm per cell), so the printed pieces still touched.
+#
+# Fix: BEFORE any downstream stage sees the green boundary, run a **cubic
+# periodic B-spline** smoothing pass with a smoothing factor tuned to
+# eliminate sub-mm noise. This runs AHEAD of the Chaikin pass — the spline
+# fit removes the underlying raggedness, then Chaikin (if still enabled)
+# just polishes corners. The result is a genuinely smooth curve that lets
+# the small gap actually show up in the print.
+#
+# `s` (splprep smoothing factor) is the maximum RMS pixel deviation the
+# spline may take from the input control polyline. At typical golf-image
+# scale (~500 px green boundary), s = 4.0 pushes noise below ~0.5 mm while
+# keeping the overall polygon shape within a fraction of a mm of the intent.
+GREEN_BOUNDARY_SPLINE_SMOOTHING_PX: float = 4.0   # scipy splprep `s` parameter
+GREEN_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after spline fit
+
 # ---------------------------------------------------------------------------
-# Green → fringe XY gap (Topo, 2026-08-28 per Thomas — task 677)
+# Green → fringe XY gap (Topo, 2026-08-28 per Thomas — task 677;
+# raised to 0.5 mm 2026-08-30, task 679)
 #
-# BEFORE this constant: there was NO explicit code-side gap between the
-# green's outer edge and the fringe's inner edge. `build_fringe_mesh` tests
-# each fringe grid cell with `green_shapely.contains(sp)` and skips cells
-# that fall inside the green polygon. The green mesh and fringe mesh
-# therefore share the same nominal boundary. The effective physical gap
-# they printed with was ONLY grid-quantization noise — the fringe grid cell
-# is ≈(PRINT_SIZE_MM + |FRINGE_XY_EXPANSION_MM|) / 200 ≈ 0.86 mm, so the
-# mean unpredictable gap ran ~0.43 mm and the worst-case ~0.86 mm.
+# BEFORE 677: there was NO explicit code-side gap between the green's outer
+# edge and the fringe's inner edge. `build_fringe_mesh` tests each fringe
+# grid cell with `green_shapely.contains(sp)` and skips cells that fall
+# inside the green polygon. The green mesh and fringe mesh therefore
+# shared the same nominal boundary. Effective physical gap = grid-
+# quantization noise only. Fringe grid cell ≈ 0.86 mm, so mean unpredictable
+# gap ran ~0.43 mm, worst-case ~0.86 mm.
 #
-# AFTER: an explicit `GREEN_FRINGE_GAP_MM` is added to the shapely test:
-#   `green_shapely.buffer(+GAP).contains(sp)` → the fringe stops GAP mm
-# outside the green polygon, leaving a deterministic slit for the physical
-# pieces to slide together. Halving the prior effective grid-mean gap
-# (~0.43 mm) puts the target near 0.2 mm.
-GREEN_FRINGE_GAP_MM: float = 0.2  # Halved 2026-08-28 per Thomas (was ~0.43 mm grid-quantization mean)
+# 677 (2026-08-28): added `green_shapely.buffer(+0.2).contains(sp)` to leave
+# a deterministic 0.2 mm slit. This had NO visible effect on prints
+# because the raw ragged boundary swamped the small tolerance (see the
+# GREEN_BOUNDARY_SPLINE_SMOOTHING_PX block above).
+#
+# 679 (2026-08-30): with the new spline smoothing pass in place, the green
+# boundary is now genuinely smooth, so a 0.5 mm gap can actually show up in
+# the print. Target 0.5 mm gap — half of the ~1 mm slop the eye tolerates
+# on the plaque, big enough to survive one fringe-grid step (~0.88 mm) of
+# quantization.
+GREEN_FRINGE_GAP_MM: float = 0.5  # Raised 2026-08-30 per Thomas (task 679) — was 0.2 mm (task 677)
 
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:

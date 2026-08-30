@@ -883,3 +883,27 @@ Config:
   include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
   exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
 ========================================
+========================================
+Scan run_id=16 — 2026-08-29T07:00:05Z → 2026-08-29T07:00:14Z
+Status: done
+Scanned: 1,215,427 rows | New titles: 0 | Matches: 0
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
+  exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
+========================================
+========================================
+Scan run_id=17 — 2026-08-30T07:00:07Z → 2026-08-30T07:00:40Z
+Status: done
+Scanned: 1,215,668 rows | New titles: 260 | Matches: 0
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
+  exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
+========================================

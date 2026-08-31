@@ -1187,7 +1187,8 @@ FRINGE_GREEN_EDGE_TAPER_MM: float = 15.0  # XY distance over which fringe Z tape
 # The smoothing is applied to the DENSE polyline returned by
 # `interpolate_catmull_rom`, so control-point count and editor behaviour are
 # untouched. Existing EGM files render smoother without re-drawing.
-GREEN_BOUNDARY_SMOOTH_ITERATIONS: int = 4  # Chaikin passes on the interpolated green polyline — doubled 2026-08-30 (task 683) per Thomas: extra corner-cutting on top of the stronger spline pass to polish any residual scalloping.
+GREEN_BOUNDARY_SMOOTH_ITERATIONS: int = 5  # Chaikin passes on the interpolated green polyline — bumped 4 → 5 on 2026-08-31 (task 687) per Thomas: extra corner-cutting on top of the 3× spline `s` bump. Note: each Chaikin pass roughly DOUBLES vertex count (2^N density gain), so 6 iters + 1657 spline pts → 106k pts pushed regen to 94s. 5 iters × the coarser resample below keeps final N ~53k and wall-clock < 60s while still visibly rounding any residual scallops the spline missed.
+
 
 # Hard-spline smoothing pass (Topo, 2026-08-30 per Thomas — task 679).
 #
@@ -1207,7 +1208,7 @@ GREEN_BOUNDARY_SMOOTH_ITERATIONS: int = 4  # Chaikin passes on the interpolated 
 # spline may take from the input control polyline. At typical golf-image
 # scale (~500 px green boundary), s = 4.0 pushes noise below ~0.5 mm while
 # keeping the overall polygon shape within a fraction of a mm of the intent.
-GREEN_BOUNDARY_SPLINE_SMOOTHING_PX: float = 16.0  # scipy splprep `s` parameter — 4× bump 2026-08-30 (task 683) per Thomas: prior 4.0 still read as scalloped at print scale; s scales roughly quadratically with the tolerable RMS deviation, so 4× s ≈ 2× physical smoothing radius.
+GREEN_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0  # scipy splprep `s` parameter — 3× bump 2026-08-31 (task 687) per Thomas: 16.0 still read as scalloped at print scale. s scales roughly quadratically with the tolerable RMS deviation, so 3× s ≈ √3 ≈ 1.7× physical smoothing radius. Fringe inner edge is `green_shapely_exclusion = green_shapely` (identity, GREEN_FRINGE_GAP_MM=0), so this bump directly softens the printed green↔fringe seam.
 GREEN_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after spline fit
 
 # ---------------------------------------------------------------------------

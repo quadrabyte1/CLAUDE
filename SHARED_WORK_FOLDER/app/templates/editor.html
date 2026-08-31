@@ -421,8 +421,11 @@
             :disabled="!(polygons.length > 0 && courseName && holeName) || generating"
             :class="(polygons.length > 0 && courseName && holeName) && !generating ? 'bg-teal-600 hover:bg-teal-700' : 'bg-teal-600/40 cursor-not-allowed'"
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
-            title="Run the render pipeline for this hole and produce a 3MF (and STL) output file."
-            x-text="generating ? 'Generating…' : 'Generate'">
+            title="Run the render pipeline for this hole and produce a 3MF (and STL) output file. Typically takes 1–3 minutes.">
+      <svg x-show="generating" xmlns="http://www.w3.org/2000/svg" class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <path d="M12 3a9 9 0 1 0 9 9" />
+      </svg>
+      <span x-text="generating ? ('Generating… ' + generatingElapsed + 's') : 'Generate'"></span>
     </button>
 
     <label class="inline-flex items-center gap-1.5 text-sm text-notion-text cursor-pointer select-none">
@@ -539,6 +542,8 @@ function polygonEditor() {
     statusFilename: '',
     statusSticky: false,
     generating: false,
+    generatingElapsed: 0,      // seconds since Generate was clicked (updated every 1s)
+    _generatingTimer: null,    // interval handle for the elapsed counter
     _flashTimer: null,
 
     POINT_RADIUS: 8,
@@ -2133,8 +2138,16 @@ function polygonEditor() {
         this.flash('No polygons to generate models from', false);
         return;
       }
-      // Auto-save first so the pipeline reads the latest EGM (including grass params)
-      await this.autoSave();
+      // Auto-save first so the pipeline reads the latest EGM (including grass params).
+      // Wrap in try/catch so a save failure never silently blocks the fetch below —
+      // Thomas has seen "Generate" appear to hang when the real cause was an
+      // autoSave exception that swallowed the click.
+      try {
+        await this.autoSave();
+      } catch (saveErr) {
+        this.flash('Auto-save failed before generate: ' + (saveErr && saveErr.message ? saveErr.message : saveErr), false);
+        return;
+      }
       const allPolygons = [
         ...this.polygons.map(p => ({
           name: p.name,
@@ -2177,6 +2190,16 @@ function polygonEditor() {
         open_in_slicer: this.openInSlicer,
       };
       this.generating = true;
+      // Immediate user feedback — the pipeline is minutes-long, so without this
+      // the button just sits at "Generating…" and Thomas reports it as hung.
+      this.flash('Generation started — this typically takes 1–3 minutes…', true, '', 3500);
+      // Elapsed-seconds ticker so the button label counts up ("Generating… 42s")
+      this.generatingElapsed = 0;
+      if (this._generatingTimer) clearInterval(this._generatingTimer);
+      const _startedAt = Date.now();
+      this._generatingTimer = setInterval(() => {
+        this.generatingElapsed = Math.round((Date.now() - _startedAt) / 1000);
+      }, 1000);
       try {
         const resp = await fetch('/api/generate_models', {
           method: 'POST',
@@ -2184,9 +2207,10 @@ function polygonEditor() {
           body: JSON.stringify(data),
         });
         const result = await resp.json();
+        const elapsed = Math.round((Date.now() - _startedAt) / 1000);
         if (result.status === 'ok') {
           const fname = result.file && result.file.name ? result.file.name : '';
-          let msg = 'Generated' + (fname ? ':' : '');
+          let msg = 'Generated in ' + elapsed + 's' + (fname ? ':' : '');
           if (result.slicer_opened) {
             msg += ' · Opened in default slicer';
           } else if (result.slicer_error) {
@@ -2194,12 +2218,14 @@ function polygonEditor() {
           }
           this.flash(msg, result.slicer_error ? false : true, fname, result.slicer_error ? null : 8000);
         } else {
-          this.flash('Generation failed: ' + (result.msg || result.error || 'unknown error'), false);
+          this.flash('Generation failed after ' + elapsed + 's: ' + (result.msg || result.error || 'unknown error'), false);
         }
       } catch (err) {
-        this.flash('Generation error: ' + err.message, false);
+        const elapsed = Math.round((Date.now() - _startedAt) / 1000);
+        this.flash('Generation error after ' + elapsed + 's: ' + err.message, false);
       } finally {
         this.generating = false;
+        if (this._generatingTimer) { clearInterval(this._generatingTimer); this._generatingTimer = null; }
       }
     },
 

@@ -1187,7 +1187,7 @@ FRINGE_GREEN_EDGE_TAPER_MM: float = 15.0  # XY distance over which fringe Z tape
 # The smoothing is applied to the DENSE polyline returned by
 # `interpolate_catmull_rom`, so control-point count and editor behaviour are
 # untouched. Existing EGM files render smoother without re-drawing.
-GREEN_BOUNDARY_SMOOTH_ITERATIONS: int = 2  # Chaikin passes on the interpolated green polyline
+GREEN_BOUNDARY_SMOOTH_ITERATIONS: int = 4  # Chaikin passes on the interpolated green polyline — doubled 2026-08-30 (task 683) per Thomas: extra corner-cutting on top of the stronger spline pass to polish any residual scalloping.
 
 # Hard-spline smoothing pass (Topo, 2026-08-30 per Thomas — task 679).
 #
@@ -1207,7 +1207,7 @@ GREEN_BOUNDARY_SMOOTH_ITERATIONS: int = 2  # Chaikin passes on the interpolated 
 # spline may take from the input control polyline. At typical golf-image
 # scale (~500 px green boundary), s = 4.0 pushes noise below ~0.5 mm while
 # keeping the overall polygon shape within a fraction of a mm of the intent.
-GREEN_BOUNDARY_SPLINE_SMOOTHING_PX: float = 4.0   # scipy splprep `s` parameter
+GREEN_BOUNDARY_SPLINE_SMOOTHING_PX: float = 16.0  # scipy splprep `s` parameter — 4× bump 2026-08-30 (task 683) per Thomas: prior 4.0 still read as scalloped at print scale; s scales roughly quadratically with the tolerable RMS deviation, so 4× s ≈ 2× physical smoothing radius.
 GREEN_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after spline fit
 
 # ---------------------------------------------------------------------------
@@ -1232,7 +1232,7 @@ GREEN_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after splin
 # the print. Target 0.5 mm gap — half of the ~1 mm slop the eye tolerates
 # on the plaque, big enough to survive one fringe-grid step (~0.88 mm) of
 # quantization.
-GREEN_FRINGE_GAP_MM: float = 0.5  # Raised 2026-08-30 per Thomas (task 679) — was 0.2 mm (task 677)
+GREEN_FRINGE_GAP_MM: float = 0.0  # Zeroed 2026-08-30 per Thomas (task 683): fringe boundary must track the smoothed green exactly (no added clearance). Because the green boundary is now much smoother (see GREEN_BOUNDARY_SPLINE_SMOOTHING_PX bump), the pieces mate cleanly without a code-side slit. The `if GREEN_FRINGE_GAP_MM > 0` branch at ~2248 falls through, so `green_shapely_exclusion` == `green_shapely` — identical XY footprint.
 
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
@@ -2002,18 +2002,29 @@ def _dist_to_segment(px: float, py: float, ax: float, ay: float, bx: float, by: 
 def _min_dist_to_polyline(px: float, py: float, pts: np.ndarray) -> tuple[float, float, float]:
     """
     Return (min_dist, nearest_x, nearest_y) from point to closed polyline pts (Nx2).
+
+    Vectorised over all polyline segments in numpy — critical for the fringe
+    grid loop (task 683, Topo 2026-08-30). The scalar-Python version was O(N)
+    per call and became a wall-clock catastrophe once GREEN_BOUNDARY_SPLINE +
+    4× Chaikin pushed N to ~26k boundary points: 40k fringe cells × 26k pts
+    = ~1e9 pure-Python ops per pipeline (~20 min wall time). Vectorised, one
+    call is a single numpy pass — total wall time drops back to ~2 min.
     """
-    best_d = 1e18
-    best_nx, best_ny = pts[0, 0], pts[0, 1]
     n = len(pts)
-    for i in range(n):
-        ax, ay = pts[i, 0], pts[i, 1]
-        bx, by = pts[(i + 1) % n, 0], pts[(i + 1) % n, 1]
-        d, nx, ny = _dist_to_segment(px, py, ax, ay, bx, by)
-        if d < best_d:
-            best_d = d
-            best_nx, best_ny = nx, ny
-    return best_d, best_nx, best_ny
+    if n < 2:
+        return float("inf"), float(pts[0, 0]), float(pts[0, 1])
+    a = pts                                # (N, 2) segment starts
+    b = np.roll(pts, -1, axis=0)           # (N, 2) segment ends (closed)
+    d = b - a                              # (N, 2) edge vectors
+    denom = (d * d).sum(axis=1) + 1e-30    # (N,) squared edge lengths
+    px_a = np.array([px, py]) - a          # (N, 2)
+    t = (px_a * d).sum(axis=1) / denom     # (N,) projection param
+    np.clip(t, 0.0, 1.0, out=t)
+    proj = a + t[:, None] * d              # (N, 2) closest point on each segment
+    diff = proj - np.array([px, py])       # (N, 2)
+    dist2 = (diff * diff).sum(axis=1)      # (N,)
+    i = int(np.argmin(dist2))
+    return float(math.sqrt(dist2[i])), float(proj[i, 0]), float(proj[i, 1])
 
 
 def _nearest_grid_z(nx_mm: float, ny_mm: float,
@@ -2235,9 +2246,12 @@ def build_fringe_mesh(
                 print(f"  WARNING: fringe boulders-annulus carve failed: {_exc_ba}")
 
     # --- Build Shapely green polygon for point-in-polygon tests ---
+    print(f"  [green_carve] building green ShapelyPolygon from {len(green_bnd_mm)} boundary pts")
     green_shapely = ShapelyPolygon(green_bnd_mm)
     if not green_shapely.is_valid:
+        print("  [green_carve] green polygon invalid → buffer(0) repair")
         green_shapely = green_shapely.buffer(0)
+    print(f"  [green_carve] green area={green_shapely.area:.2f} mm² valid={green_shapely.is_valid}")
 
     # Task 677 (Topo, 2026-08-28): expand the green polygon by GREEN_FRINGE_GAP_MM
     # for the fringe-exclusion test ONLY. This carves a deterministic slit
@@ -2246,11 +2260,15 @@ def build_fringe_mesh(
     # itself is left unmodified because downstream code (seam-Z sampling,
     # bnd_z lookups) needs the exact green edge to preserve seam-match Z.
     if GREEN_FRINGE_GAP_MM > 0:
+        print(f"  [green_carve] buffering green by +{GREEN_FRINGE_GAP_MM} mm for exclusion")
         green_shapely_exclusion = green_shapely.buffer(+GREEN_FRINGE_GAP_MM)
         if not green_shapely_exclusion.is_valid:
+            print("  [green_carve] exclusion polygon invalid → buffer(0) repair")
             green_shapely_exclusion = green_shapely_exclusion.buffer(0)
     else:
+        print("  [green_carve] GREEN_FRINGE_GAP_MM == 0 → exclusion polygon == green polygon (identity)")
         green_shapely_exclusion = green_shapely
+    print(f"  [green_carve] exclusion ready: area={green_shapely_exclusion.area:.2f} mm² empty={green_shapely_exclusion.is_empty}")
 
     # Union all traps + water + boulders-annuli polygons.  They share the same
     # carve-out role: any fringe cell falling inside any of these shapes is
@@ -5564,6 +5582,11 @@ def run_pipeline(
     print("=" * 60)
     print("Gradient Surface Diagnostic")
     print("=" * 60)
+    print(f"[config] GREEN_BOUNDARY_SPLINE_SMOOTHING_PX = {GREEN_BOUNDARY_SPLINE_SMOOTHING_PX}")
+    print(f"[config] GREEN_BOUNDARY_SPLINE_RESAMPLE_PX  = {GREEN_BOUNDARY_SPLINE_RESAMPLE_PX}")
+    print(f"[config] GREEN_BOUNDARY_SMOOTH_ITERATIONS   = {GREEN_BOUNDARY_SMOOTH_ITERATIONS}")
+    print(f"[config] GREEN_FRINGE_GAP_MM                = {GREEN_FRINGE_GAP_MM}")
+    print(f"[config] FRINGE_XY_EXPANSION_MM             = {FRINGE_XY_EXPANSION_MM}")
 
     # ── 1. Load EGM and image ───────────────────────────────────────────────
     egm_path = os.path.abspath(egm_path)

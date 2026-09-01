@@ -1099,6 +1099,32 @@ MOUNT_BORE_INSET_MM: float = 20.0                 # distance from print rect cor
 # left corner of the frame. It's just causing too much trouble."
 ENABLE_MOUNT_BORE: bool = False
 
+# ---------------------------------------------------------------------------
+# Tee hole (Topo, task 692 — 2026-09-01). A 2 mm through-hole punched into
+# the fringe so Thomas can slot a golf tee into the finished plaque. The
+# location is user-picked in the Boundary Editor (Sienna, task 691) and
+# persisted to the EGM as:
+#
+#     "tee_hole": {"x_mm": <float>, "y_mm": <float>}
+#
+# Coordinates are millimetres measured from the top-left corner of the print
+# bounds (NOT the image, NOT the green boundary). The fringe outer bbox lives
+# at ±(PRINT_SIZE_MM/2 + FRINGE_XY_EXPANSION_MM/2) in world coords, so the
+# conversion is:
+#     mesh_cx = -half + x_mm
+#     mesh_cy = +half - y_mm          (top-left = +Y max)
+#
+# A reinforcing collar (annular sleeve) is unioned in to give the tee lateral
+# support even where the fringe is thin. The collar's outer diameter and
+# above-fringe protrusion are geometry constants — do NOT store in the EGM.
+# The 4 mm OD leaves the 9 mm frame-edge cap rule (project_golf_render_rules)
+# untouched: the collar radius is 2 mm, so as long as the tee-hole XY sits at
+# least ~2 mm inside the frame perimeter, the collar stays outside the 1 mm
+# frame-cap band. The editor UI should enforce that inset.
+TEE_HOLE_DIAMETER_MM: float = 2.0        # inner through-hole diameter
+TEE_HOLE_COLLAR_OD_MM: float = 4.0       # outer diameter of reinforcing sleeve
+TEE_HOLE_COLLAR_PROTRUDE_MM: float = 1.5 # collar height ABOVE fringe top (0 = flush)
+
 
 class _MountBoreDisabled(Exception):
     """Sentinel raised inside the pipe-build try-block when ENABLE_MOUNT_BORE
@@ -1591,6 +1617,44 @@ def _build_heightmap_mesh(
         if edge_count.get((b, a), 0) == 0:
             boundary_edges.append((a, b))
 
+    # ── Boundary vertex XY snap onto the smooth green polyline ─────────────
+    # Task #689 (2026-08-31, Topo). The green mesh's boundary vertices were
+    # sitting on 200×200 raster cell centers → stair-step at ~0.85 mm per axis
+    # (Chebyshev worst case ~0.60 mm), which reads as visibly jagged next to
+    # the fringe seam that already lives on the smooth gbnd polyline.
+    #
+    # Fix: for every TOP vertex that lies on a boundary edge, project its XY
+    # onto the SMOOTHED green polyline in mm-space (`_green_boundary_px`
+    # transformed via `scale/centroid_px`). Same connectivity, exact smooth
+    # curve — matches the fringe seam mesh exactly (both now sit on gbnd),
+    # printed gap → 0.
+    #
+    # Skipped when `_green_boundary_px` has < 4 points (defensive; can happen
+    # for degenerate inputs where the caller passes an empty array — e.g. for
+    # trap sub-meshes that reuse this function).
+    if _green_boundary_px is not None and len(_green_boundary_px) >= 4:
+        _gbnd_mm_local = _px_to_mm_2d(
+            _green_boundary_px.copy(), scale, centroid_px
+        )
+        _boundary_vert_ids: set[int] = set()
+        for _a, _b in boundary_edges:
+            _boundary_vert_ids.add(_a)
+            _boundary_vert_ids.add(_b)
+        _snap_shifts_mm: list[float] = []
+        for _vi in _boundary_vert_ids:
+            _x, _y, _z = top_verts[_vi]
+            _d, _nx, _ny = _min_dist_to_polyline(
+                float(_x), float(_y), _gbnd_mm_local
+            )
+            _snap_shifts_mm.append(_d)
+            top_verts[_vi] = [float(_nx), float(_ny), float(_z)]
+        if _snap_shifts_mm:
+            _shifts = np.asarray(_snap_shifts_mm, dtype=np.float64)
+            print(f"  Boundary-vertex XY-snap to smooth green polyline "
+                  f"(task #689): reseated {len(_snap_shifts_mm)} top verts, "
+                  f"median shift={float(np.median(_shifts)):.4f} mm, "
+                  f"max shift={float(_shifts.max()):.4f} mm")
+
     # --- Build wall vertices and faces ---
     # For each boundary directed edge (va_top → vb_top) on the top surface,
     # create bottom counterparts (va_bot, vb_bot) at z=0 and stitch a wall quad.
@@ -1876,6 +1940,138 @@ def drill_fringe_hole(
     print(f"  Fringe post-drill watertight: {result.is_watertight}")
     print(f"  Fringe post-drill faces: {len(result.faces)}, vertices: {len(result.vertices)}")
     return result
+
+
+def drill_tee_hole(
+    mesh: "trimesh.Trimesh",
+    x_mm_from_topleft: float,
+    y_mm_from_topleft: float,
+    diameter: float = TEE_HOLE_DIAMETER_MM,
+    collar_od: float = TEE_HOLE_COLLAR_OD_MM,
+    collar_protrude: float = TEE_HOLE_COLLAR_PROTRUDE_MM,
+) -> "trimesh.Trimesh":
+    """
+    Punch a 2 mm through-hole into the fringe at (x_mm, y_mm) measured from
+    the top-left corner of the print bounds, and drop in a reinforcing
+    annular collar so the hole walls are thicker than the fringe's baseline
+    thickness alone. The collar optionally protrudes ABOVE the fringe top
+    surface to give the tee more lateral guidance.
+
+    Strategy — no boolean engine required
+    -------------------------------------
+    The fringe mesh is chronically non-watertight after all the trap / water /
+    grass-texture surgery, so `trimesh.boolean.difference` on it fails with
+    "Not all meshes are volumes" on manifold and blender-not-installed on the
+    fallback. Rather than try harder to repair the mesh (fragile) we build
+    the collar as an independent, closed annular tube — the same trick
+    `build_mount_pipe_mesh` uses for the upper-left mounting bore — and
+    concatenate it into the fringe. Face-removal punches a wide-enough hole
+    (radius = collar_od/2 + a small guard) through the fringe top surface so
+    the tube's outer wall is exposed and the tee can be inserted from above.
+    The tube itself is watertight by construction; the fringe's minor gaps
+    around the hole are handled by the slicer the same way it handles the
+    fringe's other imperfections today.
+
+    Parameters
+    ----------
+    mesh : trimesh.Trimesh
+        The (already-lifted, already-capped) fringe mesh in world mm coords.
+        Its outer XY bbox is expected at ±(PRINT_SIZE_MM/2 + FRINGE_XY_EXPANSION_MM/2).
+    x_mm_from_topleft, y_mm_from_topleft : float
+        Tee-hole location, in mm from the top-left corner of the print bounds.
+        Converted internally to world (mesh-local) coords.
+    diameter : float
+        Inner through-hole diameter (default 2.0 mm — accepts a standard tee).
+    collar_od : float
+        Outer diameter of the reinforcing sleeve (default 4.0 mm → 1 mm wall
+        on each side of the tee).
+    collar_protrude : float
+        Height the collar rises ABOVE the fringe's max Z (default 1.5 mm).
+        0 = collar top is flush with the fringe top.
+    """
+    # ---- 1. Convert print-top-left mm → mesh world coords -----------------
+    half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+    cx = -half + float(x_mm_from_topleft)
+    cy = +half - float(y_mm_from_topleft)
+
+    bounds = mesh.bounds  # ((xmin,ymin,zmin),(xmax,ymax,zmax))
+    z_min_mesh = float(bounds[0, 2])
+    z_max_mesh = float(bounds[1, 2])
+    print(f"  [tee_hole] top-left mm=({x_mm_from_topleft:.2f}, {y_mm_from_topleft:.2f}) "
+          f"→ mesh world=({cx:.2f}, {cy:.2f}) mm  (half={half:.3f})")
+    print(f"  [tee_hole] fringe Z range: [{z_min_mesh:.3f}, {z_max_mesh:.3f}] mm  "
+          f"diameter={diameter} mm  collar_od={collar_od} mm  protrude={collar_protrude} mm")
+
+    # ---- 2. Sanity: bore XY must land inside fringe outer bbox ------------
+    if not (bounds[0, 0] <= cx <= bounds[1, 0] and bounds[0, 1] <= cy <= bounds[1, 1]):
+        print(f"  [tee_hole] WARNING: XY ({cx:.2f}, {cy:.2f}) is OUTSIDE fringe bounds "
+              f"X=[{bounds[0,0]:.2f}, {bounds[1,0]:.2f}] Y=[{bounds[0,1]:.2f}, {bounds[1,1]:.2f}]. "
+              f"Skipping tee-hole punch to avoid an empty subtract.")
+        return mesh
+
+    inner_r = float(diameter) / 2.0
+    outer_r = float(collar_od) / 2.0
+    if outer_r <= inner_r:
+        print(f"  [tee_hole] WARNING: collar_od ({collar_od}) must exceed diameter "
+              f"({diameter}); skipping tee hole.")
+        return mesh
+
+    # ---- 3. Punch a hole in the fringe surface wide enough for the tube ---
+    # Remove every triangle whose centroid sits inside the collar OD (plus a
+    # tiny guard so we don't leave stubs poking into the tube). This opens
+    # both the top surface and the bottom surface for the tube's exterior
+    # walls to be visible in the slicer.
+    guard_mm = 0.15  # small keep-out so the collar wall isn't touched by leftover fringe faces
+    remove_r = outer_r + guard_mm
+    centroids = mesh.triangles_center  # (N, 3)
+    dxy2 = (centroids[:, 0] - cx) ** 2 + (centroids[:, 1] - cy) ** 2
+    keep_face_mask = dxy2 >= (remove_r ** 2)
+    n_removed = int((~keep_face_mask).sum())
+    print(f"  [tee_hole] removed {n_removed} fringe faces within Ø{2*remove_r:.2f} mm "
+          f"of ({cx:.2f}, {cy:.2f}) to seat the collar")
+    if n_removed == 0:
+        # Nothing to remove means the tee point is outside the fringe surface
+        # — refuse to drop a floating tube on top of empty space.
+        print("  [tee_hole] WARNING: no fringe faces near tee point — skipping.")
+        return mesh
+    fringe_carved = mesh.submesh(
+        [np.where(keep_face_mask)[0]], append=True
+    )
+
+    # ---- 4. Build the watertight annular collar tube ----------------------
+    # The tube extends from z=0 (build plate) up to z=(fringe_top + protrude).
+    # Its inner wall = through-hole (radius=inner_r); its outer wall = collar
+    # (radius=outer_r). Top and bottom annulus caps close the tube so the
+    # tube itself is a watertight volume — no boolean engine required.
+    tube_top = float(z_max_mesh) + max(float(collar_protrude), 0.0)
+    if tube_top <= 0.0:
+        print(f"  [tee_hole] WARNING: computed tube top ({tube_top}) <= 0 — skipping.")
+        return mesh
+    try:
+        collar_tube = build_mount_pipe_mesh(
+            cx=cx, cy=cy,
+            inner_radius=inner_r,
+            outer_radius=outer_r,
+            z_top=tube_top,
+            n_seg=48,
+        )
+    except Exception as exc:
+        print(f"  [tee_hole] ERROR building collar tube: {exc} — returning carved fringe (open hole).")
+        return fringe_carved
+    print(f"  [tee_hole] collar tube: r_in={inner_r:.2f} r_out={outer_r:.2f} "
+          f"z=[0.00, {tube_top:.3f}]  verts={len(collar_tube.vertices)} "
+          f"faces={len(collar_tube.faces)} watertight={collar_tube.is_watertight}")
+
+    # ---- 5. Concatenate collar tube into carved fringe --------------------
+    combined = trimesh.util.concatenate([fringe_carved, collar_tube])
+    combined.merge_vertices(digits_vertex=6)
+    combined.update_faces(combined.nondegenerate_faces())
+    combined.update_faces(combined.unique_faces())
+    combined.remove_unreferenced_vertices()
+    print(f"  [tee_hole] fringe + collar merged: verts={len(combined.vertices)} "
+          f"faces={len(combined.faces)} watertight={combined.is_watertight} "
+          f"Z=[{combined.bounds[0,2]:.3f}, {combined.bounds[1,2]:.3f}] mm")
+    return combined
 
 
 def save_stl_meshes(
@@ -2502,22 +2698,31 @@ def build_fringe_mesh(
         gbnd_kd_seam = cKDTree(gbnd)
 
         # Build override map: (r, c) -> (x, y, z)
-        # Task #488 (fringe seam sawtooth): the seam cell KEEPS its own fringe-
-        # grid XY. Only Z is overridden, computed as an inverse-square-distance
-        # weighted average of the K nearest green top-boundary vertices' Z.
-        # This eliminates two failure modes visible on FantasyGolfCourse Hole 01
-        # and The Palmer – PGA WEST Hole 15:
-        #   1. XY warp: prior code snapped the seam vertex's XY onto the green
-        #      vertex position. The fringe grid and green grid have different
-        #      resolutions, so adjacent seam cells snapped to different green
-        #      XY positions — the triangles connecting the seam row to the
-        #      non-seam row got twisted, reading as a visible staircase.
-        #   2. Nearest-vertex Z quantization: consecutive seam cells often
-        #      shared the same nearest green vertex, then abruptly flipped to
-        #      the next one, giving Z a piecewise-constant sawtooth along the
-        #      seam. IDW over K neighbours yields a smooth Z curve instead.
+        # Task #488 (fringe seam sawtooth): IDW-blend Z from the K nearest
+        # green top-boundary vertices to kill nearest-vertex Z quantization.
+        #
+        # Task #689 (2026-08-31, Topo) — fringe stair-step at green↔fringe seam.
+        # Prior fix (#488) intentionally held fringe seam XY on the fringe grid
+        # to avoid the "twisted triangle" failure from pre-#488 code that
+        # snapped XY onto discrete GREEN VERTEX positions. That was correct at
+        # the time (green boundary was a coarse polyline with only ~200-500
+        # vertices — two adjacent fringe cells often collided onto the same
+        # green vertex → twisted quads).
+        #
+        # Since #683 the green boundary is a *dense smooth polyline* `gbnd`
+        # (~26k points after 48-px spline + 5x Chaikin, ≈2 mm segment length),
+        # so we can now project each seam cell's XY onto the *segment* (not a
+        # vertex) of `gbnd`. Adjacent fringe cells 0.85 mm apart project to
+        # DISTINCT continuous points on the polyline — no vertex collisions,
+        # no twisted triangles. The stair-step at the seam disappears because
+        # the seam vertex XY now lies exactly on the smoothed green polygon,
+        # matching the green mesh XY exactly (0 mm gap, mesh-topology equal).
+        #
+        # We still keep the fringe cell's grid (r, c) as the mesh index so
+        # downstream triangulation (top_faces, walls, hole walls) is unchanged.
         K_SEAM_NEIGHBOURS = min(4, len(g_bdry_arr))
         seam_override: dict[tuple[int, int], tuple[float, float, float]] = {}
+        _seam_snap_shifts_mm: list[float] = []  # diagnostic — how far each seam XY moved
         for r in range(fringe_grid_res):
             for c in range(fringe_grid_res):
                 if not fringe_mask[r, c]:
@@ -2539,12 +2744,24 @@ def build_fringe_mesh(
                     w = 1.0 / (dists ** 2)
                     w /= w.sum()
                     gz = float(np.dot(w, g_bdry_arr[gi_arr, 2]))
-                seam_override[(r, c)] = (x, y, gz)
+                # Task #689: project XY onto the smooth green polyline `gbnd`
+                # so the printed seam matches the green mesh XY exactly (no
+                # stair-step at the fringe/green interface).
+                _d_proj, _nx, _ny = _min_dist_to_polyline(x, y, gbnd)
+                _seam_snap_shifts_mm.append(_d_proj)
+                seam_override[(r, c)] = (float(_nx), float(_ny), gz)
                 Z_fringe[r, c] = gz  # keep the height array consistent
-        print(f"  Seam-reseat (IDW-Z, K={K_SEAM_NEIGHBOURS}): "
-              f"blended Z on {len(seam_override)} fringe inner-boundary cells "
-              f"from green's smooth top-boundary ring "
-              f"(fringe XY held on fringe grid — no twisted seam triangles)")
+        if _seam_snap_shifts_mm:
+            _shifts_arr = np.asarray(_seam_snap_shifts_mm, dtype=np.float64)
+            _snap_median = float(np.median(_shifts_arr))
+            _snap_max = float(_shifts_arr.max())
+        else:
+            _snap_median = _snap_max = 0.0
+        print(f"  Seam-reseat (IDW-Z K={K_SEAM_NEIGHBOURS} + XY-snap to smooth gbnd, task #689): "
+              f"reseated {len(seam_override)} fringe inner-boundary cells "
+              f"onto smooth green polyline "
+              f"(XY snap median={_snap_median:.3f} mm max={_snap_max:.3f} mm; "
+              f"printed seam gap → 0)")
     else:
         seam_override = {}
 
@@ -6113,6 +6330,36 @@ def run_pipeline(
             )
     else:
         print("\n[7c] Water-hole rule: SKIPPED (no water polygons in EGM)")
+
+    # ── 7d. Tee-hole punch (task 692, Topo 2026-09-01) ──────────────────────
+    # Read the optional {"tee_hole": {"x_mm": ..., "y_mm": ...}} key from the
+    # EGM. Coords are millimetres from the top-left corner of the print
+    # bounds; drill_tee_hole handles the conversion to mesh world coords.
+    # When the key is absent (all legacy EGMs) we silently skip — no error,
+    # no spurious hole, no change to the fringe.
+    _tee_spec = _egm_data.get("tee_hole")
+    if _tee_spec and isinstance(fringe_mesh, trimesh.Trimesh):
+        try:
+            _tee_x = float(_tee_spec.get("x_mm"))
+            _tee_y = float(_tee_spec.get("y_mm"))
+        except (TypeError, ValueError, AttributeError) as _exc_tee:
+            print(f"\n[7d] Tee-hole: SKIPPED — invalid tee_hole spec {_tee_spec!r}: {_exc_tee}")
+        else:
+            print(f"\n[7d] Tee-hole: punching Ø{TEE_HOLE_DIAMETER_MM} mm through-hole "
+                  f"at print-top-left ({_tee_x:.2f}, {_tee_y:.2f}) mm, "
+                  f"collar Ø{TEE_HOLE_COLLAR_OD_MM} mm + {TEE_HOLE_COLLAR_PROTRUDE_MM} mm protrusion")
+            try:
+                fringe_mesh = drill_tee_hole(
+                    fringe_mesh,
+                    x_mm_from_topleft=_tee_x,
+                    y_mm_from_topleft=_tee_y,
+                )
+            except Exception as _exc_tee:
+                print(f"    ERROR drilling tee hole: {_exc_tee}")
+                import traceback; traceback.print_exc()
+    else:
+        if not _tee_spec:
+            print("\n[7d] Tee-hole: no 'tee_hole' key in EGM — skipping.")
 
     # ── 8. Build sand trap meshes (in-memory) ───────────────────────────────
     print("\n[8] Building sand trap meshes…")

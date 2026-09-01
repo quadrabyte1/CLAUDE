@@ -413,6 +413,28 @@
         </div>
       </div>
     </template>
+
+    {# ── Tee-hole marker ───────────────────────────────────────
+       Single draggable crosshair-in-circle marker showing where a tee/pin
+       hole will be drilled through the fringe. Position is stored in mm
+       relative to the print top-left; overlay is positioned via image-px
+       computed from mm on the fly (see teeHoleImgPx()). #}
+    <template x-if="teeHole && imgLoaded">
+      <div class="absolute select-grab active:cursor-grabbing"
+           :style="(() => { const p = teeHoleImgPx(); const sz = (TEE_HOLE_MARKER_MM * (imgW && printSizeMm ? Math.max(imgW, imgH) / printSizeMm : 1)) * scale; return `left:${p.x * scale + offsetX}px; top:${p.y * scale + offsetY}px; width:${sz}px; height:${sz}px; transform:translate(-50%,-50%); z-index:22;`; })()"
+           @pointerdown="teeHolePointerDown($event)"
+           title="Tee hole — drag to reposition. Stored in mm from print top-left.">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+             style="width:100%; height:100%; display:block; cursor:grab; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));">
+          <circle cx="12" cy="12" r="10" fill="rgba(255,255,255,0.55)" stroke="#D94F1F" stroke-width="2"/>
+          <line x1="12" y1="2"  x2="12" y2="8"  stroke="#D94F1F" stroke-width="1.75" stroke-linecap="round"/>
+          <line x1="12" y1="16" x2="12" y2="22" stroke="#D94F1F" stroke-width="1.75" stroke-linecap="round"/>
+          <line x1="2"  y1="12" x2="8"  y2="12" stroke="#D94F1F" stroke-width="1.75" stroke-linecap="round"/>
+          <line x1="16" y1="12" x2="22" y2="12" stroke="#D94F1F" stroke-width="1.75" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="1.6" fill="#D94F1F"/>
+        </svg>
+      </div>
+    </template>
   </div>
 
   {# ── Below-canvas action row ─────────────────────────────── #}
@@ -455,6 +477,14 @@
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
             title="Add an elevation spike — drops a draggable marker on the fringe with the wanted fringe height in mm. Use the ▲/▼ buttons to adjust in 0.1 mm steps.">
       Add Elevation Spike
+    </button>
+
+    <button @click="toggleTeeHole()"
+            :disabled="!imgLoaded"
+            :class="!imgLoaded ? 'bg-rose-600/40 cursor-not-allowed' : (teeHole ? 'bg-rose-700 hover:bg-rose-800' : 'bg-rose-600 hover:bg-rose-700')"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
+            :title="teeHole ? 'Remove the tee-hole marker from this hole.' : 'Add a tee-hole marker (default 8 mm in from the top-left of the print bounds). Drag to reposition.'">
+      <span x-text="teeHole ? 'Remove T Hole' : 'Add T Hole'"></span>
     </button>
 
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
@@ -564,6 +594,15 @@ function polygonEditor() {
     // Geometry pipeline (Topo) will consume these in a follow-up task.
     elevationSpikes: [],   // [{x, y, mm}] — x,y in image-pixel coords
     _spikeDrag: null,      // {idx, startClientX, startClientY, startX, startY, moved} during drag
+
+    // Tee-hole marker — a single optional point (in mm from print top-left)
+    // marking where a physical pin/tee hole should be drilled into the fringe.
+    // Diameter is a geometry constant owned by Topo (default 2 mm), NOT stored here.
+    // Persisted at the top level of the .egm payload as `tee_hole` (or absent).
+    teeHole: null,         // null when disabled, or {x_mm, y_mm} from print top-left
+    _teeHoleDrag: null,    // {startClientX, startClientY, startImgX, startImgY, moved} during drag
+    TEE_HOLE_DEFAULT_MM: 8.0,   // default inset from top/left of print bounds (mm)
+    TEE_HOLE_MARKER_MM: 6.0,    // visual diameter of the marker (mm) — outer circle
 
     // Contour lines — open polylines (type: "contour", closed: false)
     contours: [],          // [{name, direction, points:[{x,y}]}]
@@ -1788,6 +1827,106 @@ function polygonEditor() {
       window.addEventListener('pointerup', onUp);
     },
 
+    // ── Tee-hole marker ──────────────────────────────────────
+    // Convert mm-from-print-top-left ↔ image-pixel coords.
+    //
+    // The rendering pipeline uses:
+    //   scale_px_to_mm = PRINT_SIZE_MM / max(imgW, imgH)
+    //   origin_px      = (imgW/2, imgH/2)  (image center = print center)
+    // so the print-rect top-left in image-pixel coords is:
+    //   printLeftPx = imgW/2 - (PRINT_SIZE_MM/2) / scale_px_to_mm
+    //               = imgW/2 - maxDim/2
+    //   printTopPx  = imgH/2 - maxDim/2
+    // (same on both axes because the print is square and image is centered).
+    // Then: img_px = printTopLeft_px + mm / scale_px_to_mm
+    //             = printTopLeft_px + mm * maxDim / PRINT_SIZE_MM
+    _pxPerMm() {
+      const maxDim = Math.max(this.imgW || 1, this.imgH || 1);
+      const psm = this.printSizeMm || 171.45;
+      return maxDim / psm;
+    },
+    _printTopLeftPx() {
+      const maxDim = Math.max(this.imgW || 1, this.imgH || 1);
+      return {
+        x: this.imgW / 2 - maxDim / 2,
+        y: this.imgH / 2 - maxDim / 2,
+      };
+    },
+    teeHoleImgPx() {
+      if (!this.teeHole) return { x: 0, y: 0 };
+      const tl = this._printTopLeftPx();
+      const k = this._pxPerMm();
+      return {
+        x: tl.x + this.teeHole.x_mm * k,
+        y: tl.y + this.teeHole.y_mm * k,
+      };
+    },
+    _imgPxToTeeHoleMm(imgX, imgY) {
+      const tl = this._printTopLeftPx();
+      const k = this._pxPerMm();
+      // Clamp to print bounds (0 .. PRINT_SIZE_MM on both axes).
+      const psm = this.printSizeMm || 171.45;
+      const mmX = (imgX - tl.x) / k;
+      const mmY = (imgY - tl.y) / k;
+      return {
+        x_mm: Math.max(0, Math.min(psm, mmX)),
+        y_mm: Math.max(0, Math.min(psm, mmY)),
+      };
+    },
+    toggleTeeHole() {
+      if (!this.imgLoaded) return;
+      if (this.teeHole) {
+        this.teeHole = null;
+        this.flash('Tee hole removed', true);
+      } else {
+        this.teeHole = {
+          x_mm: this.TEE_HOLE_DEFAULT_MM,
+          y_mm: this.TEE_HOLE_DEFAULT_MM,
+        };
+        this.flash('Tee hole added — drag to reposition', true);
+      }
+      this.autoSave();
+    },
+    teeHolePointerDown(e) {
+      if (!this.teeHole) return;
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const startImg = this.teeHoleImgPx();
+      this._teeHoleDrag = {
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        startImgX: startImg.x,
+        startImgY: startImg.y,
+        moved: false,
+      };
+      const onMove = (ev) => {
+        const d = this._teeHoleDrag;
+        if (!d || !this.teeHole) return;
+        // scale is CSS-px per image-px; delta in image-px = delta in CSS-px / scale
+        const dx = (ev.clientX - d.startClientX) / this.scale;
+        const dy = (ev.clientY - d.startClientY) / this.scale;
+        if (Math.abs(dx) + Math.abs(dy) > 1) d.moved = true;
+        const newImgX = d.startImgX + dx;
+        const newImgY = d.startImgY + dy;
+        const mm = this._imgPxToTeeHoleMm(newImgX, newImgY);
+        // Round to 0.1 mm for stability in the saved file
+        this.teeHole = {
+          x_mm: Math.round(mm.x_mm * 10) / 10,
+          y_mm: Math.round(mm.y_mm * 10) / 10,
+        };
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        const d = this._teeHoleDrag;
+        this._teeHoleDrag = null;
+        if (d && d.moved) this.autoSave();
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    },
+
     removePoly(idx) {
       if (this.polygons[idx].type !== 'trap' && this.polygons[idx].type !== 'water' && this.polygons[idx].type !== 'boulders') return;
       this.pushUndo();
@@ -1851,6 +1990,14 @@ function polygonEditor() {
           mm: Math.round(sp.mm * 10) / 10,
         })),
       };
+      // Only serialize tee_hole when set — keeps EGMs without a tee hole
+      // byte-identical to their pre-v4.24 form (backward compat).
+      if (this.teeHole && typeof this.teeHole.x_mm === 'number' && typeof this.teeHole.y_mm === 'number') {
+        data.tee_hole = {
+          x_mm: Math.round(this.teeHole.x_mm * 10) / 10,
+          y_mm: Math.round(this.teeHole.y_mm * 10) / 10,
+        };
+      }
       try {
         await fetch('/api/boundaries', {
           method: 'POST',
@@ -2019,6 +2166,12 @@ function polygonEditor() {
               mm: (typeof sp.mm === 'number') ? sp.mm : 0,
             }))
           : [];
+        // Tee-hole: absent field = no tee hole (backward compatible).
+        if (data.tee_hole && typeof data.tee_hole.x_mm === 'number' && typeof data.tee_hole.y_mm === 'number') {
+          this.teeHole = { x_mm: data.tee_hole.x_mm, y_mm: data.tee_hole.y_mm };
+        } else {
+          this.teeHole = null;
+        }
         this._pendingRestore = data.polygons;
         this.loadImage();
         this.flash('Loaded: ' + data.course + ' — Hole ' + data.hole, true);
@@ -2069,6 +2222,7 @@ function polygonEditor() {
       this.selectedVerts = [];
       this.polygons = [];
       this.elevationSpikes = [];
+      this.teeHole = null;
       this._pendingDetect = true;
       this.loadImage();
     },
@@ -2189,6 +2343,12 @@ function polygonEditor() {
         })),
         open_in_slicer: this.openInSlicer,
       };
+      if (this.teeHole && typeof this.teeHole.x_mm === 'number' && typeof this.teeHole.y_mm === 'number') {
+        data.tee_hole = {
+          x_mm: Math.round(this.teeHole.x_mm * 10) / 10,
+          y_mm: Math.round(this.teeHole.y_mm * 10) / 10,
+        };
+      }
       this.generating = true;
       // Immediate user feedback — the pipeline is minutes-long, so without this
       // the button just sits at "Generating…" and Thomas reports it as hung.

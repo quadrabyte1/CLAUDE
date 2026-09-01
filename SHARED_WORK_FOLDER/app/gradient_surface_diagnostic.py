@@ -1117,13 +1117,13 @@ ENABLE_MOUNT_BORE: bool = False
 # A reinforcing collar (annular sleeve) is unioned in to give the tee lateral
 # support even where the fringe is thin. The collar's outer diameter and
 # above-fringe protrusion are geometry constants — do NOT store in the EGM.
-# The 4 mm OD leaves the 9 mm frame-edge cap rule (project_golf_render_rules)
-# untouched: the collar radius is 2 mm, so as long as the tee-hole XY sits at
-# least ~2 mm inside the frame perimeter, the collar stays outside the 1 mm
-# frame-cap band. The editor UI should enforce that inset.
-TEE_HOLE_DIAMETER_MM: float = 2.0        # inner through-hole diameter
-TEE_HOLE_COLLAR_OD_MM: float = 4.0       # outer diameter of reinforcing sleeve
-TEE_HOLE_COLLAR_PROTRUDE_MM: float = 1.5 # collar height ABOVE fringe top (0 = flush)
+# The 7.56 mm OD leaves the 9 mm frame-edge cap rule (project_golf_render_rules)
+# untouched: the collar radius is 3.78 mm, so as long as the tee-hole XY sits at
+# least ~3.8 mm inside the frame perimeter, the collar stays outside the 1 mm
+# frame-cap band. The editor UI should enforce that inset (5 mm clamp is fine).
+TEE_HOLE_DIAMETER_MM: float = 5.55625    # 7/32 inch = 7 * 25.4 / 32 mm (real golf tee shaft ⌀)
+TEE_HOLE_COLLAR_OD_MM: float = 7.55625   # hole + 1 mm wall each side (5.55625 + 2 * 1.0)
+TEE_HOLE_COLLAR_PROTRUDE_MM: float = 0.0 # flush with fringe top; no protrusion (collar must not rise above the fringe)
 
 
 class _MountBoreDisabled(Exception):

@@ -483,9 +483,31 @@
             :disabled="!imgLoaded"
             :class="!imgLoaded ? 'bg-rose-600/40 cursor-not-allowed' : (teeHole ? 'bg-rose-700 hover:bg-rose-800' : 'bg-rose-600 hover:bg-rose-700')"
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
-            :title="teeHole ? 'Remove the tee-hole marker from this hole.' : 'Add a tee-hole marker (default 8 mm in from the top-left of the print bounds). Drag to reposition.'">
+            :title="teeHole ? 'Remove the tee-hole marker from this hole.' : 'Add a tee-hole marker (default 30 mm in from the top-left of the print bounds). Drag to reposition.'">
       <span x-text="teeHole ? 'Remove T Hole' : 'Add T Hole'"></span>
     </button>
+
+    {# Side picker — only visible when the tee-hole marker exists. Mirrors the
+       x_mm around the print-center on toggle. Reflects the current side even
+       when the user drags across center (bind is via computed teeHoleSide). #}
+    <div x-show="teeHole" x-transition
+         class="inline-flex items-center gap-2 pl-1 pr-2 py-1 rounded-md border border-notion-border bg-stone-50/70">
+      <span class="text-xs text-notion-muted font-medium tracking-wide uppercase">Side</span>
+      <label class="inline-flex items-center gap-1 text-sm text-notion-text cursor-pointer select-none">
+        <input type="radio" name="tee-hole-side" value="left"
+               :checked="teeHoleSide === 'left'"
+               @change="setTeeHoleSide('left')"
+               class="h-3.5 w-3.5 text-rose-600 border-notion-border focus:ring-rose-500 focus:ring-offset-0">
+        <span>Left</span>
+      </label>
+      <label class="inline-flex items-center gap-1 text-sm text-notion-text cursor-pointer select-none">
+        <input type="radio" name="tee-hole-side" value="right"
+               :checked="teeHoleSide === 'right'"
+               @change="setTeeHoleSide('right')"
+               class="h-3.5 w-3.5 text-rose-600 border-notion-border focus:ring-rose-500 focus:ring-offset-0">
+        <span>Right</span>
+      </label>
+    </div>
 
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
           x-text="courseName + ' — Hole ' + holeName"></span>
@@ -601,8 +623,9 @@ function polygonEditor() {
     // Persisted at the top level of the .egm payload as `tee_hole` (or absent).
     teeHole: null,         // null when disabled, or {x_mm, y_mm} from print top-left
     _teeHoleDrag: null,    // {startClientX, startClientY, startImgX, startImgY, moved} during drag
-    TEE_HOLE_DEFAULT_MM: 8.0,   // default inset from top/left of print bounds (mm)
+    TEE_HOLE_DEFAULT_MM: 30.0,  // default inset from top/left of print bounds (mm)
     TEE_HOLE_MARKER_MM: 6.0,    // visual diameter of the marker (mm) — outer circle
+    TEE_HOLE_EDGE_CLAMP_MM: 5.0, // minimum distance from any print-bound edge (mm) — buffer past collar radius
 
     // Contour lines — open polylines (type: "contour", closed: false)
     contours: [],          // [{name, direction, points:[{x,y}]}]
@@ -1864,13 +1887,17 @@ function polygonEditor() {
     _imgPxToTeeHoleMm(imgX, imgY) {
       const tl = this._printTopLeftPx();
       const k = this._pxPerMm();
-      // Clamp to print bounds (0 .. PRINT_SIZE_MM on both axes).
+      // Clamp to print bounds minus a per-edge buffer (TEE_HOLE_EDGE_CLAMP_MM).
+      // The collar around the hole is ~3.78 mm radius (Topo's 7/32" hole + doubled
+      // collar OD); 5 mm keeps ~1.2 mm past the collar edge and honors the 1 mm
+      // fringe-cap rule near the frame perimeter.
       const psm = this.printSizeMm || 171.45;
+      const c = this.TEE_HOLE_EDGE_CLAMP_MM;
       const mmX = (imgX - tl.x) / k;
       const mmY = (imgY - tl.y) / k;
       return {
-        x_mm: Math.max(0, Math.min(psm, mmX)),
-        y_mm: Math.max(0, Math.min(psm, mmY)),
+        x_mm: Math.max(c, Math.min(psm - c, mmX)),
+        y_mm: Math.max(c, Math.min(psm - c, mmY)),
       };
     },
     toggleTeeHole() {
@@ -1885,6 +1912,29 @@ function polygonEditor() {
         };
         this.flash('Tee hole added — drag to reposition', true);
       }
+      this.autoSave();
+    },
+    // Which side of the print (left / right) the tee hole currently sits on.
+    // Derived from x_mm — no dedicated EGM field. Returns 'left' when marker
+    // is missing (radio group is hidden anyway, but keep the getter safe).
+    get teeHoleSide() {
+      if (!this.teeHole) return 'left';
+      const psm = this.printSizeMm || 171.45;
+      return (this.teeHole.x_mm < psm / 2) ? 'left' : 'right';
+    },
+    // Mirror the tee hole across the print's vertical centerline so its
+    // distance from the opposite frame edge is preserved. Y is untouched.
+    // No-op when marker is missing or when the requested side already matches.
+    setTeeHoleSide(side) {
+      if (!this.teeHole) return;
+      if (side !== 'left' && side !== 'right') return;
+      if (this.teeHoleSide === side) return;
+      const psm = this.printSizeMm || 171.45;
+      const newX = psm - this.teeHole.x_mm;
+      this.teeHole = {
+        x_mm: Math.round(newX * 10) / 10,
+        y_mm: this.teeHole.y_mm,
+      };
       this.autoSave();
     },
     teeHolePointerDown(e) {
@@ -2166,11 +2216,17 @@ function polygonEditor() {
               mm: (typeof sp.mm === 'number') ? sp.mm : 0,
             }))
           : [];
-        // Tee-hole: absent field = no tee hole (backward compatible).
+        // Tee-hole: absent field = default-populate at (30, 30) on the left.
+        // A saved position (even in an older EGM) always wins over the default.
+        // The default is client-side only — it isn't persisted to disk until the
+        // user next triggers autoSave() (e.g. drags the marker, saves, etc.).
         if (data.tee_hole && typeof data.tee_hole.x_mm === 'number' && typeof data.tee_hole.y_mm === 'number') {
           this.teeHole = { x_mm: data.tee_hole.x_mm, y_mm: data.tee_hole.y_mm };
         } else {
-          this.teeHole = null;
+          this.teeHole = {
+            x_mm: this.TEE_HOLE_DEFAULT_MM,
+            y_mm: this.TEE_HOLE_DEFAULT_MM,
+          };
         }
         this._pendingRestore = data.polygons;
         this.loadImage();
@@ -2222,7 +2278,12 @@ function polygonEditor() {
       this.selectedVerts = [];
       this.polygons = [];
       this.elevationSpikes = [];
-      this.teeHole = null;
+      // Default-populate the tee hole on the left side (30 mm inset) — same
+      // convention as loadProject(). User can remove it explicitly.
+      this.teeHole = {
+        x_mm: this.TEE_HOLE_DEFAULT_MM,
+        y_mm: this.TEE_HOLE_DEFAULT_MM,
+      };
       this._pendingDetect = true;
       this.loadImage();
     },

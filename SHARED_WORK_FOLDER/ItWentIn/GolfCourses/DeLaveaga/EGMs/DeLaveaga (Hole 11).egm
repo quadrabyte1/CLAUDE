@@ -241,5 +241,9 @@
       ]
     }
   ],
-  "elevationSpikes": []
+  "elevationSpikes": [],
+  "tee_hole": {
+    "x_mm": 141.5,
+    "y_mm": 30
+  }
 }

@@ -619,6 +619,84 @@ def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
         print(f"  Green boundary Chaikin smoothing: "
               f"{_n_before} → {boundary_px.shape[0]} pts "
               f"({GREEN_BOUNDARY_SMOOTH_ITERATIONS} iters)")
+
+    # ── Trap + water boundary smoothing (task 705, Topo 2026-09-01) ────────
+    # Apply the same spline+Chaikin pipeline used on the green to every trap
+    # and water polygon. The smoothed dense polyline is written back into
+    # `poly["points"]` and the polygon is marked with `_dense_px_points`
+    # so `_poly_to_dense_px` returns the smoothed points directly (no second
+    # Catmull-Rom pass, which would add wiggles between our dense samples).
+    #
+    # This is the trap/water analogue of the green→fringe seam-smoothing fix
+    # (task 683). Downstream stages that build trap/water shapely polygons
+    # (build_fringe_mesh, export_trap_stls, export_water_meshes, and the
+    # grass-texture seam-exclusion path) all read via `_poly_to_dense_px`
+    # (or are updated to do so), so they all see the smoothed outlines.
+    #
+    # Prints `[trap_smooth]` / `[water_smooth]` per-polygon so a future
+    # regression is diagnosable in seconds — same tag pattern as the
+    # `[green_carve]` markers.
+    for _poly in data.get("polygons", []):
+        _ptype = _poly.get("type")
+        if _ptype == "trap":
+            _smooth_px = TRAP_BOUNDARY_SPLINE_SMOOTHING_PX
+            _resample_px = TRAP_BOUNDARY_SPLINE_RESAMPLE_PX
+            _chaikin_iters = TRAP_BOUNDARY_SMOOTH_ITERATIONS
+            _tag = "trap_smooth"
+        elif _ptype == "water":
+            _smooth_px = WATER_BOUNDARY_SPLINE_SMOOTHING_PX
+            _resample_px = WATER_BOUNDARY_SPLINE_RESAMPLE_PX
+            _chaikin_iters = WATER_BOUNDARY_SMOOTH_ITERATIONS
+            _tag = "water_smooth"
+        else:
+            continue
+        _ctrl = _poly.get("points") or []
+        if len(_ctrl) < 3:
+            print(f"  [{_tag}] skipped: only {len(_ctrl)} control pts")
+            continue
+        try:
+            _dense = interpolate_catmull_rom(_ctrl)
+        except Exception as _exc_ir:
+            print(f"  [{_tag}] Catmull-Rom failed ({_exc_ir}) — keeping raw pts")
+            continue
+        _n_raw = _dense.shape[0]
+        if _smooth_px > 0.0:
+            _dense = _spline_smooth_closed(
+                _dense,
+                smoothing_px=_smooth_px,
+                resample_spacing_px=_resample_px,
+            )
+        _n_spl = _dense.shape[0]
+        if _chaikin_iters > 0:
+            _dense = _chaikin_smooth_closed(_dense, _chaikin_iters)
+        _n_chk = _dense.shape[0]
+        # Simplify the smoothed polyline via Shapely so downstream extrusion
+        # (trimesh.creation.extrude_polygon) doesn't choke on 30k+ near-
+        # collinear points. Tolerance 0.5 px ≈ 0.1 mm at typical golf scale
+        # (well under the printer's XY resolution). This keeps the curve
+        # visually identical while dropping vertex count ~20-40×. Without
+        # this, the trap slab produces thousands of near-degenerate wall
+        # triangles that break as non-manifold during serial engraving.
+        try:
+            from shapely.geometry import LinearRing as _LR
+            _ring = _LR(_dense)
+            _ring_simp = _ring.simplify(0.5, preserve_topology=True)
+            _coords = np.asarray(_ring_simp.coords, dtype=np.float64)
+            # LinearRing repeats the first point at the end — drop the dup
+            if len(_coords) >= 2 and np.allclose(_coords[0], _coords[-1]):
+                _coords = _coords[:-1]
+            if len(_coords) >= 4:
+                _dense = _coords
+        except Exception as _exc_simp:
+            print(f"  [{_tag}] simplify failed ({_exc_simp}) — keeping dense pts")
+        _n_final = _dense.shape[0]
+        # Write smoothed dense polyline back and flag it as pre-densified.
+        _poly["points"] = [{"x": float(x), "y": float(y)} for x, y in _dense]
+        _poly["_dense_px_points"] = True
+        print(f"  [{_tag}] {_n_raw} → {_n_spl} → {_n_chk} → {_n_final} pts "
+              f"(s={_smooth_px} px, resample={_resample_px} px, "
+              f"chaikin={_chaikin_iters}, simplify_tol=0.5 px)")
+
     return data, image_path, boundary_px
 
 
@@ -1260,6 +1338,36 @@ GREEN_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after splin
 # on the plaque, big enough to survive one fringe-grid step (~0.88 mm) of
 # quantization.
 GREEN_FRINGE_GAP_MM: float = 0.0  # Zeroed 2026-08-30 per Thomas (task 683): fringe boundary must track the smoothed green exactly (no added clearance). Because the green boundary is now much smoother (see GREEN_BOUNDARY_SPLINE_SMOOTHING_PX bump), the pieces mate cleanly without a code-side slit. The `if GREEN_FRINGE_GAP_MM > 0` branch at ~2248 falls through, so `green_shapely_exclusion` == `green_shapely` — identical XY footprint.
+
+
+# ---------------------------------------------------------------------------
+# Trap / water boundary smoothing (Topo, 2026-09-01 per Thomas — task 705)
+#
+# Same recipe as the green boundary (splprep + Chaikin), applied per-polygon
+# in `load_egm` to every polygon of type 'trap' and 'water'. The smoothed
+# dense polyline is written BACK into `polygon["points"]` and the polygon is
+# tagged with `"_dense_px_points": True` so `_poly_to_dense_px` returns it
+# raw (skipping a second Catmull-Rom pass that would re-introduce wiggles).
+#
+# Separate constants per feature so future tuning is independent (e.g. traps
+# might tolerate more aggressive smoothing than water without changing what
+# the green does). Defaults intentionally mirror the green so day-1 behaviour
+# is the direct trap/water analogue of the green→fringe fix from task 683.
+#
+# The corresponding *_FRINGE_GAP_MM constants leave a deterministic slit
+# between the trap/water outer edge and the fringe cutout inner edge, exactly
+# like GREEN_FRINGE_GAP_MM. Zero by default: with the boundary now genuinely
+# smooth, the pieces mate cleanly and any explicit slit would print as a
+# visible gap. Kept as a constant so it can be dialled up if a specific
+# printer + filament combo needs a hair of clearance.
+TRAP_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0  # splprep `s` — same as green
+TRAP_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after spline fit
+TRAP_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5     # Chaikin passes after spline
+TRAP_FRINGE_GAP_MM:                float = 0.0   # slit between trap edge and fringe cutout
+WATER_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0
+WATER_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5
+WATER_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5
+WATER_FRINGE_GAP_MM:                float = 0.0
 
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
@@ -2588,7 +2696,35 @@ def build_fringe_mesh(
     # the fringe rectangle. Any portion of a trap/water polygon outside the
     # rectangle simply has no fringe cells to carve out — the implicit clip
     # by the iteration domain matches the explicit clip applied to the slab.
-    _carve_shapely = trap_shapely + water_shapely + boulders_annulus_shapely
+    # Task 705 (2026-09-01): TRAP_FRINGE_GAP_MM / WATER_FRINGE_GAP_MM leave a
+    # deterministic slit between each carve-out polygon and the fringe cutout,
+    # exactly like GREEN_FRINGE_GAP_MM for the green. Zero by default (the
+    # smoothed boundary is meant to mate cleanly). If a printer/filament
+    # combo needs a hair of clearance, dial these up like the green one.
+    _trap_carve = trap_shapely
+    if TRAP_FRINGE_GAP_MM > 0 and trap_shapely:
+        _buffered_traps = []
+        for _tsp in trap_shapely:
+            _t_ex = _tsp.buffer(+TRAP_FRINGE_GAP_MM)
+            if not _t_ex.is_valid:
+                _t_ex = _t_ex.buffer(0)
+            _buffered_traps.append(_t_ex)
+        _trap_carve = _buffered_traps
+        print(f"  [trap_carve] buffered {len(trap_shapely)} traps by "
+              f"+{TRAP_FRINGE_GAP_MM} mm for fringe exclusion")
+    _water_carve = water_shapely
+    if WATER_FRINGE_GAP_MM > 0 and water_shapely:
+        _buffered_water = []
+        for _wsp in water_shapely:
+            _w_ex = _wsp.buffer(+WATER_FRINGE_GAP_MM)
+            if not _w_ex.is_valid:
+                _w_ex = _w_ex.buffer(0)
+            _buffered_water.append(_w_ex)
+        _water_carve = _buffered_water
+        print(f"  [water_carve] buffered {len(water_shapely)} water polys by "
+              f"+{WATER_FRINGE_GAP_MM} mm for fringe exclusion")
+
+    _carve_shapely = list(_trap_carve) + list(_water_carve) + boulders_annulus_shapely
     if _carve_shapely:
         from shapely.ops import unary_union
         traps_union = unary_union(_carve_shapely)
@@ -2869,6 +3005,88 @@ def build_fringe_mesh(
               f"printed seam gap → 0)")
     else:
         seam_override = {}
+
+    # ── Trap / water seam-reseat (task 705, Topo 2026-09-01) ────────────────
+    # Extend the same XY-snap the green-fringe seam already gets: for each
+    # trap and water polygon, project every fringe cell within one grid step
+    # of that polygon's smoothed polyline onto the polyline. Result: the
+    # fringe cutout perimeter matches the trap/water slab outer edge exactly
+    # (both now sit on the same smooth polyline in XY), killing the
+    # stair-step at the fringe/trap and fringe/water interfaces.
+    #
+    # Unlike the green seam, we do NOT touch Z — the trap/water slabs sit
+    # BELOW the fringe top surface (a vertical wall drops from the fringe
+    # top down to the slab top), so the fringe cell just needs its natural
+    # Z_fringe height preserved. If we blended Z toward the slab top we'd
+    # tilt the fringe surface into the cutout, which is not the intent.
+    #
+    # Cell already in seam_override (green seam) wins — a fringe cell that's
+    # simultaneously adjacent to the green AND a trap/water cutout keeps
+    # the green snap (which is the tighter Z-critical case). In practice
+    # such overlap only happens for pathological hole layouts where a trap
+    # or water polygon touches the green — the green wall/seam still
+    # controls the visible geometry there.
+    dx_fringe = float(xs_mm[1] - xs_mm[0])
+    dy_fringe = float(ys_mm[1] - ys_mm[0])
+    # Tighter radius than the green seam (1.5×) — for trap/water we only want
+    # the SINGLE innermost fringe ring (the one directly on the cutout edge),
+    # not a two-cell-deep band. Two-deep folds onto itself when the polyline
+    # is closer to a grid cell than the grid pitch, creating twisted quads.
+    _tw_seam_radius = 0.9 * max(abs(dx_fringe), abs(dy_fringe))
+    _tw_snap_shifts: dict[str, list[float]] = {"trap": [], "water": []}
+    _tw_snap_counts: dict[str, int] = {"trap": 0, "water": 0}
+    # Track which cells we've already claimed for a trap/water seam so a cell
+    # near TWO cutouts (e.g. two adjacent traps) keeps the first snap — a
+    # second snap would drag it toward a different polyline and could create
+    # a fold-over triangle bridging the two cutouts.
+    _tw_seam_claimed: set[tuple[int, int]] = set()
+
+    def _snap_fringe_to_polygon_polyline(
+        pts_mm_arr: np.ndarray, label: str, kind: str
+    ) -> None:
+        """Snap fringe cells near ``pts_mm_arr`` onto that polyline (XY only)."""
+        if pts_mm_arr is None or len(pts_mm_arr) < 4:
+            return
+        _kd = cKDTree(pts_mm_arr)
+        for r_ in range(fringe_grid_res):
+            for c_ in range(fringe_grid_res):
+                if not fringe_mask[r_, c_]:
+                    continue
+                if (r_, c_) in seam_override:
+                    # green seam wins (see comment above)
+                    continue
+                if (r_, c_) in _tw_seam_claimed:
+                    continue
+                x_ = float(xs_mm[c_]); y_ = float(ys_mm[r_])
+                d_bnd, _ = _kd.query([x_, y_], k=1)
+                if d_bnd > _tw_seam_radius:
+                    continue
+                _d_proj, _nx, _ny = _min_dist_to_polyline(x_, y_, pts_mm_arr)
+                _tw_snap_shifts[kind].append(_d_proj)
+                _tw_snap_counts[kind] += 1
+                # Preserve natural Z; only the XY moves.
+                _z_keep = float(Z_fringe[r_, c_])
+                seam_override[(r_, c_)] = (float(_nx), float(_ny), _z_keep)
+                _tw_seam_claimed.add((r_, c_))
+
+    for _ti, _tp_mm in enumerate(trap_polys_mm, start=1):
+        _snap_fringe_to_polygon_polyline(_tp_mm, f"trap_{_ti}", "trap")
+    for _wi, _wp_mm in enumerate(water_polys_mm, start=1):
+        _snap_fringe_to_polygon_polyline(_wp_mm, f"water_{_wi}", "water")
+
+    for _kind in ("trap", "water"):
+        _shifts_list = _tw_snap_shifts[_kind]
+        if _shifts_list:
+            _arr = np.asarray(_shifts_list, dtype=np.float64)
+            print(f"  Seam-reseat ({_kind}, task 705): "
+                  f"reseated {_tw_snap_counts[_kind]} fringe cells "
+                  f"onto smooth {_kind} polyline(s) "
+                  f"(XY snap median={float(np.median(_arr)):.3f} mm "
+                  f"max={float(_arr.max()):.3f} mm)")
+        elif ({"trap": trap_polys_mm, "water": water_polys_mm}[_kind]):
+            print(f"  Seam-reseat ({_kind}, task 705): no fringe cells within "
+                  f"{_tw_seam_radius:.2f} mm of any {_kind} polyline (unusual — "
+                  f"check {_kind} polygons vs fringe grid)")
 
     # ── Pointy-spike filter (task #314) ──────────────────────────────────────
     # Both spike clusters identified in #313 (9 seam-stilt cells along the
@@ -3920,8 +4138,11 @@ def export_trap_stls(
     results: list = []
     for i, trap_poly in enumerate(trap_polygons, start=1):
         try:
-            # Interpolate outline with Catmull-Rom (closed spline, matching editor)
-            pts_px = interpolate_catmull_rom(trap_poly["points"])
+            # Route through _poly_to_dense_px so smoothed points from load_egm
+            # (task 705) are consumed as-is; falls back to Catmull-Rom for any
+            # legacy code path that skipped smoothing (defensive — should not
+            # happen in the run_pipeline flow).
+            pts_px = _poly_to_dense_px(trap_poly)
 
             # Convert pixel coords → mm, Y-flipped
             pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
@@ -5909,6 +6130,14 @@ def run_pipeline(
     print(f"[config] GREEN_BOUNDARY_SPLINE_RESAMPLE_PX  = {GREEN_BOUNDARY_SPLINE_RESAMPLE_PX}")
     print(f"[config] GREEN_BOUNDARY_SMOOTH_ITERATIONS   = {GREEN_BOUNDARY_SMOOTH_ITERATIONS}")
     print(f"[config] GREEN_FRINGE_GAP_MM                = {GREEN_FRINGE_GAP_MM}")
+    print(f"[config] TRAP_BOUNDARY_SPLINE_SMOOTHING_PX  = {TRAP_BOUNDARY_SPLINE_SMOOTHING_PX}")
+    print(f"[config] TRAP_BOUNDARY_SPLINE_RESAMPLE_PX   = {TRAP_BOUNDARY_SPLINE_RESAMPLE_PX}")
+    print(f"[config] TRAP_BOUNDARY_SMOOTH_ITERATIONS    = {TRAP_BOUNDARY_SMOOTH_ITERATIONS}")
+    print(f"[config] TRAP_FRINGE_GAP_MM                 = {TRAP_FRINGE_GAP_MM}")
+    print(f"[config] WATER_BOUNDARY_SPLINE_SMOOTHING_PX = {WATER_BOUNDARY_SPLINE_SMOOTHING_PX}")
+    print(f"[config] WATER_BOUNDARY_SPLINE_RESAMPLE_PX  = {WATER_BOUNDARY_SPLINE_RESAMPLE_PX}")
+    print(f"[config] WATER_BOUNDARY_SMOOTH_ITERATIONS   = {WATER_BOUNDARY_SMOOTH_ITERATIONS}")
+    print(f"[config] WATER_FRINGE_GAP_MM                = {WATER_FRINGE_GAP_MM}")
     print(f"[config] FRINGE_XY_EXPANSION_MM             = {FRINGE_XY_EXPANSION_MM}")
 
     # ── 1. Load EGM and image ───────────────────────────────────────────────

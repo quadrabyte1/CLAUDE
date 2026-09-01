@@ -1986,8 +1986,14 @@ def drill_tee_hole(
         Outer diameter of the reinforcing sleeve (default 4.0 mm → 1 mm wall
         on each side of the tee).
     collar_protrude : float
-        Height the collar rises ABOVE the fringe's max Z (default 1.5 mm).
-        0 = collar top is flush with the fringe top.
+        Height the collar rises ABOVE the LOCAL fringe surface at (x_mm, y_mm)
+        — NOT the global fringe max. 0 = collar top is flush with the fringe
+        surface at the tee position (default). Positive values push the collar
+        rim above the local terrain to give the tee more lateral guidance;
+        negative values (uncommon) would sink it.  Behaviour changed in v4.27
+        (task 699): pre-v4.27 the reference was the mesh's global max Z, which
+        put the collar above the local surface on any hole whose tee sat away
+        from the frame-edge cap band.
     """
     # ---- 1. Convert print-top-left mm → mesh world coords -----------------
     half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
@@ -2017,18 +2023,88 @@ def drill_tee_hole(
         return mesh
 
     # ---- 3. Punch a hole in the fringe surface wide enough for the tube ---
-    # Remove every triangle whose centroid sits inside the collar OD (plus a
-    # tiny guard so we don't leave stubs poking into the tube). This opens
-    # both the top surface and the bottom surface for the tube's exterior
-    # walls to be visible in the slicer.
+    # Remove every triangle whose XY footprint overlaps the collar OD disk (plus
+    # a tiny guard so we don't leave stubs poking into the tube).  We must open
+    # BOTH the top surface AND the bottom slab so the tube's exterior walls are
+    # visible and, crucially, so nothing plugs the through-hole from below.
+    #
+    # Task #703 (Topo, 2026-09-01): pre-#703 we removed by triangle CENTROID
+    # inside the disk.  That worked for top-surface faces (small 200×200 grid
+    # triangles whose centroid is a reliable proxy for their footprint) but
+    # missed the fringe's BOTTOM-SLAB triangulation.  The bottom slab is
+    # earcut-triangulated from the fringe outline (see build_fringe_mesh) and
+    # produces a handful of GIANT triangles that span half the mesh — e.g.
+    # one triangle with vertices at (32.9, 31.1, 0), (33.65, 30.8, 0),
+    # (85.2, 85.2, 0).  Its centroid sits at r≈33 mm from the tee, so the
+    # centroid test kept it, and it covered the bore from below.  In FDM the
+    # slicer prints that as a floor at z=0 → Thomas sees a plugged tee hole.
+    #
+    # Fix: remove any triangle whose XY-projected footprint intersects the
+    # bore disk.  Three vectorised checks per triangle (union → remove):
+    #   (a) any of the 3 vertices lies within remove_r of (cx, cy)
+    #   (b) (cx, cy) lies inside the triangle's XY projection (barycentric)
+    #   (c) any of the 3 edges passes within remove_r of (cx, cy)
+    # This is O(N_faces) with small constants (pure NumPy) — no acceleration
+    # structure needed for a 200×200 fringe mesh (~80k faces).
     guard_mm = 0.15  # small keep-out so the collar wall isn't touched by leftover fringe faces
     remove_r = outer_r + guard_mm
-    centroids = mesh.triangles_center  # (N, 3)
-    dxy2 = (centroids[:, 0] - cx) ** 2 + (centroids[:, 1] - cy) ** 2
-    keep_face_mask = dxy2 >= (remove_r ** 2)
-    n_removed = int((~keep_face_mask).sum())
+    remove_r2 = remove_r * remove_r
+
+    tri_v = mesh.triangles  # shape (N, 3, 3) — vertex coords per face
+    ax, ay = tri_v[:, 0, 0], tri_v[:, 0, 1]
+    bx, by = tri_v[:, 1, 0], tri_v[:, 1, 1]
+    cx3, cy3 = tri_v[:, 2, 0], tri_v[:, 2, 1]
+
+    # (a) any vertex within remove_r
+    va2 = (ax - cx) ** 2 + (ay - cy) ** 2
+    vb2 = (bx - cx) ** 2 + (by - cy) ** 2
+    vc2 = (cx3 - cx) ** 2 + (cy3 - cy) ** 2
+    vert_hit = (va2 < remove_r2) | (vb2 < remove_r2) | (vc2 < remove_r2)
+
+    # (b) point-in-triangle (barycentric via cross products; sign-consistent).
+    # For a triangle ABC and a query point P, compute the three signed
+    # cross-products; P is inside iff all three share the same sign.
+    px, py = cx, cy
+    d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by)
+    d2 = (px - cx3) * (by - cy3) - (bx - cx3) * (py - cy3)
+    d3 = (px - ax) * (cy3 - ay) - (cx3 - ax) * (py - ay)
+    has_neg = (d1 < 0) | (d2 < 0) | (d3 < 0)
+    has_pos = (d1 > 0) | (d2 > 0) | (d3 > 0)
+    pt_in_tri = ~(has_neg & has_pos)  # all same sign (including zeros)
+
+    # (c) any of the 3 edges within remove_r of (cx, cy). Point-to-segment
+    # squared distance, vectorised over N faces per edge.
+    def _seg_dist2(x1, y1, x2, y2):
+        ex, ey = x2 - x1, y2 - y1
+        # t = ((P-A) . (B-A)) / |B-A|^2, clamped to [0,1]
+        len2 = ex * ex + ey * ey
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t = ((cx - x1) * ex + (cy - y1) * ey) / np.where(len2 > 0, len2, 1.0)
+        t = np.clip(t, 0.0, 1.0)
+        qx = x1 + t * ex
+        qy = y1 + t * ey
+        return (cx - qx) ** 2 + (cy - qy) ** 2
+
+    e_ab = _seg_dist2(ax, ay, bx, by)
+    e_bc = _seg_dist2(bx, by, cx3, cy3)
+    e_ca = _seg_dist2(cx3, cy3, ax, ay)
+    edge_hit = (e_ab < remove_r2) | (e_bc < remove_r2) | (e_ca < remove_r2)
+
+    overlap_mask = vert_hit | pt_in_tri | edge_hit
+    keep_face_mask = ~overlap_mask
+    n_removed = int(overlap_mask.sum())
+
+    # Diagnostic breakdown: how many of each category (union of tests).
+    n_vert = int(vert_hit.sum())
+    n_pt   = int(pt_in_tri.sum())
+    n_edge = int(edge_hit.sum())
+    # Faces caught ONLY by pt-in-tri or edge (i.e. the huge bottom-slab tris
+    # that the pre-#703 centroid test would have missed).
+    n_bottom_slab = int((pt_in_tri & ~vert_hit).sum())
     print(f"  [tee_hole] removed {n_removed} fringe faces within Ø{2*remove_r:.2f} mm "
-          f"of ({cx:.2f}, {cy:.2f}) to seat the collar")
+          f"of ({cx:.2f}, {cy:.2f}) to seat the collar "
+          f"(vertex_hit={n_vert}, pt_in_tri={n_pt}, edge_hit={n_edge}, "
+          f"pt_in_tri_only={n_bottom_slab})")
     if n_removed == 0:
         # Nothing to remove means the tee point is outside the fringe surface
         # — refuse to drop a floating tube on top of empty space.
@@ -2039,11 +2115,40 @@ def drill_tee_hole(
     )
 
     # ---- 4. Build the watertight annular collar tube ----------------------
-    # The tube extends from z=0 (build plate) up to z=(fringe_top + protrude).
-    # Its inner wall = through-hole (radius=inner_r); its outer wall = collar
-    # (radius=outer_r). Top and bottom annulus caps close the tube so the
-    # tube itself is a watertight volume — no boolean engine required.
-    tube_top = float(z_max_mesh) + max(float(collar_protrude), 0.0)
+    # The tube extends from z=0 (build plate) up to z=(local_fringe_top + protrude).
+    #
+    # LOCAL fringe height (task 699, Topo 2026-09-01): the collar top must sit
+    # flush with the fringe surface AT THE TEE POSITION — NOT at the global
+    # fringe max. The fringe's global max Z is only reached inside the frame-
+    # edge cap band (~1 mm from the perimeter, per project_golf_render_rules);
+    # elsewhere the surface follows the terrain and drops considerably. Using
+    # the global max produced a visible collar protrusion above the local
+    # fringe (v4.26 T-hole regression Thomas caught in DeLaveaga #11 [176]).
+    #
+    # We sample the mesh vertices in a small disk around (cx, cy) (top-surface
+    # verts only, filtered by z > half the base slab) and take the max Z as
+    # our local fringe surface height — same pattern as the mount-pipe rim
+    # sampling a few sections down. The fringe is a ~200×200 grid so cell
+    # step ≈ 0.9 mm; a 2 mm sample radius reliably captures 9+ verts.
+    _sample_r = max(2.0, outer_r + 0.5)  # at least 2 mm, or collar OR + a hair
+    _verts = mesh.vertices
+    _dxy2_v = (_verts[:, 0] - cx) ** 2 + (_verts[:, 1] - cy) ** 2
+    _top_mask = _dxy2_v <= (_sample_r ** 2)
+    _top_mask &= _verts[:, 2] > (BASE_THICKNESS_MM * 0.5)  # skip bottom slab / walls
+    if _top_mask.any():
+        _local_zs = _verts[_top_mask, 2]
+        z_local = float(np.max(_local_zs))
+        print(f"  [tee_hole] local fringe surface sample: {int(_top_mask.sum())} verts "
+              f"within {_sample_r:.2f} mm of tee, Z range=[{_local_zs.min():.3f}, "
+              f"{_local_zs.max():.3f}] mm → local top = {z_local:.3f} mm  "
+              f"(global fringe max = {z_max_mesh:.3f} mm)")
+    else:
+        # Fallback: no top-surface verts near tee (fringe carved away here?).
+        # Use a small positive height so the collar isn't a zero-tall ring.
+        z_local = max(float(BASE_THICKNESS_MM), 2.0)
+        print(f"  [tee_hole] WARNING: no top-surface fringe verts within "
+              f"{_sample_r:.2f} mm of tee — falling back to z_local={z_local:.3f} mm")
+    tube_top = float(z_local) + max(float(collar_protrude), 0.0)
     if tube_top <= 0.0:
         print(f"  [tee_hole] WARNING: computed tube top ({tube_top}) <= 0 — skipping.")
         return mesh

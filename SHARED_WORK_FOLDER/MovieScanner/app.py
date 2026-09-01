@@ -30,7 +30,7 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.21"
+APP_VERSION = "V3.22"
 # V3.21 — Matches table now flags each row that is NEW since the
 # immediately-previous scan. Snapshot of the outgoing tconst set is
 # taken in /run right before DELETE FROM matches, into the new

@@ -39,7 +39,7 @@ app.jinja_env.auto_reload = True
 # Single source of truth for the version badge shown in the footer of every
 # page. Bump on every change; templates read it via the context processor
 # below, so there's only one place to update.
-APP_VERSION = "V3.5"
+APP_VERSION = "V3.6"
 
 # ── Retry policy constants ────────────────────────────────────────────────────
 # Status codes that strongly suggest bot-detection rather than a real outage.

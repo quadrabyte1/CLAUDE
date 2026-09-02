@@ -1337,7 +1337,7 @@ GREEN_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after splin
 # the print. Target 0.5 mm gap — half of the ~1 mm slop the eye tolerates
 # on the plaque, big enough to survive one fringe-grid step (~0.88 mm) of
 # quantization.
-GREEN_FRINGE_GAP_MM: float = 0.0  # Zeroed 2026-08-30 per Thomas (task 683): fringe boundary must track the smoothed green exactly (no added clearance). Because the green boundary is now much smoother (see GREEN_BOUNDARY_SPLINE_SMOOTHING_PX bump), the pieces mate cleanly without a code-side slit. The `if GREEN_FRINGE_GAP_MM > 0` branch at ~2248 falls through, so `green_shapely_exclusion` == `green_shapely` — identical XY footprint.
+GREEN_FRINGE_GAP_MM: float = 0.25  # 0.25 mm print-fit slop; smoothing keeps the visible curve continuous. Bumped 0.0 → 0.25 on 2026-09-02 per Thomas (task 707): with zero clearance the printed green and fringe pieces mate too tight (standard FDM slop ~0.2–0.3 mm). The smoothed boundary is continuous enough that a 0.25 mm buffer reads as a clean seam rather than a scallop. Routes through the `if GREEN_FRINGE_GAP_MM > 0` branch at ~2672 so `green_shapely_exclusion` = `green_shapely.buffer(+0.25)`.
 
 
 # ---------------------------------------------------------------------------
@@ -1356,18 +1356,19 @@ GREEN_FRINGE_GAP_MM: float = 0.0  # Zeroed 2026-08-30 per Thomas (task 683): fri
 #
 # The corresponding *_FRINGE_GAP_MM constants leave a deterministic slit
 # between the trap/water outer edge and the fringe cutout inner edge, exactly
-# like GREEN_FRINGE_GAP_MM. Zero by default: with the boundary now genuinely
-# smooth, the pieces mate cleanly and any explicit slit would print as a
-# visible gap. Kept as a constant so it can be dialled up if a specific
-# printer + filament combo needs a hair of clearance.
+# like GREEN_FRINGE_GAP_MM. Default is 0.25 mm as of 2026-09-02 (task 707):
+# a standard FDM print-fit slop so the physical pieces mate cleanly instead
+# of jamming. The smoothed boundary is continuous enough that a quarter-mm
+# gap reads as a clean seam rather than a visible scallop; drop back toward
+# zero only if a specific printer + filament combo prints looser than nominal.
 TRAP_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0  # splprep `s` — same as green
 TRAP_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after spline fit
 TRAP_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5     # Chaikin passes after spline
-TRAP_FRINGE_GAP_MM:                float = 0.0   # slit between trap edge and fringe cutout
+TRAP_FRINGE_GAP_MM:                float = 0.25  # 0.25 mm print-fit slop between trap edge and fringe cutout; smoothing keeps the visible curve continuous (bumped 0.0 → 0.25 on 2026-09-02 per Thomas, task 707)
 WATER_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0
 WATER_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5
 WATER_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5
-WATER_FRINGE_GAP_MM:                float = 0.0
+WATER_FRINGE_GAP_MM:                float = 0.25  # 0.25 mm print-fit slop between water edge and fringe cutout; smoothing keeps the visible curve continuous (bumped 0.0 → 0.25 on 2026-09-02 per Thomas, task 707)
 
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
@@ -2964,6 +2965,24 @@ def build_fringe_mesh(
         K_SEAM_NEIGHBOURS = min(4, len(g_bdry_arr))
         seam_override: dict[tuple[int, int], tuple[float, float, float]] = {}
         _seam_snap_shifts_mm: list[float] = []  # diagnostic — how far each seam XY moved
+
+        # Task 707 (2026-09-02, Topo): snap target = OUTWARD-BUFFERED green.
+        # With GREEN_FRINGE_GAP_MM > 0 the fringe cell-exclusion pushes the
+        # nominal fringe inner edge out by GAP_MM, but the seam-snap below
+        # would still pull each fringe boundary vertex back onto the RAW
+        # smoothed green polyline (`gbnd`) — collapsing the physical gap to
+        # zero. Fix: snap to the exterior of `green_shapely_exclusion` (the
+        # +GAP_MM-buffered polygon) so the fringe inner ring sits exactly
+        # GAP_MM outside the green outer ring. When GAP_MM==0, exclusion ==
+        # green so `gbnd_snap` == `gbnd` and behaviour is unchanged.
+        if (GREEN_FRINGE_GAP_MM > 0
+                and green_shapely_exclusion is not green_shapely
+                and green_shapely_exclusion.exterior is not None):
+            gbnd_snap = np.asarray(
+                list(green_shapely_exclusion.exterior.coords), dtype=np.float64
+            )
+        else:
+            gbnd_snap = gbnd
         for r in range(fringe_grid_res):
             for c in range(fringe_grid_res):
                 if not fringe_mask[r, c]:
@@ -2987,8 +3006,10 @@ def build_fringe_mesh(
                     gz = float(np.dot(w, g_bdry_arr[gi_arr, 2]))
                 # Task #689: project XY onto the smooth green polyline `gbnd`
                 # so the printed seam matches the green mesh XY exactly (no
-                # stair-step at the fringe/green interface).
-                _d_proj, _nx, _ny = _min_dist_to_polyline(x, y, gbnd)
+                # stair-step at the fringe/green interface). Task 707 upgrade:
+                # snap to `gbnd_snap` (= exterior of `green_shapely_exclusion`
+                # when GAP_MM>0) so the physical seam gap = GAP_MM, not zero.
+                _d_proj, _nx, _ny = _min_dist_to_polyline(x, y, gbnd_snap)
                 _seam_snap_shifts_mm.append(_d_proj)
                 seam_override[(r, c)] = (float(_nx), float(_ny), gz)
                 Z_fringe[r, c] = gz  # keep the height array consistent
@@ -3069,10 +3090,33 @@ def build_fringe_mesh(
                 seam_override[(r_, c_)] = (float(_nx), float(_ny), _z_keep)
                 _tw_seam_claimed.add((r_, c_))
 
+    # Task 707 (2026-09-02, Topo): snap target = OUTWARD-BUFFERED polygon
+    # exterior so the physical fringe/trap and fringe/water seam gap ends up
+    # equal to *_FRINGE_GAP_MM (not zero, as the raw snap-to-polyline would
+    # produce). Mirrors the green-seam fix above. When GAP_MM==0 we pass the
+    # raw polyline through unchanged and behaviour matches task 705.
+    def _buffered_snap_polyline(
+        pts_mm_arr: np.ndarray, gap_mm: float
+    ) -> np.ndarray:
+        if gap_mm <= 0 or pts_mm_arr is None or len(pts_mm_arr) < 4:
+            return pts_mm_arr
+        try:
+            _poly = ShapelyPolygon(pts_mm_arr)
+            if not _poly.is_valid:
+                _poly = _poly.buffer(0)
+            _buf = _poly.buffer(+gap_mm)
+            if not _buf.is_valid or _buf.is_empty or _buf.exterior is None:
+                return pts_mm_arr
+            return np.asarray(list(_buf.exterior.coords), dtype=np.float64)
+        except Exception:
+            return pts_mm_arr
+
     for _ti, _tp_mm in enumerate(trap_polys_mm, start=1):
-        _snap_fringe_to_polygon_polyline(_tp_mm, f"trap_{_ti}", "trap")
+        _snap_target = _buffered_snap_polyline(_tp_mm, TRAP_FRINGE_GAP_MM)
+        _snap_fringe_to_polygon_polyline(_snap_target, f"trap_{_ti}", "trap")
     for _wi, _wp_mm in enumerate(water_polys_mm, start=1):
-        _snap_fringe_to_polygon_polyline(_wp_mm, f"water_{_wi}", "water")
+        _snap_target = _buffered_snap_polyline(_wp_mm, WATER_FRINGE_GAP_MM)
+        _snap_fringe_to_polygon_polyline(_snap_target, f"water_{_wi}", "water")
 
     for _kind in ("trap", "water"):
         _shifts_list = _tw_snap_shifts[_kind]

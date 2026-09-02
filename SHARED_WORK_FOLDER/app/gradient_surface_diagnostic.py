@@ -2507,6 +2507,7 @@ def build_fringe_mesh(
     egm_data: dict,
     fringe_grid_res: int = 200,
     holes: list | None = None,
+    image_path: str | None = None,
 ) -> trimesh.Trimesh:
     """
     Build a tapered fringe mesh that:
@@ -2887,6 +2888,135 @@ def build_fringe_mesh(
     print(f"  Fringe cells: {n_fringe}")
     if n_fringe == 0:
         raise RuntimeError("No fringe cells found — check coordinate system")
+
+    # ── Fringe-terrain gradient (v4.32 experiment, Topo 2026-09-02, task 711) ──
+    # If a source image is available, extract iso-line pixels + arrow pixels
+    # from the fringe area and modulate the flat green-edge-Z baseline into a
+    # gently rolling terrain that follows the image's iso-line pattern.
+    #
+    # Method:
+    #   1. Get iso-line pixel positions + arrow centroids from the fringe area.
+    #   2. Convert them to mm (same scale used for green_bnd_mm).
+    #   3. For each fringe cell, compute distance to the nearest iso-line pixel.
+    #      The signed-distance-modulo yields a ripple that peaks between iso-
+    #      lines and dips at each iso-line — turning the flat cap into a
+    #      "topographic" surface with visible relief.
+    #   4. Modulate the amplitude: 0 at the green edge (seam continuity), 0 in
+    #      the outer BOUNDARY_CAP_BAND_MM near the frame (preserve cap rule),
+    #      full amplitude in the fringe interior.
+    #   5. Skip the whole block if no iso-lines are detected (backward compat).
+    _fringe_delta_applied = False
+    try:
+        if image_path is not None:
+            from generate_stl_3mf import extract_fringe_terrain_from_image
+            terrain = extract_fringe_terrain_from_image(
+                image_path, green_boundary_px, egm_data,
+            )
+            iso_pixels = terrain["isoline_pixels"]
+            arrow_pixels_fr = terrain["arrow_pixels"]
+            if len(iso_pixels) >= 200:
+                # Convert iso-line pixels to mm (same transform as green_bnd_mm)
+                iso_mm = _px_to_mm_2d(
+                    iso_pixels.astype(np.float64), scale, centroid_px
+                )
+                # Also convert arrow centroids for reporting
+                if len(arrow_pixels_fr) > 0:
+                    arrow_mm = _px_to_mm_2d(
+                        arrow_pixels_fr.astype(np.float64), scale, centroid_px
+                    )
+                    print(f"[fringe_grad] arrow mm bbox: "
+                          f"X[{arrow_mm[:,0].min():.1f}, {arrow_mm[:,0].max():.1f}] "
+                          f"Y[{arrow_mm[:,1].min():.1f}, {arrow_mm[:,1].max():.1f}]")
+
+                iso_kd = cKDTree(iso_mm)
+
+                # Iso-line spacing heuristic (median nearest-neighbour dist).
+                # Sample a subset for speed.
+                sample_n = min(500, len(iso_mm))
+                sample_idx = np.random.RandomState(0).choice(len(iso_mm), sample_n, replace=False)
+                _dnn, _ = iso_kd.query(iso_mm[sample_idx], k=2)  # 1st is self at d=0
+                iso_spacing_mm = float(np.median(_dnn[:, 1])) if _dnn.shape[1] > 1 else 3.0
+                # Clamp to a sensible range so wild outliers don't produce a
+                # useless ripple period.
+                iso_spacing_mm = max(1.5, min(iso_spacing_mm, 8.0))
+
+                # Ripple period ≈ 2 * typical iso-line spacing (two neighbours
+                # define one full oscillation between low and high half-planes).
+                ripple_period_mm = 2.0 * iso_spacing_mm
+                ripple_amp_mm = 1.2          # peak-to-trough ~ 2.4 mm variation
+                edge_taper_mm = 6.0          # attenuate ripple near green edge
+                frame_taper_mm = 2.5         # attenuate ripple near frame edge (preserve cap rule)
+
+                # Query nearest iso-line distance for EVERY fringe cell at once
+                fr_ys, fr_xs = np.where(fringe_mask)
+                cell_xy = np.column_stack([xs_mm[fr_xs], ys_mm[fr_ys]])
+                d_iso, _ = iso_kd.query(cell_xy, k=1)
+
+                # Sinusoidal ripple: -amp at iso-line (d=0), +amp at d=iso_spacing.
+                # Using cos so ripple(0) = -amp: dip AT the iso-line, hump between.
+                # cos(0)=1 → ripple = -amp, cos(pi)=-1 → ripple = +amp.
+                phase = 2.0 * math.pi * d_iso / ripple_period_mm
+                ripple = -ripple_amp_mm * np.cos(phase)
+
+                # Amplitude taper — need distance to green edge AND to frame edge
+                # per cell. We already have the green boundary polyline `gbnd`
+                # and a KD-tree for the frame is trivial (frame is the axis-
+                # aligned rectangle bounds; distance = min to any edge).
+                gbnd_kd_taper = cKDTree(gbnd)
+                d_green_edge, _ = gbnd_kd_taper.query(cell_xy, k=1)
+
+                d_frame_x = np.minimum(
+                    cell_xy[:, 0] - (-half),
+                    half - cell_xy[:, 0],
+                )
+                d_frame_y = np.minimum(
+                    cell_xy[:, 1] - (-half),
+                    half - cell_xy[:, 1],
+                )
+                d_frame = np.minimum(d_frame_x, d_frame_y)
+
+                w_green = np.clip(d_green_edge / edge_taper_mm, 0.0, 1.0)
+                w_frame = np.clip(d_frame / frame_taper_mm, 0.0, 1.0)
+                # Also protect the cap band exactly
+                w_frame = np.where(
+                    d_frame < BOUNDARY_CAP_BAND_MM, 0.0, w_frame,
+                )
+                delta = ripple * w_green * w_frame
+
+                # Apply
+                z_before_min = float(Z_fringe[fringe_mask].min())
+                z_before_max = float(Z_fringe[fringe_mask].max())
+                new_z = Z_fringe[fr_ys, fr_xs] + delta
+                # Clamp: never below BASE_THICKNESS, never above BASE+elevation_range+2mm slop
+                z_ceiling = BASE_THICKNESS_MM + _elevation_range_mm + 2.0
+                new_z = np.clip(new_z, BASE_THICKNESS_MM, z_ceiling)
+                Z_fringe[fr_ys, fr_xs] = new_z
+                z_after_min = float(Z_fringe[fringe_mask].min())
+                z_after_max = float(Z_fringe[fringe_mask].max())
+                z_after_std = float(Z_fringe[fringe_mask].std())
+                _fringe_delta_applied = True
+
+                print(f"[fringe_grad] iso-spacing (median NN) ≈ {iso_spacing_mm:.2f} mm, "
+                      f"ripple period = {ripple_period_mm:.2f} mm, amp = ±{ripple_amp_mm:.2f} mm")
+                print(f"[fringe_grad] delta stats: min={delta.min():+.3f} max={delta.max():+.3f} "
+                      f"mean={delta.mean():+.3f} std={delta.std():.3f} mm")
+                print(f"[fringe_grad] fringe Z BEFORE modulation: "
+                      f"[{z_before_min:.3f}, {z_before_max:.3f}] mm")
+                print(f"[fringe_grad] fringe Z AFTER  modulation: "
+                      f"[{z_after_min:.3f}, {z_after_max:.3f}] mm  std={z_after_std:.4f}")
+                print(f"[fringe_grad] fringe grid MODIFIED: True "
+                      f"(iso pixels={len(iso_pixels)}, arrows={len(arrow_pixels_fr)})")
+            else:
+                print(f"[fringe_grad] iso-pixel count {len(iso_pixels)} < 200 — "
+                      f"skipping ripple (backward compat / plain fringe)")
+                print(f"[fringe_grad] fringe grid MODIFIED: False")
+        else:
+            print("[fringe_grad] image_path not provided — skipping fringe terrain extraction")
+            print("[fringe_grad] fringe grid MODIFIED: False")
+    except Exception as _exc_ft:
+        print(f"[fringe_grad] ERROR during fringe terrain extraction: {_exc_ft}")
+        import traceback; traceback.print_exc()
+        print("[fringe_grad] fringe grid MODIFIED: False (extraction failed, holding flat cap)")
 
     # Fringe smoothing disabled — keeping raw interpolated surface
     valid_z = Z_fringe[fringe_mask]
@@ -6522,6 +6652,7 @@ def run_pipeline(
             _egm_data,
             fringe_grid_res=200,
             holes=fringe_holes,
+            image_path=image_path,
         )
         bb = fringe_mesh.bounds
         print(f"  Fringe mesh: {len(fringe_mesh.vertices)} vertices, {len(fringe_mesh.faces)} faces")

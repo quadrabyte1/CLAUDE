@@ -10,7 +10,7 @@
   "contourStep": 0.5,
   "grassAmplitude": 0.5,
   "grassSpacing": 2.4,
-  "greenStyle": "terraced",
+  "greenStyle": "smooth",
   "elevationRange": 14.5,
   "greenScale": 1.0065,
   "fringeEdgeHeight": 10,

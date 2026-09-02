@@ -995,32 +995,80 @@ def engrave_serial_on_mesh(
     return engraved
 
 
+def _scene_geom_to_node_names(scene: trimesh.Scene) -> dict:
+    """Build a ``{geometry_key: node_name}`` map from the scene graph.
+
+    ``Scene.add_geometry(mesh, node_name=X)`` stores the mesh in
+    ``scene.geometry`` under an auto-generated key like ``geometry_0`` while
+    recording the caller-supplied node name (``trap_1``, ``water_1``, …) in
+    the transform graph.  This helper reverses that so log output can name the
+    actual part being engraved instead of the opaque geometry key — crucial
+    for spot-checking that every trap AND every water mesh receives its
+    serial-number engraving (task 709).
+
+    Falls back to an empty dict if the graph isn't inspectable; callers can
+    treat a missing entry as "unknown node — use the geometry key as-is".
+    """
+    out: dict = {}
+    graph = getattr(scene, "graph", None)
+    if graph is None:
+        return out
+    try:
+        node_iter = graph.nodes_geometry
+    except Exception:
+        return out
+    for node in node_iter:
+        try:
+            transform, geom_key = graph.get(node)
+        except Exception:
+            continue
+        if geom_key and geom_key not in out:
+            out[geom_key] = str(node)
+    return out
+
+
 def engrave_scene_geometries(scene: trimesh.Scene, serial_number: int) -> dict:
     """Replace every geometry in ``scene`` with its engraved copy, in place.
 
-    Returns a dict summary: ``{geom_name: {"engraved": bool, "watertight": bool}}``
-    for logging.
+    Engraves EVERY geometry in the scene — green surface, fringe, every trap,
+    every water body, every boulders slab, and anything else the caller has
+    added.  There is no filter: if a mesh reaches this function it gets a
+    serial number, so long as one of the engraving strategies (boolean,
+    plane-surgery, vertex-push) succeeds.
+
+    Log lines now include the scene-graph node name in addition to the
+    ``geometry_N`` key, so ``trap_1``, ``water_1`` etc. are clearly visible
+    (Thomas asked for this after we couldn't tell from logs whether water was
+    being engraved — task 709).
+
+    Returns a dict summary keyed by geometry key:
+        ``{geom_key: {"node_name": str, "engraved": bool,
+                      "watertight": bool, "faces": int}}``.
     """
     summary: dict = {}
+    node_by_geom = _scene_geom_to_node_names(scene)
     # scene.geometry is an OrderedDict; iterate over a snapshot of items so we
     # can mutate the dict during iteration.
     for name in list(scene.geometry.keys()):
         original = scene.geometry[name]
+        node_name = node_by_geom.get(name, name)
         try:
             engraved = engrave_serial_on_mesh(original, serial_number)
         except Exception as exc:
-            print(f"[serial_engraver]   '{name}' — engraving raised: {exc}")
+            print(f"[serial_engraver]   '{node_name}' ({name}) — "
+                  f"engraving raised: {exc}")
             engraved = original
         was_modified = engraved is not original
         scene.geometry[name] = engraved
         summary[name] = {
+            "node_name": node_name,
             "engraved": was_modified,
             "watertight": bool(getattr(engraved, "is_watertight", False)),
             "faces": int(len(engraved.faces)),
         }
         flag = "engraved" if was_modified else "unchanged (fallback)"
         wt = "watertight" if summary[name]["watertight"] else "NOT watertight"
-        print(f"[serial_engraver]   '{name}': {flag}, {wt}, "
+        print(f"[serial_engraver]   '{node_name}' ({name}): {flag}, {wt}, "
               f"{summary[name]['faces']} faces")
     return summary
 

@@ -2051,6 +2051,147 @@ def drill_fringe_hole(
     return result
 
 
+def _remove_faces_whose_footprint_overlaps_polygon(
+    mesh: "trimesh.Trimesh",
+    shapely_polygon: "ShapelyPolygon",
+    label: str = "carve",
+) -> tuple["trimesh.Trimesh", int]:
+    """
+    Delete every triangle in ``mesh`` whose XY-projected footprint intersects
+    ``shapely_polygon``. Returns (new_mesh, n_removed).
+
+    Motivation (task 713, Topo 2026-09-02) — same bug class Topo fixed for the
+    tee hole in task 703. The fringe's bottom-slab earcut triangulation
+    (build_fringe_mesh → polygon-with-holes earcut) can emit a handful of
+    GIANT triangles that span half the mesh. When such a triangle's XY
+    footprint covers a trap or water cutout, it lands at z=0 UNDER the cutout
+    and re-plugs the void — producing the "sand rake stripe" Thomas saw on
+    DeLaveaga #11's trap 1 (traps 2 and 3 got lucky, no giant-triangle footprint
+    over them). Cell-level `traps_union.contains(sp)` correctly excludes fringe
+    top-surface cells inside a trap, but has no visibility into whether the
+    LATER earcut on the bottom loop produces a triangle spanning the trap.
+
+    Filter (three vectorised checks per triangle, union → remove):
+      (a) any of the 3 triangle vertices lies INSIDE the polygon
+      (b) the polygon's representative point (or centroid) lies INSIDE the
+          triangle's XY projection (barycentric)
+      (c) any of the 3 triangle edges intersects the polygon exterior
+
+    For a convex disk polygon (as used by drill_tee_hole) this matches the
+    v/pt/edge test the tee-hole path pioneered — see the disk wrapper below.
+    """
+    if mesh is None or len(mesh.faces) == 0:
+        return mesh, 0
+    if shapely_polygon is None or shapely_polygon.is_empty:
+        return mesh, 0
+
+    poly = shapely_polygon
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+        if poly.is_empty:
+            return mesh, 0
+
+    tri_v = mesh.triangles  # (N, 3, 3)
+    ax, ay = tri_v[:, 0, 0], tri_v[:, 0, 1]
+    bx, by = tri_v[:, 1, 0], tri_v[:, 1, 1]
+    cx3, cy3 = tri_v[:, 2, 0], tri_v[:, 2, 1]
+
+    # ── Coarse bbox reject: skip triangles whose XY bbox misses the polygon ──
+    pxmin, pymin, pxmax, pymax = poly.bounds
+    fxmin = np.minimum(np.minimum(ax, bx), cx3)
+    fxmax = np.maximum(np.maximum(ax, bx), cx3)
+    fymin = np.minimum(np.minimum(ay, by), cy3)
+    fymax = np.maximum(np.maximum(ay, by), cy3)
+    bbox_hit = (fxmax >= pxmin) & (fxmin <= pxmax) & (fymax >= pymin) & (fymin <= pymax)
+    cand_idx = np.where(bbox_hit)[0]
+    if cand_idx.size == 0:
+        return mesh, 0
+
+    # ── (a) vertex-inside-polygon: batch via shapely.vectorized.contains ─────
+    try:
+        from shapely.vectorized import contains as _sh_contains
+    except Exception:
+        _sh_contains = None
+
+    if _sh_contains is not None:
+        # Stack all three vertex arrays; one call per array (much faster than
+        # per-face Python).
+        va_in = _sh_contains(poly, ax[cand_idx], ay[cand_idx])
+        vb_in = _sh_contains(poly, bx[cand_idx], by[cand_idx])
+        vc_in = _sh_contains(poly, cx3[cand_idx], cy3[cand_idx])
+        vert_hit = va_in | vb_in | vc_in
+    else:
+        # Slow-path fallback (shouldn't hit in normal env).
+        from shapely.geometry import Point as _SP
+        vert_hit = np.zeros(cand_idx.size, dtype=bool)
+        for k, fi in enumerate(cand_idx):
+            if (poly.contains(_SP(float(ax[fi]), float(ay[fi]))) or
+                poly.contains(_SP(float(bx[fi]), float(by[fi]))) or
+                poly.contains(_SP(float(cx3[fi]), float(cy3[fi])))):
+                vert_hit[k] = True
+
+    # ── (b) polygon representative point inside triangle (catches giant tris
+    # spanning the polygon whose own vertices sit outside). We use the
+    # polygon's representative_point (guaranteed inside) — one point-in-tri
+    # test per candidate. Barycentric sign-consistent check, vectorised.
+    rep = poly.representative_point()
+    rx, ry = float(rep.x), float(rep.y)
+    axs = ax[cand_idx]; ays = ay[cand_idx]
+    bxs = bx[cand_idx]; bys = by[cand_idx]
+    cxs = cx3[cand_idx]; cys = cy3[cand_idx]
+    d1 = (rx - bxs) * (ays - bys) - (axs - bxs) * (ry - bys)
+    d2 = (rx - cxs) * (bys - cys) - (bxs - cxs) * (ry - cys)
+    d3 = (rx - axs) * (cys - ays) - (cxs - axs) * (ry - ays)
+    has_neg = (d1 < 0) | (d2 < 0) | (d3 < 0)
+    has_pos = (d1 > 0) | (d2 > 0) | (d3 > 0)
+    pt_in_tri = ~(has_neg & has_pos)
+
+    # ── (c) edge crosses polygon exterior: catches the remaining case where
+    # a triangle straddles the polygon (edges cross into the interior but no
+    # vertex is inside and the rep-point is outside the triangle). Use
+    # shapely-vectorized intersects on the edges (batched by building
+    # LineString per candidate — slower but only on the bbox-narrowed set).
+    from shapely.geometry import LineString as _LS
+    edge_hit = np.zeros(cand_idx.size, dtype=bool)
+    poly_ext = poly.exterior if hasattr(poly, "exterior") and poly.exterior is not None else None
+    # For a MultiPolygon representative check, fall back to the boundary.
+    poly_boundary = poly.boundary if poly_ext is None else poly_ext
+    # Only run edge test on triangles NOT already caught by (a) or (b) —
+    # keeps the LineString cost bounded even for pathological meshes.
+    _remaining = np.where(~(vert_hit | pt_in_tri))[0]
+    for k in _remaining:
+        seg_ab = _LS([(axs[k], ays[k]), (bxs[k], bys[k])])
+        if seg_ab.intersects(poly_boundary):
+            edge_hit[k] = True; continue
+        seg_bc = _LS([(bxs[k], bys[k]), (cxs[k], cys[k])])
+        if seg_bc.intersects(poly_boundary):
+            edge_hit[k] = True; continue
+        seg_ca = _LS([(cxs[k], cys[k]), (axs[k], ays[k])])
+        if seg_ca.intersects(poly_boundary):
+            edge_hit[k] = True; continue
+
+    overlap_local = vert_hit | pt_in_tri | edge_hit
+    if not overlap_local.any():
+        return mesh, 0
+
+    # Expand back to full face indexing
+    overlap_mask = np.zeros(len(mesh.faces), dtype=bool)
+    overlap_mask[cand_idx[overlap_local]] = True
+    keep_face_mask = ~overlap_mask
+    n_removed = int(overlap_mask.sum())
+
+    n_vert = int(vert_hit.sum())
+    n_pt = int(pt_in_tri.sum())
+    n_edge = int(edge_hit.sum())
+    n_giant = int((pt_in_tri & ~vert_hit).sum())  # "bottom-slab giant tris"
+    print(f"  [{label}] removed {n_removed} faces whose XY footprint overlaps polygon "
+          f"(cand={cand_idx.size}, vertex_hit={n_vert}, pt_in_tri={n_pt}, "
+          f"edge_hit={n_edge}, giant_pt_in_tri_only={n_giant})")
+
+    carved = mesh.submesh([np.where(keep_face_mask)[0]], append=True)
+    return carved, n_removed
+
+
 def drill_tee_hole(
     mesh: "trimesh.Trimesh",
     x_mm_from_topleft: float,
@@ -2138,90 +2279,27 @@ def drill_tee_hole(
     # visible and, crucially, so nothing plugs the through-hole from below.
     #
     # Task #703 (Topo, 2026-09-01): pre-#703 we removed by triangle CENTROID
-    # inside the disk.  That worked for top-surface faces (small 200×200 grid
-    # triangles whose centroid is a reliable proxy for their footprint) but
-    # missed the fringe's BOTTOM-SLAB triangulation.  The bottom slab is
-    # earcut-triangulated from the fringe outline (see build_fringe_mesh) and
-    # produces a handful of GIANT triangles that span half the mesh — e.g.
-    # one triangle with vertices at (32.9, 31.1, 0), (33.65, 30.8, 0),
-    # (85.2, 85.2, 0).  Its centroid sits at r≈33 mm from the tee, so the
-    # centroid test kept it, and it covered the bore from below.  In FDM the
-    # slicer prints that as a floor at z=0 → Thomas sees a plugged tee hole.
+    # inside the disk.  That missed the fringe's BOTTOM-SLAB triangulation
+    # (earcut on polygon-with-holes → a handful of GIANT triangles whose
+    # centroid sits far from the tee but whose XY footprint covers the bore).
     #
-    # Fix: remove any triangle whose XY-projected footprint intersects the
-    # bore disk.  Three vectorised checks per triangle (union → remove):
-    #   (a) any of the 3 vertices lies within remove_r of (cx, cy)
-    #   (b) (cx, cy) lies inside the triangle's XY projection (barycentric)
-    #   (c) any of the 3 edges passes within remove_r of (cx, cy)
-    # This is O(N_faces) with small constants (pure NumPy) — no acceleration
-    # structure needed for a 200×200 fringe mesh (~80k faces).
+    # Task 713 (Topo, 2026-09-02): the vertex/pt-in-tri/edge test the tee-hole
+    # pioneered is now the shared utility
+    # `_remove_faces_whose_footprint_overlaps_polygon`. We call it with the
+    # bore disk expressed as a Shapely circle so the disk case and the
+    # trap/water carve case use one code path.
     guard_mm = 0.15  # small keep-out so the collar wall isn't touched by leftover fringe faces
     remove_r = outer_r + guard_mm
-    remove_r2 = remove_r * remove_r
-
-    tri_v = mesh.triangles  # shape (N, 3, 3) — vertex coords per face
-    ax, ay = tri_v[:, 0, 0], tri_v[:, 0, 1]
-    bx, by = tri_v[:, 1, 0], tri_v[:, 1, 1]
-    cx3, cy3 = tri_v[:, 2, 0], tri_v[:, 2, 1]
-
-    # (a) any vertex within remove_r
-    va2 = (ax - cx) ** 2 + (ay - cy) ** 2
-    vb2 = (bx - cx) ** 2 + (by - cy) ** 2
-    vc2 = (cx3 - cx) ** 2 + (cy3 - cy) ** 2
-    vert_hit = (va2 < remove_r2) | (vb2 < remove_r2) | (vc2 < remove_r2)
-
-    # (b) point-in-triangle (barycentric via cross products; sign-consistent).
-    # For a triangle ABC and a query point P, compute the three signed
-    # cross-products; P is inside iff all three share the same sign.
-    px, py = cx, cy
-    d1 = (px - bx) * (ay - by) - (ax - bx) * (py - by)
-    d2 = (px - cx3) * (by - cy3) - (bx - cx3) * (py - cy3)
-    d3 = (px - ax) * (cy3 - ay) - (cx3 - ax) * (py - ay)
-    has_neg = (d1 < 0) | (d2 < 0) | (d3 < 0)
-    has_pos = (d1 > 0) | (d2 > 0) | (d3 > 0)
-    pt_in_tri = ~(has_neg & has_pos)  # all same sign (including zeros)
-
-    # (c) any of the 3 edges within remove_r of (cx, cy). Point-to-segment
-    # squared distance, vectorised over N faces per edge.
-    def _seg_dist2(x1, y1, x2, y2):
-        ex, ey = x2 - x1, y2 - y1
-        # t = ((P-A) . (B-A)) / |B-A|^2, clamped to [0,1]
-        len2 = ex * ex + ey * ey
-        with np.errstate(divide="ignore", invalid="ignore"):
-            t = ((cx - x1) * ex + (cy - y1) * ey) / np.where(len2 > 0, len2, 1.0)
-        t = np.clip(t, 0.0, 1.0)
-        qx = x1 + t * ex
-        qy = y1 + t * ey
-        return (cx - qx) ** 2 + (cy - qy) ** 2
-
-    e_ab = _seg_dist2(ax, ay, bx, by)
-    e_bc = _seg_dist2(bx, by, cx3, cy3)
-    e_ca = _seg_dist2(cx3, cy3, ax, ay)
-    edge_hit = (e_ab < remove_r2) | (e_bc < remove_r2) | (e_ca < remove_r2)
-
-    overlap_mask = vert_hit | pt_in_tri | edge_hit
-    keep_face_mask = ~overlap_mask
-    n_removed = int(overlap_mask.sum())
-
-    # Diagnostic breakdown: how many of each category (union of tests).
-    n_vert = int(vert_hit.sum())
-    n_pt   = int(pt_in_tri.sum())
-    n_edge = int(edge_hit.sum())
-    # Faces caught ONLY by pt-in-tri or edge (i.e. the huge bottom-slab tris
-    # that the pre-#703 centroid test would have missed).
-    n_bottom_slab = int((pt_in_tri & ~vert_hit).sum())
-    print(f"  [tee_hole] removed {n_removed} fringe faces within Ø{2*remove_r:.2f} mm "
-          f"of ({cx:.2f}, {cy:.2f}) to seat the collar "
-          f"(vertex_hit={n_vert}, pt_in_tri={n_pt}, edge_hit={n_edge}, "
-          f"pt_in_tri_only={n_bottom_slab})")
+    from shapely.geometry import Point as _ShapelyPointDisk
+    bore_disk = _ShapelyPointDisk(cx, cy).buffer(remove_r, resolution=32)
+    fringe_carved, n_removed = _remove_faces_whose_footprint_overlaps_polygon(
+        mesh, bore_disk, label=f"tee_hole@({cx:.2f},{cy:.2f})",
+    )
     if n_removed == 0:
         # Nothing to remove means the tee point is outside the fringe surface
         # — refuse to drop a floating tube on top of empty space.
         print("  [tee_hole] WARNING: no fringe faces near tee point — skipping.")
         return mesh
-    fringe_carved = mesh.submesh(
-        [np.where(keep_face_mask)[0]], append=True
-    )
 
     # ---- 4. Build the watertight annular collar tube ----------------------
     # The tube extends from z=0 (build plate) up to z=(local_fringe_top + protrude).
@@ -3720,6 +3798,43 @@ def build_fringe_mesh(
             mesh = main
     except Exception as _exc_split:
         print(f"  Fringe: component-split cleanup skipped ({_exc_split})")
+
+    # ── Trap / water bottom-cap carve (task 713, Topo 2026-09-02) ────────────
+    # Same bug class as task 703 tee-hole. The bottom cap is earcut-triangulated
+    # from the fringe outer ring + inner cutout loops (green + trap + water).
+    # Even when a trap loop IS classified correctly as a "hole" in the earcut
+    # polygon, the earcut can still emit a triangle whose XY footprint spans
+    # the trap area (numerical edge cases, sliver loops, holes not classified
+    # as such when their area happens to sort ahead of another).  On DeLaveaga
+    # #11 [197], trap 1 had 811 fringe faces overlapping its footprint — one
+    # single triangle of area 2050 mm² covered the entire 1928 mm² trap — while
+    # traps 2 and 3 got lucky (0 overlap each).  Result: the visible
+    # sand-rake-stripe on trap 1 where the z=0 slab z-fights with the trap.
+    #
+    # Fix: after the fringe mesh is assembled, run the shared
+    # `_remove_faces_whose_footprint_overlaps_polygon` utility for every trap
+    # and water polygon (buffered by the same *_FRINGE_GAP_MM used for the
+    # cell-carve above, so the removed footprint matches the intended cutout
+    # boundary exactly).  Guaranteed: 0 fringe faces cover any trap/water
+    # footprint after this pass, regardless of what the earcut produced.
+    _bottom_carve_polys: list[tuple[ShapelyPolygon, str]] = []
+    if trap_shapely:
+        for _i, _tsp in enumerate(_trap_carve, start=1):
+            if _tsp is not None and not _tsp.is_empty:
+                _bottom_carve_polys.append((_tsp, f"trap_{_i}_bottom_carve"))
+    if water_shapely:
+        for _i, _wsp in enumerate(_water_carve, start=1):
+            if _wsp is not None and not _wsp.is_empty:
+                _bottom_carve_polys.append((_wsp, f"water_{_i}_bottom_carve"))
+    if _bottom_carve_polys:
+        total_removed = 0
+        for _poly, _label in _bottom_carve_polys:
+            mesh, _nrm = _remove_faces_whose_footprint_overlaps_polygon(
+                mesh, _poly, label=_label,
+            )
+            total_removed += _nrm
+        print(f"  Fringe: trap/water bottom-cap carve removed {total_removed} "
+              f"straggler face(s) across {len(_bottom_carve_polys)} cutout(s)")
 
     return mesh
 

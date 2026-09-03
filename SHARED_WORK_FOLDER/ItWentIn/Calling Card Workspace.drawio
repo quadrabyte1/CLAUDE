@@ -95,9 +95,6 @@
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-245" edge="1" parent="XavUwjVmfIstgLTpjz7r-54" source="B_e0j9w85cKSHvmaGQ1E-112" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;" target="B_e0j9w85cKSHvmaGQ1E-244" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="B_e0j9w85cKSHvmaGQ1E-112" parent="XavUwjVmfIstgLTpjz7r-54" style="html=1;whiteSpace=wrap;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=0;align=center;verticalAlign=top;gradientColor=#FFE8F5;" value="HoleInOne" vertex="1">
-          <mxGeometry height="90" width="140" x="1400" y="4400" as="geometry" />
-        </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-117" edge="1" parent="XavUwjVmfIstgLTpjz7r-54" source="B_e0j9w85cKSHvmaGQ1E-114" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#007FFF;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=default;labelBackgroundColor=default;endArrow=none;strokeWidth=2;gradientColor=#3728FF;" target="B_e0j9w85cKSHvmaGQ1E-116" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
@@ -147,8 +144,8 @@
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-132" edge="1" parent="XavUwjVmfIstgLTpjz7r-54" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#007FFF;align=center;verticalAlign=middle;fontFamily=Helvetica;fontSize=11;fontColor=default;labelBackgroundColor=default;endArrow=none;strokeWidth=2;gradientColor=#3728FF;" target="B_e0j9w85cKSHvmaGQ1E-131" value="">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
-              <mxPoint x="1720" y="4540" />
-              <mxPoint x="1720" y="4855" />
+              <mxPoint x="1885" y="4540" />
+              <mxPoint x="1700" y="4540" />
             </Array>
             <mxPoint x="1885.000000000001" y="4508.909999999999" as="sourcePoint" />
           </mxGeometry>
@@ -189,14 +186,11 @@
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-129" parent="B_e0j9w85cKSHvmaGQ1E-148" style="html=1;whiteSpace=wrap;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=0;align=center;verticalAlign=top;strokeColor=default;fillColor=default;gradientColor=#FFE8F5;" value="Flag" vertex="1">
           <mxGeometry height="80" width="160" as="geometry" />
         </mxCell>
-        <mxCell id="B_e0j9w85cKSHvmaGQ1E-147" parent="B_e0j9w85cKSHvmaGQ1E-148" style="label;fontStyle=0;strokeColor=none;fillColor=none;align=left;verticalAlign=top;overflow=hidden;spacingLeft=28;spacingRight=4;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;imageWidth=16;imageHeight=16;whiteSpace=wrap;html=1;image=img/clipart/Gear_128x128.png" value="ClicksFromCenter : int" vertex="1">
-          <mxGeometry height="18.90909090909091" width="160" y="40.00181818181819" as="geometry" />
-        </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-150" connectable="0" parent="XavUwjVmfIstgLTpjz7r-54" style="group" value="" vertex="1">
           <mxGeometry height="190" width="180" x="1640" y="4760" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-131" parent="B_e0j9w85cKSHvmaGQ1E-150" style="html=1;whiteSpace=wrap;verticalAlign=top;strokeColor=default;align=center;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=0;fillColor=default;gradientColor=#FFE8F5;container=0;" value="Plaque" vertex="1">
-          <mxGeometry height="190" width="160" as="geometry" />
+          <mxGeometry height="190" width="160" x="-20" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-140" parent="B_e0j9w85cKSHvmaGQ1E-150" style="label;fontStyle=0;strokeColor=none;fillColor=none;align=left;verticalAlign=top;overflow=hidden;spacingLeft=28;spacingRight=4;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;imageWidth=16;imageHeight=16;whiteSpace=wrap;html=1;image=img/clipart/Gear_128x128.png;container=0;" value="ClubUsed : int" vertex="1">
           <mxGeometry height="26" width="120" y="134" as="geometry" />
@@ -513,6 +507,18 @@
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-255" parent="B_e0j9w85cKSHvmaGQ1E-256" style="label;fontStyle=0;strokeColor=none;fillColor=none;align=left;verticalAlign=top;overflow=hidden;spacingLeft=28;spacingRight=4;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;imageWidth=16;imageHeight=16;whiteSpace=wrap;html=1;image=img/clipart/Gear_128x128.png;container=0;" value="Zip : string" vertex="1">
           <mxGeometry height="26" width="200" x="12.5" y="108" as="geometry" />
+        </mxCell>
+        <mxCell id="B_e0j9w85cKSHvmaGQ1E-258" connectable="0" parent="XavUwjVmfIstgLTpjz7r-54" style="group" value="" vertex="1">
+          <mxGeometry height="90" width="255" x="1360" y="4400" as="geometry" />
+        </mxCell>
+        <mxCell id="B_e0j9w85cKSHvmaGQ1E-112" parent="B_e0j9w85cKSHvmaGQ1E-258" style="html=1;whiteSpace=wrap;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=0;align=center;verticalAlign=top;gradientColor=#FFE8F5;" value="HoleInOne" vertex="1">
+          <mxGeometry height="90" width="220" as="geometry" />
+        </mxCell>
+        <mxCell id="B_e0j9w85cKSHvmaGQ1E-147" parent="B_e0j9w85cKSHvmaGQ1E-258" style="label;fontStyle=0;strokeColor=none;fillColor=none;align=left;verticalAlign=top;overflow=hidden;spacingLeft=28;spacingRight=4;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;imageWidth=16;imageHeight=16;whiteSpace=wrap;html=1;image=img/clipart/Gear_128x128.png" value="Flag_ClicksFromCenterX : int" vertex="1">
+          <mxGeometry height="18.91" width="250" x="5" y="36" as="geometry" />
+        </mxCell>
+        <mxCell id="B_e0j9w85cKSHvmaGQ1E-257" parent="B_e0j9w85cKSHvmaGQ1E-258" style="label;fontStyle=0;strokeColor=none;fillColor=none;align=left;verticalAlign=top;overflow=hidden;spacingLeft=28;spacingRight=4;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;imageWidth=16;imageHeight=16;whiteSpace=wrap;html=1;image=img/clipart/Gear_128x128.png" value="Flag_ClicksFromCenterY : int" vertex="1">
+          <mxGeometry height="18.91" width="250" x="5" y="62" as="geometry" />
         </mxCell>
         <mxCell id="1" parent="0" />
         <mxCell id="XavUwjVmfIstgLTpjz7r-53" parent="0" value="QR Codes" />

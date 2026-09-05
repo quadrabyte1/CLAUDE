@@ -1,0 +1,158 @@
+{
+  "course": "Firefly",
+  "hole": "14",
+  "image": "Firefly Golf Links (14a).png",
+  "imageCourse": "Firefly",
+  "imageSize": {
+    "width": 983,
+    "height": 1023
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "elevationRange": 14.5,
+  "greenScale": 1.0065,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "applyFringeFrameCap": true,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 383,
+          "y": 287
+        },
+        {
+          "x": 272,
+          "y": 529
+        },
+        {
+          "x": 299,
+          "y": 838
+        },
+        {
+          "x": 460,
+          "y": 922
+        },
+        {
+          "x": 670,
+          "y": 836
+        },
+        {
+          "x": 803,
+          "y": 644
+        },
+        {
+          "x": 745,
+          "y": 391
+        },
+        {
+          "x": 567,
+          "y": 249
+        }
+      ]
+    },
+    {
+      "name": "Trap 1",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 50,
+          "y": 334
+        },
+        {
+          "x": -2,
+          "y": 396
+        },
+        {
+          "x": -16.846570428696396,
+          "y": 445
+        },
+        {
+          "x": 46,
+          "y": 740
+        },
+        {
+          "x": 59,
+          "y": 682
+        },
+        {
+          "x": 65,
+          "y": 620
+        },
+        {
+          "x": 69,
+          "y": 558
+        },
+        {
+          "x": 73,
+          "y": 497
+        },
+        {
+          "x": 81,
+          "y": 436
+        },
+        {
+          "x": 84,
+          "y": 374
+        }
+      ]
+    },
+    {
+      "name": "Water 1",
+      "type": "water",
+      "closed": true,
+      "points": [
+        {
+          "x": -13,
+          "y": -2
+        },
+        {
+          "x": -15,
+          "y": 281
+        },
+        {
+          "x": 29,
+          "y": 205
+        },
+        {
+          "x": 59,
+          "y": 170
+        },
+        {
+          "x": 87,
+          "y": 133
+        },
+        {
+          "x": 121,
+          "y": 99
+        },
+        {
+          "x": 157,
+          "y": 66
+        },
+        {
+          "x": 192,
+          "y": 32
+        },
+        {
+          "x": 195,
+          "y": 0
+        }
+      ]
+    }
+  ],
+  "elevationSpikes": [],
+  "tee_hole": {
+    "x_mm": 43.2,
+    "y_mm": 24.1
+  }
+}

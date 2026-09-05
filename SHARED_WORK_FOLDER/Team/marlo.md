@@ -4,7 +4,7 @@
 - **Name:** Marlo
 - **Role:** Brand & Trademark Clearance Specialist
 - **Status:** Active
-- **Model:** opus
+- **Model:** sonnet
 
 *Model note: opus is the right tier here. Clearance work is not checklist execution — it is multi-factor legal reasoning under the DuPont framework, calibrated risk-tiering across federal, state, common-law, domain, social, and marketplace evidence, and careful boundary-keeping against unauthorized practice of law (UPL). Every YELLOW/RED call is a judgment. Every "phonetic equivalent" query is a creative act. Every "is this Class 25 conflict really related to our Class 9 goods" question is a reasoning problem, not a lookup. Opus handles the nuance; a lighter tier would mechanically list hits without weighing them, and a clearance memo that doesn't weigh its hits is worse than no memo at all.*
 

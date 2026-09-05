@@ -2585,6 +2585,153 @@ def _count_fringe_spikes(
     return count
 
 
+def _replace_fringe_with_watertight_extrusion(
+    old_mesh: "trimesh.Trimesh",
+    bottom_poly: "ShapelyPolygon",
+    fringe_max_z: float,
+    label: str = "fringe",
+) -> "trimesh.Trimesh":
+    """
+    Task 742 (Topo, 2026-09-05): rewrite fringe mesh assembly using
+    ``trimesh.creation.extrude_polygon`` to guarantee a watertight, positive-
+    volume mesh.
+
+    The prior fringe assembly (top-surface grid + stitched walls + earcut
+    bottom cap) produced 1115 open edges and negative volume on DeLaveaga H11
+    (task 738 diagnosis). Bambu Studio auto-repairs the broken mesh, inserting
+    phantom filament in visually unpredictable places.
+
+    This helper takes the polygon-with-holes that already describes the fringe
+    footprint (frame rectangle minus green minus traps minus water minus bore
+    holes) and extrudes it at ``fringe_max_z`` — that produces a clean box with
+    correct walls / bottom / (initially flat) top. Then we displace each TOP
+    vertex to the sculpted Z sampled from the OLD mesh's top surface, so we
+    keep the per-cell terrain variation that the sculpting pipeline computed.
+
+    Displacing only top vertices preserves watertightness (topology unchanged;
+    walls & bottom untouched). Boundary top vertices sit on the polygon
+    perimeter, so their XY exactly matches the polygon rings — the trap/water
+    cutout perimeters and green-cutout perimeter are identical between the
+    fringe mesh here and the slabs / green mesh built elsewhere, killing the
+    seam mismatch at the source.
+
+    We use the Triangle engine with quality + max-area constraints so the top
+    face carries interior Steiner points at ~5 mm spacing, giving enough
+    resolution to sample terrain variation cleanly.
+    """
+    from scipy.spatial import cKDTree
+    if bottom_poly is None or bottom_poly.is_empty:
+        print(f"  [{label} watertight-rewrite] EMPTY polygon — returning old mesh unchanged.")
+        return old_mesh
+    if fringe_max_z <= 0.0:
+        print(f"  [{label} watertight-rewrite] fringe_max_z <= 0 — returning old mesh unchanged.")
+        return old_mesh
+
+    # Ensure valid polygon (fix self-intersections from smoothing artifacts).
+    if not bottom_poly.is_valid:
+        try:
+            from shapely.validation import make_valid
+            bottom_poly = make_valid(bottom_poly)
+        except Exception:
+            bottom_poly = bottom_poly.buffer(0)
+        if hasattr(bottom_poly, "geoms"):
+            bottom_poly = max(bottom_poly.geoms, key=lambda g: g.area)
+
+    print(f"  [{label} watertight-rewrite] extruding polygon-with-holes: "
+          f"area={bottom_poly.area:.1f} mm² interiors={len(list(bottom_poly.interiors))} "
+          f"height={fringe_max_z:.3f} mm")
+
+    # Extrude at max Z using Triangle engine with quality + area constraints
+    # so the top face carries interior Steiner points. 'p'=PSLG, 'q30'=min
+    # angle 30°, 'a25'=max triangle area 25 mm² (⇒ ~5 mm effective spacing).
+    try:
+        new_mesh = trimesh.creation.extrude_polygon(
+            bottom_poly, height=float(fringe_max_z),
+            engine="triangle", triangle_args="pq30a25",
+        )
+    except Exception as exc_ex:
+        print(f"  [{label} watertight-rewrite] extrude with triangle FAILED ({exc_ex}) "
+              f"→ falling back to earcut (no interior verts, flat top)")
+        try:
+            new_mesh = trimesh.creation.extrude_polygon(
+                bottom_poly, height=float(fringe_max_z), engine="earcut",
+            )
+        except Exception as exc_earcut:
+            print(f"  [{label} watertight-rewrite] earcut fallback ALSO FAILED "
+                  f"({exc_earcut}) — returning old mesh unchanged.")
+            return old_mesh
+
+    print(f"  [{label} watertight-rewrite] extruded mesh: "
+          f"verts={len(new_mesh.vertices)} faces={len(new_mesh.faces)} "
+          f"watertight={new_mesh.is_watertight} "
+          f"volume={new_mesh.volume:.1f} mm³ "
+          f"open_edges={len(trimesh.grouping.group_rows(new_mesh.edges_sorted, require_count=1))}")
+
+    # --- Build KD-tree of old mesh top-surface vertices for Z sampling ------
+    old_verts = old_mesh.vertices
+    if len(old_verts) < 4:
+        print(f"  [{label} watertight-rewrite] old mesh empty — skipping displacement.")
+        return new_mesh
+
+    # Top-surface only: Z > BASE_THICKNESS_MM / 2 excludes floor / wall bottoms.
+    _top_mask_old = old_verts[:, 2] > (BASE_THICKNESS_MM * 0.5)
+    if not _top_mask_old.any():
+        print(f"  [{label} watertight-rewrite] no top-surface verts in old mesh — "
+              f"leaving new mesh at flat max Z.")
+        return new_mesh
+    top_xy_old = old_verts[_top_mask_old, :2]
+    top_z_old = old_verts[_top_mask_old, 2]
+    old_kd = cKDTree(top_xy_old)
+
+    # --- Displace TOP vertices of new mesh only ------------------------------
+    # Top-face vertices are those at z == fringe_max_z (extrude_polygon
+    # creates vertices at exactly [0, height]). Use a tight tolerance.
+    new_verts = new_mesh.vertices.copy()
+    top_z_target = float(fringe_max_z)
+    top_mask_new = np.abs(new_verts[:, 2] - top_z_target) < 1e-4
+    if not top_mask_new.any():
+        print(f"  [{label} watertight-rewrite] no top verts found at z={top_z_target} — "
+              f"leaving new mesh unmodified.")
+        return new_mesh
+
+    top_xy_new = new_verts[top_mask_new, :2]
+
+    # Sample old-mesh Z via IDW over K nearest neighbours for smoother result.
+    K = min(4, len(top_z_old))
+    dists_s, idxs_s = old_kd.query(top_xy_new, k=K)
+    # Ensure 2D shape for K=1 case
+    dists_s = np.atleast_2d(dists_s.T).T if K == 1 else dists_s
+    idxs_s = np.atleast_2d(idxs_s.T).T if K == 1 else idxs_s
+    if K == 1:
+        sampled_z = top_z_old[idxs_s[:, 0]]
+    else:
+        # Guard divide-by-zero: any near-coincident (< 1e-6 mm) vertex snaps
+        # to the exact nearest Z (no blending).
+        _coincident = dists_s.min(axis=1) < 1e-6
+        w = 1.0 / np.maximum(dists_s, 1e-6) ** 2
+        w /= w.sum(axis=1, keepdims=True)
+        sampled_z = (w * top_z_old[idxs_s]).sum(axis=1)
+        if _coincident.any():
+            # Overwrite with nearest for exact-match cases (seam-match preserved)
+            nearest_col = np.argmin(dists_s, axis=1)
+            _sn = top_z_old[idxs_s[np.arange(len(idxs_s)), nearest_col]]
+            sampled_z = np.where(_coincident, _sn, sampled_z)
+
+    # Clamp: never above top_z_target (safety), never below BASE_THICKNESS_MM.
+    sampled_z = np.clip(sampled_z, BASE_THICKNESS_MM, top_z_target)
+
+    new_verts[top_mask_new, 2] = sampled_z
+    new_mesh.vertices = new_verts
+
+    # Recompute normals — vertex Z change flipped some triangle orientations.
+    trimesh.repair.fix_normals(new_mesh)
+
+    print(f"  [{label} watertight-rewrite] displaced {int(top_mask_new.sum())} "
+          f"top vertices  Z range=[{sampled_z.min():.3f}, {sampled_z.max():.3f}] mm  "
+          f"final watertight={new_mesh.is_watertight} volume={new_mesh.volume:.1f} mm³")
+    return new_mesh
+
+
 def build_fringe_mesh(
     Z_mm: np.ndarray,
     xs_grid: np.ndarray,
@@ -4189,6 +4336,36 @@ def build_fringe_mesh(
             except Exception as _exc_nuke_split:
                 print(f"  Fringe: post-negative-extrusion component cleanup skipped ({_exc_nuke_split})")
 
+    # ── WATERTIGHT REWRITE (task 742, Topo 2026-09-05) ──────────────────────
+    # 9+ prior rounds of surgical trap/water carve fixes still left the fringe
+    # mesh fundamentally non-manifold (1115 open edges, negative volume,
+    # is_watertight=False on DeLaveaga H11 — task 738 diagnosis). Bambu Studio
+    # auto-repairs the broken mesh, inserting phantom filament in visually
+    # unpredictable places (visible in Thomas's screenshots of H11 [237] top-
+    # left trap area).
+    #
+    # Replace the assembled mesh with a `trimesh.creation.extrude_polygon`-
+    # based version of the SAME polygon-with-holes we just built for the
+    # bottom cap. The extrusion guarantees watertightness (positive volume,
+    # 0 open edges, is_volume=True). We then displace the top vertices to
+    # sample the sculpted terrain Z from the old mesh so per-cell terrain
+    # variation is preserved. Walls & bottom stay untouched → watertight.
+    #
+    # Gated by env var FRINGE_WATERTIGHT_REWRITE (default "1"=ON). Set to "0"
+    # to fall back to the legacy assembly for regression comparison.
+    import os as _os_wr
+    if _os_wr.environ.get("FRINGE_WATERTIGHT_REWRITE", "1") == "1":
+        try:
+            _old_top_z = float(mesh.vertices[:, 2].max()) if len(mesh.vertices) else 0.0
+            _new_mesh = _replace_fringe_with_watertight_extrusion(
+                mesh, bottom_poly, fringe_max_z=_old_top_z, label="fringe",
+            )
+            if _new_mesh is not None and len(_new_mesh.faces) > 0:
+                mesh = _new_mesh
+        except Exception as _exc_wr:
+            print(f"  [fringe watertight-rewrite] pass FAILED ({_exc_wr}) — "
+                  f"keeping legacy assembly")
+
     return mesh
 
 
@@ -4842,9 +5019,15 @@ def export_trap_stls(
                 sample_pts = np.array(sample_pts)
                 _, idxs = fringe_kd.query(sample_pts)
                 sampled_z = fringe_verts_top[idxs, 2]
-                trap_height = float(sampled_z.min())
-                print(f"  Trap {i}: fringe Z min over {len(sample_pts)} samples = {trap_height:.2f} mm "
-                      f"(centroid Z = {fringe_verts_top[fringe_kd.query([[cx, cy]])[1][0], 2]:.2f} mm, "
+                # Task 742 (Topo, 2026-09-05): changed .min() → .max() so the trap
+                # slab height matches the TOP of the fringe over the trap footprint,
+                # not the low-Z frame-edge cells the KD lookup picks up nearby.
+                # This produces consistent ~9-10mm trap heights matching the fringe
+                # cap band instead of wildly inconsistent 2.85 → 10.0 mm values.
+                trap_height = float(sampled_z.max())
+                print(f"  Trap {i}: fringe Z MAX over {len(sample_pts)} samples = {trap_height:.2f} mm "
+                      f"(min was {float(sampled_z.min()):.2f} mm, "
+                      f"centroid Z = {fringe_verts_top[fringe_kd.query([[cx, cy]])[1][0], 2]:.2f} mm, "
                       f"was fixed {TRAP_THICKNESS_MM} mm)")
             else:
                 trap_height = TRAP_THICKNESS_MM

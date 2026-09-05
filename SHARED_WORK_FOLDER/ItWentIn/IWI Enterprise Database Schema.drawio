@@ -246,7 +246,7 @@
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-158" parent="B_e0j9w85cKSHvmaGQ1E-159" style="label;fontStyle=0;strokeColor=none;fillColor=none;align=left;verticalAlign=top;overflow=hidden;spacingLeft=28;spacingRight=4;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;imageWidth=16;imageHeight=16;whiteSpace=wrap;html=1;image=img/clipart/Gear_128x128.png;container=0;" value="Number : int" vertex="1">
           <mxGeometry height="26" width="120" y="32" as="geometry" />
         </mxCell>
-        <mxCell id="B_e0j9w85cKSHvmaGQ1E-164" parent="XavUwjVmfIstgLTpjz7r-54" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;" value="Hole In One (v0.5.3)" vertex="1">
+        <mxCell id="B_e0j9w85cKSHvmaGQ1E-164" parent="XavUwjVmfIstgLTpjz7r-54" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;" value="Hole In One (v0.5.4)" vertex="1">
           <mxGeometry height="30" width="250" x="2230" y="4020" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-171" edge="1" parent="XavUwjVmfIstgLTpjz7r-54" source="B_e0j9w85cKSHvmaGQ1E-155" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;" target="B_e0j9w85cKSHvmaGQ1E-170" value="">

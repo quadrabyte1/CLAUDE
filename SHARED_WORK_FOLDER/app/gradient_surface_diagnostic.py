@@ -660,6 +660,15 @@ def load_egm(egm_path: str) -> tuple[dict, str, np.ndarray]:
             print(f"  [{_tag}] Catmull-Rom failed ({_exc_ir}) — keeping raw pts")
             continue
         _n_raw = _dense.shape[0]
+        # task 723: stash the raw Catmull-Rom polyline (before smoothing) so
+        # build_fringe_mesh can use the un-smoothed outline for its carve-out
+        # exclusion test and snap target. The fringe cutout must reference the
+        # same polygon the slicer sees as the trap's OUTER boundary — the raw
+        # Catmull-Rom — so fringe walls are never placed inside that boundary.
+        # (The smoothed version can be inward of the raw by up to a few tenths
+        # of a mm, which puts fringe walls in the raw/smooth gap zone and causes
+        # slicer "conflicts of gcode paths" between fringe and trap layers.)
+        _poly["_raw_catmull_px"] = _dense.copy()
         if _smooth_px > 0.0:
             _dense = _spline_smooth_closed(
                 _dense,
@@ -1337,7 +1346,7 @@ GREEN_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after splin
 # the print. Target 0.5 mm gap — half of the ~1 mm slop the eye tolerates
 # on the plaque, big enough to survive one fringe-grid step (~0.88 mm) of
 # quantization.
-GREEN_FRINGE_GAP_MM: float = 0.25  # 0.25 mm print-fit slop; smoothing keeps the visible curve continuous. Bumped 0.0 → 0.25 on 2026-09-02 per Thomas (task 707): with zero clearance the printed green and fringe pieces mate too tight (standard FDM slop ~0.2–0.3 mm). The smoothed boundary is continuous enough that a 0.25 mm buffer reads as a clean seam rather than a scallop. Routes through the `if GREEN_FRINGE_GAP_MM > 0` branch at ~2672 so `green_shapely_exclusion` = `green_shapely.buffer(+0.25)`.
+GREEN_FRINGE_GAP_MM: float = 1.0  # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732): 0.5 mm gap didn't stop the slicer's "conflict of gcode paths at layer 30" warning even when measured trap gap was 0.57 mm. Going 2.5× nozzle diameter to rule out path-proximity as the cause. Routes through the `if GREEN_FRINGE_GAP_MM > 0` branch at ~2672 so `green_shapely_exclusion` = `green_shapely.buffer(+1.0)`.
 
 
 # ---------------------------------------------------------------------------
@@ -1364,11 +1373,11 @@ GREEN_FRINGE_GAP_MM: float = 0.25  # 0.25 mm print-fit slop; smoothing keeps the
 TRAP_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0  # splprep `s` — same as green
 TRAP_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after spline fit
 TRAP_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5     # Chaikin passes after spline
-TRAP_FRINGE_GAP_MM:                float = 0.25  # 0.25 mm print-fit slop between trap edge and fringe cutout; smoothing keeps the visible curve continuous (bumped 0.0 → 0.25 on 2026-09-02 per Thomas, task 707)
+TRAP_FRINGE_GAP_MM:                float = 1.0   # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732) — 0.5 mm didn't stop the layer-30 slicer conflict warning
 WATER_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0
 WATER_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5
 WATER_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5
-WATER_FRINGE_GAP_MM:                float = 0.25  # 0.25 mm print-fit slop between water edge and fringe cutout; smoothing keeps the visible curve continuous (bumped 0.0 → 0.25 on 2026-09-02 per Thomas, task 707)
+WATER_FRINGE_GAP_MM:                float = 1.0   # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732) — 0.5 mm didn't stop the layer-30 slicer conflict warning
 
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
@@ -2655,9 +2664,17 @@ def build_fringe_mesh(
         ptype = poly.get("type")
         if ptype not in ("trap", "water"):
             continue
-        # poly["points"] is a list of {"x": float, "y": float} dicts
+        # task 723: use RAW Catmull-Rom polygon (pre-smoothing) for the fringe
+        # carve-out exclusion test and the snap target.  The smoothed polygon
+        # can be inward of the raw boundary by a few tenths of a mm; fringe
+        # walls snapped to smoothed+TRAP_FRINGE_GAP_MM can then land inside the
+        # raw polygon, producing slicer "conflicts of gcode paths" between fringe
+        # and trap layers.  Using the raw outline ensures fringe walls always sit
+        # at raw+GAP_MM — strictly outside the raw polygon, matching what the
+        # slicer sees as the trap's outer boundary.
+        # Water polygons also get raw treatment for consistency (same gap logic).
         try:
-            pts_px = _poly_to_dense_px(poly)
+            pts_px = _poly_to_raw_catmull_px(poly)
         except Exception:
             pts_px = np.array([[p["x"], p["y"]] for p in poly["points"]], dtype=np.float64)
         pts_mm = _px_to_mm_2d(pts_px, scale, centroid_px)
@@ -2891,6 +2908,11 @@ def build_fringe_mesh(
     # scripts that want to inspect the old behaviour.
     K_LERP_NEIGHBOURS = min(4, len(green_cell_z))
 
+    # Task 726 (Topo, 2026-09-04): compute fringe cell half-step for footprint
+    # overlap tests below.  The grid is uniform (linspace), so the step is
+    # constant across the entire grid.
+    _fringe_half_step = float(xs_mm[1] - xs_mm[0]) / 2.0 if fringe_grid_res > 1 else 0.0
+
     for r in range(fringe_grid_res):
         for c in range(fringe_grid_res):
             x = float(xs_mm[c])
@@ -2905,9 +2927,23 @@ def build_fringe_mesh(
             if green_shapely_exclusion.contains(sp):
                 continue  # inside green (or in the seam gap) → skip
 
-            # Must be OUTSIDE all traps and water polygons (carve-out region)
-            if traps_union is not None and traps_union.contains(sp):
-                continue
+            # Must be OUTSIDE all traps and water polygons (carve-out region).
+            # Task 726 fix: use cell-FOOTPRINT overlap instead of centroid
+            # point-in-polygon.  The old `traps_union.contains(sp)` test only
+            # skipped cells whose CENTER was inside the trap, leaving up to
+            # ~half a grid-cell of fringe top surface bleeding into the trap
+            # area on every boundary cell.  Replace with a Shapely box that
+            # covers the full cell footprint and test `.intersects(traps_union)`
+            # — any overlap at all is enough to suppress the top face.
+            # Buffer by TRAP_FRINGE_GAP_MM so the exclusion zone matches the
+            # buffered polygon already used for wall/carve geometry.
+            if traps_union is not None:
+                _cell_box = shapely_box(
+                    x - _fringe_half_step, y - _fringe_half_step,
+                    x + _fringe_half_step, y + _fringe_half_step,
+                )
+                if _cell_box.intersects(traps_union):
+                    continue
 
             # Must be OUTSIDE all baked holes
             if holes:
@@ -2956,7 +2992,33 @@ def build_fringe_mesh(
                 _weight = min(1.0, max(0.0, d_to_green / FRINGE_GREEN_EDGE_TAPER_MM))
                 green_edge_h = (1.0 - _weight) * green_edge_h + _weight * _cap_target
 
-            z_fringe = max(BASE_THICKNESS_MM, min(green_edge_h, BASE_THICKNESS_MM + _elevation_range_mm))
+            # Task 717 (Topo, 2026-09-03): plateau breaker.  When many fringe
+            # cells hit the same clamp value BASE_THICKNESS_MM (1.5 mm), they
+            # form a dead-flat horizontal plateau at that z.  Bambu Studio's
+            # layer sectioner slices this plateau ambiguously — at layer 8
+            # (z ~ 1.5–1.6 mm on 0.2 mm layers) the intersection polygon
+            # degenerates into ~25 tiny polylines and the slicer emits
+            # "conflicts of gcode paths at layer 8 (geometry_0 ↔ geometry_1)"
+            # even when green and fringe never actually share any XY.
+            #
+            # Fix: lift the fringe floor by FRINGE_PLATEAU_MARGIN_MM AND add
+            # a small per-cell tilt so no two grid cells clamp to the exact
+            # same z-value.  The tilt is a smooth ramp along +x+y — 0 at
+            # cell (0, 0), max at cell (N-1, N-1) — with a peak-to-peak
+            # amplitude of 0.10 mm.  That's much smaller than the layer
+            # height (0.2 mm) so the print visually reads as flat, but the
+            # slicer never sees a truly horizontal plateau at any single z,
+            # eliminating the layer-aligned degenerate section.
+            #
+            # Verified DeLaveaga #11 [210]: z=1.60 fringe area = 21867 mm²
+            # (correct, matches z=0.5 baseline), overlap with green = 0.00
+            # (was 5036 mm² at [208]).  Cell counts, top-surface topology,
+            # seam-match, and trap/water cutouts all unchanged.
+            FRINGE_PLATEAU_MARGIN_MM = 0.30  # 1.5 → 1.8 mm floor on default BASE
+            FRINGE_PLATEAU_TILT_MM = 0.10    # 0.10 mm peak-to-peak XY ramp
+            _tilt = FRINGE_PLATEAU_TILT_MM * (r + c) / (2 * (fringe_grid_res - 1))
+            _floor = BASE_THICKNESS_MM + FRINGE_PLATEAU_MARGIN_MM + _tilt
+            z_fringe = max(_floor, min(green_edge_h, BASE_THICKNESS_MM + _elevation_range_mm))
 
             fringe_mask[r, c] = True
             Z_fringe[r, c] = z_fringe
@@ -3525,101 +3587,155 @@ def build_fringe_mesh(
         wall_faces.append([va, vb, bb])
         wall_faces.append([va, bb, ba])
 
-    # Bottom cap — polygon with holes (cutouts for green and traps)
-    # Extract boundary loops from the wall edges (already built in top_to_bot)
-    bot_next: dict[int, int] = {}
-    for va, vb in boundary_edges:
-        ba = top_to_bot[va]
-        bb = top_to_bot[vb]
-        bot_next[bb] = ba
-
-    visited: set[int] = set()
-    loops: list[list[int]] = []
-    for start in list(bot_next.keys()):
-        if start in visited:
-            continue
-        loop = []
-        cur = start
-        for _ in range(len(bot_next) + 1):
-            if cur in visited:
-                break
-            visited.add(cur)
-            loop.append(cur)
-            cur = bot_next.get(cur, -1)
-            if cur == start or cur < 0:
-                break
-        if len(loop) >= 3:
-            loops.append(loop)
-
-    # Build KD-tree over bot_verts for snapping
+    # Bottom cap — polygon with holes (cutouts for green and traps/water/bore)
+    #
+    # Task 719 (Topo, 2026-09-03): jelly-bean trap gcode conflict on DeLaveaga #11.
+    # The prior implementation traced boundary loops from `boundary_edges` using a
+    # `bot_next: dict[int, int]` (one-next-per-vertex) and treated the largest area
+    # loop as the outer ring, the rest as holes. That works when every trap/water
+    # cutout produces a CLOSED loop in the wall edges. It FAILS silently when the
+    # wall ring around an elongated / curved (jelly-bean-shape) cutout picks up a
+    # junction vertex — a vertex with 2+ outgoing bottom edges. The one-next-dict
+    # then silently OVERWRITES the earlier edge, leaving orphan chains that never
+    # close into a loop. When a trap loop is missing from the earcut polygon-with-
+    # holes, the bottom cap FILLS OVER that trap area, and Bambu Studio sees the
+    # cap as solid at every layer up to the trap slab's top — emitting "conflicts
+    # of gcode paths" for the entire trap footprint.
+    #
+    # Verified failure mode on [212] for trap_1 (jelly bean, aspect 2.54):
+    #   * fringe wall around trap_1 = 31 disconnected chain pieces at z=0
+    #   * bottom-cap boundary loops = 4 (frame + green + 2 tee-collar), no trap_1
+    #   * fringe cross-section at Z=8: fringe∩trap_1 mesh = 1636 mm² (whole trap)
+    #   * layer-slicer intersection: 25 layers of trap_1 conflict, 9 of trap_2,
+    #     12 of trap_3 — all three traps have broken wall rings, just trap_1's
+    #     failure spans the most layers because it's the tallest.
+    #
+    # Fix: build the bottom-cap polygon-with-holes from the KNOWN input geometry
+    # instead of tracing wall edges. The fringe rectangle is a known shape; the
+    # holes are exactly `green_shapely_exclusion`, every `_trap_carve`, every
+    # `_water_carve`, boulders_annulus_shapely, and each bore-hole circle. This
+    # decouples the cap from the fragile wall-loop tracing (walls can still be
+    # slightly imperfect at junction vertices, but the CAP always excludes every
+    # trap/water/bore footprint properly). Earcut vertices are snapped to
+    # existing bot_verts within a 3-grid-cell threshold, so most cap vertices
+    # still share XY with wall bottoms (mesh is as-manifold as before), and any
+    # cap vertex that doesn't have a wall partner is added as a new interior
+    # bot_vert (fine — bottom cap needs interior points anyway).
     bot_verts_arr = np.array([[v[0], v[1]] for v in bot_verts], dtype=np.float64)
     bot_kd = cKDTree(bot_verts_arr)
 
     cap_faces: list[list[int]] = []
 
-    if loops:
-        # Classify loops: the outer ring has the largest area; inner loops are holes
-        loop_polys = []
-        for loop in loops:
-            xy = np.array([[bot_verts[vi - n_top][0], bot_verts[vi - n_top][1]]
-                           for vi in loop], dtype=np.float64)
-            loop_polys.append((loop, xy, ShapelyPolygon(xy)))
+    # ── Assemble the polygon-with-holes DIRECTLY from known geometry ────────
+    # This is the fringe frame perimeter minus the green + all cutouts.
+    from shapely.geometry import box as _shbox_cap
+    _cap_rect = _shbox_cap(-half, -half, +half, +half)
+    _cap_holes: list[ShapelyPolygon] = []
+    if green_shapely_exclusion is not None and not green_shapely_exclusion.is_empty:
+        # Only add the OUTER exterior of the green cutout (buffered by
+        # GREEN_FRINGE_GAP_MM). MultiPolygon -> pick each piece.
+        if hasattr(green_shapely_exclusion, "geoms"):
+            for _g in green_shapely_exclusion.geoms:
+                if _g.exterior is not None:
+                    _cap_holes.append(ShapelyPolygon(list(_g.exterior.coords)))
+        else:
+            _cap_holes.append(ShapelyPolygon(list(green_shapely_exclusion.exterior.coords)))
+    for _tp in _trap_carve:
+        if _tp is None or _tp.is_empty:
+            continue
+        if hasattr(_tp, "geoms"):
+            for _g in _tp.geoms:
+                if _g.exterior is not None:
+                    _cap_holes.append(ShapelyPolygon(list(_g.exterior.coords)))
+        elif _tp.exterior is not None:
+            _cap_holes.append(ShapelyPolygon(list(_tp.exterior.coords)))
+    for _wp in _water_carve:
+        if _wp is None or _wp.is_empty:
+            continue
+        if hasattr(_wp, "geoms"):
+            for _g in _wp.geoms:
+                if _g.exterior is not None:
+                    _cap_holes.append(ShapelyPolygon(list(_g.exterior.coords)))
+        elif _wp.exterior is not None:
+            _cap_holes.append(ShapelyPolygon(list(_wp.exterior.coords)))
+    for _bp in boulders_annulus_shapely:
+        if _bp is None or _bp.is_empty:
+            continue
+        if hasattr(_bp, "geoms"):
+            for _g in _bp.geoms:
+                if _g.exterior is not None:
+                    _cap_holes.append(ShapelyPolygon(list(_g.exterior.coords)))
+        elif _bp.exterior is not None:
+            _cap_holes.append(ShapelyPolygon(list(_bp.exterior.coords)))
+    if holes:
+        from shapely.geometry import Point as _SPPT_cap
+        for _hcx, _hcy, _hr in holes:
+            _cap_holes.append(_SPPT_cap(_hcx, _hcy).buffer(_hr))
 
-        # Sort by area descending; largest is outer ring
-        loop_polys.sort(key=lambda t: abs(t[2].area), reverse=True)
-        outer_loop, outer_xy, outer_shapely = loop_polys[0]
-        holes_loops = [(lp[0], lp[1]) for lp in loop_polys[1:]]
-
-        # Build Shapely polygon with holes from actual boundary vertices
-        # Ensure outer ring is CCW and holes are CW for Shapely
-        from shapely.geometry import LinearRing
-        outer_ring = LinearRing(outer_xy)
-        if not outer_ring.is_ccw:
-            outer_xy = outer_xy[::-1]
-        hole_rings = []
-        for _, hole_xy in holes_loops:
-            ring = LinearRing(hole_xy)
-            if ring.is_ccw:
-                hole_xy = hole_xy[::-1]
-            hole_rings.append(hole_xy)
-
-        bottom_poly = ShapelyPolygon(outer_xy, hole_rings)
-        if not bottom_poly.is_valid:
-            bottom_poly = bottom_poly.buffer(0)
-
-        # Triangulate using earcut — force_vertices=True avoids inserting new points
+    bottom_poly = _cap_rect
+    for _h in _cap_holes:
         try:
-            cap_verts_2d, cap_tri_idx = trimesh.creation.triangulate_polygon(
-                bottom_poly, engine="earcut"
-            )
-            # Snap each triangulation vertex to nearest bot_vert
-            dists, idxs = bot_kd.query(cap_verts_2d)
-            snap_threshold = (PRINT_SIZE_MM / fringe_grid_res) * 3  # 3 grid cells
-            local_to_global: dict[int, int] = {}
-            for local_i, (dist, li) in enumerate(zip(dists, idxs)):
-                if dist < snap_threshold:
-                    local_to_global[local_i] = n_top + li
-                else:
-                    # Interior vertex — add as new bottom vertex
-                    x_new, y_new = float(cap_verts_2d[local_i, 0]), float(cap_verts_2d[local_i, 1])
-                    new_idx = n_top + len(bot_verts)
-                    bot_verts.append([x_new, y_new, 0.0])
-                    local_to_global[local_i] = new_idx
+            bottom_poly = bottom_poly.difference(_h)
+        except Exception:
+            continue
+    if not bottom_poly.is_valid:
+        bottom_poly = bottom_poly.buffer(0)
 
-            for tri in cap_tri_idx:
-                fn0 = local_to_global.get(tri[0], -1)
-                fn1 = local_to_global.get(tri[1], -1)
-                fn2 = local_to_global.get(tri[2], -1)
-                if fn0 >= 0 and fn1 >= 0 and fn2 >= 0 and fn0 != fn1 and fn1 != fn2 and fn0 != fn2:
-                    # Reverse winding so normal points down (−Z)
-                    cap_faces.append([fn0, fn2, fn1])
-            print(f"  Bottom cap: {len(cap_faces)} triangles (polygon-with-holes, earcut)")
-        except Exception as e:
-            print(f"  Bottom cap earcut failed ({e}), using fan fallback")
-            for loop, loop_xy, _ in loop_polys:
-                v0 = loop[0]
-                for i in range(1, len(loop) - 1):
-                    cap_faces.append([v0, loop[i+1], loop[i]])
+    # Pick the largest piece if the difference produced a MultiPolygon
+    # (defensive — for well-formed inputs `bottom_poly` is always the fringe
+    # frame minus cutouts, a single polygon with N holes).
+    if hasattr(bottom_poly, "geoms"):
+        bottom_poly = max(bottom_poly.geoms, key=lambda g: g.area)
+
+    print(f"  Bottom cap polygon: outer_area={bottom_poly.area:.1f} mm² "
+          f"interiors={len(list(bottom_poly.interiors))} "
+          f"(task 719: cap built from known geometry, not wall-edge loops)")
+
+    try:
+        cap_verts_2d, cap_tri_idx = trimesh.creation.triangulate_polygon(
+            bottom_poly, engine="earcut"
+        )
+        # Snap each triangulation vertex to nearest bot_vert.  Use the same
+        # 3-grid-cell threshold as the previous implementation so cap vertices
+        # near the fringe top-surface boundary re-use existing wall bottoms
+        # (keeps the mesh as-connected as the prior code where wall loops WERE
+        # closed; for the loops that failed, cap vertices simply land as new
+        # interior bot_verts which is fine — bottom cap needs interior verts
+        # anyway for the earcut triangulation).
+        dists, idxs = bot_kd.query(cap_verts_2d)
+        snap_threshold = (PRINT_SIZE_MM / fringe_grid_res) * 3  # 3 grid cells
+        local_to_global: dict[int, int] = {}
+        for local_i, (dist, li) in enumerate(zip(dists, idxs)):
+            if dist < snap_threshold:
+                local_to_global[local_i] = n_top + li
+            else:
+                x_new, y_new = float(cap_verts_2d[local_i, 0]), float(cap_verts_2d[local_i, 1])
+                new_idx = n_top + len(bot_verts)
+                bot_verts.append([x_new, y_new, 0.0])
+                local_to_global[local_i] = new_idx
+
+        for tri in cap_tri_idx:
+            fn0 = local_to_global.get(tri[0], -1)
+            fn1 = local_to_global.get(tri[1], -1)
+            fn2 = local_to_global.get(tri[2], -1)
+            if fn0 >= 0 and fn1 >= 0 and fn2 >= 0 and fn0 != fn1 and fn1 != fn2 and fn0 != fn2:
+                # Reverse winding so normal points down (−Z)
+                cap_faces.append([fn0, fn2, fn1])
+        print(f"  Bottom cap: {len(cap_faces)} triangles (polygon-with-holes, earcut, "
+              f"{len(list(bottom_poly.interiors))} hole(s) from known geometry)")
+    except Exception as e:
+        print(f"  Bottom cap earcut failed ({e}), using rectangle fan fallback")
+        # Emergency fan-fallback: triangulate the outer rectangle only. This is
+        # WORSE than the old fan fallback (which tried per-loop fans) but only
+        # fires on shapely/earcut failures which are rare enough that a big
+        # non-cutout bottom cap is preferable to a crash.
+        outer_coords = list(_cap_rect.exterior.coords)[:-1]  # drop dup
+        # Add outer coords as new bot_verts if not already present
+        for x_new, y_new in outer_coords:
+            bot_verts.append([float(x_new), float(y_new), 0.0])
+        base_idx = n_top + len(bot_verts) - len(outer_coords)
+        for i in range(1, len(outer_coords) - 1):
+            cap_faces.append([base_idx, base_idx + i + 1, base_idx + i])
 
     # --- Hole walls ---
     # The `holes` parameter excludes bore regions from `fringe_mask`, which means the
@@ -3688,12 +3804,43 @@ def build_fringe_mesh(
     # boundary exactly).  Guaranteed: 0 fringe faces cover any trap/water
     # footprint after this pass, regardless of what the earcut produced.
     _bottom_carve_polys: list[tuple[ShapelyPolygon, str]] = []
+    # Task 717 investigation (Topo, 2026-09-03): I initially wired
+    # `green_shapely_exclusion` in here as a defensive mirror of the
+    # trap/water carve, but this over-removes: the fringe's LEGITIMATE
+    # bottom-cap ring bordering the green hole shares vertices with the
+    # green polygon exterior, and the polygon-overlap filter (which uses
+    # vertex_hit / edge_hit / pt_in_tri) flags every ring triangle whose
+    # boundary edge sits on the green polyline.  On DeLaveaga #11 the
+    # green-bottom-carve pass removed 2,019 faces including the ring,
+    # collapsing the fringe base into a solid slab covering the green
+    # area.  Do NOT wire the green polygon in here — it must remain a
+    # true HOLE in the fringe.  Trap/water polygons are safe because they
+    # sit strictly inside the fringe rectangle and don't share the fringe's
+    # top-surface boundary (the fringe top wraps around them cleanly).
+    # Task 719 (Topo, 2026-09-03): the bottom-cap polygon is now built directly
+    # from the +*_FRINGE_GAP_MM-buffered trap/water polygons (see task 719 fix
+    # above), so the cap already excludes each cutout's footprint by design —
+    # trap-covering earcut triangles can't happen anymore. But we KEEP this
+    # defensive carve pass as a last-line-of-defense against any wall/top-surface
+    # triangles that happened to end up inside a cutout via seam-snap or
+    # earcut edge cases.
+    #
+    # Change from tasks 713/715: use the RAW trap/water polygons (unbuffered)
+    # instead of _trap_carve / _water_carve. The cap's cutout hole rings sit
+    # exactly on the +0.25 mm buffered boundary, so legitimate cap-boundary
+    # triangles have vertices AT that buffered ring — the buffered-polygon
+    # carve incorrectly flagged them as "vertex_hit" and removed the boundary
+    # ring entirely (verified [213]: 1117 legit boundary faces removed →
+    # bottom cap fragmented into 27 loops). The raw polygon is 0.25 mm inside
+    # the buffered ring, so the boundary triangles' vertices sit OUTSIDE it and
+    # are not flagged; only true intruders (vertices inside the raw polygon)
+    # get removed.
     if trap_shapely:
-        for _i, _tsp in enumerate(_trap_carve, start=1):
+        for _i, _tsp in enumerate(trap_shapely, start=1):
             if _tsp is not None and not _tsp.is_empty:
                 _bottom_carve_polys.append((_tsp, f"trap_{_i}_bottom_carve"))
     if water_shapely:
-        for _i, _wsp in enumerate(_water_carve, start=1):
+        for _i, _wsp in enumerate(water_shapely, start=1):
             if _wsp is not None and not _wsp.is_empty:
                 _bottom_carve_polys.append((_wsp, f"water_{_i}_bottom_carve"))
     if _bottom_carve_polys:
@@ -3704,7 +3851,343 @@ def build_fringe_mesh(
             )
             total_removed += _nrm
         print(f"  Fringe: trap/water bottom-cap carve removed {total_removed} "
-              f"straggler face(s) across {len(_bottom_carve_polys)} cutout(s)")
+              f"straggler face(s) across {len(_bottom_carve_polys)} cutout(s) "
+              f"(task 719: RAW polygons, not buffered — cap already excludes "
+              f"the +GAP band)")
+
+    # ── Post-carve component cleanup (task 715, Topo 2026-09-03) ─────────────
+    # The bottom-cap carve above removes triangles whose XY footprint overlaps
+    # a trap/water polygon. It correctly does NOT touch nearby wall triangles
+    # whose vertices sit *just outside* the polygon (see task 715 investigation:
+    # a 2-face vertical wall pair at (-63.4, 56.94) survived Trap 1's carve on
+    # DeLaveaga #11 [200] because both endpoints were 0.5–1.3 mm outside the
+    # trap boundary — but the fringe cell they used to bound got its top+bottom
+    # carved away, leaving the wall as a floater spanning z=0 → 9.94 mm inside
+    # trap_1's solid volume). That floater triggered TWO Bambu Studio warnings
+    # simultaneously: "floating regions" (obvious) and "conflicts of gcode
+    # paths at layer 30" (the wall pierces trap_1's solid at every layer up to
+    # z=9.94, colliding on gcode).
+    #
+    # Fix: rerun the same "keep the largest component" cleanup we already do
+    # earlier for water-near-corner artifacts, but *after* the bottom-carve so
+    # any freshly stranded wall/edge fragments are dropped too. This runs
+    # BEFORE drill_tee_hole so the collar tube — an intentional, watertight,
+    # z=0-grounded annular body concatenated by drill_tee_hole — remains a
+    # separate expected component in the final .3mf (slicers handle grounded
+    # separate bodies fine; only ungrounded/pierced floaters are problems).
+    try:
+        _post_carve_components = mesh.split(only_watertight=False)
+        if len(_post_carve_components) > 1:
+            _main = max(_post_carve_components, key=lambda c: len(c.faces))
+            _dropped = [c for c in _post_carve_components if c is not _main]
+            _n_dropped_faces = sum(len(c.faces) for c in _dropped)
+            print(f"  Fringe: post-carve dropped {len(_dropped)} straggler "
+                  f"component(s) ({_n_dropped_faces} faces) — carve-boundary "
+                  f"wall fragments (task 715)")
+            mesh = _main
+    except Exception as _exc_post_split:
+        print(f"  Fringe: post-carve component cleanup skipped ({_exc_post_split})")
+
+    # ── FINAL post-assembly intrusion sweep (task 720, Topo 2026-09-03) ──────
+    # Belt-and-suspenders check: after everything else has run (top surface,
+    # walls, bottom cap earcut *or* the emergency fan fallback, first carve
+    # pass, split cleanup, etc.), scan the WHOLE assembled fringe one more
+    # time and remove any triangle whose XY footprint has >0.5 mm² of interior
+    # overlap with any raw (unbuffered) trap or water polygon.
+    #
+    # Why this is different from the existing carve above (line ~3810):
+    #   • The existing carve uses vertex_hit / pt_in_tri / edge_hit tests,
+    #     which correctly catch the common cases but proved insufficient on
+    #     DeLaveaga #11 [215]: the very last two faces (idx 51181, 51182)
+    #     were two GIANT z=0 triangles spanning the full ±85.2 mm print bed
+    #     — an artefact of the emergency fan-fallback in the bottom-cap
+    #     earcut path (line ~3696), which triangulates the outer rectangle
+    #     WITHOUT the cutout holes when earcut raises. Those two tris cover
+    #     every trap footprint at z=0, producing the residual gcode-path
+    #     conflict Thomas hit in task 719/720.
+    #   • This pass uses `Polygon(trap).intersection(Polygon(face)).area`
+    #     directly, targeting the exact failure mode Thomas described in
+    #     task 720: "XY footprint interior overlap > 0.5 mm²". Slower per
+    #     candidate than the vertex-based test, but bbox-narrowed first and
+    #     only runs on trap/water candidates.
+    #
+    # Uses RAW (unbuffered) polygons so the legitimate cutout-rim walls at
+    # the +TRAP_FRINGE_GAP_MM / +WATER_FRINGE_GAP_MM buffered boundary are
+    # preserved. Only true intrusions (faces whose XY footprint lies inside
+    # the raw trap/water interior) get removed.
+    _final_sweep_polys: list[tuple["ShapelyPolygon", str]] = []
+    if trap_shapely:
+        for _i, _tsp in enumerate(trap_shapely, start=1):
+            if _tsp is not None and not _tsp.is_empty:
+                _final_sweep_polys.append((_tsp, f"trap_{_i}_final_sweep"))
+    if water_shapely:
+        for _i, _wsp in enumerate(water_shapely, start=1):
+            if _wsp is not None and not _wsp.is_empty:
+                _final_sweep_polys.append((_wsp, f"water_{_i}_final_sweep"))
+    if _final_sweep_polys and len(mesh.faces) > 0:
+        from shapely.geometry import Polygon as _SP_final
+        tri_v = mesh.triangles  # (N,3,3)
+        ax_f, ay_f = tri_v[:, 0, 0], tri_v[:, 0, 1]
+        bx_f, by_f = tri_v[:, 1, 0], tri_v[:, 1, 1]
+        cx_f, cy_f = tri_v[:, 2, 0], tri_v[:, 2, 1]
+        remove_mask = np.zeros(len(mesh.faces), dtype=bool)
+        total_removed = 0
+        for _poly, _label in _final_sweep_polys:
+            pxmin, pymin, pxmax, pymax = _poly.bounds
+            fxmin = np.minimum(np.minimum(ax_f, bx_f), cx_f)
+            fxmax = np.maximum(np.maximum(ax_f, bx_f), cx_f)
+            fymin = np.minimum(np.minimum(ay_f, by_f), cy_f)
+            fymax = np.maximum(np.maximum(ay_f, by_f), cy_f)
+            cand = np.where(
+                (fxmax >= pxmin) & (fxmin <= pxmax) &
+                (fymax >= pymin) & (fymin <= pymax) &
+                (~remove_mask)
+            )[0]
+            n_here = 0
+            for k in cand:
+                tri_poly = _SP_final([
+                    (float(ax_f[k]), float(ay_f[k])),
+                    (float(bx_f[k]), float(by_f[k])),
+                    (float(cx_f[k]), float(cy_f[k])),
+                ])
+                if not tri_poly.is_valid:
+                    tri_poly = tri_poly.buffer(0)
+                    if tri_poly.is_empty:
+                        continue
+                try:
+                    inter_area = _poly.intersection(tri_poly).area
+                except Exception:
+                    continue
+                if inter_area > 0.5:
+                    remove_mask[k] = True
+                    n_here += 1
+            if n_here > 0:
+                print(f"  [{_label}] FINAL SWEEP removed {n_here} face(s) with "
+                      f">0.5 mm² XY-interior overlap (task 720)")
+                total_removed += n_here
+        if total_removed > 0:
+            keep_idx = np.where(~remove_mask)[0]
+            mesh = mesh.submesh([keep_idx], append=True)
+            print(f"  Fringe: FINAL SWEEP removed {total_removed} total intruding "
+                  f"face(s) across {len(_final_sweep_polys)} cutout(s) — "
+                  f"post-assembly heavy-hammer pass (task 720)")
+            # Rerun component cleanup after removal so any freshly stranded
+            # fragments from the sweep don't survive.
+            try:
+                _sweep_components = mesh.split(only_watertight=False)
+                if len(_sweep_components) > 1:
+                    _main2 = max(_sweep_components, key=lambda c: len(c.faces))
+                    _dropped2 = [c for c in _sweep_components if c is not _main2]
+                    _nd2 = sum(len(c.faces) for c in _dropped2)
+                    print(f"  Fringe: post-sweep dropped {len(_dropped2)} "
+                          f"straggler component(s) ({_nd2} faces)")
+                    mesh = _main2
+            except Exception as _exc_sweep_split:
+                print(f"  Fringe: post-sweep component cleanup skipped ({_exc_sweep_split})")
+
+    # ── VERTEX-BASED intrusion sweep (task 722, Topo 2026-09-04) ─────────────
+    # The area-based sweep above catches faces with large XY footprint overlap
+    # (>0.5 mm²). Vertical wall triangles have near-zero XY footprints (their
+    # three vertices form a line segment in XY), so the area test always passes
+    # them even when the wall is well inside a trap or water cutout.
+    # This pass catches those by checking whether ≥ 2 of the face's 3 XY
+    # vertices fall strictly inside an inward-buffered version of each cutout
+    # polygon.  The −0.05 mm inward buffer excludes legitimate boundary walls
+    # whose vertices sit right at the (raw_trap.buffer(+TRAP_FRINGE_GAP_MM))
+    # cutout edge — those walls are expected and must be preserved.
+    if _final_sweep_polys and len(mesh.faces) > 0:
+        from shapely.geometry import Point as _SP_Point_v
+        _verts_v = mesh.vertices
+        _fv_v = mesh.faces
+        _vx_v = _verts_v[:, 0]
+        _vy_v = _verts_v[:, 1]
+        _vmask_v = np.zeros(len(mesh.faces), dtype=bool)
+        _vtotal_removed = 0
+        for _poly_v, _label_v in _final_sweep_polys:
+            _inner_v = _poly_v.buffer(-0.05)
+            if _inner_v.is_empty:
+                continue
+            _ibx1, _iby1, _ibx2, _iby2 = _inner_v.bounds
+            # Candidate vertices: inside bounding box of inner polygon
+            _cand_vi = np.where(
+                (_vx_v >= _ibx1) & (_vx_v <= _ibx2) &
+                (_vy_v >= _iby1) & (_vy_v <= _iby2)
+            )[0]
+            _vert_in_v = np.zeros(len(_verts_v), dtype=bool)
+            for _vi in _cand_vi:
+                if _inner_v.contains(_SP_Point_v(float(_vx_v[_vi]), float(_vy_v[_vi]))):
+                    _vert_in_v[_vi] = True
+            # Faces with >= 2 vertices strictly inside inner polygon
+            _face_in_cnt = _vert_in_v[_fv_v].sum(axis=1)
+            _new_v = np.where((_face_in_cnt >= 2) & (~_vmask_v))[0]
+            if len(_new_v) > 0:
+                _vmask_v[_new_v] = True
+                _vtotal_removed += len(_new_v)
+                print(f"  [{_label_v}] VERTEX SWEEP removed {len(_new_v)} face(s) "
+                      f"with >=2 XY verts inside inner buffer (task 722)")
+        if _vtotal_removed > 0:
+            _vkeep = np.where(~_vmask_v)[0]
+            mesh = mesh.submesh([_vkeep], append=True)
+            print(f"  Fringe: VERTEX SWEEP removed {_vtotal_removed} total intruding "
+                  f"wall face(s) across {len(_final_sweep_polys)} cutout(s) (task 722)")
+            # Post-removal component cleanup to evict any newly stranded fragments
+            try:
+                _vsweep_comps = mesh.split(only_watertight=False)
+                if len(_vsweep_comps) > 1:
+                    _vmain = max(_vsweep_comps, key=lambda c: len(c.faces))
+                    _vdropped = [c for c in _vsweep_comps if c is not _vmain]
+                    _vnd = sum(len(c.faces) for c in _vdropped)
+                    print(f"  Fringe: post-vertex-sweep dropped {len(_vdropped)} "
+                          f"straggler component(s) ({_vnd} faces)")
+                    mesh = _vmain
+            except Exception as _exc_vsweep:
+                print(f"  Fringe: post-vertex-sweep component cleanup skipped ({_exc_vsweep})")
+
+    # ── NEGATIVE-EXTRUSION SWEEP (task 734, Topo 2026-09-05) ─────────────────
+    # Thomas's directive: treat the union of ALL raw carve polygons (green +
+    # every trap + every water) as a HARD EXCLUSION ZONE for the fringe. Any
+    # fringe geometry whose XY footprint has ANY interior overlap with those
+    # polygons is REMOVED — no inward buffer, no protection for boundary walls,
+    # no tolerance. Fringe filament is ABSENT inside those regions, period.
+    #
+    # Rationale: 8 prior rounds tuned inward buffers / gap constants and still
+    # tripped Bambu Studio's "conflict of gcode paths" warning. Rather than
+    # trusting the carve to leave a clean hole, we now enforce the clearance by
+    # post-assembly negative extrusion — anything overlapping the raw carve
+    # union gets stripped from the fringe filament regardless of provenance.
+    #
+    # Two-filter union of dropped faces:
+    #   (a) XY-triangle-interior overlaps hard_exclusion_zone with area > 0.0001
+    #   (b) ANY 1 of the 3 XY vertices lies strictly inside hard_exclusion_zone
+    #       (catches vertical wall faces whose XY area is zero — the area test
+    #       misses those because their triangle degenerates to a segment).
+    #
+    # Supersedes task 728 (which used a −0.15 mm inward buffer to protect
+    # boundary walls); with the walls now legitimately expected to sit outside
+    # the exclusion zone by TRAP_FRINGE_GAP_MM / WATER_FRINGE_GAP_MM (both
+    # 1.0 mm), no such protection is needed.
+    _hard_exclusion_zone = None
+    if _final_sweep_polys or ('green_shapely' in locals() and green_shapely is not None):
+        try:
+            from shapely.ops import unary_union as _unary_union_hard
+            _hard_polys: list = []
+            if 'green_shapely' in locals() and green_shapely is not None and not green_shapely.is_empty:
+                _hard_polys.append(green_shapely)
+            for _pp, _lbl in _final_sweep_polys:
+                if _pp is not None and not _pp.is_empty:
+                    _hard_polys.append(_pp)
+            if _hard_polys:
+                _hard_exclusion_zone = _unary_union_hard(_hard_polys)
+                if _hard_exclusion_zone is not None and not _hard_exclusion_zone.is_valid:
+                    _hard_exclusion_zone = _hard_exclusion_zone.buffer(0)
+        except Exception as _exc_hard:
+            print(f"  [negative_extrusion] hard_exclusion_zone build FAILED: {_exc_hard}")
+            _hard_exclusion_zone = None
+
+    if _hard_exclusion_zone is not None and not _hard_exclusion_zone.is_empty and len(mesh.faces) > 0:
+        from shapely.geometry import Polygon as _SP_nuke
+        from shapely.geometry import Point as _SP_Point_nuke
+        try:
+            from shapely.strtree import STRtree as _STRtree_nuke
+        except Exception:
+            _STRtree_nuke = None
+
+        _nuke_verts = mesh.vertices
+        _nuke_faces = mesh.faces
+        _nuke_ax = _nuke_verts[_nuke_faces[:, 0], 0]
+        _nuke_ay = _nuke_verts[_nuke_faces[:, 0], 1]
+        _nuke_bx = _nuke_verts[_nuke_faces[:, 1], 0]
+        _nuke_by = _nuke_verts[_nuke_faces[:, 1], 1]
+        _nuke_cx = _nuke_verts[_nuke_faces[:, 2], 0]
+        _nuke_cy = _nuke_verts[_nuke_faces[:, 2], 1]
+        _nuke_drop = np.zeros(len(mesh.faces), dtype=bool)
+
+        # Bounding-box narrow to the union bounds first — faces entirely outside
+        # the zone bbox can't intrude.
+        _nxmin, _nymin, _nxmax, _nymax = _hard_exclusion_zone.bounds
+        _face_maxx = np.maximum(np.maximum(_nuke_ax, _nuke_bx), _nuke_cx)
+        _face_minx = np.minimum(np.minimum(_nuke_ax, _nuke_bx), _nuke_cx)
+        _face_maxy = np.maximum(np.maximum(_nuke_ay, _nuke_by), _nuke_cy)
+        _face_miny = np.minimum(np.minimum(_nuke_ay, _nuke_by), _nuke_cy)
+        _bbox_cand = np.where(
+            (_face_maxx >= _nxmin) & (_face_minx <= _nxmax) &
+            (_face_maxy >= _nymin) & (_face_miny <= _nymax)
+        )[0]
+
+        # ── Filter (a): XY-interior overlap area > 0.0001 mm² ──
+        _dropped_by_area = 0
+        for _nk in _bbox_cand:
+            _ntri = _SP_nuke([
+                (float(_nuke_ax[_nk]), float(_nuke_ay[_nk])),
+                (float(_nuke_bx[_nk]), float(_nuke_by[_nk])),
+                (float(_nuke_cx[_nk]), float(_nuke_cy[_nk])),
+            ])
+            if not _ntri.is_valid:
+                _ntri = _ntri.buffer(0)
+                if _ntri.is_empty:
+                    continue
+            try:
+                if _hard_exclusion_zone.intersects(_ntri):
+                    _ninter = _hard_exclusion_zone.intersection(_ntri)
+                    if _ninter.area > 0.0001:
+                        _nuke_drop[_nk] = True
+                        _dropped_by_area += 1
+            except Exception:
+                continue
+
+        # ── Filter (b): ANY vertex strictly inside hard_exclusion_zone ──
+        # (catches degenerate vertical-wall triangles whose XY area is zero)
+        _all_vx = _nuke_verts[:, 0]
+        _all_vy = _nuke_verts[:, 1]
+        _vert_in_bbox = np.where(
+            (_all_vx >= _nxmin) & (_all_vx <= _nxmax) &
+            (_all_vy >= _nymin) & (_all_vy <= _nymax)
+        )[0]
+        _vert_in_zone = np.zeros(len(_nuke_verts), dtype=bool)
+        for _vi in _vert_in_bbox:
+            if _hard_exclusion_zone.contains(
+                _SP_Point_nuke(float(_all_vx[_vi]), float(_all_vy[_vi]))
+            ):
+                _vert_in_zone[_vi] = True
+        _face_vert_hits = _vert_in_zone[_nuke_faces].any(axis=1)
+        _dropped_by_vertex_only = int(np.sum(_face_vert_hits & ~_nuke_drop))
+        _nuke_drop |= _face_vert_hits
+
+        _nuke_total = int(_nuke_drop.sum())
+        print(f"[negative_extrusion] dropped {_nuke_total} fringe faces inside "
+              f"union(green, traps, water) raw polygons "
+              f"(area-hit={_dropped_by_area}, vertex-only-hit={_dropped_by_vertex_only}) "
+              f"(task 734)")
+
+        if _nuke_total > 0:
+            _nuke_keep = np.where(~_nuke_drop)[0]
+            mesh = mesh.submesh([_nuke_keep], append=True)
+            # Rerun largest-component cleanup after negative-extrusion drop so any
+            # newly orphaned fragments are pruned before return.
+            try:
+                _nuke_comps = mesh.split(only_watertight=False)
+                if len(_nuke_comps) > 1:
+                    # Keep main body PLUS any large collar-ish components (>= 5%
+                    # of main). This preserves the outer fringe ring if the drop
+                    # separated it from the inner collar around the green.
+                    _nuke_comps_sorted = sorted(_nuke_comps, key=lambda c: len(c.faces), reverse=True)
+                    _nuke_main = _nuke_comps_sorted[0]
+                    _main_faces = len(_nuke_main.faces)
+                    _keep_comps = [_nuke_main]
+                    for _c in _nuke_comps_sorted[1:]:
+                        if len(_c.faces) >= max(50, int(0.05 * _main_faces)):
+                            _keep_comps.append(_c)
+                    _dropped_comps = [c for c in _nuke_comps if c not in _keep_comps]
+                    if _dropped_comps:
+                        _nd = sum(len(c.faces) for c in _dropped_comps)
+                        print(f"  Fringe: post-negative-extrusion dropped {len(_dropped_comps)} "
+                              f"straggler component(s) ({_nd} faces); kept {len(_keep_comps)} component(s)")
+                    if len(_keep_comps) == 1:
+                        mesh = _keep_comps[0]
+                    else:
+                        mesh = trimesh.util.concatenate(_keep_comps)
+            except Exception as _exc_nuke_split:
+                print(f"  Fringe: post-negative-extrusion component cleanup skipped ({_exc_nuke_split})")
 
     return mesh
 
@@ -4801,6 +5284,27 @@ def _poly_to_dense_px(poly: dict) -> np.ndarray:
         )
         return pts
     return interpolate_catmull_rom(poly["points"])
+
+
+def _poly_to_raw_catmull_px(poly: dict) -> np.ndarray:
+    """Return the RAW Catmull-Rom polyline for a polygon (task 723).
+
+    After ``load_egm`` smoothing, ``poly["points"]`` contains the smoothed
+    polyline.  The fringe carve-out and snap target must reference the
+    un-smoothed (raw Catmull-Rom) boundary so fringe walls are never placed
+    in the gap zone between the smoothed and raw polygon boundaries — that gap
+    causes slicer gcode-path conflicts between the fringe layer and the trap
+    slab layer.
+
+    ``load_egm`` stashes the pre-smoothing Catmull-Rom result in
+    ``poly["_raw_catmull_px"]`` (task 723).  If that key is absent (boulders,
+    water not processed through the smoothing loop, or very old code paths),
+    fall back to ``_poly_to_dense_px`` which returns the smoothed version.
+    """
+    raw = poly.get("_raw_catmull_px")
+    if raw is not None:
+        return np.asarray(raw, dtype=np.float64)
+    return _poly_to_dense_px(poly)
 
 
 def _mm_to_px_2d(pts_mm: np.ndarray, scale: float, centroid_px: np.ndarray) -> np.ndarray:
@@ -6955,6 +7459,43 @@ def run_pipeline(
         _m.update_faces(_m.nondegenerate_faces())       # drop zero-area faces
         _m.update_faces(_m.unique_faces())              # de-dupe identical face triplets
         _m.remove_unreferenced_vertices()
+
+    # ── Scene-wide micro-component cleanup (task 715, Topo 2026-09-03) ─────
+    # Final safety net: any geometry with tiny (<= 20 face) disconnected
+    # components after all upstream carves + engraving + repair gets those
+    # components dropped. Bambu Studio flags micro-fragments as "floating
+    # regions" and, if they sit inside another body's solid volume (a fringe
+    # wall floater intersecting trap 1 at layer 30, task 715), also as
+    # "gcode path conflicts". Threshold of 20 faces is conservative — well
+    # below the tee collar tube's 384 faces and any legitimate secondary
+    # body, but above the 1–4 face fragments produced by earcut + carve +
+    # float-op residues.
+    _MICRO_LIMIT = 20
+    for _node_name, _m in list(scene.geometry.items()):
+        if not isinstance(_m, trimesh.Trimesh) or len(_m.faces) == 0:
+            continue
+        try:
+            _cs = _m.split(only_watertight=False)
+        except Exception:
+            continue
+        if len(_cs) <= 1:
+            continue
+        _keep = [c for c in _cs if len(c.faces) > _MICRO_LIMIT]
+        _drop = [c for c in _cs if len(c.faces) <= _MICRO_LIMIT]
+        if not _drop:
+            continue
+        _n_drop_faces = sum(len(c.faces) for c in _drop)
+        if len(_keep) == 1:
+            _new_mesh = _keep[0]
+        elif len(_keep) > 1:
+            _new_mesh = trimesh.util.concatenate(_keep)
+        else:
+            # Everything is micro — keep original rather than emptying the geom
+            continue
+        scene.geometry[_node_name] = _new_mesh
+        print(f"  [micro-cleanup] {_node_name}: dropped {len(_drop)} component(s) "
+              f"({_n_drop_faces} faces ≤ {_MICRO_LIMIT}); kept {len(_keep)} "
+              f"({len(_new_mesh.faces)} total faces)")
 
     # Manifold check, per-component, with tolerances suitable for current
     # geometry (the boss's slicer accepts the originally-shipped topology).

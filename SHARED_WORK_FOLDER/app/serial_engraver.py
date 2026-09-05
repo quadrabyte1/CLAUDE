@@ -599,7 +599,20 @@ def _engrave_by_plane_surgery(
             p = _Poly(ring)
             if not p.is_valid:
                 p = p.buffer(0)
-            if not p.is_empty:
+            if p.is_empty:
+                continue
+            # buffer(0) can return a MultiPolygon on self-intersecting rings;
+            # flatten so downstream code (which reads .exterior) never trips.
+            # Task 715 (Topo 2026-09-03): fringe bottom-cap for DeLaveaga #11
+            # produced a MultiPolygon here after buffer(0), and the
+            # `raw_polys[j].exterior.coords` access below raised
+            # "'MultiPolygon' object has no attribute 'exterior'", forcing the
+            # engraver to fall back to the un-engraved fringe.
+            if p.geom_type == "MultiPolygon":
+                for sub in p.geoms:
+                    if not sub.is_empty and sub.geom_type == "Polygon":
+                        raw_polys.append(sub)
+            elif p.geom_type == "Polygon":
                 raw_polys.append(p)
         except Exception:
             continue
@@ -625,9 +638,42 @@ def _engrave_by_plane_surgery(
                 used[j] = True
         try:
             pp = _Poly(list(outer.exterior.coords), holes)
+            n_holes_before = len(holes)
             if not pp.is_valid:
-                pp = pp.buffer(0)
+                # Task 715 (Topo 2026-09-03): buffer(0) silently DROPPED 9 of 19
+                # hole loops on the DeLaveaga #11 fringe outer polygon, causing
+                # the engraver to re-plug trap 1 with a 7149 mm² bottom-cap
+                # triangle (regression of task 713's plug-fix). Try
+                # shapely.make_valid first — it preserves the hole topology far
+                # more reliably than buffer(0). Fall back to buffer(0) only if
+                # make_valid is unavailable or produces something unusable.
+                try:
+                    from shapely.validation import make_valid as _mv
+                    pp_mv = _mv(pp)
+                    if pp_mv is not None and not pp_mv.is_empty:
+                        pp = pp_mv
+                    else:
+                        pp = pp.buffer(0)
+                except Exception:
+                    pp = pp.buffer(0)
             if not pp.is_empty:
+                # If holes STILL got dropped (rare, some make_valid outputs
+                # split into a GeometryCollection or MultiPolygon that loses
+                # inner-ring semantics), log the delta so a future bug is
+                # visible in the log.
+                n_holes_after = 0
+                if pp.geom_type == "Polygon":
+                    n_holes_after = len(pp.interiors)
+                elif pp.geom_type == "MultiPolygon":
+                    n_holes_after = sum(len(g.interiors) for g in pp.geoms
+                                        if g.geom_type == "Polygon")
+                elif pp.geom_type == "GeometryCollection":
+                    n_holes_after = sum(len(g.interiors) for g in pp.geoms
+                                        if g.geom_type == "Polygon")
+                if n_holes_after != n_holes_before:
+                    print(f"[serial_engraver]   plane-surgery: WARNING outer #{i} "
+                          f"holes {n_holes_before} → {n_holes_after} after validity "
+                          f"repair; type={pp.geom_type}")
                 final.append(pp)
                 used[i] = True
         except Exception:
@@ -637,6 +683,44 @@ def _engrave_by_plane_surgery(
         return None
 
     bottom_poly = _uu(final)   # may be a MultiPolygon
+    # Diagnostic: report bottom polygon hole count so we can verify trap
+    # cutouts survive the classifier (task 715).
+    _bp_holes = 0
+    if bottom_poly.geom_type == "Polygon":
+        _bp_holes = len(bottom_poly.interiors)
+    elif bottom_poly.geom_type == "MultiPolygon":
+        _bp_holes = sum(len(g.interiors) for g in bottom_poly.geoms if g.geom_type == "Polygon")
+    print(f"[serial_engraver]   plane-surgery: bottom_poly type={bottom_poly.geom_type} "
+          f"holes={_bp_holes} area={bottom_poly.area:.1f} mm² "
+          f"(from {len(final)} outer polys, {len(raw_polys)} raw)")
+
+    # Task 715 (Topo 2026-09-03): abort plane-surgery for meshes whose bottom
+    # polygon has many raw loops (the fringe has ~40 raw loops because earcut
+    # emits many boundary chains and the trap/water/green cutouts add ~5-8
+    # loops each). The classifier can't reliably recover polygon-with-holes
+    # topology from that many loops — buffer(0) or make_valid drops inner
+    # rings, and the reassembled bottom cap then re-plugs the trap cutouts.
+    # Vertex-push is a safe fallback: low-res text impression, but leaves the
+    # bottom cap intact so the traps stay open (verified by regression on
+    # DeLaveaga #11 [200] which used the un-engraved fallback and had 0 trap
+    # overlaps).
+    # Task 720 (Topo 2026-09-03): tighten from ">8" to ">6". DeLaveaga #11
+    # produces raw_polys=7 with _bp_holes=5 (green + 3 traps + a fringe-outer
+    # loop artefact), which passed the old gate and reached the extrude path,
+    # where trimesh.creation.extrude_polygon fan-triangulated the outer ring
+    # without preserving the 5 interior hole rings — producing 2 giant z=0
+    # triangles spanning the full ±85.2 mm bed and re-plugging every trap
+    # footprint. Vertex-push (return None) preserves the traps at the cost of
+    # losing serial engraving on the fringe bottom — acceptable per task 715
+    # regression discipline (DeLaveaga #11 [200] shipped fine without fringe
+    # engraving; the serial is legible on green_surface + trap bottoms).
+    if len(raw_polys) > 6 or _bp_holes < 3:
+        print(f"[serial_engraver]   plane-surgery: aborting — bottom loop count "
+              f"({len(raw_polys)} raw, {_bp_holes} holes preserved) exceeds "
+              f"the classifier's reliable range. Falling back to vertex-push "
+              f"to preserve trap/green cutouts (task 715, tightened 715 gate "
+              f"in task 720).")
+        return None
 
     # Union the text polygons (the cut-out shape)
     text_union = _uu(text_polys_xy)
@@ -793,6 +877,37 @@ def _engrave_by_plane_surgery(
         combined.merge_vertices()
     except Exception:
         pass
+
+    # ── Post-engrave component cleanup (task 715, Topo 2026-09-03) ──────────
+    # The plane-surgery text pocket occasionally strands a tiny (<10 faces)
+    # component near the pocket perimeter — e.g. DeLaveaga #11 [202] left a
+    # 4-face fragment at (-47.6, 41.5) after engraving the fringe. Bambu Studio
+    # flags any such micro-component as a "floating region" and, if it sits
+    # inside another body's solid, raises a "gcode path conflict" at the
+    # relevant layer.
+    #
+    # IMPORTANT: only drop MICRO stragglers (<= 20 faces). The tee collar tube
+    # is 288-384 faces and MUST be preserved — it's an intentional secondary
+    # body (annular tube) concatenated into the fringe by drill_tee_hole.
+    # Using a percent-based threshold silently killed the collar on [203].
+    try:
+        _MICRO_FACE_LIMIT = 20
+        _comps = combined.split(only_watertight=False)
+        if len(_comps) > 1:
+            _keep = [c for c in _comps if len(c.faces) > _MICRO_FACE_LIMIT]
+            _drop = [c for c in _comps if len(c.faces) <= _MICRO_FACE_LIMIT]
+            if _drop:
+                _n_dropped = sum(len(c.faces) for c in _drop)
+                print(f"[serial_engraver]   plane-surgery: dropped {len(_drop)} "
+                      f"micro-component(s) ({_n_dropped} faces ≤ "
+                      f"{_MICRO_FACE_LIMIT}) — text-pocket carve stragglers; "
+                      f"kept {len(_keep)} main + secondary bodies")
+                if len(_keep) == 1:
+                    combined = _keep[0]
+                elif len(_keep) > 1:
+                    combined = trimesh.util.concatenate(_keep)
+    except Exception as _exc_split:
+        print(f"[serial_engraver]   plane-surgery: component cleanup skipped ({_exc_split})")
 
     print(f"[serial_engraver]   plane-surgery: removed {n_bot} old-bottom faces, "
           f"added {len(new_bot_faces)}+{len(new_pocket_faces)}+{len(new_wall_faces)} "

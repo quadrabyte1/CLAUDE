@@ -3834,6 +3834,78 @@ def build_fringe_mesh(
     if hasattr(bottom_poly, "geoms"):
         bottom_poly = max(bottom_poly.geoms, key=lambda g: g.area)
 
+    # ── Tee-hole bore-carve (task 748, Topo 2026-09-05) ─────────────────────
+    # If the EGM defines a tee_hole, subtract a precise bore-hole disc from
+    # `bottom_poly` here — BEFORE the watertight-rewrite extrudes it — so the
+    # fringe extrusion naturally builds clean vertical walls flush against the
+    # collar tube at the intended `remove_r = collar_r + guard`. Without this
+    # carve, `drill_tee_hole`'s post-extrude face-removal chews through the
+    # coarse Steiner-triangulated top face (~5 mm triangles from `pq30a25`),
+    # producing a jagged ~5-6 mm-radius hole around a 3.78 mm-radius collar
+    # tube — visible in the render as a ~1-2 mm XY gap between cylinder wall
+    # and surrounding fringe.
+    #
+    # Regression window: task 742 (2026-09-05, ea5dcae) added the watertight-
+    # rewrite (extrude_polygon on bottom_poly). Pre-742, fringe top surface
+    # was the 200×200 grid (~0.86 mm cells) so drill_tee_hole's face-removal
+    # produced a tight ~4 mm hole. Post-742, the top is Steiner-triangulated
+    # at ~5 mm spacing → face-removal enlarges the hole to ~5-6 mm.
+    #
+    # Fix: bake the bore as a proper polygon-with-holes cutout so triangulate
+    # runs vertical walls around it at exactly `remove_r`. drill_tee_hole
+    # still runs afterwards (idempotent: n_removed will be 0-few, and the
+    # collar tube concatenation still happens the same way).
+    #
+    # Guard = 0.15 mm matches the constant used inside drill_tee_hole itself.
+    # Total bore radius = collar_r + 0.15 mm = 3.78 + 0.15 = 3.93 mm.
+    _tee_spec_bp = egm_data.get("tee_hole") if isinstance(egm_data, dict) else None
+    if _tee_spec_bp:
+        try:
+            _tx = float(_tee_spec_bp.get("x_mm"))
+            _ty = float(_tee_spec_bp.get("y_mm"))
+        except (TypeError, ValueError, AttributeError):
+            _tx = _ty = None
+        if _tx is not None and _ty is not None:
+            from shapely.geometry import Point as _SPPt_tee
+            _tee_cx = -half + _tx
+            _tee_cy = +half - _ty
+            _tee_bore_r = TEE_HOLE_COLLAR_OD_MM / 2.0 + 0.15  # match drill_tee_hole's guard
+            _tee_bore_disk = _SPPt_tee(_tee_cx, _tee_cy).buffer(
+                _tee_bore_r, resolution=32
+            )
+            # First guarantee the tee area is fringe material (union an island)
+            # in case a boundary-touching trap/water carve ate the surrounding
+            # fringe. Island slightly larger than the bore so the difference
+            # below leaves a full-thickness fringe wall around the collar.
+            _tee_island_r = _tee_bore_r + 1.5   # ~1.5 mm of fringe outside the bore
+            _tee_island = _SPPt_tee(_tee_cx, _tee_cy).buffer(
+                _tee_island_r, resolution=32
+            ).intersection(_cap_rect)
+            _bp_before_area = bottom_poly.area
+            _bp_before_interiors = len(list(bottom_poly.interiors))
+            if not _tee_island.is_empty and _tee_island.area > 0:
+                try:
+                    bottom_poly = bottom_poly.union(_tee_island)
+                    if not bottom_poly.is_valid:
+                        bottom_poly = bottom_poly.buffer(0)
+                    if hasattr(bottom_poly, "geoms"):
+                        bottom_poly = max(bottom_poly.geoms, key=lambda g: g.area)
+                except Exception as _exc_isle:
+                    print(f"  Bottom cap polygon: tee-hole island union FAILED: {_exc_isle}")
+            try:
+                bottom_poly = bottom_poly.difference(_tee_bore_disk)
+                if not bottom_poly.is_valid:
+                    bottom_poly = bottom_poly.buffer(0)
+                if hasattr(bottom_poly, "geoms"):
+                    bottom_poly = max(bottom_poly.geoms, key=lambda g: g.area)
+                print(f"  Bottom cap polygon: tee-hole bore carve r={_tee_bore_r:.3f} mm "
+                      f"(island r={_tee_island_r:.3f}) at ({_tee_cx:.2f}, {_tee_cy:.2f}): "
+                      f"area {_bp_before_area:.1f} → {bottom_poly.area:.1f} mm², "
+                      f"interiors {_bp_before_interiors} → {len(list(bottom_poly.interiors))} "
+                      f"(task 748)")
+            except Exception as _exc_bore:
+                print(f"  Bottom cap polygon: tee-hole bore carve FAILED: {_exc_bore}")
+
     print(f"  Bottom cap polygon: outer_area={bottom_poly.area:.1f} mm² "
           f"interiors={len(list(bottom_poly.interiors))} "
           f"(task 719: cap built from known geometry, not wall-edge loops)")

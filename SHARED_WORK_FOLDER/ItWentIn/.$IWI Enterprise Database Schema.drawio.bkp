@@ -159,7 +159,7 @@
           <mxGeometry height="50" width="110" x="2340" y="4680" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-143" connectable="0" parent="XavUwjVmfIstgLTpjz7r-54" style="group;shadow=1;" value="" vertex="1">
-          <mxGeometry height="90" width="210" x="1850" y="4340" as="geometry" />
+          <mxGeometry height="90" width="210" x="1850" y="4300" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-141" connectable="0" parent="B_e0j9w85cKSHvmaGQ1E-143" style="group;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=0;align=center;verticalAlign=top;strokeColor=default;fillColor=default;gradientColor=#FFE8F5;container=0;" value="" vertex="1">
           <mxGeometry height="90" width="210" as="geometry" />
@@ -246,7 +246,7 @@
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-158" parent="B_e0j9w85cKSHvmaGQ1E-159" style="label;fontStyle=0;strokeColor=none;fillColor=none;align=left;verticalAlign=top;overflow=hidden;spacingLeft=28;spacingRight=4;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;imageWidth=16;imageHeight=16;whiteSpace=wrap;html=1;image=img/clipart/Gear_128x128.png;container=0;" value="Number : int" vertex="1">
           <mxGeometry height="26" width="120" y="32" as="geometry" />
         </mxCell>
-        <mxCell id="B_e0j9w85cKSHvmaGQ1E-164" parent="XavUwjVmfIstgLTpjz7r-54" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;" value="Hole In One (v0.4)" vertex="1">
+        <mxCell id="B_e0j9w85cKSHvmaGQ1E-164" parent="XavUwjVmfIstgLTpjz7r-54" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;" value="Hole In One (v0.5)" vertex="1">
           <mxGeometry height="30" width="250" x="2230" y="4020" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-171" edge="1" parent="XavUwjVmfIstgLTpjz7r-54" source="B_e0j9w85cKSHvmaGQ1E-155" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;" target="B_e0j9w85cKSHvmaGQ1E-170" value="">
@@ -372,7 +372,7 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-256" connectable="0" parent="XavUwjVmfIstgLTpjz7r-54" style="group" value="" vertex="1">
-          <mxGeometry height="140" width="212.5" x="1007.5" y="4100" as="geometry" />
+          <mxGeometry height="140" width="212.5" x="1007.5" y="4060" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-250" parent="B_e0j9w85cKSHvmaGQ1E-256" style="whiteSpace=wrap;html=1;verticalAlign=top;fontStyle=0;gradientColor=#FFE8F5;" value="ShippingAddress" vertex="1">
           <mxGeometry height="140" width="165" as="geometry" />
@@ -390,7 +390,7 @@
           <mxGeometry height="26" width="200" x="12.5" y="108" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-112" parent="XavUwjVmfIstgLTpjz7r-54" style="html=1;whiteSpace=wrap;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=0;align=center;verticalAlign=top;gradientColor=#FFE8F5;" value="HoleInOne" vertex="1">
-          <mxGeometry height="231" width="220" x="1365" y="4234" as="geometry" />
+          <mxGeometry height="231" width="220" x="1365" y="4229.5" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-147" parent="XavUwjVmfIstgLTpjz7r-54" style="label;fontStyle=0;strokeColor=none;fillColor=none;align=left;verticalAlign=top;overflow=hidden;spacingLeft=28;spacingRight=4;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;imageWidth=16;imageHeight=16;whiteSpace=wrap;html=1;image=img/clipart/Gear_128x128.png" value="Flag_ClicksFromCenterX : int" vertex="1">
           <mxGeometry height="48.54" width="250" x="1370" y="4271.46" as="geometry" />
@@ -408,7 +408,7 @@
           <mxGeometry height="48.535666666666664" width="250" x="1370" y="4387.46" as="geometry" />
         </mxCell>
         <mxCell id="O2H0O8xsTzrN3F7RroZi-4" connectable="0" parent="XavUwjVmfIstgLTpjz7r-54" style="group" value="" vertex="1">
-          <mxGeometry height="150" width="210" x="990" y="4310" as="geometry" />
+          <mxGeometry height="150" width="210" x="990" y="4270" as="geometry" />
         </mxCell>
         <mxCell id="B_e0j9w85cKSHvmaGQ1E-244" parent="O2H0O8xsTzrN3F7RroZi-4" style="html=1;whiteSpace=wrap;fontFamily=Helvetica;fontSize=12;fontColor=default;fontStyle=0;align=center;verticalAlign=top;gradientColor=#FFE8F5;" value="OrderingPerson" vertex="1">
           <mxGeometry height="150" width="200" as="geometry" />

@@ -7306,12 +7306,29 @@ def run_pipeline(
     )
 
     # ── 6b. Apply grass texture to smooth mesh ──────────────────────────────
+    # The green surface must protect its OWN boundary vertices from the grass
+    # bump displacement — otherwise the green edge lifts off the pinned fringe
+    # seam and opens a visible gap. This mirrors the fringe's seam-freeze at
+    # ~7449 (see block 7). Both sides of the seam use the same exclusion
+    # radius (_GREEN_SEAM_EXCLUDE_RADIUS_MM = 2.0 mm) so the two textured
+    # meshes meet flush along the green boundary polyline.
     grass_amplitude = _egm_data.get("grassAmplitude", 0.5)
     grass_spacing   = _egm_data.get("grassSpacing",   2.4)
     print(f"\n[6b] Applying grass texture (amplitude={grass_amplitude} mm, spacing={grass_spacing} mm)…")
     import copy
     smooth_mesh = copy.deepcopy(smooth_mesh_flat)
-    apply_grass_texture(smooth_mesh, amplitude=grass_amplitude, bump_spacing=grass_spacing)
+    _scale_g, _centroid_g = _compute_px_to_mm(green_boundary_px, _egm_data)
+    _green_bnd_mm_for_green_grass = _px_to_mm_2d(
+        green_boundary_px.copy(), _scale_g, _centroid_g
+    )
+    _GREEN_SEAM_EXCLUDE_RADIUS_MM = 2.0  # must match fringe seam radius (block 7)
+    apply_grass_texture(
+        smooth_mesh,
+        amplitude=grass_amplitude,
+        bump_spacing=grass_spacing,
+        exclude_polyline_xy=_green_bnd_mm_for_green_grass,
+        exclude_radius_mm=_GREEN_SEAM_EXCLUDE_RADIUS_MM,
+    )
 
     # ── 7. Build fringe mesh ────────────────────────────────────────────────
     print("\n[7] Building fringe mesh…")
@@ -7672,13 +7689,16 @@ def run_pipeline(
     scene = trimesh.Scene()
     scene_names = []
 
-    # Green surface — flat (no grass) smooth or terraced based on EGM setting
+    # Green surface — smooth green gets grass texture; terraced stays flat.
+    # `smooth_mesh` = textured copy built in block 6b with seam vertices frozen
+    # so the green edge stays flush against the fringe. `stepped_mesh` is the
+    # terraced variant; grass would fight the step edges, so it stays untextured.
     green_style = _egm_data.get("greenStyle", "smooth")
     print(f"  Using {green_style} green surface")
     if green_style == "terraced":
         scene.add_geometry(stepped_mesh, node_name="green_surface")
     else:
-        scene.add_geometry(smooth_mesh_flat, node_name="green_surface")  # flat, no grass
+        scene.add_geometry(smooth_mesh, node_name="green_surface")  # grass-textured, seam frozen
     scene_names.append("green_surface")
 
     # Fringe mesh (if built successfully) — includes a 3/16" through-hole at the stand corner

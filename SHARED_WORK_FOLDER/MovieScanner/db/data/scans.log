@@ -1003,3 +1003,15 @@ Config:
   include_genres: (any)
   exclude_genres: (none)
 ========================================
+========================================
+Scan run_id=2 — 2026-09-07T07:00:06Z → 2026-09-07T07:00:39Z
+Status: done
+Scanned: 1,216,946 rows | New titles: 233 | Matches: 0
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: (none)
+========================================

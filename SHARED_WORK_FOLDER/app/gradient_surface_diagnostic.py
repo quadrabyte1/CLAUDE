@@ -7305,25 +7305,46 @@ def run_pipeline(
         _egm_data, None, None  # no STL writes — meshes are 3MF-bound
     )
 
-    # ── 6b. Apply grass texture to smooth mesh ──────────────────────────────
+    # ── 6b. Apply grass texture to BOTH green meshes ────────────────────────
     # The green surface must protect its OWN boundary vertices from the grass
     # bump displacement — otherwise the green edge lifts off the pinned fringe
     # seam and opens a visible gap. This mirrors the fringe's seam-freeze at
     # ~7449 (see block 7). Both sides of the seam use the same exclusion
     # radius (_GREEN_SEAM_EXCLUDE_RADIUS_MM = 2.0 mm) so the two textured
     # meshes meet flush along the green boundary polyline.
+    #
+    # Task Larry-2026-09-07: Thomas' screenshot showed a terraced green whose
+    # interior was completely smooth while the fringe rim carried dense grass
+    # bumps.  Root cause: only `smooth_mesh` was being textured; the terraced
+    # `stepped_mesh` was shipped to the scene untouched, so terraced-style
+    # holes rendered with an untextured green interior + textured fringe rim
+    # (the "grass ring at the boundary" artefact).  Fix: texture BOTH meshes
+    # here so whichever one the greenStyle branch at ~L7698 picks is already
+    # grass-covered.  The paraboloid displacement (peak ≈ amplitude ≈ 0.5–2 mm)
+    # is small compared to the 0.5 mm terrace step and simply sits on top of
+    # each terrace — the step edges are preserved.
     grass_amplitude = _egm_data.get("grassAmplitude", 0.5)
     grass_spacing   = _egm_data.get("grassSpacing",   2.4)
     print(f"\n[6b] Applying grass texture (amplitude={grass_amplitude} mm, spacing={grass_spacing} mm)…")
     import copy
-    smooth_mesh = copy.deepcopy(smooth_mesh_flat)
+    smooth_mesh  = copy.deepcopy(smooth_mesh_flat)
+    stepped_mesh_flat = copy.deepcopy(stepped_mesh)  # keep flat copy for reference
     _scale_g, _centroid_g = _compute_px_to_mm(green_boundary_px, _egm_data)
     _green_bnd_mm_for_green_grass = _px_to_mm_2d(
         green_boundary_px.copy(), _scale_g, _centroid_g
     )
     _GREEN_SEAM_EXCLUDE_RADIUS_MM = 2.0  # must match fringe seam radius (block 7)
+    print("  [smooth green]")
     apply_grass_texture(
         smooth_mesh,
+        amplitude=grass_amplitude,
+        bump_spacing=grass_spacing,
+        exclude_polyline_xy=_green_bnd_mm_for_green_grass,
+        exclude_radius_mm=_GREEN_SEAM_EXCLUDE_RADIUS_MM,
+    )
+    print("  [terraced green]")
+    apply_grass_texture(
+        stepped_mesh,
         amplitude=grass_amplitude,
         bump_spacing=grass_spacing,
         exclude_polyline_xy=_green_bnd_mm_for_green_grass,
@@ -7689,16 +7710,18 @@ def run_pipeline(
     scene = trimesh.Scene()
     scene_names = []
 
-    # Green surface — smooth green gets grass texture; terraced stays flat.
-    # `smooth_mesh` = textured copy built in block 6b with seam vertices frozen
-    # so the green edge stays flush against the fringe. `stepped_mesh` is the
-    # terraced variant; grass would fight the step edges, so it stays untextured.
+    # Green surface — both smooth and terraced now get grass texture (task
+    # Larry-2026-09-07).  `smooth_mesh` and `stepped_mesh` are both grass-
+    # textured in block 6b with their boundary vertices seam-frozen so the
+    # green edge stays flush against the fringe.  Grass paraboloids ride on
+    # top of each terrace step (small amplitude vs. step height), preserving
+    # the visible step edges of terraced style.
     green_style = _egm_data.get("greenStyle", "smooth")
     print(f"  Using {green_style} green surface")
     if green_style == "terraced":
-        scene.add_geometry(stepped_mesh, node_name="green_surface")
+        scene.add_geometry(stepped_mesh, node_name="green_surface")   # grass-textured, seam frozen
     else:
-        scene.add_geometry(smooth_mesh, node_name="green_surface")  # grass-textured, seam frozen
+        scene.add_geometry(smooth_mesh, node_name="green_surface")    # grass-textured, seam frozen
     scene_names.append("green_surface")
 
     # Fringe mesh (if built successfully) — includes a 3/16" through-hole at the stand corner

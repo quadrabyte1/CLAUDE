@@ -21,12 +21,15 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.47"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.49"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
-# Dashboard task counts only reflect tasks created after this id — bumped 2026-07-03
-# at owner's request to re-zero the counter; raise this value again to re-zero later.
-_TASK_COUNT_BASELINE_MAX_ID = 485
+# Dashboard task counts only reflect tasks with id strictly greater than the
+# baseline stored in system_config (key='task_count_baseline_id'). The value
+# is pinned on first boot to the current MAX(id) FROM tasks so historical /
+# imported rows stay hidden and only current-session-and-beyond work counts.
+# Populated at init_db() time; falls back to a live lookup if unset.
+_TASK_COUNT_BASELINE_MAX_ID = 0
 
 # ── Database initialisation ────────────────────────────────────────────────
 
@@ -132,8 +135,115 @@ def init_db():
            updated_at=strftime('%Y-%m-%dT%H:%M:%SZ','now')
            WHERE name='Hollis' AND (persona_file IS NULL OR persona_file = '')"""
     )
+    # ── Persona self-healing guardrail (added 2026-09-07 by Reed) ──────────
+    # Walk team/*.md on every boot and INSERT OR IGNORE any missing personas
+    # back into team_members. Prevents accidental data loss (e.g. a stray
+    # DELETE during a migration) from leaving the roster short. INSERT OR
+    # IGNORE means existing rows — including any intentional model-tier
+    # edits — are never overwritten.
+    _backfill_personas(db)
+    # ── system_config table + task-count baseline pinning ──────────────────
+    # Generic key/value store for cross-boot app settings. Pin the dashboard
+    # task-count baseline once, on first boot after this migration, to the
+    # current MAX(id) FROM tasks. All future new tasks (id > baseline) show
+    # up in the summary counter; imported/historical rows stay hidden.
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS system_config (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        )
+    """)
+    _row = db.execute(
+        "SELECT value FROM system_config WHERE key='task_count_baseline_id'"
+    ).fetchone()
+    if _row is None or _row[0] is None or str(_row[0]).strip() == "":
+        _max = db.execute("SELECT COALESCE(MAX(id), 0) FROM tasks").fetchone()[0]
+        db.execute(
+            "INSERT OR REPLACE INTO system_config (key, value) VALUES (?, ?)",
+            ("task_count_baseline_id", str(int(_max))),
+        )
+    # Cache into the module-level constant so request handlers avoid a DB
+    # round-trip. init_db() is called at import time, so this is populated
+    # before the first request.
+    global _TASK_COUNT_BASELINE_MAX_ID
+    _baseline_row = db.execute(
+        "SELECT value FROM system_config WHERE key='task_count_baseline_id'"
+    ).fetchone()
+    try:
+        _TASK_COUNT_BASELINE_MAX_ID = int(_baseline_row[0]) if _baseline_row else 0
+    except (TypeError, ValueError):
+        _TASK_COUNT_BASELINE_MAX_ID = 0
     db.commit()
     db.close()
+
+
+def _backfill_personas(db: sqlite3.Connection) -> None:
+    """INSERT OR IGNORE any team/*.md persona missing from team_members.
+
+    Extraction rules (kept deliberately narrow so a malformed persona file
+    fails soft — it is skipped rather than crashing boot):
+      * Name / role come from the H1 heading ``# NAME — ROLE`` (em-dash,
+        en-dash, or plain hyphen accepted).
+      * Model tier comes from a ``**Model:** <tier>`` line; defaults to
+        ``'sonnet'`` if absent.
+      * Files starting with ``_hiring_research_`` and ``README.md`` are
+        skipped.
+    Logs a single ``activity_log`` row when at least one persona is added.
+    """
+    team_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "team"))
+    if not os.path.isdir(team_dir):
+        return
+
+    backfilled = []
+    # `— ` (em-dash), `– ` (en-dash), or `- ` (hyphen) between name and role.
+    h1_re = re.compile(r"^#\s+([^\s#][^\-–—]*?)\s*[—–\-]\s*(.+?)\s*$")
+    # Accept either `**Model:** haiku` or `- **Model:** haiku` — both forms
+    # appear in the current personas.
+    model_re = re.compile(r"^(?:-\s*)?\*\*Model:\*\*\s*([A-Za-z0-9_\-]+)")
+
+    for fname in sorted(os.listdir(team_dir)):
+        if not fname.endswith(".md"):
+            continue
+        if fname.startswith("_hiring_research_") or fname.lower() == "readme.md":
+            continue
+
+        path = os.path.join(team_dir, fname)
+        name = role = None
+        model = "sonnet"
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                for line in fh:
+                    if name is None:
+                        m = h1_re.match(line)
+                        if m:
+                            name = m.group(1).strip()
+                            role = m.group(2).strip()
+                            continue
+                    mm = model_re.match(line.strip())
+                    if mm:
+                        model = mm.group(1).strip().lower()
+                        break
+        except OSError:
+            continue
+
+        if not name or not role:
+            continue
+
+        relative_path = f"team/{fname}"
+        cur = db.execute(
+            """INSERT OR IGNORE INTO team_members (name, role, persona_file, model)
+               VALUES (?, ?, ?, ?)""",
+            (name, role, relative_path, model),
+        )
+        if cur.rowcount:
+            backfilled.append(name)
+
+    if backfilled:
+        db.execute(
+            """INSERT INTO activity_log (actor, action, entity_type, details)
+               VALUES ('System', 'backfilled_team_members', 'team_member', ?)""",
+            (", ".join(backfilled),),
+        )
 
 
 init_db()

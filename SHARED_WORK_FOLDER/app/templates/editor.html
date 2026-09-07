@@ -512,6 +512,13 @@
     <span x-show="courseName && holeName" class="text-sm text-notion-text font-medium"
           x-text="courseName + ' — Hole ' + holeName"></span>
 
+    <!-- v4.48 — unsaved-changes badge, shows when autoSave() was blocked by a guard -->
+    <span x-show="_pendingAutoSave" x-transition
+          title="A change is queued and will save automatically once the image finishes loading."
+          class="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+      unsaved
+    </span>
+
     <div class="ml-auto flex items-center gap-1.5">
       <span x-show="statusMsg" x-text="statusMsg" x-transition
             :class="statusOk ? 'text-green-600' : 'text-red-500'"
@@ -593,6 +600,7 @@ function polygonEditor() {
     statusOk: true,
     statusFilename: '',
     statusSticky: false,
+    _pendingAutoSave: false,   // v4.48 — set when autoSave() skips due to unmet prereqs; re-fires once they clear
     generating: false,
     generatingElapsed: 0,      // seconds since Generate was clicked (updated every 1s)
     _generatingTimer: null,    // interval handle for the elapsed counter
@@ -712,6 +720,12 @@ function polygonEditor() {
         } else {
           this.initPolygons();
           this.$nextTick(() => this.resizeCanvas());
+        }
+        // v4.48 — if the user tweaked a field (e.g. grassSpacing) before the
+        // image finished loading, autoSave() will have set _pendingAutoSave.
+        // Fire it once now that the guards are satisfied.
+        if (this._pendingAutoSave) {
+          this.$nextTick(() => { this._pendingAutoSave = false; this.autoSave(); });
         }
       };
       this.img.onload = onImageReady;
@@ -1997,8 +2011,18 @@ function polygonEditor() {
     },
 
     async autoSave() {
-      if (!this.imgLoaded || this.polygons.length === 0) return;
-      if (!this.courseName.trim() || !this.holeName.trim()) return;
+      // v4.48 — instead of silently returning, tell the user *why* the save
+      // was skipped and queue a retry once the prereqs clear (loadImage tail).
+      const missing = [];
+      if (!this.imgLoaded)                missing.push('image still loading');
+      if (this.polygons.length === 0)     missing.push('no polygons yet');
+      if (!this.courseName.trim())        missing.push('course name empty');
+      if (!this.holeName.trim())          missing.push('hole name empty');
+      if (missing.length) {
+        this._pendingAutoSave = true;
+        this.flash('Change kept in memory — will save once ' + missing.join(', '), true, '', 4000);
+        return;
+      }
       // Build combined polygons list: regular polygons + contour lines
       const allPolygons = [
         ...this.polygons.map(p => ({
@@ -2054,6 +2078,7 @@ function polygonEditor() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(data),
         });
+        this._pendingAutoSave = false;  // v4.48 — clear any deferred-save badge
       } catch (err) {
         // Silent — don't interrupt the user
       }

@@ -8,8 +8,8 @@
     "height": 949
   },
   "contourStep": 0.5,
-  "grassAmplitude": 1,
-  "grassSpacing": 1,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
   "greenStyle": "terraced",
   "elevationRange": 14.5,
   "greenScale": 1.0065,

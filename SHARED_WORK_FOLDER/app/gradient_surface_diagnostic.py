@@ -1,3 +1,6 @@
+# v0.02 — 2026-09-09 Topo — added apply_grass_texture_v2 (cone/pyramid + Poisson
+#         + amplitude jitter + XY shear); GRASS_ALGORITHM switch on fringe;
+#         FRINGE_GRASS_MIN_SPACING_MM floor to keep Poisson counts sane.
 """
 gradient_surface_diagnostic.py — Reconstruct golf green height from arrow gradient directions.
 
@@ -1379,6 +1382,50 @@ WATER_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5
 WATER_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5
 WATER_FRINGE_GAP_MM:                float = 1.0   # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732) — 0.5 mm didn't stop the layer-30 slicer conflict warning
 
+# ── Fringe grass texturing knobs (task 500, Topo 2026-09-09) ─────────────────
+# Root cause of "grass looks like coarse spikes, not grass": the fringe
+# watertight-rewrite (task 742) extrudes the polygon at `triangle_args="pq30a25"`
+# → max triangle area 25 mm² → ~5 mm effective spacing on the top surface. Then
+# `apply_grass_texture` applies per-vertex paraboloid bumps at grassSpacing
+# ~1-2.4 mm — well below the vertex spacing → 1 vertex per bump → a spike per
+# vertex, not a lawn. Simultaneously the seam-exclude radius (2.0 mm) freezes
+# EVERY vertex within 2 mm of any cutout boundary polyline. Because the boundary
+# polylines are Chaikin-densified (sub-mm points), that annular band swallows
+# ~96% of top-surface verts, leaving only 4% to be grass-textured. Combined:
+# the fringe is 96% flat + 4% spikes.
+#
+# Fix:
+#   1. Reduce max triangle area from 25 → 1 mm² so the interior gets ~5× more
+#      Steiner points (from ~5000 free verts to ~17-20K free verts on Firefly).
+#      Vertex count grows ~10% (147K → 160K); extrude time unchanged (0.3s).
+#   2. Reduce seam-exclude radius from 2.0 → 1.2 mm. The mesh boundary is
+#      buffered outward by GREEN/TRAP/WATER_FRINGE_GAP_MM (1.0 mm), so the seam
+#      polyline (which is the raw, unbuffered boundary) sits 1.0 mm INSIDE the
+#      mesh boundary. r=1.2 still catches the mesh boundary verts (dist ≈ 1.0
+#      to polyline) with a 0.2 mm safety margin, but frees up ~2× more interior
+#      verts than r=2.0.
+FRINGE_TOP_MAX_TRIANGLE_AREA_MM2: float = 1.0   # was 25 (~5mm triangles); 1 → ~1.5mm triangles
+FRINGE_GRASS_SEAM_EXCLUDE_MM:     float = 1.2   # was 2.0; matches *_FRINGE_GAP_MM (1.0) + 0.2 safety
+
+# ── Grass v2 knobs (Topo 2026-09-09) ─────────────────────────────────────────
+# GRASS_ALGORITHM picks the fringe grass implementation:
+#   "v1" → apply_grass_texture (paraboloid on jittered hex-ish grid; the original)
+#   "v2" → apply_grass_texture_v2 (cone/pyramid profile, Poisson-disk centers,
+#          per-bump amplitude jitter, per-vertex XY shear). Default for the
+#          prototype run — flip back to "v1" if v2 misbehaves.
+# FRINGE_GRASS_MIN_SPACING_MM: hard floor on grass_spacing before it feeds v2.
+# The Boundary Editor default is 0.05 mm which would produce millions of Poisson
+# centers and hours of compute; below the floor we clamp UP and print a
+# one-line warning (we do NOT edit the editor default here — that's Thomas's
+# call once he sees the prototype).
+GRASS_ALGORITHM:               str   = "v2"
+# Floor rationale: v2's cone kernel has support radius = bump_spacing. Below
+# ~1 mm the bumps overlap into fuzz (individual blades no longer resolve at
+# the printer's ~0.4 mm nozzle) AND Bridson's runtime scales as N=area/r²
+# (7.5s at r=0.4 mm on Firefly, 1.1s at r=1.0 mm). 1.0 mm keeps both aesthetic
+# resolution and compute in the ≤3× v1 budget the task called for.
+FRINGE_GRASS_MIN_SPACING_MM:   float = 1.0
+
 
 def _compute_px_to_mm(green_boundary_px: np.ndarray, egm_data: dict) -> tuple[float, np.ndarray]:
     """
@@ -2643,11 +2690,18 @@ def _replace_fringe_with_watertight_extrusion(
 
     # Extrude at max Z using Triangle engine with quality + area constraints
     # so the top face carries interior Steiner points. 'p'=PSLG, 'q30'=min
-    # angle 30°, 'a25'=max triangle area 25 mm² (⇒ ~5 mm effective spacing).
+    # angle 30°, 'a<X>'=max triangle area X mm².
+    #
+    # Task 500 (Topo, 2026-09-09): tunable via FRINGE_TOP_MAX_TRIANGLE_AREA_MM2.
+    # Prior default 25 mm² (~5 mm triangles) was too coarse for grass-texture
+    # bumps at spacing 1-2.4 mm — each bump landed on ≤1 interior vertex,
+    # producing spikes instead of grass. Now 1 mm² (~1.5 mm triangles) so the
+    # interior carries enough vertex density for grass to actually read as grass.
+    _tri_args = f"pq30a{FRINGE_TOP_MAX_TRIANGLE_AREA_MM2}"
     try:
         new_mesh = trimesh.creation.extrude_polygon(
             bottom_poly, height=float(fringe_max_z),
-            engine="triangle", triangle_args="pq30a25",
+            engine="triangle", triangle_args=_tri_args,
         )
     except Exception as exc_ex:
         print(f"  [{label} watertight-rewrite] extrude with triangle FAILED ({exc_ex}) "
@@ -5115,6 +5169,16 @@ def export_trap_stls(
             # finished textured surface as one block).
             apply_sand_texture(mesh, trap_index=i)
 
+            # Per-object flatten (Topo, 2026-09-11): after all texture/build
+            # steps, collapse every vertex to this trap's own min-Z so the top
+            # surface is completely flat by construction. Supersedes the prior
+            # "interior trap vertices keep natural relief" behavior. XY is
+            # unchanged, so fringe/seam geometry is unaffected. Downstream
+            # BOUNDARY_HEIGHT_CAP_MM guardrail in _apply_lift_and_cap is now a
+            # no-op for typical (< 9 mm) trap heights but is left in place.
+            _min_z = float(mesh.vertices[:, 2].min())
+            mesh.vertices[:, 2] = _min_z
+
             # Water-hole rule (Topo, 2026-05-05): lift this trap and apply the
             # per-vertex edge-band cap inside _apply_lift_and_cap. The cap only
             # affects vertices within BOUNDARY_CAP_BAND_MM of the plaque frame
@@ -6620,6 +6684,242 @@ def apply_grass_texture(
 
 
 # ---------------------------------------------------------------------------
+# Grass bump texture v2 (Poisson-disk centers, cone/pyramid profile, jitter)
+# ---------------------------------------------------------------------------
+
+def _bridson_poisson_disk_2d(
+    x_min: float, y_min: float, x_max: float, y_max: float,
+    radius: float, k: int, rng: np.random.Generator,
+) -> np.ndarray:
+    """
+    Bridson's Poisson-disk sampling in 2D. Returns (N, 2) sample coords in the
+    rectangle [x_min, x_max] x [y_min, y_max] with min pairwise distance
+    ``radius``. Pure numpy, no external deps. ``k`` is Bridson's max attempts
+    per active sample (typical 30). Deterministic given ``rng``.
+    """
+    if radius <= 0 or x_max <= x_min or y_max <= y_min:
+        return np.zeros((0, 2), dtype=np.float64)
+
+    cell = radius / math.sqrt(2.0)
+    gw = int(math.ceil((x_max - x_min) / cell))
+    gh = int(math.ceil((y_max - y_min) / cell))
+    if gw <= 0 or gh <= 0:
+        return np.zeros((0, 2), dtype=np.float64)
+
+    # Grid holds index into samples list (-1 = empty). Each cell fits at most
+    # one sample by construction (cell diag = radius).
+    grid = -np.ones((gw, gh), dtype=np.int64)
+    samples: list[tuple[float, float]] = []
+    active: list[int] = []
+
+    def _grid_coords(px: float, py: float) -> tuple[int, int]:
+        gx = int((px - x_min) / cell)
+        gy = int((py - y_min) / cell)
+        return max(0, min(gw - 1, gx)), max(0, min(gh - 1, gy))
+
+    def _fits(px: float, py: float) -> bool:
+        if not (x_min <= px < x_max and y_min <= py < y_max):
+            return False
+        gx, gy = _grid_coords(px, py)
+        r2 = radius * radius
+        for ix in range(max(0, gx - 2), min(gw, gx + 3)):
+            for iy in range(max(0, gy - 2), min(gh, gy + 3)):
+                si = grid[ix, iy]
+                if si < 0:
+                    continue
+                sx, sy = samples[si]
+                if (sx - px) * (sx - px) + (sy - py) * (sy - py) < r2:
+                    return False
+        return True
+
+    # Seed with a random point.
+    p0 = (rng.uniform(x_min, x_max), rng.uniform(y_min, y_max))
+    samples.append(p0)
+    active.append(0)
+    gx0, gy0 = _grid_coords(*p0)
+    grid[gx0, gy0] = 0
+
+    while active:
+        # Pick a random active sample.
+        ai = int(rng.integers(0, len(active)))
+        si = active[ai]
+        sx, sy = samples[si]
+        found = False
+        # Generate k candidates in the annulus [radius, 2*radius] around sample.
+        for _ in range(k):
+            r = radius * (1.0 + rng.random())
+            theta = 2.0 * math.pi * rng.random()
+            cx = sx + r * math.cos(theta)
+            cy = sy + r * math.sin(theta)
+            if _fits(cx, cy):
+                samples.append((cx, cy))
+                new_i = len(samples) - 1
+                gx, gy = _grid_coords(cx, cy)
+                grid[gx, gy] = new_i
+                active.append(new_i)
+                found = True
+                break
+        if not found:
+            # Retire this active sample (swap-pop).
+            active[ai] = active[-1]
+            active.pop()
+
+    return np.asarray(samples, dtype=np.float64)
+
+
+def apply_grass_texture_v2(
+    mesh: "trimesh.Trimesh",
+    *,
+    amplitude: float,
+    bump_spacing: float,
+    exclude_polyline_xy: np.ndarray | None = None,
+    freeze_radius_mm: float = FRINGE_GRASS_SEAM_EXCLUDE_MM,
+    # v2-only
+    profile: str = "cone",
+    amplitude_jitter: float = 0.5,
+    xy_shear_mm: float = 0.15,
+    poisson_k: int = 30,
+    rng_seed: int = 42,
+) -> "trimesh.Trimesh":
+    """
+    v2 grass displacement. Improvements over v1:
+      * Poisson-disk sample centers (Bridson) instead of jittered lattice →
+        breaks the "regular pattern" tell.
+      * Cone / pyramid profile options (sharper peaks than paraboloid) that
+        read as grass blades rather than smoothed domes. Paraboloid remains
+        as a comparison baseline.
+      * Per-bump amplitude jitter (±``amplitude_jitter`` fraction, uniform).
+      * Per-vertex XY shear before kernel evaluation to break lattice tells.
+        Skipped for verts inside ``freeze_radius_mm`` of ``exclude_polyline_xy``
+        so the seam does NOT open.
+      * Vertex sums contributions from EVERY center within ``bump_spacing`` of
+        it (cKDTree ball-query), not just the nearest — gives overlapping
+        blades a natural build-up instead of picket-fence uniformity.
+
+    Returns the mesh modified in place.
+    """
+    if bump_spacing <= 0:
+        print(f"    apply_grass_texture_v2: bump_spacing={bump_spacing} ≤ 0, skipping.")
+        return mesh
+    if profile not in ("cone", "pyramid", "paraboloid"):
+        raise ValueError(f"apply_grass_texture_v2: unknown profile {profile!r}")
+
+    verts = mesh.vertices  # (N, 3) — live reference
+    top_mask = verts[:, 2] > BASE_THICKNESS_MM
+    if not top_mask.any():
+        print(f"    apply_grass_texture_v2: no top-surface vertices found (Z > {BASE_THICKNESS_MM}), skipping.")
+        return mesh
+
+    top_xy = verts[top_mask, :2].copy()  # copy — we'll apply per-vertex shear
+    n_top = int(top_mask.sum())
+
+    # Per-vertex seam-freeze mask (also gates XY shear so seam doesn't open).
+    protect = np.zeros(n_top, dtype=bool)
+    if exclude_polyline_xy is not None and freeze_radius_mm > 0.0 and len(exclude_polyline_xy) >= 2:
+        ex_tree = cKDTree(exclude_polyline_xy)
+        d_ex, _ = ex_tree.query(top_xy, k=1)
+        protect = d_ex < freeze_radius_mm
+
+    rng = np.random.default_rng(rng_seed)
+
+    # --- Per-vertex XY shear (only for un-protected verts) --------------------
+    if xy_shear_mm > 0.0:
+        r_shear = np.sqrt(rng.random(n_top)) * xy_shear_mm
+        th_shear = 2.0 * math.pi * rng.random(n_top)
+        dx = r_shear * np.cos(th_shear)
+        dy = r_shear * np.sin(th_shear)
+        # Zero out the shear on protected (seam) vertices so they stay pinned.
+        dx = np.where(protect, 0.0, dx)
+        dy = np.where(protect, 0.0, dy)
+        top_xy[:, 0] += dx
+        top_xy[:, 1] += dy
+
+    # --- Poisson-disk bump centers in the top-surface XY bounding box ---------
+    x_min, x_max = float(top_xy[:, 0].min()), float(top_xy[:, 0].max())
+    y_min, y_max = float(top_xy[:, 1].min()), float(top_xy[:, 1].max())
+    centers = _bridson_poisson_disk_2d(
+        x_min, y_min, x_max, y_max,
+        radius=bump_spacing, k=poisson_k, rng=rng,
+    )
+
+    if len(centers) == 0:
+        print("    apply_grass_texture_v2: Poisson sampling produced 0 centers, skipping.")
+        return mesh
+
+    # Reject centers that are off-mesh (> bump_spacing to the nearest top vert).
+    top_tree = cKDTree(verts[top_mask, :2])  # unsheared XY for on-mesh test
+    d_off, _ = top_tree.query(centers, k=1)
+    on_mesh = d_off <= bump_spacing
+    centers = centers[on_mesh]
+
+    # Reject centers within freeze_radius_mm of the exclude polyline.
+    if exclude_polyline_xy is not None and freeze_radius_mm > 0.0 and len(exclude_polyline_xy) >= 2:
+        ex_tree = cKDTree(exclude_polyline_xy)
+        d_ex_c, _ = ex_tree.query(centers, k=1)
+        centers = centers[d_ex_c >= freeze_radius_mm]
+
+    n_bumps = len(centers)
+    if n_bumps == 0:
+        print("    apply_grass_texture_v2: 0 centers after on-mesh/seam filtering, skipping.")
+        return mesh
+
+    # Per-center amplitude (cached once — don't re-roll).
+    amp_i = amplitude * (1.0 + rng.uniform(-amplitude_jitter, amplitude_jitter, size=n_bumps))
+
+    # --- Spatial hash for kernel evaluation -----------------------------------
+    # Vectorized: cKDTree.query_ball_tree with a vertex-tree yields a list of
+    # neighbor lists, but the hot path is Python overhead per vertex. We flatten
+    # (vertex, center) pairs into two long arrays and evaluate the kernel with
+    # numpy + np.add.at to accumulate per-vertex sums. This drops the Python-
+    # per-vertex overhead entirely and holds v2 within ~3× of v1 on Firefly.
+    ctree = cKDTree(centers)
+    R = float(bump_spacing)  # kernel support radius
+    vtree = cKDTree(top_xy)
+    # Neighbors of each center, in vertex space. Returned as a list of lists.
+    # For 12K centers × ~30 neighbors each = ~360K pairs — small.
+    neighbors_per_center = ctree.query_ball_tree(vtree, r=R)
+    # Flatten to (center_idx, vertex_idx) pair arrays.
+    lens = np.fromiter((len(x) for x in neighbors_per_center), dtype=np.int64,
+                       count=n_bumps)
+    if lens.sum() == 0:
+        print("    apply_grass_texture_v2: no vertex-center pairs within radius, skipping.")
+        return mesh
+    center_ids = np.repeat(np.arange(n_bumps, dtype=np.int64), lens)
+    vertex_ids = np.concatenate([np.asarray(x, dtype=np.int64)
+                                 for x in neighbors_per_center if x])
+    diffs = centers[center_ids] - top_xy[vertex_ids]  # (P, 2)
+
+    if profile == "cone":
+        d = np.linalg.norm(diffs, axis=1)
+        contrib = amp_i[center_ids] * np.maximum(0.0, 1.0 - d / R)
+    elif profile == "pyramid":
+        d = np.maximum(np.abs(diffs[:, 0]), np.abs(diffs[:, 1]))
+        contrib = amp_i[center_ids] * np.maximum(0.0, 1.0 - d / R)
+    else:  # paraboloid — v1 kernel, for A/B baseline via v2 code path
+        d = np.linalg.norm(diffs, axis=1)
+        r_n = d / R
+        contrib = amp_i[center_ids] * np.maximum(0.0, 1.0 - r_n * r_n)
+
+    dz = np.zeros(n_top, dtype=np.float64)
+    np.add.at(dz, vertex_ids, contrib)
+
+    # Freeze seam-adjacent vertices.
+    if protect.any():
+        dz = np.where(protect, 0.0, dz)
+
+    verts[top_mask, 2] += dz
+
+    n_displaced = int((dz > 0.0).sum())
+    print(f"    Grass v2 ({profile}): {n_bumps} Poisson centers "
+          f"(radius={bump_spacing:.2f} mm), amplitude={amplitude:.3f}±{amplitude_jitter*100:.0f}%, "
+          f"xy_shear={xy_shear_mm:.2f} mm, dz range [{dz.min():.3f}, {dz.max():.3f}] mm; "
+          f"{n_displaced}/{n_top} top verts displaced"
+          f"{' (' + str(int(protect.sum())) + ' seam-frozen)' if protect.any() else ''}")
+
+    return mesh
+
+
+# ---------------------------------------------------------------------------
 # Fringe divot
 # ---------------------------------------------------------------------------
 
@@ -7305,51 +7605,16 @@ def run_pipeline(
         _egm_data, None, None  # no STL writes — meshes are 3MF-bound
     )
 
-    # ── 6b. Apply grass texture to BOTH green meshes ────────────────────────
-    # The green surface must protect its OWN boundary vertices from the grass
-    # bump displacement — otherwise the green edge lifts off the pinned fringe
-    # seam and opens a visible gap. This mirrors the fringe's seam-freeze at
-    # ~7449 (see block 7). Both sides of the seam use the same exclusion
-    # radius (_GREEN_SEAM_EXCLUDE_RADIUS_MM = 2.0 mm) so the two textured
-    # meshes meet flush along the green boundary polyline.
-    #
-    # Task Larry-2026-09-07: Thomas' screenshot showed a terraced green whose
-    # interior was completely smooth while the fringe rim carried dense grass
-    # bumps.  Root cause: only `smooth_mesh` was being textured; the terraced
-    # `stepped_mesh` was shipped to the scene untouched, so terraced-style
-    # holes rendered with an untextured green interior + textured fringe rim
-    # (the "grass ring at the boundary" artefact).  Fix: texture BOTH meshes
-    # here so whichever one the greenStyle branch at ~L7698 picks is already
-    # grass-covered.  The paraboloid displacement (peak ≈ amplitude ≈ 0.5–2 mm)
-    # is small compared to the 0.5 mm terrace step and simply sits on top of
-    # each terrace — the step edges are preserved.
+    # ── 6b. (Green grass texturing removed — Topo 2026-09-09) ───────────────
+    # Per Thomas: the green surface is NEVER grass-textured, regardless of
+    # greenStyle ("smooth" or "terraced"). Grass belongs on the fringe ONLY
+    # (see block 7 ~L7491). The green's visual style comes from smooth-vs-
+    # terraced geometry alone; both variants ship untextured. `grass_amplitude`
+    # and `grass_spacing` are still read from the EGM below so block 7 can
+    # apply them to the fringe.
     grass_amplitude = _egm_data.get("grassAmplitude", 0.5)
     grass_spacing   = _egm_data.get("grassSpacing",   2.4)
-    print(f"\n[6b] Applying grass texture (amplitude={grass_amplitude} mm, spacing={grass_spacing} mm)…")
-    import copy
-    smooth_mesh  = copy.deepcopy(smooth_mesh_flat)
-    stepped_mesh_flat = copy.deepcopy(stepped_mesh)  # keep flat copy for reference
-    _scale_g, _centroid_g = _compute_px_to_mm(green_boundary_px, _egm_data)
-    _green_bnd_mm_for_green_grass = _px_to_mm_2d(
-        green_boundary_px.copy(), _scale_g, _centroid_g
-    )
-    _GREEN_SEAM_EXCLUDE_RADIUS_MM = 2.0  # must match fringe seam radius (block 7)
-    print("  [smooth green]")
-    apply_grass_texture(
-        smooth_mesh,
-        amplitude=grass_amplitude,
-        bump_spacing=grass_spacing,
-        exclude_polyline_xy=_green_bnd_mm_for_green_grass,
-        exclude_radius_mm=_GREEN_SEAM_EXCLUDE_RADIUS_MM,
-    )
-    print("  [terraced green]")
-    apply_grass_texture(
-        stepped_mesh,
-        amplitude=grass_amplitude,
-        bump_spacing=grass_spacing,
-        exclude_polyline_xy=_green_bnd_mm_for_green_grass,
-        exclude_radius_mm=_GREEN_SEAM_EXCLUDE_RADIUS_MM,
-    )
+    import copy  # still needed for fringe_mesh_flat deepcopy in block 7
 
     # ── 7. Build fringe mesh ────────────────────────────────────────────────
     print("\n[7] Building fringe mesh…")
@@ -7481,20 +7746,48 @@ def run_pipeline(
                 _px_to_mm_2d(_pts_px, scale_f, centroid_f)
             )
         _grass_exclude_polyline = np.vstack(_cutout_polylines_mm)
-        # Exclude-radius must cover the seam snap radius used in build_fringe_mesh
-        # (≈1.5 × fringe grid step).  A dense grid (200^2 over ±85 mm) gives
-        # ~0.86 mm step → ~1.3 mm radius; use 2.0 mm for safety.
-        _seam_exclude_radius_mm = 2.0
-        print(f"  Applying grass texture to fringe (amplitude={grass_amplitude} mm, spacing={grass_spacing} mm)…")
+        # Exclude-radius covers the buffered seam gap.  Post-watertight-rewrite
+        # (task 742), the fringe mesh boundary sits at the +*_FRINGE_GAP_MM
+        # buffered ring (~1.0 mm outside the raw green/trap/water polygons),
+        # while the seam polyline used here is the RAW polygons.  So the mesh
+        # boundary verts sit at distance ~1.0 mm from the seam polyline.  Using
+        # 2.0 mm (task 488 legacy) was safe but frozed ~96% of top-surface verts
+        # because the polylines are Chaikin-densified — grass barely applied
+        # anywhere.  Task 500 (Topo, 2026-09-09): drop to 1.2 mm (matches gap
+        # + 0.2 safety), freeing ~2× more interior verts for grass texture.
+        _seam_exclude_radius_mm = FRINGE_GRASS_SEAM_EXCLUDE_MM
+
+        # Grass spacing floor — v2 Poisson explodes below ~0.4 mm and v1
+        # collapses to per-vertex spikes there too. Editor default currently
+        # 0.05 mm; clamp up so the fringe build stays sane. (Editor default
+        # left as-is per Thomas — this only affects the build, not the EGM.)
+        _grass_spacing_eff = grass_spacing
+        if _grass_spacing_eff < FRINGE_GRASS_MIN_SPACING_MM:
+            print(f"  [grass floor] grass_spacing={_grass_spacing_eff} mm below "
+                  f"FRINGE_GRASS_MIN_SPACING_MM={FRINGE_GRASS_MIN_SPACING_MM} mm; "
+                  f"clamping UP to {FRINGE_GRASS_MIN_SPACING_MM} mm.")
+            _grass_spacing_eff = FRINGE_GRASS_MIN_SPACING_MM
+
+        print(f"  Applying grass texture to fringe (algorithm={GRASS_ALGORITHM}, "
+              f"amplitude={grass_amplitude} mm, spacing={_grass_spacing_eff} mm)…")
         print(f"  Grass seam exclusion: {len(_cutout_polylines_mm)} polyline(s) "
               f"({len(_grass_exclude_polyline)} points total)")
-        apply_grass_texture(
-            fringe_mesh,
-            amplitude=grass_amplitude,
-            bump_spacing=grass_spacing,
-            exclude_polyline_xy=_grass_exclude_polyline,
-            exclude_radius_mm=_seam_exclude_radius_mm,
-        )
+        if GRASS_ALGORITHM == "v2":
+            apply_grass_texture_v2(
+                fringe_mesh,
+                amplitude=grass_amplitude,
+                bump_spacing=_grass_spacing_eff,
+                exclude_polyline_xy=_grass_exclude_polyline,
+                freeze_radius_mm=_seam_exclude_radius_mm,
+            )
+        else:
+            apply_grass_texture(
+                fringe_mesh,
+                amplitude=grass_amplitude,
+                bump_spacing=_grass_spacing_eff,
+                exclude_polyline_xy=_grass_exclude_polyline,
+                exclude_radius_mm=_seam_exclude_radius_mm,
+            )
 
         # ── 7b. Build the upper-left mounting-bore PIPE (task #335) ──────────
         # The fringe was already hollowed out at (_bore_cx, _bore_cy) with
@@ -7710,18 +8003,15 @@ def run_pipeline(
     scene = trimesh.Scene()
     scene_names = []
 
-    # Green surface — both smooth and terraced now get grass texture (task
-    # Larry-2026-09-07).  `smooth_mesh` and `stepped_mesh` are both grass-
-    # textured in block 6b with their boundary vertices seam-frozen so the
-    # green edge stays flush against the fringe.  Grass paraboloids ride on
-    # top of each terrace step (small amplitude vs. step height), preserving
-    # the visible step edges of terraced style.
+    # Green surface — untextured in both styles (Topo 2026-09-09). Grass is
+    # applied to the fringe only; the green's visual style is smooth vs.
+    # terraced geometry, nothing more.
     green_style = _egm_data.get("greenStyle", "smooth")
     print(f"  Using {green_style} green surface")
     if green_style == "terraced":
-        scene.add_geometry(stepped_mesh, node_name="green_surface")   # grass-textured, seam frozen
+        scene.add_geometry(stepped_mesh, node_name="green_surface")
     else:
-        scene.add_geometry(smooth_mesh, node_name="green_surface")    # grass-textured, seam frozen
+        scene.add_geometry(smooth_mesh_flat, node_name="green_surface")
     scene_names.append("green_surface")
 
     # Fringe mesh (if built successfully) — includes a 3/16" through-hole at the stand corner

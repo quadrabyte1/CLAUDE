@@ -5170,14 +5170,18 @@ def export_trap_stls(
             apply_sand_texture(mesh, trap_index=i)
 
             # Per-object flatten (Topo, 2026-09-11): after all texture/build
-            # steps, collapse every vertex to this trap's own min-Z so the top
-            # surface is completely flat by construction. Supersedes the prior
-            # "interior trap vertices keep natural relief" behavior. XY is
+            # steps, collapse every TOP-SURFACE vertex on this trap to the
+            # top-surface min-Z so the top face is completely flat by
+            # construction. Base (z<=1e-6) is left alone so wall/base topology
+            # stays intact. Supersedes the prior "interior trap vertices keep
+            # natural relief" behavior (see _apply_lift_and_cap comment). XY is
             # unchanged, so fringe/seam geometry is unaffected. Downstream
             # BOUNDARY_HEIGHT_CAP_MM guardrail in _apply_lift_and_cap is now a
             # no-op for typical (< 9 mm) trap heights but is left in place.
-            _min_z = float(mesh.vertices[:, 2].min())
-            mesh.vertices[:, 2] = _min_z
+            _top_mask = mesh.vertices[:, 2] > 1e-6
+            if _top_mask.any():
+                _top_min_z = float(mesh.vertices[_top_mask, 2].min())
+                mesh.vertices[_top_mask, 2] = _top_min_z
 
             # Water-hole rule (Topo, 2026-05-05): lift this trap and apply the
             # per-vertex edge-band cap inside _apply_lift_and_cap. The cap only
@@ -5338,6 +5342,19 @@ def export_water_meshes(
                     water_index=i,
                     control_points_px=water_poly.get("points", []),
                 )
+
+            # Per-object flatten (Topo, 2026-09-11): after ripple/texture steps,
+            # collapse every TOP-SURFACE vertex on this water polygon to the
+            # top-surface min-Z so the top face is completely flat. Base
+            # (z<=1e-6) is left alone so wall/base topology stays intact. The
+            # downstream 2 mm WATER_HOLE_LIFT_MM rule (applied to green/fringe
+            # elsewhere) still lifts water-hole pieces via max(current_Z,
+            # lift_mm); this flatten only removes per-vertex Z variation on the
+            # top face of this water slab.
+            _top_mask = mesh.vertices[:, 2] > 1e-6
+            if _top_mask.any():
+                _top_min_z = float(mesh.vertices[_top_mask, 2].min())
+                mesh.vertices[_top_mask, 2] = _top_min_z
 
             bb = mesh.bounds
             print(f"  Water {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "

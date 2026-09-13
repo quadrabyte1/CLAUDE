@@ -32,7 +32,26 @@ from homunculus_brain import reminders as rem
 
 
 TZ = ZoneInfo("America/New_York")
-NOW = datetime(2026, 6, 8, 9, 0, tzinfo=TZ)  # Monday 9 AM, same anchor as test_capture_journey.
+
+
+def _next_monday_9am(tz: ZoneInfo) -> datetime:
+    """Next Monday 09:00 in ``tz`` strictly after real now.
+
+    Same rationale as ``test_capture_journey._next_monday_9am``: keeps the
+    seeded weekday event in the future relative to the real clock so
+    ``/reminders/upcoming`` (which filters by ``datetime.now(tz)``
+    server-side) surfaces the strike rows this test asserts on.
+    """
+    now = datetime.now(tz)
+    days_ahead = (0 - now.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    return (now + timedelta(days=days_ahead)).replace(
+        hour=9, minute=0, second=0, microsecond=0
+    )
+
+
+NOW = _next_monday_9am(TZ)
 
 
 # --- 1. static page is mounted ----------------------------------------------

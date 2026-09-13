@@ -5,14 +5,16 @@ to acked reminder, against a real FastAPI ``TestClient``. No Ollama —
 ``OLLAMA_BASE_URL`` points at a closed port so the heuristic fallback
 fires.
 
-We pin ``captured_at`` to a known wall-clock so weekday math is stable.
-``NOW`` is Monday June 8 2026 at 9:00 AM Eastern; "Thursday at 10am" then
-resolves to Thursday June 11.
+We anchor ``NOW`` to the next Monday 9 AM Eastern relative to the real
+clock so "Thursday at 10am" always resolves 3 days into the real future
+— that keeps the seeded reminders inside the ``/reminders/upcoming``
+window regardless of when the test runs (the endpoint uses
+``datetime.now(tz)`` server-side to filter).
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -24,7 +26,32 @@ from homunculus_brain.server import create_app
 
 
 TZ = ZoneInfo("America/New_York")
-NOW = datetime(2026, 6, 8, 9, 0, tzinfo=TZ)  # Monday 9 AM
+
+
+def _next_monday_9am(tz: ZoneInfo) -> datetime:
+    """Return the next Monday at 09:00 in ``tz`` strictly after real now.
+
+    Anchoring to the real clock keeps the whole journey — seeded event,
+    strike rows, and ``/reminders/upcoming`` filter — on the same
+    forward-of-now timeline, so the assertions stay stable as the calendar
+    advances.
+    """
+    now = datetime.now(tz)
+    # weekday(): Monday=0. Always jump at least 1 day so we don't land on
+    # "now" (which might already be Monday) and end up parsing "Thursday"
+    # against a NOW that's within the same week — safer to always be a
+    # clean Monday in the future.
+    days_ahead = (0 - now.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7
+    monday = (now + timedelta(days=days_ahead)).replace(
+        hour=9, minute=0, second=0, microsecond=0
+    )
+    return monday
+
+
+NOW = _next_monday_9am(TZ)
+THURSDAY_DATE = (NOW + timedelta(days=3)).date()  # weekday resolver: Mon+3 = Thu
 
 
 def test_full_user_journey(tmp_path: Path, monkeypatch):
@@ -82,8 +109,8 @@ def test_full_user_journey(tmp_path: Path, monkeypatch):
         assert written is not None
         assert (tmp_path / written).exists()
 
-        # 3) /events?day=2026-06-11 returns the event.
-        r = client.get("/events?day=2026-06-11")
+        # 3) /events?day=<Thursday> returns the event.
+        r = client.get(f"/events?day={THURSDAY_DATE.isoformat()}")
         assert r.status_code == 200
         events = r.json()
         assert any("coffee" in (e["title"] or "").lower() for e in events), events
@@ -112,7 +139,7 @@ def test_full_user_journey(tmp_path: Path, monkeypatch):
         }, kinds
         # And at least one morning summary row for that Thursday.
         summary_ids = {row["event_id"] for row in rows if row["kind"] == "morning_summary"}
-        assert "summary.2026-06-11" in summary_ids, summary_ids
+        assert f"summary.{THURSDAY_DATE.isoformat()}" in summary_ids, summary_ids
 
         # 5) Ack strike_0. The three later strikes should be cancelled.
         r = client.post(

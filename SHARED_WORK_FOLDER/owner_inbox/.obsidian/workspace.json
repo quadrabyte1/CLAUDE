@@ -20,8 +20,19 @@
               "icon": "lucide-file",
               "title": "travel_checklist"
             }
+          },
+          {
+            "id": "88ec219dc32c5390",
+            "type": "leaf",
+            "state": {
+              "type": "empty",
+              "state": {},
+              "icon": "lucide-file",
+              "title": "New tab"
+            }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -41,7 +52,9 @@
               "type": "file-explorer",
               "state": {
                 "sortOrder": "alphabetical",
-                "autoReveal": false
+                "autoReveal": false,
+                "showSearch": false,
+                "searchQuery": ""
               },
               "icon": "lucide-folder-closed",
               "title": "Files"
@@ -78,7 +91,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 434.515625
   },
   "right": {
     "id": "dfd8521912c1fcb2",
@@ -183,8 +196,9 @@
       "bases:Create new base": false
     }
   },
-  "active": "96d2dcafdbd36829",
+  "active": "88ec219dc32c5390",
   "lastOpenFiles": [
+    "travel_checklist.md",
     "close_session_2026-06-30.md",
     "close_session_2026-06-29.md",
     "close_session_2026-06-28.md",

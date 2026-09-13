@@ -175,3 +175,67 @@ class AckResponse(BaseModel):
     cancelled_kinds: list[ReminderKind] = Field(default_factory=list)
     # The updated sidecar rows (for the event chain) after the mutation.
     rows: list[ReminderRow] = Field(default_factory=list)
+
+
+# --- v1.3: Sprite POST /capture/parsed ---------------------------------------
+
+
+class CaptureVerb(str, Enum):
+    """The four Sprite verbs.
+
+    - ``schedule``: put an event on the calendar.
+    - ``note``: append a timestamped note to the vault (long-form memory).
+    - ``handle``: create a Herman reminder chain (short-form to-do).
+    - ``avoid``: append to the standing-warnings file surfaced in the
+      morning summary. No reminder, no calendar row — it is context the
+      user wants Herman to have.
+    """
+
+    SCHEDULE = "schedule"
+    NOTE = "note"
+    HANDLE = "handle"
+    AVOID = "avoid"
+
+
+class CaptureCriticality(str, Enum):
+    NORMAL = "normal"
+    CRITICAL = "critical"
+
+
+class ParsedCaptureRequest(BaseModel):
+    """Sprite → Herman: a pre-parsed record from an on-device .m4a memo.
+
+    Sprite runs its own Ollama parse against the transcript and gives Herman
+    the structured result. This shape is the contract; Kit's phone client
+    will emit the identical shape once mic capture ships.
+    """
+
+    verb: CaptureVerb
+    subject: str = Field(min_length=1)
+    when: Optional[datetime] = None  # ISO-8601 or null
+    criticality: CaptureCriticality = CaptureCriticality.NORMAL
+    confidence: float = Field(ge=0.0, le=1.0)
+    raw_transcript: str
+    audio_path: str  # absolute path to the source .m4a (provenance)
+    captured_at: datetime  # mtime of the .m4a
+
+
+class ParsedCaptureResponse(BaseModel):
+    """Herman → Sprite: what happened to the record.
+
+    ``record_id`` is a stable idempotency key derived from
+    ``verb + subject + when + captured_at``. Re-posting the same request
+    returns the same ``record_id`` and ``stored=True`` but does NOT
+    double-schedule / double-write.
+    """
+
+    stored: bool
+    record_id: str
+    verb: CaptureVerb
+    written_path: Optional[str] = None  # relative to vault_path when applicable
+    event_id: Optional[str] = None  # populated for schedule / handle
+
+
+class ParsedCaptureLowConfidenceResponse(BaseModel):
+    stored: bool = False
+    reason: Literal["low_confidence"] = "low_confidence"

@@ -22,7 +22,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, time
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 from zoneinfo import ZoneInfo
 
 from . import calendar as cal
@@ -112,10 +112,16 @@ def build_morning_summary(
     summary_date: datetime,
     summary_time_local: str,
     tz: ZoneInfo,
+    warnings: Optional[list[str]] = None,
 ) -> ReminderRow:
     """One summary row for a given day. Fires at `summary_time_local` in `tz`.
 
     `summary_date` carries the date; its tzinfo is replaced by `tz`.
+
+    ``warnings`` is a v1.3 addition: the recent lines from Sprite's
+    ``warnings.md`` (most-recent first). When non-empty, a "Standing
+    warnings" section is appended to the body. When ``None`` or empty,
+    the section is omitted entirely.
     """
     hh, mm = (int(x) for x in summary_time_local.split(":"))
     fire_at = datetime.combine(
@@ -124,7 +130,7 @@ def build_morning_summary(
         tzinfo=tz,
     )
 
-    body = _compose_summary_body(events_today, missed_yesterday)
+    body = _compose_summary_body(events_today, missed_yesterday, warnings or [])
     return ReminderRow(
         event_id=f"summary-{summary_date.date().isoformat()}",
         kind=ReminderKind.MORNING_SUMMARY,
@@ -134,7 +140,11 @@ def build_morning_summary(
     )
 
 
-def _compose_summary_body(events_today: list[CalendarEvent], missed_yesterday: list[CalendarEvent]) -> str:
+def _compose_summary_body(
+    events_today: list[CalendarEvent],
+    missed_yesterday: list[CalendarEvent],
+    warnings: Optional[list[str]] = None,
+) -> str:
     if not events_today:
         head = "Good morning. No events today."
     else:
@@ -144,6 +154,9 @@ def _compose_summary_body(events_today: list[CalendarEvent], missed_yesterday: l
     if missed_yesterday:
         miss_bits = ", ".join(e.title for e in missed_yesterday)
         head += f" Yesterday missed: {miss_bits}. Tap to reschedule."
+    if warnings:
+        section = "\n\nStanding warnings:\n" + "\n".join(warnings)
+        head += section
     return head
 
 
@@ -182,6 +195,7 @@ def build_daily_summary_rows(
     days_ahead: int = 3,
     summary_time: str,
     anchor_tz: ZoneInfo,
+    warnings_path: Optional[Path] = None,
 ) -> list[ReminderRow]:
     """Return one ``ReminderRow`` per upcoming day in [today, today+days_ahead).
 
@@ -189,13 +203,28 @@ def build_daily_summary_rows(
     day. Its body lists that day's events (read from the vault on demand)
     plus the previous day's missed events.
 
-    Missed-event tracking is a v1.3 deliverable; today the
+    Missed-event tracking is a v1.4 deliverable; today the
     ``missed_yesterday`` slot is stubbed as an empty list so the API shape
     is correct and the iOS spec can wire against it without breaking when
-    the v1.3 missed-tracking lands.
+    the missed-tracking lands.
+
+    ``warnings_path`` (v1.3): when supplied, the last 20 lines of that
+    file are read once and appended to every day's summary body as a
+    "Standing warnings" section. When the file is missing or empty, the
+    section is omitted entirely — the caller doesn't need to check first.
     """
     hh, mm = (int(x) for x in summary_time.split(":"))
     today_local = now.astimezone(anchor_tz).date()
+
+    # Read warnings ONCE per call, not per day — the file is shared across
+    # days and shouldn't be re-read three times for the same request.
+    warnings: list[str] = []
+    if warnings_path is not None:
+        # Late import to avoid the circular ``reminders → capture_parsed →
+        # reminders`` cycle. capture_parsed imports reminders for the
+        # schedule/handle paths.
+        from . import capture_parsed
+        warnings = capture_parsed.read_recent_warnings(warnings_path, n=20)
 
     rows: list[ReminderRow] = []
     for offset in range(days_ahead):
@@ -206,7 +235,7 @@ def build_daily_summary_rows(
         events_today = cal.list_events_between(vault_path, day_start, day_end)
         events_today.sort(key=lambda e: e.starts_at)
 
-        # Stub for v1.3 missed-event tracking. Shape stays stable.
+        # Stub for v1.4 missed-event tracking. Shape stays stable.
         missed_yesterday: list[CalendarEvent] = []
 
         summary = build_morning_summary(
@@ -215,6 +244,7 @@ def build_daily_summary_rows(
             summary_date=day_start,
             summary_time_local=summary_time,
             tz=anchor_tz,
+            warnings=warnings,
         )
         # Use the iOS-spec identifier scheme: summary.<yyyy-mm-dd>.
         summary = summary.model_copy(update={"event_id": f"summary.{day.isoformat()}"})
@@ -265,6 +295,7 @@ def collect_upcoming_rows(
     anchor_tz: ZoneInfo,
     summary_time: str,
     include_fired: bool = False,
+    warnings_path: Optional[Path] = None,
 ) -> list[ReminderRow]:
     """Combine per-event strike rows + daily summary rows in the window.
 
@@ -315,6 +346,7 @@ def collect_upcoming_rows(
         days_ahead=days_ahead,
         summary_time=summary_time,
         anchor_tz=anchor_tz,
+        warnings_path=warnings_path,
     )
     for r in summary_rows:
         if include_fired:

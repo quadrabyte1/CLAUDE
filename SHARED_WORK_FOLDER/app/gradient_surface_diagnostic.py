@@ -1349,7 +1349,7 @@ GREEN_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after splin
 # the print. Target 0.5 mm gap — half of the ~1 mm slop the eye tolerates
 # on the plaque, big enough to survive one fringe-grid step (~0.88 mm) of
 # quantization.
-GREEN_FRINGE_GAP_MM: float = 1.0  # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732): 0.5 mm gap didn't stop the slicer's "conflict of gcode paths at layer 30" warning even when measured trap gap was 0.57 mm. Going 2.5× nozzle diameter to rule out path-proximity as the cause. Routes through the `if GREEN_FRINGE_GAP_MM > 0` branch at ~2672 so `green_shapely_exclusion` = `green_shapely.buffer(+1.0)`.
+GREEN_FRINGE_GAP_MM: float = 0.125  # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732): 0.5 mm gap didn't stop the slicer's "conflict of gcode paths at layer 30" warning even when measured trap gap was 0.57 mm. Going 2.5× nozzle diameter to rule out path-proximity as the cause. Routes through the `if GREEN_FRINGE_GAP_MM > 0` branch at ~2672 so `green_shapely_exclusion` = `green_shapely.buffer(+GREEN_FRINGE_GAP_MM)`. Halved 2026-09-11 per Thomas — accepts slicer-warning risk to try tighter fit. Halved again 2026-09-12 per Thomas (task 508) — round-2 gap tightening from 0.5 → 0.25 mm. Halved again 2026-09-13 per Thomas (task 513) — round-3 sub-nozzle tightening 0.25 → 0.125 mm; Thomas explicitly accepts print-fit / slicer-warning risk.
 
 
 # ---------------------------------------------------------------------------
@@ -1376,11 +1376,11 @@ GREEN_FRINGE_GAP_MM: float = 1.0  # bumped 0.5 → 1.0 on 2026-09-04 per Thomas 
 TRAP_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0  # splprep `s` — same as green
 TRAP_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5   # resample spacing after spline fit
 TRAP_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5     # Chaikin passes after spline
-TRAP_FRINGE_GAP_MM:                float = 1.0   # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732) — 0.5 mm didn't stop the layer-30 slicer conflict warning
+TRAP_FRINGE_GAP_MM:                float = 0.125  # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732) — 0.5 mm didn't stop the layer-30 slicer conflict warning; halved 2026-09-11 per Thomas — accepts slicer-warning risk to try tighter fit; halved again 2026-09-12 per Thomas (task 508) — round-2 gap tightening from 0.5 → 0.25 mm; halved again 2026-09-13 per Thomas (task 513) — round-3 sub-nozzle tightening 0.25 → 0.125 mm; Thomas explicitly accepts print-fit / slicer-warning risk
 WATER_BOUNDARY_SPLINE_SMOOTHING_PX: float = 48.0
 WATER_BOUNDARY_SPLINE_RESAMPLE_PX:  float = 1.5
 WATER_BOUNDARY_SMOOTH_ITERATIONS:   int   = 5
-WATER_FRINGE_GAP_MM:                float = 1.0   # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732) — 0.5 mm didn't stop the layer-30 slicer conflict warning
+WATER_FRINGE_GAP_MM:                float = 0.125  # bumped 0.5 → 1.0 on 2026-09-04 per Thomas (task 732) — 0.5 mm didn't stop the layer-30 slicer conflict warning; halved 2026-09-11 per Thomas — accepts slicer-warning risk to try tighter fit; halved again 2026-09-12 per Thomas (task 508) — round-2 gap tightening from 0.5 → 0.25 mm; halved again 2026-09-13 per Thomas (task 513) — round-3 sub-nozzle tightening 0.25 → 0.125 mm; Thomas explicitly accepts print-fit / slicer-warning risk
 
 # ── Fringe grass texturing knobs (task 500, Topo 2026-09-09) ─────────────────
 # Root cause of "grass looks like coarse spikes, not grass": the fringe
@@ -1405,7 +1405,7 @@ WATER_FRINGE_GAP_MM:                float = 1.0   # bumped 0.5 → 1.0 on 2026-0
 #      to polyline) with a 0.2 mm safety margin, but frees up ~2× more interior
 #      verts than r=2.0.
 FRINGE_TOP_MAX_TRIANGLE_AREA_MM2: float = 1.0   # was 25 (~5mm triangles); 1 → ~1.5mm triangles
-FRINGE_GRASS_SEAM_EXCLUDE_MM:     float = 1.2   # was 2.0; matches *_FRINGE_GAP_MM (1.0) + 0.2 safety
+FRINGE_GRASS_SEAM_EXCLUDE_MM:     float = 0.325  # was 1.2; matches *_FRINGE_GAP_MM (0.125) + 0.2 safety (halved 2026-09-11 alongside gap halving; halved again 2026-09-12 task 508 alongside 0.5→0.25 gap tightening; scaled again 2026-09-13 task 513 to 0.325 = 0.125 + 0.2 preserving same relative margin alongside 0.25→0.125 gap tightening)
 
 # ── Grass v2 knobs (Topo 2026-09-09) ─────────────────────────────────────────
 # GRASS_ALGORITHM picks the fringe grass implementation:
@@ -2271,9 +2271,21 @@ def drill_tee_hole(
     fallback. Rather than try harder to repair the mesh (fragile) we build
     the collar as an independent, closed annular tube — the same trick
     `build_mount_pipe_mesh` uses for the upper-left mounting bore — and
-    concatenate it into the fringe. Face-removal punches a wide-enough hole
-    (radius = collar_od/2 + a small guard) through the fringe top surface so
-    the tube's outer wall is exposed and the tee can be inserted from above.
+    concatenate it into the fringe.
+
+    Task 748 (2026-09-05) added a pre-extrusion bore-carve into `bottom_poly`
+    inside `build_fringe_mesh` so the fringe extrusion NATURALLY builds clean
+    vertical walls at radius = outer_r + guard. Since then the fringe arrives
+    here with a perfect through-hole already in place, and the historic
+    face-removal step (which was needed pre-748 to open the bore) becomes
+    DESTRUCTIVE: it hits every wall face along the bore boundary via
+    edge_hit, leaving 200+ open edges → non-manifold rim → Bambu Studio
+    auto-repair fills the hole. Task 508 (2026-09-12, Topo): detect the
+    already-carved bore (no face footprint covers the tee axis) and skip
+    the removal in that case. Fall back to the legacy sweep only if the
+    fringe still has faces plugging the tee axis (rare, e.g. task 748
+    fallback path or an ancient EGM).
+
     The tube itself is watertight by construction; the fringe's minor gaps
     around the hole are handled by the slicer the same way it handles the
     fringe's other imperfections today.
@@ -2344,18 +2356,66 @@ def drill_tee_hole(
     # `_remove_faces_whose_footprint_overlaps_polygon`. We call it with the
     # bore disk expressed as a Shapely circle so the disk case and the
     # trap/water carve case use one code path.
+    #
+    # Task 508 (Topo, 2026-09-12): NON-DESTRUCTIVE MODE. Since task 748
+    # (2026-09-05) the fringe's bottom_poly is already carved with the bore
+    # disc BEFORE extrusion, so `_replace_fringe_with_watertight_extrusion`
+    # produces a mesh with perfect vertical bore walls at r=outer_r+guard.
+    # The old vertex/pt/edge test (a) hits the vertices AT the bore boundary
+    # (some fp-round inside), and (b) hits every wall-face edge lying ALONG
+    # the boundary (edge_hit=True universally). Result: 200+ perfect bore
+    # walls destroyed → 256 open edges → non-manifold ring at r=4.2 → Bambu
+    # Studio's auto-repair fills the hole and Thomas sees "walls marked but
+    # not hollowed through". Fix: detect whether the bore is already carved
+    # (no face footprint covers the tee center); if so, SKIP the destructive
+    # sweep and just concatenate the collar into the already-clean bore. If
+    # for any reason the carve is absent (task 748 fallback / EGM edge case),
+    # fall back to the historic face-removal so we still open a through-hole.
     guard_mm = 0.15  # small keep-out so the collar wall isn't touched by leftover fringe faces
     remove_r = outer_r + guard_mm
+
+    # Bore-already-carved detection: does any triangle's XY footprint cover
+    # (cx, cy)? Uses the same barycentric sign test as
+    # `_remove_faces_whose_footprint_overlaps_polygon`, but only for the
+    # single tee-axis point. If no face covers the point, the tee axis is
+    # already void in XY (i.e., bottom_poly.difference(_tee_bore_disk) ran).
+    tri_v = mesh.triangles  # (F, 3, 3)
+    ax, ay = tri_v[:, 0, 0], tri_v[:, 0, 1]
+    bx, by = tri_v[:, 1, 0], tri_v[:, 1, 1]
+    cx3, cy3 = tri_v[:, 2, 0], tri_v[:, 2, 1]
+    _d1 = (cx - bx) * (ay - by) - (ax - bx) * (cy - by)
+    _d2 = (cx - cx3) * (by - cy3) - (bx - cx3) * (cy - cy3)
+    _d3 = (cx - ax) * (cy3 - ay) - (cx3 - ax) * (cy - ay)
+    _has_neg = (_d1 < 0) | (_d2 < 0) | (_d3 < 0)
+    _has_pos = (_d1 > 0) | (_d2 > 0) | (_d3 > 0)
+    _face_covers_tee_axis = ~(_has_neg & _has_pos)
+    _n_face_covers = int(_face_covers_tee_axis.sum())
+
     from shapely.geometry import Point as _ShapelyPointDisk
-    bore_disk = _ShapelyPointDisk(cx, cy).buffer(remove_r, resolution=32)
-    fringe_carved, n_removed = _remove_faces_whose_footprint_overlaps_polygon(
-        mesh, bore_disk, label=f"tee_hole@({cx:.2f},{cy:.2f})",
-    )
-    if n_removed == 0:
-        # Nothing to remove means the tee point is outside the fringe surface
-        # — refuse to drop a floating tube on top of empty space.
-        print("  [tee_hole] WARNING: no fringe faces near tee point — skipping.")
-        return mesh
+    if _n_face_covers == 0:
+        # Already-carved path — bottom_poly.difference() built clean bore walls
+        # at r=outer_r+guard. Do NOT run the vertex/pt/edge sweep — it would
+        # destroy those walls (edge_hit fires on every wall face lying along
+        # the bore boundary → non-manifold ring, Bambu auto-fills).
+        print(f"  [tee_hole] bore already carved in fringe (0 faces cover tee axis) — "
+              f"skipping destructive face-removal (task 508). Walls at r={remove_r:.3f} preserved.")
+        fringe_carved = mesh
+        n_removed = 0
+    else:
+        # Fallback: bore not carved into fringe (rare — bottom_poly path failed
+        # or the EGM version predates task 748). Run the legacy sweep so we
+        # still get an open hole, even if the resulting boundary is jagged.
+        print(f"  [tee_hole] {_n_face_covers} faces cover tee axis — running legacy "
+              f"face-removal sweep (fallback, may produce jagged rim).")
+        bore_disk = _ShapelyPointDisk(cx, cy).buffer(remove_r, resolution=32)
+        fringe_carved, n_removed = _remove_faces_whose_footprint_overlaps_polygon(
+            mesh, bore_disk, label=f"tee_hole@({cx:.2f},{cy:.2f})",
+        )
+        if n_removed == 0:
+            # Nothing to remove and nothing covered → tee is outside fringe
+            # entirely. Refuse to drop a floating tube on top of empty space.
+            print("  [tee_hole] WARNING: no fringe faces near tee point — skipping.")
+            return mesh
 
     # ---- 4. Build the watertight annular collar tube ----------------------
     # The tube extends from z=0 (build plate) up to z=(local_fringe_top + protrude).

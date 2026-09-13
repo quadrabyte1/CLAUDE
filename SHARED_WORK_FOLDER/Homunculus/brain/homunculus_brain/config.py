@@ -29,6 +29,13 @@ class Config:
     ollama_model: str
     server_host: str
     server_port: int
+    # v1.3: Sprite integration — path to the "standing warnings" file the
+    # ``avoid`` verb appends to and the morning summary reads back.
+    sprite_warnings_path: Path
+    # v1.3: minimum confidence a Sprite-parsed record needs before the brain
+    # will act on it. Sprite drops sub-floor records into its own inbox
+    # client-side; the brain defends the vault regardless.
+    min_capture_confidence: float
 
     @property
     def default_tz(self) -> ZoneInfo:
@@ -48,4 +55,8 @@ def load_config() -> Config:
         ollama_model=os.environ.get("OLLAMA_MODEL", "qwen2.5:7b"),
         server_host=os.environ.get("HOMUNCULUS_HOST", "0.0.0.0"),
         server_port=int(os.environ.get("HOMUNCULUS_PORT", "8765")),
+        sprite_warnings_path=Path(
+            os.environ.get("SPRITE_WARNINGS_PATH", str(Path.home() / "sprite" / "warnings.md"))
+        ),
+        min_capture_confidence=float(os.environ.get("HOMUNCULUS_MIN_CONFIDENCE", "0.6")),
     )

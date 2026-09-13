@@ -39,6 +39,8 @@ def _config(tmp_path: Path) -> Config:
         ollama_model="qwen2.5:7b",
         server_host="0.0.0.0",
         server_port=8765,
+        sprite_warnings_path=tmp_path / "sprite" / "warnings.md",
+        min_capture_confidence=0.6,
     )
 
 

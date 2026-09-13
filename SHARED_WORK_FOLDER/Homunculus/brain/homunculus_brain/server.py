@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -22,6 +23,7 @@ from pydantic import BaseModel
 from . import VERSION, DESIGN_VERSION
 from . import activity_log
 from . import calendar as cal
+from . import capture_parsed
 from . import intent_router
 from . import llm
 from . import reminders as rem
@@ -32,9 +34,12 @@ from .schemas import (
     CaptureRequest,
     CaptureResponse,
     HealthResponse,
+    ParsedCaptureRequest,
+    ParsedCaptureResponse,
     ParsedIntent,
     ReminderRow,
 )
+from fastapi.responses import JSONResponse
 
 
 class ConfirmRequest(BaseModel):
@@ -72,6 +77,19 @@ def create_app() -> FastAPI:
     config = load_config()
     app = FastAPI(title="Homunculus brain", version=VERSION)
     app.state.config = config
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_handler(request: Request, exc: RequestValidationError):
+        """Return 400 for schema violations on /capture/parsed per the Sprite
+        contract; keep FastAPI's default 422 elsewhere so v1.2 clients don't
+        see a behavior change.
+        """
+        if request.url.path == "/capture/parsed":
+            return JSONResponse(
+                status_code=400,
+                content={"stored": False, "reason": "schema_violation", "detail": exc.errors()},
+            )
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
 
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
@@ -145,8 +163,38 @@ def create_app() -> FastAPI:
             anchor_tz=tz,
             summary_time=config.morning_summary_time,
             include_fired=include_fired,
+            warnings_path=config.sprite_warnings_path,
         )
         return rows[:60]
+
+    @app.post("/capture/parsed")
+    async def capture_parsed_endpoint(req: ParsedCaptureRequest):
+        """Sprite → Herman: submit a pre-parsed record for dispatch.
+
+        Response codes:
+          * 200 — dispatched (or idempotent replay of a prior dispatch).
+          * 400 — schema violation (FastAPI/Pydantic auto-returns 422 by
+            default; we re-raise pydantic ValidationErrors as 400 here per
+            the Sprite contract; missing-field / bad-verb / bad-enum
+            hit this branch).
+          * 422 — confidence under Herman's floor. Body:
+            ``{"stored": false, "reason": "low_confidence"}``.
+        """
+        tz = _resolve_tz(None, config.default_tz_name)
+
+        if capture_parsed.below_floor(req, config=config):
+            log.info(
+                "capture/parsed rejected low-confidence record: %s < %s",
+                req.confidence,
+                config.min_capture_confidence,
+            )
+            return JSONResponse(
+                status_code=422,
+                content={"stored": False, "reason": "low_confidence"},
+            )
+
+        resp = capture_parsed.dispatch(req, config=config, tz=tz)
+        return resp.model_dump(mode="json")
 
     @app.post("/ack", response_model=AckResponse)
     async def ack(req: AckRequest) -> AckResponse:

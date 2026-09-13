@@ -33,7 +33,7 @@ def _make_config(tmp_path: Path) -> SpriteConfig:
         recordings_dir=tmp_path / "recordings",
         models_dir=tmp_path / "models",
         ollama_base_url="http://mock-ollama",
-        ollama_model="qwen2.5:7b-instruct",
+        ollama_model="qwen2.5:7b",
         herman_base_url="http://mock-herman",
         debounce_seconds=0.0,   # no wait in tests
         min_file_bytes=100,     # tiny threshold for test files

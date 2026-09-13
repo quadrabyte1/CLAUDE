@@ -3,6 +3,7 @@ pyproject.toml
 homunculus_brain/__init__.py
 homunculus_brain/activity_log.py
 homunculus_brain/calendar.py
+homunculus_brain/capture_parsed.py
 homunculus_brain/config.py
 homunculus_brain/date_resolver.py
 homunculus_brain/intent_router.py
@@ -24,6 +25,7 @@ homunculus_brain/test_client/styles.css
 tests/test_activity_log.py
 tests/test_calendar.py
 tests/test_capture_journey.py
+tests/test_capture_parsed.py
 tests/test_daily_summary.py
 tests/test_date_resolver.py
 tests/test_intent_router.py

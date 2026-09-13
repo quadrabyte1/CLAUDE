@@ -101,7 +101,7 @@ def _call_parse(transcript: str, llm_body: dict) -> ParseResult:
         return parse_intent(
             transcript,
             ollama_base_url="http://mock-ollama",
-            ollama_model="qwen2.5:7b-instruct",
+            ollama_model="qwen2.5:7b",
             captured_at=_NOW,
         )
 
@@ -260,7 +260,7 @@ def test_ollama_unreachable_raises():
             parse_intent(
                 "test",
                 ollama_base_url="http://localhost:11434",
-                ollama_model="qwen2.5:7b-instruct",
+                ollama_model="qwen2.5:7b",
             )
 
 
@@ -282,7 +282,7 @@ def test_ollama_bad_json_raises_parse_error():
             parse_intent(
                 "test",
                 ollama_base_url="http://mock",
-                ollama_model="qwen2.5:7b-instruct",
+                ollama_model="qwen2.5:7b",
             )
 
 
@@ -315,5 +315,5 @@ def test_ollama_missing_required_key_raises_parse_error():
             parse_intent(
                 "test",
                 ollama_base_url="http://mock",
-                ollama_model="qwen2.5:7b-instruct",
+                ollama_model="qwen2.5:7b",
             )

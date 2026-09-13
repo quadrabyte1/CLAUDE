@@ -1,5 +1,5 @@
 #!/bin/bash
-# Sprite M2 install script
+# Sprite v0.3 install script
 # Copies the watcher entry point to ~/.local/bin/ and the plist to
 # ~/Library/LaunchAgents/. Does NOT load the plist — see FDA_SETUP.md first.
 #
@@ -108,9 +108,9 @@ MODEL_PATH="${MODELS_DIR}/ggml-small.en.bin"
 
 if [ ! -f "$MODEL_PATH" ]; then
     echo ""
-    echo "[install] whisper.cpp model not found at $MODEL_PATH"
+    echo "[install] whisper-cli model not found at $MODEL_PATH"
     echo "  To download:"
-    echo "    brew install whisper-cpp   # installs the binary"
+    echo "    brew install whisper-cpp   # installs the whisper-cli binary"
     echo "    # Model download (run once):"
     echo "    whisper-cpp-download-ggml-model small.en"
     echo "    # Then move it:"
@@ -119,6 +119,24 @@ if [ ! -f "$MODEL_PATH" ]; then
     echo "  Or manually from: https://huggingface.co/ggerganov/whisper.cpp"
 else
     echo "[install] Model found at $MODEL_PATH — good."
+fi
+
+# ---------------------------------------------------------------------------
+# Check for ffmpeg (required to decode Voice Memos .m4a files)
+# ---------------------------------------------------------------------------
+
+echo ""
+if command -v ffmpeg &>/dev/null; then
+    echo "[install] ffmpeg found at $(command -v ffmpeg) — good."
+else
+    echo "[install] WARNING: ffmpeg not found."
+    echo "  Sprite requires ffmpeg to decode Voice Memos .m4a files."
+    echo "  Install it before starting the watcher:"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        echo "    brew install ffmpeg"
+    else
+        echo "    apt install ffmpeg   # or your distro's equivalent"
+    fi
 fi
 
 echo ""

@@ -86,7 +86,7 @@ def load_config() -> SpriteConfig:
             os.environ.get("SPRITE_MODELS_DIR", str(sprite_root / "models"))
         ),
         ollama_base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434"),
-        ollama_model=os.environ.get("SPRITE_OLLAMA_MODEL", "qwen2.5:7b-instruct"),
+        ollama_model=os.environ.get("SPRITE_OLLAMA_MODEL", "qwen2.5:7b"),
         herman_base_url=os.environ.get("SPRITE_HERMAN_URL", "http://localhost:8765"),
         debounce_seconds=float(os.environ.get("SPRITE_DEBOUNCE_SECONDS", "3.0")),
         min_file_bytes=int(os.environ.get("SPRITE_MIN_FILE_BYTES", str(10 * 1024))),

@@ -39,6 +39,12 @@
     <!-- Environment variables for the watcher process. -->
     <key>EnvironmentVariables</key>
     <dict>
+        <!-- PATH: launchd runs with a minimal environment. We explicitly include
+             /opt/homebrew/bin so that whisper-cli and ffmpeg resolve correctly
+             without requiring absolute paths in SPRITE_WHISPER_BIN. -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+
         <key>SPRITE_HERMAN_URL</key>
         <string>http://localhost:8765</string>
 
@@ -46,7 +52,13 @@
         <string>http://localhost:11434</string>
 
         <key>SPRITE_OLLAMA_MODEL</key>
-        <string>qwen2.5:7b-instruct</string>
+        <string>qwen2.5:7b</string>
+
+        <!-- whisper-cli is resolved via PATH above. Uncomment to pin an
+             absolute path (belt-and-suspenders) if needed:
+        <key>SPRITE_WHISPER_BIN</key>
+        <string>/opt/homebrew/bin/whisper-cli</string>
+        -->
 
         <!-- Override these if your paths differ: -->
         <!-- <key>SPRITE_RECORDINGS_DIR</key> -->

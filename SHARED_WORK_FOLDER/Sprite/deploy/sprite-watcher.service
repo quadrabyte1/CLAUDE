@@ -27,7 +27,7 @@ RestartSec=10
 #   ~/.config/systemd/user/sprite-watcher.service.d/override.conf
 Environment=SPRITE_HERMAN_URL=http://localhost:8765
 Environment=OLLAMA_BASE_URL=http://localhost:11434
-Environment=SPRITE_OLLAMA_MODEL=qwen2.5:7b-instruct
+Environment=SPRITE_OLLAMA_MODEL=qwen2.5:7b
 Environment=SPRITE_LOG_LEVEL=INFO
 
 # On Linux, vLLM (OpenAI-compatible) can replace Ollama:

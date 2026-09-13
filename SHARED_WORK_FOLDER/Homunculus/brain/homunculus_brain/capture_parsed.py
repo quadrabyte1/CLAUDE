@@ -40,6 +40,7 @@ from zoneinfo import ZoneInfo
 
 from . import activity_log
 from . import calendar as cal
+from . import date_resolver
 from . import reminders as rem
 from . import vault
 from .config import Config
@@ -98,6 +99,18 @@ def dispatch(
     else:  # pragma: no cover — enum guarantees no other branch
         raise ValueError(f"unhandled verb: {req.verb!r}")
 
+    # Clarification responses (stored=False due to ambiguous hints) must NOT
+    # be recorded in the idempotency log or the activity log — the request
+    # was not committed. The client retries with a clarified payload, which
+    # will get a different record_id and proceed normally.
+    if not resp.stored:
+        log.info(
+            "capture/parsed needs clarification for record_id=%s: %s",
+            record_id,
+            resp.clarifying_question,
+        )
+        return resp
+
     _record_stored(config.vault_path, record_id, resp)
     activity_log.log(
         config.vault_path,
@@ -129,14 +142,24 @@ def below_floor(req: ParsedCaptureRequest, *, config: Config) -> bool:
 
 
 def compute_record_id(req: ParsedCaptureRequest) -> str:
-    """Stable id derived from ``verb + subject + when + captured_at``.
+    """Stable id derived from ``verb + subject + when/hints + captured_at``.
 
     Deliberately does NOT include the raw transcript or audio path — the
     same intent captured from two takes of the same memo (same when,
     same subject, same verb) is the same record. Audio path is provenance,
     not identity.
+
+    When ``when`` is None, the day_hint+time_hint are included in the key
+    so that two records with different hints (e.g. "thursday 9am" vs
+    "friday 2pm") hash to different ids even when other fields match.
     """
-    when_part = req.when.isoformat() if req.when is not None else ""
+    if req.when is not None:
+        when_part = req.when.isoformat()
+    else:
+        # Use hints as the temporal identity when no resolved datetime is given.
+        day = (req.day_hint or "").strip().lower()
+        time = (req.time_hint or "").strip().lower()
+        when_part = f"hint:{day}@{time}"
     material = "|".join(
         [
             req.verb.value,
@@ -197,11 +220,28 @@ def _handle_schedule(
     tz: ZoneInfo,
     record_id: str,
 ) -> ParsedCaptureResponse:
-    starts_at = req.when
-    if starts_at is None:
-        # No time given → schedule for the next-business-day morning anchor.
+    # Precedence: explicit when wins; fall through to hints; then default.
+    if req.when is not None:
+        starts_at = _ensure_tz(req.when, tz)
+    elif req.day_hint is not None or req.time_hint is not None:
+        # Use date_resolver — no LLM math on this path.
+        clarify = _resolve_from_hints(req, config=config, tz=tz, record_id=record_id)
+        if clarify is not None:
+            return clarify
+        resolved = date_resolver.resolve(
+            req.day_hint,
+            req.time_hint,
+            req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz),
+            tz,
+            morning_anchor_hour=config.morning_anchor_hour,
+        )
+        # resolved_at is non-None here because _resolve_from_hints would have
+        # returned a clarification response if it were None.
+        assert resolved.resolved_at is not None
+        starts_at = resolved.resolved_at
+    else:
+        # No time given at all → schedule for the next-business-day morning anchor.
         starts_at = _next_business_morning(req.captured_at, config=config, tz=tz)
-    starts_at = _ensure_tz(starts_at, tz)
 
     duration = config.default_event_duration_minutes
     event = cal.create_event(
@@ -291,13 +331,28 @@ def _handle_handle(
       minutes so the head-of-chain alert fires earlier. That's Herman's
       "escalation tier" today; v1.x can add a proper tiered chain.
     """
-    first_alert = req.when
-    if first_alert is None:
+    # Precedence: explicit when wins; fall through to hints; then default.
+    if req.when is not None:
+        first_alert = _ensure_tz(req.when, tz)
+    elif req.day_hint is not None or req.time_hint is not None:
+        # Use date_resolver — no LLM math on this path.
+        clarify = _resolve_from_hints(req, config=config, tz=tz, record_id=record_id)
+        if clarify is not None:
+            return clarify
+        resolved = date_resolver.resolve(
+            req.day_hint,
+            req.time_hint,
+            req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz),
+            tz,
+            morning_anchor_hour=config.morning_anchor_hour,
+        )
+        assert resolved.resolved_at is not None
+        first_alert = resolved.resolved_at
+    else:
         # Default: 1 hour before start of next business day (business day
         # begins at ``morning_anchor_hour``).
         next_morning = _next_business_morning(req.captured_at, config=config, tz=tz)
         first_alert = next_morning - timedelta(hours=1)
-    first_alert = _ensure_tz(first_alert, tz)
 
     if req.criticality is CaptureCriticality.CRITICAL:
         # Bump the whole chain earlier so the head-of-chain fires sooner.
@@ -396,6 +451,51 @@ def read_recent_warnings(warnings_path: Path, n: int = 20) -> list[str]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _resolve_from_hints(
+    req: ParsedCaptureRequest,
+    *,
+    config: Config,
+    tz: ZoneInfo,
+    record_id: str,
+) -> Optional[ParsedCaptureResponse]:
+    """Run date_resolver against the request's hints.
+
+    Returns a ``ParsedCaptureResponse`` with ``stored=False`` and a
+    ``clarifying_question`` if the hints are ambiguous — the caller must
+    return this response immediately WITHOUT writing to the vault.
+
+    Returns ``None`` when resolution succeeded; the caller is then
+    responsible for calling ``date_resolver.resolve()`` again to obtain the
+    ``resolved_at`` datetime.  (We call resolve twice in the success path to
+    keep the control flow in the verb handlers readable — date_resolver is
+    pure Python and cheap.)
+    """
+    now = req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz)
+    result = date_resolver.resolve(
+        req.day_hint,
+        req.time_hint,
+        now,
+        tz,
+        morning_anchor_hour=config.morning_anchor_hour,
+    )
+    if result.ambiguous:
+        # Build a clarifying question matching the /capture/text style.
+        parts = []
+        if "time" in result.ambiguous:
+            parts.append(f"Did you mean AM or PM? (e.g. '9 AM' or '9 PM')")
+        if "day" in result.ambiguous:
+            parts.append(f"I couldn't understand the day — could you be more specific?")
+        question = " ".join(parts)
+        return ParsedCaptureResponse(
+            stored=False,
+            record_id=record_id,
+            verb=req.verb,
+            clarifying_question=question,
+            ambiguous_fields=list(result.ambiguous),
+        )
+    return None
 
 
 def _ensure_tz(dt: datetime, tz: ZoneInfo) -> datetime:

@@ -1,0 +1,43 @@
+# Sprite watcher — systemd service unit (Linux / NVIDIA-future)
+#
+# Portability religion: this unit ships alongside the launchd plist so the
+# Linux migration is a documented checklist, not a research project.
+#
+# Installation (Linux):
+#   cp sprite-watcher.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable sprite-watcher
+#   systemctl --user start sprite-watcher
+#   journalctl --user -u sprite-watcher -f   # tail logs
+#
+# On Linux there is no iCloud/TCC gate — the recordings directory is wherever
+# the user configures SPRITE_RECORDINGS_DIR.
+
+[Unit]
+Description=Sprite voice-memo watcher (whisper.cpp + Ollama + Herman)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/sprite_watcher.sh
+Restart=always
+RestartSec=10
+
+# Environment overrides — edit or use a drop-in:
+#   ~/.config/systemd/user/sprite-watcher.service.d/override.conf
+Environment=SPRITE_HERMAN_URL=http://localhost:8765
+Environment=OLLAMA_BASE_URL=http://localhost:11434
+Environment=SPRITE_OLLAMA_MODEL=qwen2.5:7b-instruct
+Environment=SPRITE_LOG_LEVEL=INFO
+
+# On Linux, vLLM (OpenAI-compatible) can replace Ollama:
+# Environment=OLLAMA_BASE_URL=http://localhost:8000/v1
+# (The Sprite Ollama client uses /api/generate — swap to /v1/chat/completions
+#  by setting SPRITE_OLLAMA_BACKEND=openai in a future M3 config toggle.)
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sprite-watcher
+
+[Install]
+WantedBy=default.target

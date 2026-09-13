@@ -31,6 +31,7 @@ from homunculus_brain.schemas import (
     CaptureCriticality,
     CaptureVerb,
     ParsedCaptureRequest,
+    ParsedCaptureResponse,
 )
 from homunculus_brain.server import create_app
 
@@ -495,3 +496,239 @@ def test_compute_record_id_subject_is_case_insensitive_and_trimmed():
     )
     b = a.model_copy(update={"subject": "sam's dairy allergy"})
     assert capture_parsed.compute_record_id(a) == capture_parsed.compute_record_id(b)
+
+
+# ---------------------------------------------------------------------------
+# M3 bug fix — day_hint / time_hint on /capture/parsed
+# ---------------------------------------------------------------------------
+# Tests are written RED first (failing against the pre-fix code), then the
+# implementation below turns them GREEN. The red→green transition is shown in
+# the handoff report.
+#
+# New behaviors under test:
+#   1. schedule + day_hint/time_hint (no when) → real event at resolved time
+#   2. handle  + day_hint/time_hint (no when) → real reminder at resolved time
+#   3. ambiguous time (bare hour, no AM/PM) → stored=False + clarifying_question
+#   4. precedence: explicit `when` wins over hints
+#   5. wire-shape: raw string in `when` field → 400 (schema rejects it)
+#   6. regression: existing when=<datetime> tests still pass unchanged
+# ---------------------------------------------------------------------------
+
+
+def _hint_payload(**overrides) -> dict:
+    """Base payload with hints but no `when`."""
+    payload = {
+        "verb": "schedule",
+        "subject": "dentist appointment",
+        "when": None,
+        "day_hint": "thursday",
+        "time_hint": "9am",
+        "criticality": "normal",
+        "confidence": 0.88,
+        "raw_transcript": "dentist appointment thursday at 9am",
+        "audio_path": "/Users/thomas/sprite/inbox/test.m4a",
+        "captured_at": NOW.isoformat(),
+    }
+    payload.update(overrides)
+    return payload
+
+
+# --- 1. schedule verb with hints -----------------------------------------
+
+
+def test_schedule_with_day_and_time_hints_creates_event_at_correct_time(tmp_path, monkeypatch):
+    """POST /capture/parsed with day_hint=thursday, time_hint=9am, when=None
+    → stored=True, event at next Thursday 09:00 local, NOT a 400/422."""
+    client = _client_with_vault(tmp_path, monkeypatch)
+    r = client.post("/capture/parsed", json=_hint_payload(verb="schedule"))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["event_id"] is not None
+
+    events = cal.list_events(tmp_path)
+    assert len(events) == 1
+    event = events[0]
+    # NOW is 2026-09-15 (Tuesday). Next Thursday = 2026-09-17.
+    assert event.starts_at.date().isoformat() == "2026-09-17"
+    assert event.starts_at.hour == 9
+    assert event.starts_at.minute == 0
+
+
+# --- 2. handle verb with hints -------------------------------------------
+
+
+def test_handle_with_day_and_time_hints_creates_reminder_at_correct_time(tmp_path, monkeypatch):
+    """POST /capture/parsed with verb=handle, day_hint=thursday, time_hint=9am
+    → stored=True, reminder strike chain anchored to Thursday 09:00."""
+    client = _client_with_vault(tmp_path, monkeypatch)
+    r = client.post(
+        "/capture/parsed",
+        json=_hint_payload(
+            verb="handle",
+            subject="call back the plumber",
+        ),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["event_id"] is not None
+
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(row for row in rows if row.kind.value == "strike_0")
+    # Thursday 2026-09-17 at 09:00 local.
+    assert strike_0.fire_at.date().isoformat() == "2026-09-17"
+    assert strike_0.fire_at.hour == 9
+
+
+# --- 3. ambiguous time hint → needs clarification ------------------------
+
+
+def test_ambiguous_time_hint_returns_stored_false_with_clarifying_question(tmp_path, monkeypatch):
+    """day_hint=thursday, time_hint=nine (bare hour, no AM/PM)
+    → stored=False, clarifying_question mentions AM/PM, ambiguous_fields=['time']."""
+    client = _client_with_vault(tmp_path, monkeypatch)
+    r = client.post(
+        "/capture/parsed",
+        json=_hint_payload(time_hint="nine"),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is False
+    assert "clarifying_question" in body
+    assert body["clarifying_question"] is not None
+    # The clarifying question must mention the ambiguity.
+    assert "AM" in body["clarifying_question"] or "am" in body["clarifying_question"].lower()
+    assert "ambiguous_fields" in body
+    assert "time" in body["ambiguous_fields"]
+
+    # Nothing should be written to the vault.
+    assert cal.list_events(tmp_path) == []
+
+
+def test_ambiguous_day_hint_returns_stored_false_with_clarifying_question(tmp_path, monkeypatch):
+    """day_hint with an unparseable value → stored=False, ambiguous_fields includes 'day'."""
+    client = _client_with_vault(tmp_path, monkeypatch)
+    r = client.post(
+        "/capture/parsed",
+        json=_hint_payload(day_hint="xyzzy day"),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is False
+    assert "ambiguous_fields" in body
+    assert "day" in body["ambiguous_fields"]
+    assert cal.list_events(tmp_path) == []
+
+
+# --- 4. precedence: explicit when wins over hints -------------------------
+
+
+def test_explicit_when_takes_precedence_over_hints(tmp_path, monkeypatch):
+    """when=<real datetime>, day_hint=tomorrow → the event is at `when`, not tomorrow."""
+    client = _client_with_vault(tmp_path, monkeypatch)
+    explicit_when = datetime(2026, 9, 20, 14, 30, tzinfo=TZ)  # Sunday at 14:30
+    r = client.post(
+        "/capture/parsed",
+        json=_hint_payload(
+            when=explicit_when.isoformat(),
+            day_hint="tomorrow",
+            time_hint="9am",
+        ),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+
+    events = cal.list_events(tmp_path)
+    assert len(events) == 1
+    # Must be at the explicit when (2026-09-20), NOT tomorrow (2026-09-16).
+    assert events[0].starts_at.date().isoformat() == "2026-09-20"
+    assert events[0].starts_at.hour == 14
+    assert events[0].starts_at.minute == 30
+
+
+# --- 5. wire-shape: raw string in `when` field → 400 --------------------
+
+
+def test_raw_string_in_when_field_returns_400(tmp_path, monkeypatch):
+    """Sending 'thursday' as the `when` value (not ISO-8601) must return 400
+    (Pydantic rejects it before any handler runs). This test documents the
+    wire contract: `when` is Optional[datetime], not Optional[str]."""
+    client = _client_with_vault(tmp_path, monkeypatch)
+    bad_payload = _base_payload()
+    bad_payload["when"] = "thursday"  # raw string — not ISO-8601
+    r = client.post("/capture/parsed", json=bad_payload)
+    assert r.status_code == 400, r.text
+    body = r.json()
+    assert body["stored"] is False
+    assert body["reason"] == "schema_violation"
+
+
+# --- 6. regression: existing when=<datetime> path still works -------------
+
+
+def test_regression_explicit_when_schedule_still_works(tmp_path, monkeypatch):
+    """Existing callers that send a resolved ISO-8601 when are unaffected."""
+    client = _client_with_vault(tmp_path, monkeypatch)
+    explicit_when = NOW + timedelta(days=1, hours=1)
+    r = client.post(
+        "/capture/parsed",
+        json=_base_payload(
+            verb="schedule",
+            when=explicit_when.isoformat(),
+            # No hints sent — backward-compatible call site.
+        ),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["event_id"] is not None
+
+    events = cal.list_events(tmp_path)
+    assert len(events) == 1
+    assert events[0].starts_at.date() == explicit_when.date()
+
+
+def test_regression_explicit_when_handle_still_works(tmp_path, monkeypatch):
+    """Existing handle callers with explicit when are unaffected."""
+    client = _client_with_vault(tmp_path, monkeypatch)
+    explicit_when = NOW + timedelta(hours=4)
+    r = client.post(
+        "/capture/parsed",
+        json=_base_payload(
+            verb="handle",
+            subject="call accountant",
+            when=explicit_when.isoformat(),
+        ),
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["event_id"] is not None
+
+
+# --- wire-shape cross-repo round-trip ------------------------------------
+
+
+def test_hint_fields_round_trip_through_pydantic_model():
+    """ParsedCaptureRequest with day_hint+time_hint serialises and re-parses
+    correctly. This is the schema drift-detection guard for the Sprite side."""
+    req = ParsedCaptureRequest(
+        verb=CaptureVerb.SCHEDULE,
+        subject="dentist appointment",
+        when=None,
+        day_hint="thursday",
+        time_hint="9am",
+        criticality=CaptureCriticality.NORMAL,
+        confidence=0.88,
+        raw_transcript="dentist thursday at 9am",
+        audio_path="/tmp/test.m4a",
+        captured_at=datetime(2026, 9, 15, 9, 0, tzinfo=TZ),
+    )
+    # Round-trip through JSON (as Sprite's build_request does over the wire).
+    json_str = req.model_dump_json()
+    req2 = ParsedCaptureRequest.model_validate_json(json_str)
+    assert req2.day_hint == "thursday"
+    assert req2.time_hint == "9am"
+    assert req2.when is None

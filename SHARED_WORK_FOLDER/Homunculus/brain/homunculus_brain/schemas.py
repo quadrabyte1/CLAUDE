@@ -208,11 +208,25 @@ class ParsedCaptureRequest(BaseModel):
     Sprite runs its own Ollama parse against the transcript and gives Herman
     the structured result. This shape is the contract; Kit's phone client
     will emit the identical shape once mic capture ships.
+
+    Date/time resolution (added v1.3.1):
+      Callers that have already resolved the event time to an ISO-8601
+      datetime pass it in ``when``.  Callers that want Herman's authoritative
+      ``date_resolver`` to do the resolution (the right approach — never trust
+      a 7B LLM to do calendar math) pass ``day_hint`` and/or ``time_hint``
+      and leave ``when=None``.  Explicit ``when`` always wins if both are
+      present.  If resolution is ambiguous (bare hour with no AM/PM, unknown
+      day expression) Herman returns ``stored=False`` with a
+      ``clarifying_question`` instead of silently guessing.
     """
 
     verb: CaptureVerb
     subject: str = Field(min_length=1)
-    when: Optional[datetime] = None  # ISO-8601 or null
+    when: Optional[datetime] = None  # ISO-8601 or null — explicit resolved time
+    # Free-text day/time hints for Herman's date_resolver (v1.3.1).
+    # Use these instead of doing date math in the LLM or in Sprite.
+    day_hint: Optional[str] = None   # e.g. "thursday", "tomorrow", "next monday"
+    time_hint: Optional[str] = None  # e.g. "9am", "2:30 PM", "morning"
     criticality: CaptureCriticality = CaptureCriticality.NORMAL
     confidence: float = Field(ge=0.0, le=1.0)
     raw_transcript: str
@@ -224,9 +238,16 @@ class ParsedCaptureResponse(BaseModel):
     """Herman → Sprite: what happened to the record.
 
     ``record_id`` is a stable idempotency key derived from
-    ``verb + subject + when + captured_at``. Re-posting the same request
-    returns the same ``record_id`` and ``stored=True`` but does NOT
+    ``verb + subject + when/hints + captured_at``. Re-posting the same
+    request returns the same ``record_id`` and ``stored=True`` but does NOT
     double-schedule / double-write.
+
+    When ``stored=False`` and ``clarifying_question`` is set, the caller
+    should surface the question to the user and re-POST with an unambiguous
+    ``when`` (ISO-8601) or corrected hints. The ``ambiguous_fields`` list
+    names which parts were unresolvable (e.g. ``["time"]``, ``["day"]``).
+    This shape mirrors what ``/capture/text`` returns for the same condition
+    so clients implement only one clarification branch.
     """
 
     stored: bool
@@ -234,6 +255,9 @@ class ParsedCaptureResponse(BaseModel):
     verb: CaptureVerb
     written_path: Optional[str] = None  # relative to vault_path when applicable
     event_id: Optional[str] = None  # populated for schedule / handle
+    # Clarification fields — only present when stored=False due to ambiguity.
+    clarifying_question: Optional[str] = None
+    ambiguous_fields: list[str] = Field(default_factory=list)
 
 
 class ParsedCaptureLowConfidenceResponse(BaseModel):

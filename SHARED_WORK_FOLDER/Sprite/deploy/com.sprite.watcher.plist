@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.sprite.watcher</string>
+
+    <!--
+    IMPORTANT: Do NOT launchctl load this plist until Full Disk Access has been
+    granted to the sprite-watcher binary. See docs/FDA_SETUP.md for the exact
+    steps.
+
+    To load (after granting FDA):
+        launchctl load ~/Library/LaunchAgents/com.sprite.watcher.plist
+
+    To unload:
+        launchctl unload ~/Library/LaunchAgents/com.sprite.watcher.plist
+
+    To check status:
+        launchctl list | grep sprite
+    -->
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/fourierflight/.local/bin/sprite_watcher.sh</string>
+    </array>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart if the process exits with a non-zero code. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Environment variables for the watcher process. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>SPRITE_HERMAN_URL</key>
+        <string>http://localhost:8765</string>
+
+        <key>OLLAMA_BASE_URL</key>
+        <string>http://localhost:11434</string>
+
+        <key>SPRITE_OLLAMA_MODEL</key>
+        <string>qwen2.5:7b-instruct</string>
+
+        <!-- Override these if your paths differ: -->
+        <!-- <key>SPRITE_RECORDINGS_DIR</key> -->
+        <!-- <string>/path/to/custom/recordings</string> -->
+
+        <!-- <key>SPRITE_MODELS_DIR</key> -->
+        <!-- <string>/path/to/sprite/models</string> -->
+
+        <key>SPRITE_LOG_LEVEL</key>
+        <string>INFO</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/sprite_watcher.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/sprite_watcher_err.log</string>
+</dict>
+</plist>

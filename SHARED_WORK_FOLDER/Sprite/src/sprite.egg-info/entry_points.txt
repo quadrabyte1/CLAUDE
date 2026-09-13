@@ -1,0 +1,2 @@
+[console_scripts]
+sprite-watcher = sprite.watcher:main

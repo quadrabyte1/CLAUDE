@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: mac-calendar-bridge
+Version: 0.1.2
+Summary: Mac Calendar bridge for Homunculus/Herman — watches the vault and pushes events to Calendar.app via AppleScript.
+Requires-Python: >=3.11
+Requires-Dist: python-frontmatter>=1.1
+Requires-Dist: watchdog>=4.0
+Requires-Dist: tzdata
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"

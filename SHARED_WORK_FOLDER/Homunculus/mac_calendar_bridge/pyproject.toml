@@ -1,0 +1,31 @@
+[project]
+name = "mac-calendar-bridge"
+version = "0.1.2"
+description = "Mac Calendar bridge for Homunculus/Herman — watches the vault and pushes events to Calendar.app via AppleScript."
+requires-python = ">=3.11"
+dependencies = [
+    "python-frontmatter>=1.1",
+    "watchdog>=4.0",
+    "tzdata",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+mac-calendar-bridge = "mac_calendar_bridge.watcher:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mac_calendar_bridge*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

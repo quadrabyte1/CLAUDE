@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-18-code-review-with-myself",
+  "schedule": [
+    {
+      "event_id": "2026-09-18-code-review-with-myself",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-18T09:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: code review with myself at 10:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-18-code-review-with-myself",
+      "kind": "pre_5",
+      "fire_at": "2026-09-18T09:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: code review with myself at 10:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-18-code-review-with-myself",
+      "kind": "strike_0",
+      "fire_at": "2026-09-18T10:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "code review with myself is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-18-code-review-with-myself",
+      "kind": "strike_5",
+      "fire_at": "2026-09-18T10:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? code review with myself started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-18-code-review-with-myself",
+      "kind": "strike_10",
+      "fire_at": "2026-09-18T10:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: code review with myself \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-18-code-review-with-myself",
+      "kind": "strike_15",
+      "fire_at": "2026-09-18T10:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. code review with myself. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

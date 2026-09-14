@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.homunculus.brain</string>
+
+    <!--
+    IMPORTANT: Do NOT launchctl load this plist until Ollama is running and
+    you have confirmed the model is resident:
+
+        curl http://localhost:11434/api/tags   # should list qwen2.5:7b
+
+    If Ollama is not up when Herman starts, it will boot successfully (the
+    brain tolerates a missing Ollama — heuristic fallback activates). But
+    LLM-based intent parsing won't work until Ollama is available, so best
+    practice is to let Ollama start first.
+
+    To load:
+        launchctl load ~/Library/LaunchAgents/com.homunculus.brain.plist
+
+    To unload:
+        launchctl unload ~/Library/LaunchAgents/com.homunculus.brain.plist
+
+    To check status:
+        launchctl list | grep homunculus
+
+    To verify Herman is healthy after loading:
+        curl http://localhost:8765/health
+    -->
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/miniconda3/bin/homunculus-brain</string>
+    </array>
+
+    <!-- Restart automatically if Herman exits for any reason. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- Start Herman when launchd loads at login. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Wait 10 seconds before restarting a crashed process (avoids
+         tight crash-loop hammering Ollama on startup). -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Environment variables for the Herman brain process.
+         launchd runs with a stripped environment — everything Herman needs
+         must be declared here. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- PATH: launchd's default PATH is /usr/bin:/bin:/usr/sbin:/sbin.
+             We prepend /opt/homebrew/bin so that any future shell helpers
+             (ffmpeg, etc.) resolve correctly without requiring absolute paths
+             in config. Herman itself only needs the miniconda binary, which
+             is specified absolutely in ProgramArguments above. -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+
+        <!-- CRITICAL: Without this, the pip-installed Herman resolves its
+             default vault to a path inside miniconda's site-packages — which
+             is wrong and silent. Always set this explicitly. -->
+        <key>HOMUNCULUS_VAULT</key>
+        <string>/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault</string>
+
+        <key>OLLAMA_BASE_URL</key>
+        <string>http://localhost:11434</string>
+
+        <!-- Must match the model you have resident in Ollama.
+             Run `ollama list` to confirm. qwen2.5:7b (not :7b-instruct). -->
+        <key>OLLAMA_MODEL</key>
+        <string>qwen2.5:7b</string>
+
+        <!-- Time zone for the brain's default event scheduling and morning
+             summary. Set to your local IANA zone. Override here if you
+             travel for an extended period. -->
+        <key>HOMUNCULUS_TZ</key>
+        <string>America/New_York</string>
+
+        <!-- Optional: uncomment and adjust to change morning summary time
+             or other defaults. See README.md env-var table for full list. -->
+        <!-- <key>HOMUNCULUS_MORNING_SUMMARY</key> -->
+        <!-- <string>07:00</string> -->
+
+        <!-- <key>HOMUNCULUS_PORT</key> -->
+        <!-- <string>8765</string> -->
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/homunculus_brain.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/homunculus_brain_err.log</string>
+</dict>
+</plist>

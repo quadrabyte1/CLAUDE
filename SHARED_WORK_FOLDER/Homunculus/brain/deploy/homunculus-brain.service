@@ -1,0 +1,82 @@
+# Homunculus brain — systemd user unit (Linux / NVIDIA-future)
+#
+# Portability religion: this unit ships alongside the launchd plist so the
+# Linux migration is a documented checklist, not a research project.
+# (Rune persona rule #10: "Author the v1.1 Linux/NVIDIA migration runbook
+#  the day v1.0 ships." This is that artifact for the brain process.)
+#
+# Installation (Linux):
+#   cp homunculus-brain.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable homunculus-brain
+#   systemctl --user start homunculus-brain
+#   journalctl --user -u homunculus-brain -f   # tail logs
+#
+# Prerequisites on Linux:
+#   - Ollama installed and running (systemctl --user start ollama, or
+#     via the official Ollama systemd unit for a system-wide install)
+#   - homunculus-brain pip-installed into the Python that ExecStart points at
+#   - HOMUNCULUS_VAULT set to a path the process user can write to
+#
+# vLLM migration note (Linux/NVIDIA):
+#   When you swap Ollama for vLLM on the NVIDIA box, update OLLAMA_BASE_URL
+#   to point at the vLLM OpenAI-compatible endpoint:
+#     Environment=OLLAMA_BASE_URL=http://localhost:8000/v1
+#   The brain's LLM client uses /api/generate (Ollama-native) today.
+#   A v1.x config toggle (HOMUNCULUS_LLM_BACKEND=openai) will switch it
+#   to /v1/chat/completions without code changes. Until that toggle ships,
+#   you will need to either keep Ollama as a vLLM shim, or patch llm.py.
+#   Tracked in the Herman backlog as BRAIN-LLM-BACKEND.
+
+[Unit]
+Description=Homunculus brain — local LLM voice-assistant backend (Herman)
+# Wait for network in case Ollama is on a remote host. If Ollama is local,
+# this is a soft dependency — Herman boots fine without it (heuristic fallback
+# activates). Remove or relax if startup ordering is an issue.
+After=network.target
+
+[Service]
+Type=simple
+
+# On Linux, point this at whichever Python has homunculus-brain installed.
+# Examples:
+#   /opt/miniconda3/bin/homunculus-brain    (miniconda, same as Mac)
+#   /home/user/.local/bin/homunculus-brain  (pip install --user)
+#   /usr/local/bin/homunculus-brain         (system-wide)
+ExecStart=/opt/miniconda3/bin/homunculus-brain
+
+Restart=always
+RestartSec=10
+
+# ── Environment ─────────────────────────────────────────────────────────────
+# Env var names are platform-neutral (HOMUNCULUS_*, not HOMUNCULUS_MAC_*).
+# Edit or use a drop-in to override:
+#   mkdir -p ~/.config/systemd/user/homunculus-brain.service.d/
+#   cat > ~/.config/systemd/user/homunculus-brain.service.d/override.conf <<EOF
+#   [Service]
+#   Environment=HOMUNCULUS_VAULT=/data/vault
+#   EOF
+#   systemctl --user daemon-reload && systemctl --user restart homunculus-brain
+
+# CRITICAL: The pip-installed brain resolves its default vault to a path
+# inside the Python prefix (wrong, silent). Always set this explicitly.
+Environment=HOMUNCULUS_VAULT=/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault
+
+Environment=OLLAMA_BASE_URL=http://localhost:11434
+Environment=OLLAMA_MODEL=qwen2.5:7b
+Environment=HOMUNCULUS_TZ=America/New_York
+
+# Optional overrides (uncomment to activate):
+# Environment=HOMUNCULUS_MORNING_SUMMARY=07:00
+# Environment=HOMUNCULUS_PORT=8765
+
+# On Linux with vLLM replacing Ollama:
+# Environment=OLLAMA_BASE_URL=http://localhost:8000/v1
+
+# ── Logging ─────────────────────────────────────────────────────────────────
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=homunculus-brain
+
+[Install]
+WantedBy=default.target

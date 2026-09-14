@@ -10,6 +10,17 @@ client will register with `UNUserNotificationCenter` over Tailscale.
 
 ## Status
 
+- v1.4.0 shipped 2026-09-13. Deployment infrastructure milestone. Ships a
+  proper launchd LaunchAgent (`deploy/com.homunculus.brain.plist`) so Herman
+  survives reboots and restarts automatically on crash. Matching systemd user
+  unit (`deploy/homunculus-brain.service`) ships day-of per portability
+  religion. Cross-platform install script (`deploy/install.sh`) with `--dry-run`
+  mode. Ops runbook at `docs/RUNBOOK.md`. Fixes the vault-path bug: when
+  Herman is pip-installed into miniconda, `config.py`'s `_DEFAULT_VAULT`
+  resolves inside the Python prefix — the plist sets `HOMUNCULUS_VAULT`
+  explicitly so the real vault is always found. No wire-protocol changes.
+  No test-suite changes. 87 tests continue to pass.
+
 - v1.2.2 shipped 2026-06-10. **87 unit tests pass** (77 baseline + 10
   new). Bug fix: an ambiguous bare hour:minute (e.g. "Feed Jake at
   5:35") no longer silently defaults to AM. The date resolver flags
@@ -64,6 +75,18 @@ Override with `HOMUNCULUS_VAULT`.
 
 ## Install
 
+### As a supervised service (recommended — v1.4.0+)
+
+```bash
+# Install + set up the launchd agent (macOS) or print systemd steps (Linux)
+bash deploy/install.sh
+
+# Then follow the printed instructions to load the agent.
+# See deploy/README.md and docs/RUNBOOK.md for the full walkthrough.
+```
+
+### Manual install (dev / one-off)
+
 ```bash
 cd Homunculus/brain
 pip install .              # runtime
@@ -82,6 +105,8 @@ ollama pull qwen2.5:7b     # ~5 GB; fits comfortably on a 16 GB Mac mini M4
 ## Run
 
 ```bash
+# Set vault path explicitly (avoids the miniconda default-path bug — see docs/RUNBOOK.md)
+export HOMUNCULUS_VAULT=/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault
 homunculus-brain          # binds 0.0.0.0:8765 by default
 ```
 

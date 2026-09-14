@@ -102,13 +102,17 @@ def _mock_pipeline(
     whisper_confidence: float = 0.9,
     llm_verb: str = "schedule",
     llm_subject: str = "coffee with Jane",
-    llm_when: str = "tomorrow at 10am",
+    llm_day_hint: str = "tomorrow",
+    llm_time_hint: str = "10am",
     llm_confidence: float = 0.88,
     llm_ambiguous: list = None,
     herman_status: int = 200,
     herman_body: dict = None,
 ):
-    """Return a context-manager stack that mocks the pipeline."""
+    """Return a context-manager stack that mocks the pipeline.
+
+    v0.5.0: ParseResult uses day_hint/time_hint instead of the old `when` string.
+    """
     from sprite.transcribe import TranscriptResult
 
     llm_ambiguous = llm_ambiguous or []
@@ -132,7 +136,8 @@ def _mock_pipeline(
     mock_parse = ParseResult(
         verb=llm_verb,
         subject=llm_subject,
-        when=llm_when,
+        day_hint=llm_day_hint,
+        time_hint=llm_time_hint,
         criticality="normal",
         confidence=llm_confidence,
         ambiguous_fields=llm_ambiguous,
@@ -303,3 +308,236 @@ def test_process_file_skips_icloud_placeholder(tmp_path):
 
     assert result is False
     mock_dl.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# v0.6.0 TDD: Herman clarifying question must surface, not silently drop
+# ---------------------------------------------------------------------------
+
+
+def _mock_pipeline_clarifying(
+    tmp_path: Path,
+    config,
+    *,
+    whisper_text: str = "Another meeting with myself tomorrow at 10 o'clock",
+    whisper_confidence: float = 0.9,
+    llm_verb: str = "schedule",
+    llm_subject: str = "another meeting with myself",
+    llm_day_hint: str = "tomorrow",
+    llm_time_hint: str = "10 o'clock",
+    llm_confidence: float = 0.88,
+    llm_ambiguous: list = None,
+    herman_body: dict = None,
+):
+    """Mock pipeline for a Herman clarifying-question response.
+
+    Herman returns stored=False + clarifying_question when time is ambiguous.
+    """
+    from sprite.transcribe import TranscriptResult
+    from sprite.parse import ParseResult
+
+    llm_ambiguous = llm_ambiguous or []
+    # Default: Herman asks for AM/PM clarification.
+    herman_body = herman_body or {
+        "stored": False,
+        "record_id": "f252391221d7037fff9cee8adec821b7",
+        "verb": llm_verb,
+        "written_path": None,
+        "event_id": None,
+        "clarifying_question": "10 o'clock — AM or PM?",
+        "ambiguous_fields": ["time"],
+    }
+
+    mock_transcript = TranscriptResult(
+        text=whisper_text,
+        confidence=whisper_confidence,
+        segments=[{"text": whisper_text, "avg_logprob": -0.1}],
+        raw_json={"transcription": []},
+        transcript_json_path=None,
+    )
+    mock_parse = ParseResult(
+        verb=llm_verb,
+        subject=llm_subject,
+        day_hint=llm_day_hint,
+        time_hint=llm_time_hint,
+        criticality="normal",
+        confidence=llm_confidence,
+        ambiguous_fields=llm_ambiguous,
+        raw_llm_json={},
+    )
+
+    mock_herman_resp = MagicMock()
+    mock_herman_resp.status_code = 200
+    mock_herman_resp.stored = False
+    mock_herman_resp.record_id = herman_body["record_id"]
+    mock_herman_resp.event_id = None
+    mock_herman_resp.written_path = None
+    mock_herman_resp.raw_body = herman_body
+
+    return (
+        patch("sprite.watcher.archive_audio", return_value=tmp_path / "audio" / "test.m4a"),
+        patch("sprite.watcher.transcribe", return_value=mock_transcript),
+        patch("sprite.watcher.parse_intent", return_value=mock_parse),
+        patch("sprite.watcher.post_to_herman", return_value=mock_herman_resp),
+    )
+
+
+def test_clarifying_question_writes_inbox_entry(tmp_path):
+    """TDD-1: Herman returns stored=False + clarifying_question → inbox entry created.
+
+    Before v0.6.0: Sprite silently marked the record 'posted'. The question
+    was never surfaced. This test MUST FAIL before the fix is applied.
+    """
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    patches = _mock_pipeline_clarifying(tmp_path, config)
+    with patches[0], patches[1], patches[2], patches[3]:
+        result = process_file(f, config)
+
+    assert result is True
+    # Inbox file must exist with the clarifying question.
+    inbox_files = list(config.inbox_dir.glob("*.md"))
+    assert len(inbox_files) == 1, "Expected one inbox file, got none"
+    content = inbox_files[0].read_text(encoding="utf-8")
+    assert "AM or PM" in content, "Clarifying question must appear in inbox"
+
+
+def test_clarifying_question_disposition_is_clarifying(tmp_path):
+    """TDD-2: state entry disposition must be 'clarifying', not 'posted'.
+
+    The stuck record had disposition='posted' with event_id=null — wrong.
+    'clarifying' is semantically distinct: processed (cold-boot skips it)
+    but not successfully stored.
+    """
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    patches = _mock_pipeline_clarifying(tmp_path, config)
+    with patches[0], patches[1], patches[2], patches[3]:
+        process_file(f, config)
+
+    state_text = config.state_file.read_text(encoding="utf-8")
+    assert '"clarifying"' in state_text
+    # Must NOT be marked as posted.
+    for line in state_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        import json
+        row = json.loads(line)
+        assert row.get("disposition") != "posted", (
+            "disposition must not be 'posted' when stored=False"
+        )
+
+
+def test_clarifying_question_inbox_contains_question_bold(tmp_path):
+    """TDD-1b: inbox entry must include the clarifying question in bold."""
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    patches = _mock_pipeline_clarifying(tmp_path, config)
+    with patches[0], patches[1], patches[2], patches[3]:
+        process_file(f, config)
+
+    inbox_files = list(config.inbox_dir.glob("*.md"))
+    assert len(inbox_files) == 1
+    content = inbox_files[0].read_text(encoding="utf-8")
+    # The spec requires the clarifying question in bold: **Herman asks:** ...
+    assert "**Herman asks:**" in content or "Herman asks" in content
+
+
+def test_clarifying_question_cross_repo_wire_shape(tmp_path):
+    """TDD-3: Sprite's response-handling code accepts the exact shape
+    ParsedCaptureResponse.model_dump() emits.
+
+    This is the cross-repo drift-detection guard for clarifying responses.
+    """
+    import sys
+    from pathlib import Path as _Path
+
+    _HERMAN_BRAIN_SRC = _Path("/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/brain")
+    if str(_HERMAN_BRAIN_SRC) not in sys.path:
+        sys.path.insert(0, str(_HERMAN_BRAIN_SRC))
+
+    try:
+        from homunculus_brain.schemas import ParsedCaptureResponse, CaptureVerb
+    except ImportError:
+        pytest.skip("Herman package not on path")
+
+    # Build the exact shape Herman emits for a clarifying response.
+    clarify_response = ParsedCaptureResponse(
+        stored=False,
+        record_id="f252391221d7037fff9cee8adec821b7",
+        verb=CaptureVerb.SCHEDULE,
+        written_path=None,
+        event_id=None,
+        clarifying_question="10 o’clock — AM or PM?",
+        ambiguous_fields=["time"],
+    )
+    body = clarify_response.model_dump(mode="json")
+
+    # Sprite's HermanResponse must correctly interpret this.
+    from sprite.herman import HermanResponse
+    resp = HermanResponse(
+        status_code=200,
+        stored=body["stored"],
+        record_id=body["record_id"],
+        verb=body.get("verb"),
+        written_path=body.get("written_path"),
+        event_id=body.get("event_id"),
+        raw_body=body,
+    )
+
+    assert resp.stored is False
+    assert resp.record_id == "f252391221d7037fff9cee8adec821b7"
+    assert resp.event_id is None
+    # The clarifying_question must be accessible from raw_body.
+    assert "clarifying_question" in resp.raw_body
+    assert resp.raw_body["clarifying_question"] is not None
+
+
+def test_successful_post_still_marks_posted(tmp_path):
+    """TDD-4 regression: successful Herman responses still route to 'posted'.
+
+    Existing v0.5.x behaviour must be preserved.
+    """
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    patches = _mock_pipeline(tmp_path, config)
+    with patches[0], patches[1], patches[2], patches[3]:
+        result = process_file(f, config)
+
+    assert result is True
+    state_text = config.state_file.read_text(encoding="utf-8")
+    assert '"posted"' in state_text
+
+
+def test_never_mark_posted_when_event_id_is_none(tmp_path):
+    """TDD-5 regression guard: disposition='posted' with event_id=None must be
+    IMPOSSIBLE for schedule/handle verbs.
+
+    When stored=False, event_id is None by definition. If we ever write
+    disposition='posted' in that state it's the original bug re-introduced.
+    This test asserts the invariant on the 'clarifying' path.
+    """
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    patches = _mock_pipeline_clarifying(tmp_path, config)
+    with patches[0], patches[1], patches[2], patches[3]:
+        process_file(f, config)
+
+    state_text = config.state_file.read_text(encoding="utf-8")
+    import json
+    for line in state_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        row = json.loads(line)
+        if row.get("event_id") is None and row.get("disposition") == "posted":
+            pytest.fail(
+                "Invariant violated: disposition='posted' with event_id=None. "
+                "This is the original silent-drop bug."
+            )

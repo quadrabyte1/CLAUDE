@@ -11,25 +11,35 @@ Lifecycle:
    on first run).
 4. Start a watchdog observer on vault/calendar/ and dispatch new .md files
    as they appear.
+5. A periodic sweep thread fires every SWEEP_INTERVAL_SECONDS (default 60).
+   Safety net: if watchdog misses an event for any reason (dropped inotify,
+   .tmp-file timing, or a v0.1.2 bug), the sweep finds and pushes within 60 s.
 
 macOS-only at runtime (AppleScript calls). On Linux the watcher will start
 and sweep the vault but will raise NotImplementedError on the push step.
 
-v0.1.2: removed ensure_calendar() / account_name plumbing. Calendar.app has
-no "account" concept in AppleScript — the user creates "Homunculus" in the
-iCloud account manually (see docs/FIRST_RUN.md Step 1). The bridge verifies
-existence at startup via verify_calendar_exists() and exits gracefully if the
-calendar is not found.
+v0.1.3:
+  - Handle on_moved events where dest is a *.md (Herman's atomic rename path).
+  - Explicitly ignore .tmp file create events (log DEBUG instead of silent fall-through).
+  - Add periodic_sweep() function + background thread as a belt-and-suspenders
+    safety net — catches any event missed by watchdog within 60 s.
+  - Version bump 0.1.2 → 0.1.3.
 """
 
 from __future__ import annotations
 
 import logging
 import sys
+import threading
 import time
 from pathlib import Path
 
-from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEventHandler
+from watchdog.events import (
+    FileCreatedEvent,
+    FileModifiedEvent,
+    FileMovedEvent,
+    FileSystemEventHandler,
+)
 from watchdog.observers import Observer
 
 from . import VERSION
@@ -45,6 +55,9 @@ from .state import PushedState
 from .vault_reader import VaultReaderError, parse_event_file, scan_vault_calendar
 
 log = logging.getLogger(__name__)
+
+# Periodic sweep interval in seconds.
+SWEEP_INTERVAL_SECONDS = 60
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +106,7 @@ def push_if_new(
 # ---------------------------------------------------------------------------
 
 class VaultCalendarHandler(FileSystemEventHandler):
-    """Watchdog handler: fires on new or modified .md files under vault/calendar/."""
+    """Watchdog handler: fires on new, modified, or moved .md files under vault/calendar/."""
 
     def __init__(
         self,
@@ -105,13 +118,43 @@ class VaultCalendarHandler(FileSystemEventHandler):
         self._calendar_name = calendar_name
 
     def on_created(self, event: FileCreatedEvent) -> None:
-        if not event.is_directory:
-            log.info("New file detected: %s", event.src_path)
-            push_if_new(
-                Path(event.src_path),
-                self._state,
-                self._calendar_name,
+        if event.is_directory:
+            return
+        path = Path(event.src_path)
+        # Herman writes atomically: <file>.md.tmp.<PID>.<N> → os.replace → <file>.md.
+        # Explicitly log and skip temp files — do NOT fall through silently.
+        if ".tmp" in path.suffixes or path.suffix == ".tmp" or ".tmp." in path.name:
+            log.debug("Skipping temp file: %s", path.name)
+            return
+        log.info("New file detected: %s", event.src_path)
+        push_if_new(
+            path,
+            self._state,
+            self._calendar_name,
+        )
+
+    def on_moved(self, event: FileMovedEvent) -> None:
+        """Handle atomic rename: Herman writes .tmp → os.replace → .md.
+
+        Watchdog fires a MOVE event (src=.tmp, dest=.md). The bridge must
+        dispatch on the destination, not the source.
+        """
+        if event.is_directory:
+            return
+        dest_path = Path(event.dest_path)
+        if dest_path.suffix != ".md":
+            log.debug(
+                "Ignoring move to non-.md destination: %s → %s",
+                event.src_path,
+                event.dest_path,
             )
+            return
+        log.info(
+            "Atomic rename detected: %s → %s",
+            Path(event.src_path).name,
+            dest_path.name,
+        )
+        push_if_new(dest_path, self._state, self._calendar_name)
 
     def on_modified(self, event: FileModifiedEvent) -> None:
         # Modified events fire for existing files; only push if we haven't
@@ -131,6 +174,74 @@ class VaultCalendarHandler(FileSystemEventHandler):
                         )
                 except (VaultReaderError, FileNotFoundError):
                     pass  # already logged inside push_if_new
+
+
+# ---------------------------------------------------------------------------
+# Periodic sweep — belt-and-suspenders safety net
+# ---------------------------------------------------------------------------
+
+def periodic_sweep(
+    calendar_root: Path,
+    state: PushedState,
+    calendar_name: str,
+) -> int:
+    """
+    Scan *calendar_root* for any .md that isn't in pushed.jsonl and push it.
+
+    This is the safety net for events missed by watchdog (dropped inotify,
+    .tmp-file timing edge cases, or any future bug). Runs on a background
+    thread every SWEEP_INTERVAL_SECONDS.
+
+    Logs at DEBUG when no new events are found (nothing to act on).
+    Logs at INFO when it finds and pushes one or more events.
+
+    Returns:
+        The number of events pushed during this sweep.
+    """
+    if not calendar_root.exists():
+        log.debug("Periodic sweep: calendar root does not exist: %s", calendar_root)
+        return 0
+
+    records = scan_vault_calendar(calendar_root)
+    pushed_count = 0
+
+    for record in records:
+        if state.is_pushed(record.event_id):
+            continue
+        log.info(
+            "Periodic sweep: found unpushed event %s — pushing now",
+            record.event_id,
+        )
+        try:
+            push_event(record, calendar_name)
+            state.mark_pushed(record.event_id)
+            pushed_count += 1
+        except (AppleScriptError, NotImplementedError) as exc:
+            log.error(
+                "Periodic sweep: failed to push %s: %s", record.event_id, exc
+            )
+
+    if pushed_count == 0:
+        log.debug("Periodic sweep: nothing new to push (%d event(s) in vault)", len(records))
+    else:
+        log.info("Periodic sweep: pushed %d new event(s)", pushed_count)
+
+    return pushed_count
+
+
+def _sweep_loop(
+    calendar_root: Path,
+    state: PushedState,
+    calendar_name: str,
+    interval: float,
+    stop_event: threading.Event,
+) -> None:
+    """Background thread body: run periodic_sweep every *interval* seconds."""
+    while not stop_event.wait(interval):
+        try:
+            periodic_sweep(calendar_root, state, calendar_name)
+        except Exception:
+            log.exception("Periodic sweep thread: unexpected error (continuing)")
 
 
 # ---------------------------------------------------------------------------
@@ -234,12 +345,25 @@ def main() -> None:
     observer.start()
     log.info("Watching %s (recursive) …", cfg.calendar_root)
 
+    # Periodic sweep — safety net for events watchdog might miss.
+    stop_sweep = threading.Event()
+    sweep_thread = threading.Thread(
+        target=_sweep_loop,
+        args=(cfg.calendar_root, state, cfg.calendar_name, SWEEP_INTERVAL_SECONDS, stop_sweep),
+        name="mac-calendar-bridge-sweep",
+        daemon=True,
+    )
+    sweep_thread.start()
+    log.info("Periodic sweep started (interval=%ds)", SWEEP_INTERVAL_SECONDS)
+
     try:
         while observer.is_alive():
             time.sleep(1)
     except KeyboardInterrupt:
         log.info("Interrupted; stopping observer")
     finally:
+        stop_sweep.set()
+        sweep_thread.join(timeout=5)
         observer.stop()
         observer.join()
         log.info("mac_calendar_bridge stopped")

@@ -116,11 +116,13 @@ def test_fixture_end_to_end_happy_path(tmp_path):
     mock_parse = ParseResult(
         verb="schedule",
         subject="Sprite test",
-        when="2026-09-14T09:00:00-04:00",
+        day_hint=None,
+        time_hint=None,
         criticality="normal",
         confidence=0.90,
         ambiguous_fields=[],
-        raw_llm_json={},
+        # Explicit ISO datetime goes in raw_llm_json["when"] for the rare case.
+        raw_llm_json={"when": "2026-09-14T09:00:00-04:00"},
     )
 
     # --- Mock Herman ---
@@ -200,7 +202,8 @@ def test_fixture_e2e_low_confidence_goes_to_inbox(tmp_path):
         segments=[], raw_json={}, transcript_json_path=None,
     )
     mock_parse = ParseResult(
-        verb="note", subject="something unclear", when=None,
+        verb="note", subject="something unclear",
+        day_hint=None, time_hint=None,
         criticality="normal", confidence=0.88, ambiguous_fields=[],
         raw_llm_json={},
     )
@@ -230,7 +233,9 @@ def test_fixture_e2e_idempotent_second_run(tmp_path):
         text="Sprite test", confidence=0.9, segments=[], raw_json={}, transcript_json_path=None,
     )
     parse = ParseResult(
-        verb="note", subject="Sprite test", when=None, criticality="normal",
+        verb="note", subject="Sprite test",
+        day_hint=None, time_hint=None,
+        criticality="normal",
         confidence=0.85, ambiguous_fields=[], raw_llm_json={},
     )
     mock_herman_resp = MagicMock()

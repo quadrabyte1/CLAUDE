@@ -5,9 +5,15 @@ Design:
      - criticality: "mark critical", "important", "urgent", "don't let me forget"
      - verb hints: schedule / note / handle / avoid
   2. Ollama call with format=JSON schema (constrained decoding via GBNF).
-     Temperature 0.2. One-shot example in system prompt. Math never in prompt.
+     Temperature 0.2. Few-shot examples in system prompt. Math NEVER in prompt.
   3. Post-process: merge preprocessor criticality (LLM cannot override it
      downward — only upward), validate confidence, detect ambiguous_fields.
+
+v0.5.0 — M3 alignment: LLM now emits ``day_hint`` and ``time_hint`` instead
+of a ``when`` string. The LLM does NOT know what today is. It does NOT compute
+dates. It copies verbatim day/time expressions from the utterance into the two
+hint fields. Herman's authoritative ``date_resolver`` (pure Python, no LLM) is
+the only entity that resolves those hints to a UTC datetime.
 
 Portability:
   No MLX, no CoreML, no Mac-only audio. Talks to Ollama HTTP API only.
@@ -33,12 +39,26 @@ import httpx
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Output schema (matches scoping §3 + Herman's ParsedCaptureRequest)
+# Output schema (v0.5.0 — day_hint/time_hint replace the old `when` string)
+#
+# The LLM must NOT emit a resolved date. It copies the user's exact phrasing:
+#   "tomorrow at 10am" → day_hint="tomorrow", time_hint="10am"
+#   "September 18th at 10 AM" → day_hint="September 18th", time_hint="10 AM"
+#   "next Tuesday" → day_hint="next Tuesday", time_hint=null
+#   "call the contractor at 5:35" → day_hint=null, time_hint="5:35"
+#
+# If the user says nothing about time → both null.
+# If the user gives an explicit ISO-8601 datetime (typed input, very rare in
+# speech) → the LLM MAY emit `when` as an ISO string. That optional field is
+# NOT in `required`; it is listed in `properties` for completeness only.
 # ---------------------------------------------------------------------------
 
-_PARSE_SCHEMA = {
+_INTENT_JSON_SCHEMA = {
     "type": "object",
-    "required": ["verb", "subject", "when", "criticality", "confidence", "ambiguous_fields"],
+    "required": [
+        "verb", "subject", "day_hint", "time_hint",
+        "criticality", "confidence", "ambiguous_fields",
+    ],
     "additionalProperties": False,
     "properties": {
         "verb": {
@@ -50,11 +70,30 @@ _PARSE_SCHEMA = {
             "type": "string",
             "description": "Short noun phrase — what the memo is about.",
         },
+        "day_hint": {
+            "type": ["string", "null"],
+            "description": (
+                "Verbatim day expression from the utterance. "
+                "Copy exactly: 'tomorrow', 'Thursday', 'September 18th', 'next Monday'. "
+                "Do NOT resolve. Do NOT convert to a date. Null if no day reference."
+            ),
+        },
+        "time_hint": {
+            "type": ["string", "null"],
+            "description": (
+                "Verbatim time expression from the utterance. "
+                "Copy exactly: '10am', '9:00 AM', 'noon', '5:35'. "
+                "Do NOT add AM/PM if the user did not say it. "
+                "Null if no time reference."
+            ),
+        },
         "when": {
             "type": ["string", "null"],
             "description": (
-                "ISO-8601 datetime with timezone offset if extractable; "
-                "null if no time reference is present."
+                "Optional. Emit ONLY when the user provided an explicit, "
+                "unambiguous ISO-8601 datetime string (e.g. '2026-09-18T10:00:00-04:00'). "
+                "For all relative expressions use day_hint/time_hint instead. "
+                "Leave null (or omit) in the typical voice-memo case."
             ),
         },
         "criticality": {
@@ -75,7 +114,10 @@ _PARSE_SCHEMA = {
             "type": "array",
             "items": {"type": "string"},
             "description": (
-                "List field names that are unclear (e.g. ['when', 'subject']). "
+                "List field names that are unclear "
+                "(e.g. ['day_hint', 'subject', 'time_hint']). "
+                "Include 'time_hint' when the user gave a bare hour "
+                "without AM/PM and context does not resolve it. "
                 "Empty list when nothing is ambiguous."
             ),
         },
@@ -88,34 +130,66 @@ _PARSE_SCHEMA = {
 
 _SYSTEM_PROMPT = """\
 You are a voice-memo intent extractor for a personal assistant named Sprite.
-Given a voice-memo transcript, output a single JSON object with these keys:
+Given a voice-memo transcript, output a single JSON object.
 
-  verb        — one of: schedule, note, handle, avoid
-  subject     — short noun phrase (what this is about)
-  when        — ISO-8601 datetime with offset, or null if not mentioned
-  criticality — "normal" or "critical" (critical only when user says urgent/important/critical)
-  confidence  — float 0.0–1.0 (your confidence in verb + subject)
-  ambiguous_fields — list of field names you are unsure about (empty list if none)
+CRITICAL RULE: You do not know what today is. You do not compute dates. You
+do not resolve relative expressions like "tomorrow" or "Thursday" to calendar
+dates. You copy the user's exact phrasing into the hint fields and let the
+downstream date resolver do the math.
+
+Output these keys:
+
+  verb           — one of: schedule, note, handle, avoid
+  subject        — short noun phrase (what this is about)
+  day_hint       — verbatim day expression ("tomorrow", "Thursday", "next Monday",
+                   "September 18th"), or null if no day reference
+  time_hint      — verbatim time expression ("10am", "9:00 AM", "noon", "5:35"),
+                   or null if no time reference
+  when           — null in almost all cases; use ONLY for an explicit ISO-8601
+                   datetime string the user actually said (rare)
+  criticality    — "normal" or "critical" (critical only when user says so explicitly)
+  confidence     — float 0.0–1.0 (your confidence in verb + subject)
+  ambiguous_fields — list of field names you are unsure about; include "time_hint"
+                   when the user gave a bare hour with no AM/PM (e.g. "5:35")
 
 Verb definitions:
-  schedule — put something on the calendar (requires a time)
+  schedule — put something on the calendar (requires a time reference)
   note     — remember a fact, insight, or reference (no deadline)
   handle   — do-this-soon to-do (may or may not have a deadline)
   avoid    — standing warning or constraint ("avoid scheduling X", "Sam is allergic to Y")
 
-Rules:
-  - Never do date arithmetic. If "tomorrow" or "Thursday" is mentioned, emit the
-    relative expression in the `when` field as a descriptive string — NOT an ISO date.
-    Example: when="thursday at 10am" is acceptable when you cannot resolve the date.
-  - If confidence < 0.6 on verb OR subject, list those fields in ambiguous_fields.
-  - Emit JSON only. No prose. No markdown fences.
+AM/PM rule:
+  If the user says "5:35" without AM or PM, copy "5:35" into time_hint as-is.
+  Do NOT guess whether it is morning or afternoon. Add "time_hint" to
+  ambiguous_fields so the resolver can ask.
 
-Example:
+Emit JSON only. No prose. No markdown fences.
+
+--- EXAMPLES ---
+
+Transcript: "Let's set a second meeting with myself tomorrow at 10am."
+Output:
+{"verb":"schedule","subject":"second meeting with myself","day_hint":"tomorrow","time_hint":"10am","when":null,"criticality":"normal","confidence":0.92,"ambiguous_fields":[]}
+
+Transcript: "dentist appointment September 18th at 10 AM"
+Output:
+{"verb":"schedule","subject":"dentist appointment","day_hint":"September 18th","time_hint":"10 AM","when":null,"criticality":"normal","confidence":0.95,"ambiguous_fields":[]}
+
+Transcript: "gym next Tuesday"
+Output:
+{"verb":"schedule","subject":"gym","day_hint":"next Tuesday","time_hint":null,"when":null,"criticality":"normal","confidence":0.88,"ambiguous_fields":[]}
+
+Transcript: "call the contractor at 5:35"
+Output:
+{"verb":"handle","subject":"call the contractor","day_hint":null,"time_hint":"5:35","when":null,"criticality":"normal","confidence":0.85,"ambiguous_fields":["time_hint"]}
 
 Transcript: "remember to call the deck contractor Thursday, mark critical"
-
 Output:
-{"verb":"handle","subject":"call deck contractor","when":"thursday","criticality":"critical","confidence":0.88,"ambiguous_fields":[]}
+{"verb":"handle","subject":"call deck contractor","day_hint":"Thursday","time_hint":null,"when":null,"criticality":"critical","confidence":0.88,"ambiguous_fields":[]}
+
+Transcript: "note that the LED reflects off the terrazzo"
+Output:
+{"verb":"note","subject":"LED reflects off terrazzo","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.85,"ambiguous_fields":[]}
 """
 
 # ---------------------------------------------------------------------------
@@ -163,11 +237,15 @@ def _preprocess(transcript: str) -> PreprocessorHints:
 class ParseResult:
     verb: str               # schedule | note | handle | avoid
     subject: str
-    when: Optional[str]     # raw string from LLM (may be relative), or None
-    criticality: str        # normal | critical
+    day_hint: Optional[str]   # verbatim day expression from utterance, or None
+    time_hint: Optional[str]  # verbatim time expression from utterance, or None
+    criticality: str          # normal | critical
     confidence: float
     ambiguous_fields: list[str]
-    raw_llm_json: dict      # for provenance / debugging
+    raw_llm_json: dict        # for provenance / debugging
+    # `when` is intentionally absent. If the LLM emits an ISO string in the
+    # optional `when` field, we expose it via `raw_llm_json["when"]`. The
+    # watcher pipeline checks raw_llm_json to detect the rare ISO case.
 
 
 class OllamaUnreachable(RuntimeError):
@@ -189,12 +267,13 @@ def parse_intent(
 ) -> ParseResult:
     """Run preprocessor then call Ollama for structured intent extraction.
 
-    ``captured_at`` and ``speaker_tz`` are injected into the user prompt
-    to help the LLM interpret relative date expressions — but the *resolver*
-    (Python, not LLM) is responsible for converting "thursday" to an ISO
-    date. See the watcher pipeline for where date resolution happens
-    (future M3 work; for now we emit the raw ``when`` string and Herman
-    resolves it server-side via its own date_resolver).
+    Returns a ``ParseResult`` with ``day_hint`` and ``time_hint`` — verbatim
+    expressions the user spoke. The LLM does NOT resolve dates; that is the
+    job of Herman's authoritative ``date_resolver`` (pure Python, no LLM math).
+
+    ``captured_at`` and ``speaker_tz`` are included in the user message for
+    context (e.g., transcript provenance) but NOT for date resolution — the
+    LLM must not use them to compute a calendar date.
     """
     hints = _preprocess(transcript)
 
@@ -221,7 +300,7 @@ def parse_intent(
         "system": _SYSTEM_PROMPT,
         "stream": False,
         "options": {"temperature": 0.2, "num_predict": 256},
-        "format": _PARSE_SCHEMA,
+        "format": _INTENT_JSON_SCHEMA,
     }
 
     try:
@@ -263,7 +342,8 @@ def parse_intent(
     return ParseResult(
         verb=data["verb"],
         subject=data["subject"],
-        when=data.get("when"),
+        day_hint=data.get("day_hint"),
+        time_hint=data.get("time_hint"),
         criticality=criticality,
         confidence=float(data["confidence"]),
         ambiguous_fields=list(data.get("ambiguous_fields", [])),

@@ -1,6 +1,6 @@
 [project]
 name = "mac-calendar-bridge"
-version = "0.1.2"
+version = "0.1.3"
 description = "Mac Calendar bridge for Homunculus/Herman — watches the vault and pushes events to Calendar.app via AppleScript."
 requires-python = ">=3.11"
 dependencies = [

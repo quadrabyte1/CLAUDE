@@ -76,9 +76,12 @@ def mark_processed(
     """Append a processed-record entry for *key*.
 
     ``disposition`` is one of:
-      - ``"posted"``  — sent to Herman, accepted (200)
-      - ``"inbox"``   — low confidence, written to inbox
-      - ``"error"``   — pipeline error (details carries the message)
+      - ``"posted"``      — sent to Herman, stored=True (accepted)
+      - ``"inbox"``       — low confidence / ambiguous, written to inbox BEFORE Herman
+      - ``"clarifying"``  — sent to Herman, stored=False; Herman asked a clarifying
+                            question surfaced to inbox. Cold-boot skips it (already
+                            dispatched) but it is NOT the same as "posted".
+      - ``"error"``       — pipeline error (details carries the message)
     """
     state_file.parent.mkdir(parents=True, exist_ok=True)
     entry = {

@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: sprite
-Version: 0.4.0
+Version: 0.6.0
 Summary: Sprite — voice-memo Mac pipeline: iCloud .m4a → ffmpeg → whisper-cli → Ollama intent parse → Herman POST /capture/parsed
 Requires-Python: >=3.11
 Requires-Dist: httpx>=0.27

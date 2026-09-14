@@ -29,7 +29,7 @@ tail -f /tmp/sprite_watcher.log
 
 Expected cold-boot output:
 ```
-INFO sprite.watcher Sprite watcher v0.4.0 starting
+INFO sprite.watcher Sprite watcher v0.5.0 starting
 INFO sprite.watcher   recordings:  ~/Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings
 INFO sprite.watcher cold-boot: scanning ...
 INFO sprite.watcher cold-boot: dispatched 0 / 0 files

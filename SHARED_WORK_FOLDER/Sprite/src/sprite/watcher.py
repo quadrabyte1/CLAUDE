@@ -236,16 +236,35 @@ def process_file(path: Path, config: SpriteConfig) -> bool:
         return True
 
     # 7. POST to Herman.
+    # v0.5.0: ParseResult has day_hint/time_hint instead of a raw `when` string.
+    # The rare case where the LLM emitted an explicit ISO-8601 datetime is
+    # preserved via raw_llm_json["when"]. Explicit when takes precedence; hints
+    # are only sent when no ISO datetime is available (the typical case).
+    iso_when: Optional[str] = parse_result.raw_llm_json.get("when") or None
+    if iso_when:
+        # Validate it's actually parseable before trusting it.
+        try:
+            from datetime import datetime as _dt
+            _dt.fromisoformat(iso_when)
+        except (ValueError, TypeError):
+            log.warning(
+                "process: LLM emitted non-ISO when=%r — ignoring, using hints",
+                iso_when,
+            )
+            iso_when = None
+
     payload = build_request(
         verb=parse_result.verb,
         subject=parse_result.subject,
-        when=parse_result.when,
+        when=iso_when,
         criticality=parse_result.criticality,
         confidence=effective_confidence,
         raw_transcript=transcript_text,
         audio_path=str(archived_path),
         captured_at=captured_at,
         sprite_uuid=uuid,
+        day_hint=parse_result.day_hint if not iso_when else None,
+        time_hint=parse_result.time_hint if not iso_when else None,
     )
 
     try:
@@ -262,6 +281,56 @@ def process_file(path: Path, config: SpriteConfig) -> bool:
             details={"error": f"herman: {exc}"},
         )
         return False
+
+    # v0.6.0: inspect stored field — Herman may return 200 with stored=False
+    # when a clarifying question is needed (e.g. "10 o'clock — AM or PM?").
+    # NEVER mark as "posted" when stored=False. Route to inbox with the question.
+    if not herman_resp.stored:
+        clarifying_question = herman_resp.raw_body.get("clarifying_question")
+        ambiguous_from_herman = herman_resp.raw_body.get("ambiguous_fields", [])
+        log.warning(
+            "process: Herman stored=False for %s — clarifying_question=%r ambiguous=%s",
+            path.name,
+            clarifying_question,
+            ambiguous_from_herman,
+        )
+        try:
+            append_to_inbox(
+                config.inbox_dir,
+                captured_at=captured_at,
+                transcript=transcript_text,
+                verb_hint=parse_result.verb,
+                subject_hint=parse_result.subject,
+                confidence=effective_confidence,
+                ambiguous_fields=ambiguous_from_herman,
+                audio_path=str(archived_path),
+                day_hint=parse_result.day_hint,
+                time_hint=parse_result.time_hint,
+                clarifying_question=clarifying_question,
+            )
+        except Exception as exc:
+            log.error(
+                "process: inbox write failed for clarifying response %s: %s",
+                path.name, exc,
+            )
+        mark_processed(
+            config.state_file, key,
+            audio_path=str(archived_path),
+            record_id=herman_resp.record_id,
+            disposition="clarifying",
+            details={
+                "clarifying_question": clarifying_question,
+                "ambiguous_fields": ambiguous_from_herman,
+                "verb": parse_result.verb,
+                "confidence": effective_confidence,
+            },
+        )
+        log.info(
+            "process: clarifying — record_id=%s question=%r",
+            herman_resp.record_id,
+            clarifying_question,
+        )
+        return True
 
     mark_processed(
         config.state_file, key,
@@ -358,7 +427,7 @@ class _VoiceMemoHandler(FileSystemEventHandler):
 def main() -> None:
     config = load_config()
 
-    log.info("Sprite watcher v0.4.0 starting")
+    log.info("Sprite watcher v0.6.0 starting")
     log.info("  recordings:  %s", config.recordings_dir)
     log.info("  audio arch:  %s", config.audio_archive)
     log.info("  state file:  %s", config.state_file)

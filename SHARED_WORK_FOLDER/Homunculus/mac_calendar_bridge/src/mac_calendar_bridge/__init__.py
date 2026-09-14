@@ -1,9 +1,8 @@
 """
 mac_calendar_bridge — Push Herman vault events to macOS Calendar.app.
 
-Version 0.1.2  (remove invalid `tell account` — Calendar.app has no account
-concept in AppleScript; bridge now uses verify_calendar_exists() at startup
-and requires the user to create the "Homunculus" calendar manually in iCloud)
+Version 0.1.3  (atomic-rename MOVE event handler; explicit .tmp file guard;
+periodic 60-second sweep as belt-and-suspenders safety net for missed events)
 """
 
-VERSION = "0.1.2"
+VERSION = "0.1.3"

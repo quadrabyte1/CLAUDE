@@ -344,3 +344,255 @@ class TestScanVaultCalendar:
         records = scan_vault_calendar(cal_dir)
         assert len(records) == 1
         assert records[0].duration_minutes == 60  # computed from 9:00-10:00
+
+
+# ---------------------------------------------------------------------------
+# Tests: display_title — v0.1.4 [handle] prefix stripping
+# ---------------------------------------------------------------------------
+#
+# Design:
+#   "[handle] <subject>"  → "✓ <subject>"   (to-do/reminder, normal criticality)
+#   "[handle!] <subject>" → "🔥 <subject>"  (critical to-do)
+#   "<regular title>"     → "<regular title>" (no change — regular events get no noise)
+#
+# Only the leading prefix is stripped. If "[handle]" appears mid-subject,
+# it is left as-is (vault semantics are internal; we only translate the marker
+# that Herman prepends at the start of the title field).
+#
+# Edge case: a title that IS only "[handle]" with no subject → becomes "✓"
+# (empty remainder). Unlikely in practice; handled defensively.
+# ---------------------------------------------------------------------------
+
+def _make_simple_record(title: str) -> "EventRecord":
+    """Return a minimal EventRecord with the given title, for display_title tests."""
+    from datetime import datetime, timezone
+    from pathlib import Path
+    from mac_calendar_bridge.vault_reader import EventRecord
+    starts = datetime(2026, 9, 17, 15, 0, tzinfo=timezone.utc)  # Wed 17 Sep 11 AM EDT
+    ends = datetime(2026, 9, 17, 15, 30, tzinfo=timezone.utc)
+    return EventRecord(
+        event_id="test-event",
+        title=title,
+        starts_at=starts,
+        ends_at=ends,
+        tz="America/New_York",
+        duration_minutes=30,
+        source_path=Path("/tmp/fake.md"),
+    )
+
+
+class TestDisplayTitle:
+    # --- [handle] prefix (normal criticality) ---
+
+    def test_handle_prefix_stripped_and_checkmark_added(self):
+        rec = _make_simple_record("[handle] review the Homunculus enhancement list")
+        assert rec.display_title == "✓ review the Homunculus enhancement list"
+
+    def test_handle_prefix_short_subject(self):
+        rec = _make_simple_record("[handle] call the plumber")
+        assert rec.display_title == "✓ call the plumber"
+
+    def test_handle_prefix_preserves_subject_case(self):
+        rec = _make_simple_record("[handle] Buy groceries")
+        assert rec.display_title == "✓ Buy groceries"
+
+    # --- [handle!] prefix (critical) ---
+
+    def test_handle_critical_prefix_stripped_and_fire_added(self):
+        rec = _make_simple_record("[handle!] call the deck contractor")
+        assert rec.display_title == "🔥 call the deck contractor"
+
+    def test_handle_critical_prefix_short_subject(self):
+        rec = _make_simple_record("[handle!] call the vet")
+        assert rec.display_title == "🔥 call the vet"
+
+    # --- Regular event — no change ---
+
+    def test_regular_event_unchanged(self):
+        rec = _make_simple_record("meeting with myself")
+        assert rec.display_title == "meeting with myself"
+
+    def test_regular_event_with_bracket_words_unchanged(self):
+        """Titles that contain bracket-words mid-string are not modified."""
+        rec = _make_simple_record("review [handle] docs")
+        assert rec.display_title == "review [handle] docs"
+
+    def test_regular_event_empty_prefix_substring_not_stripped(self):
+        """[handle] not at position 0 is left alone."""
+        rec = _make_simple_record("see [handle!] tomorrow")
+        assert rec.display_title == "see [handle!] tomorrow"
+
+    # --- Edge cases ---
+
+    def test_handle_prefix_only_no_subject(self):
+        """Title is exactly '[handle]' with nothing after it — becomes '✓'."""
+        rec = _make_simple_record("[handle]")
+        assert rec.display_title == "✓"
+
+    def test_handle_critical_prefix_only_no_subject(self):
+        """Title is exactly '[handle!]' — becomes '🔥'."""
+        rec = _make_simple_record("[handle!]")
+        assert rec.display_title == "🔥"
+
+    def test_handle_prefix_with_extra_spaces(self):
+        """Extra whitespace between prefix and subject is collapsed: lstrip produces clean output."""
+        rec = _make_simple_record("[handle]  review the list")
+        assert rec.display_title == "✓ review the list"
+
+    def test_original_title_field_unchanged(self):
+        """display_title must not mutate the raw title field — vault stays authoritative."""
+        rec = _make_simple_record("[handle] buy milk")
+        _ = rec.display_title  # trigger the property
+        assert rec.title == "[handle] buy milk"
+
+    # --- parse_event_file integration: display_title on a real vault file ---
+
+    def test_parse_event_file_regular_title_display(self, tmp_path):
+        """Regular vault event → display_title unchanged."""
+        path = write_md(tmp_path, "meeting.md", MEETING_MD)
+        rec = parse_event_file(path)
+        assert rec.display_title == rec.title  # "meeting with myself"
+
+    def test_parse_event_file_handle_prefix(self, tmp_path):
+        """Vault file with [handle] prefix → display_title uses ✓."""
+        content = textwrap.dedent("""\
+            ---
+            id: 2026-09-17-review-enhancement-list
+            title: '[handle] review the Homunculus enhancement list'
+            starts_at: '2026-09-17T15:00:00-04:00'
+            ends_at: '2026-09-17T15:30:00-04:00'
+            tz: America/New_York
+            duration_minutes: 30
+            ---
+        """)
+        path = write_md(tmp_path, "handle_event.md", content)
+        rec = parse_event_file(path)
+        assert rec.display_title == "✓ review the Homunculus enhancement list"
+        assert rec.title == "[handle] review the Homunculus enhancement list"
+
+    def test_parse_event_file_handle_critical_prefix(self, tmp_path):
+        """Vault file with [handle!] prefix → display_title uses 🔥."""
+        content = textwrap.dedent("""\
+            ---
+            id: 2026-09-17-call-contractor
+            title: '[handle!] call the deck contractor'
+            starts_at: '2026-09-17T15:00:00-04:00'
+            ends_at: '2026-09-17T15:30:00-04:00'
+            tz: America/New_York
+            duration_minutes: 30
+            ---
+        """)
+        path = write_md(tmp_path, "critical_event.md", content)
+        rec = parse_event_file(path)
+        assert rec.display_title == "🔥 call the deck contractor"
+
+
+# ---------------------------------------------------------------------------
+# Tests: push_event uses display_title, not title  (v0.1.4 regression guard)
+# ---------------------------------------------------------------------------
+
+class TestPushEventUsesDisplayTitle:
+    """
+    Regression guard: push_event must embed display_title in the AppleScript
+    summary, NOT the raw vault title (which may contain [handle] noise).
+
+    We construct an EventRecord with a [handle] title and assert that the
+    rendered AppleScript contains the clean display form.
+    """
+
+    def test_push_event_uses_display_title_for_handle(self):
+        """push_event sends '✓ ...' to Calendar, not '[handle] ...'."""
+        import sys
+        if sys.platform != "darwin":
+            pytest.skip("push_event is macOS-only")
+
+        from pathlib import Path
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        from mac_calendar_bridge.vault_reader import EventRecord
+        from mac_calendar_bridge.applescript import push_event
+
+        starts = datetime(2026, 9, 17, 19, 0, tzinfo=timezone.utc)  # 3 PM EDT
+        ends = datetime(2026, 9, 17, 19, 30, tzinfo=timezone.utc)
+        event = EventRecord(
+            event_id="2026-09-17-review-enhancement-list",
+            title="[handle] review the Homunculus enhancement list",
+            starts_at=starts,
+            ends_at=ends,
+            tz="America/New_York",
+            duration_minutes=30,
+            source_path=Path("/tmp/fake.md"),
+        )
+
+        with patch("mac_calendar_bridge.applescript.run_applescript") as mock_run:
+            mock_run.return_value = ""
+            push_event(event, "Homunculus")
+
+        script = mock_run.call_args[0][0]
+        # Must use the clean display title
+        assert "✓ review the Homunculus enhancement list" in script
+        # Must NOT contain the raw [handle] prefix
+        assert "[handle]" not in script
+
+    def test_push_event_uses_display_title_for_handle_critical(self):
+        """push_event sends '🔥 ...' to Calendar, not '[handle!] ...'."""
+        import sys
+        if sys.platform != "darwin":
+            pytest.skip("push_event is macOS-only")
+
+        from pathlib import Path
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        from mac_calendar_bridge.vault_reader import EventRecord
+        from mac_calendar_bridge.applescript import push_event
+
+        starts = datetime(2026, 9, 17, 19, 0, tzinfo=timezone.utc)
+        ends = datetime(2026, 9, 17, 19, 30, tzinfo=timezone.utc)
+        event = EventRecord(
+            event_id="2026-09-17-call-contractor",
+            title="[handle!] call the deck contractor",
+            starts_at=starts,
+            ends_at=ends,
+            tz="America/New_York",
+            duration_minutes=30,
+            source_path=Path("/tmp/fake.md"),
+        )
+
+        with patch("mac_calendar_bridge.applescript.run_applescript") as mock_run:
+            mock_run.return_value = ""
+            push_event(event, "Homunculus")
+
+        script = mock_run.call_args[0][0]
+        assert "🔥 call the deck contractor" in script
+        assert "[handle!]" not in script
+
+    def test_push_event_regular_title_unchanged(self):
+        """Regular event title passes through push_event unchanged."""
+        import sys
+        if sys.platform != "darwin":
+            pytest.skip("push_event is macOS-only")
+
+        from pathlib import Path
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        from mac_calendar_bridge.vault_reader import EventRecord
+        from mac_calendar_bridge.applescript import push_event
+
+        starts = datetime(2026, 9, 15, 13, 0, tzinfo=timezone.utc)
+        ends = datetime(2026, 9, 15, 13, 30, tzinfo=timezone.utc)
+        event = EventRecord(
+            event_id="2026-09-15-meeting-with-myself",
+            title="meeting with myself",
+            starts_at=starts,
+            ends_at=ends,
+            tz="America/New_York",
+            duration_minutes=30,
+            source_path=Path("/tmp/fake.md"),
+        )
+
+        with patch("mac_calendar_bridge.applescript.run_applescript") as mock_run:
+            mock_run.return_value = ""
+            push_event(event, "Homunculus")
+
+        script = mock_run.call_args[0][0]
+        assert "meeting with myself" in script

@@ -518,3 +518,142 @@ class TestAtomicRenameAndSweep:
             count = periodic_sweep(cal_dir, state, "Homunculus")
 
         assert count == 0
+
+
+# ---------------------------------------------------------------------------
+# v0.1.5 TDD Bug 1: belt-and-suspenders dup-prevention wired into push_if_new
+# ---------------------------------------------------------------------------
+
+class TestPushIfNewBeltAndSuspenders:
+    """Bug 1 regression suite: query_pushed_event_ids() must be called as the
+    slow-but-authoritative second idempotency check in push_if_new() when the
+    fast-path (pushed.jsonl) says the event hasn't been pushed.
+
+    Scenario that prompted the bug: Thomas wiped pushed.jsonl during v0.1.4
+    migration.  Bridge cold-booted, state.is_pushed() returned False for every
+    event, and all 5 events got re-pushed → duplicates in Calendar.
+
+    Fix contract:
+      1. Fast path (pushed.jsonl) — if found, skip, done.
+      2. Slow path (query_pushed_event_ids) — if found in Calendar, self-heal
+         pushed.jsonl, skip (no push call).
+      3. Only if BOTH say "not present" → push, then mark in pushed.jsonl.
+    """
+
+    def test_bug1_calendar_already_has_event_no_push_when_jsonl_wiped(self, tmp_path):
+        """FAILING (pre-fix): pushed.jsonl is empty, Calendar already has the
+        event → push_if_new must NOT re-push it.
+
+        query_pushed_event_ids must be called and its result must block the push.
+        """
+        p = write_md(tmp_path, "event.md", CODE_REVIEW_MD)
+        # pushed.jsonl is empty (wiped)
+        state = PushedState(tmp_path / "state.jsonl")
+        assert not state.is_pushed("2026-09-18-code-review-with-myself")
+
+        # Calendar.app already has this event — query returns the event_id
+        with patch(
+            "mac_calendar_bridge.watcher.query_pushed_event_ids",
+            return_value=["2026-09-18-code-review-with-myself"],
+        ) as mock_query, patch(
+            "mac_calendar_bridge.watcher.push_event",
+        ) as mock_push:
+            push_if_new(p, state, "Homunculus")
+
+        # Must NOT push — event already in Calendar
+        mock_push.assert_not_called()
+        # query_pushed_event_ids must have been called
+        mock_query.assert_called_once()
+
+    def test_bug1_self_heal_writes_to_jsonl_when_found_in_calendar(self, tmp_path):
+        """FAILING (pre-fix): when Calendar.app has the event but pushed.jsonl
+        doesn't, push_if_new must self-heal by writing the event_id to
+        pushed.jsonl so future fast-path checks work.
+        """
+        p = write_md(tmp_path, "event.md", CODE_REVIEW_MD)
+        state = PushedState(tmp_path / "state.jsonl")
+
+        with patch(
+            "mac_calendar_bridge.watcher.query_pushed_event_ids",
+            return_value=["2026-09-18-code-review-with-myself"],
+        ), patch("mac_calendar_bridge.watcher.push_event"):
+            push_if_new(p, state, "Homunculus")
+
+        # Self-heal: event_id must now be in the in-memory state
+        assert state.is_pushed("2026-09-18-code-review-with-myself")
+
+    def test_bug1_self_heal_message_logged(self, tmp_path, caplog):
+        """FAILING (pre-fix): self-heal must log a recognisable message so
+        Thomas can confirm the heal in the log after migration.
+        """
+        import logging
+        p = write_md(tmp_path, "event.md", CODE_REVIEW_MD)
+        state = PushedState(tmp_path / "state.jsonl")
+
+        with caplog.at_level(logging.INFO, logger="mac_calendar_bridge.watcher"):
+            with patch(
+                "mac_calendar_bridge.watcher.query_pushed_event_ids",
+                return_value=["2026-09-18-code-review-with-myself"],
+            ), patch("mac_calendar_bridge.watcher.push_event"):
+                push_if_new(p, state, "Homunculus")
+
+        assert any(
+            "self-heal" in r.message.lower() or "self_heal" in r.message.lower()
+            for r in caplog.records
+        ), f"No self-heal log found. Records: {[r.message for r in caplog.records]}"
+
+    def test_bug1_normal_push_path_still_works(self, tmp_path):
+        """Regression: event is not in pushed.jsonl AND not in Calendar →
+        push_event must be called exactly once.
+        """
+        p = write_md(tmp_path, "event.md", CODE_REVIEW_MD)
+        state = PushedState(tmp_path / "state.jsonl")
+
+        with patch(
+            "mac_calendar_bridge.watcher.query_pushed_event_ids",
+            return_value=[],  # Calendar says not present
+        ) as mock_query, patch(
+            "mac_calendar_bridge.watcher.push_event",
+        ) as mock_push:
+            push_if_new(p, state, "Homunculus")
+
+        mock_push.assert_called_once()
+        assert state.is_pushed("2026-09-18-code-review-with-myself")
+        mock_query.assert_called_once()
+
+    def test_bug1_query_not_called_when_fast_path_hits(self, tmp_path):
+        """Optimization: if fast-path says already-pushed, query_pushed_event_ids
+        must NOT be called (it's expensive — involves a Calendar.app round-trip).
+        """
+        p = write_md(tmp_path, "event.md", CODE_REVIEW_MD)
+        state = PushedState(tmp_path / "state.jsonl")
+        state.mark_pushed("2026-09-18-code-review-with-myself")
+
+        with patch(
+            "mac_calendar_bridge.watcher.query_pushed_event_ids",
+        ) as mock_query, patch(
+            "mac_calendar_bridge.watcher.push_event",
+        ) as mock_push:
+            push_if_new(p, state, "Homunculus")
+
+        mock_push.assert_not_called()
+        mock_query.assert_not_called()
+
+    def test_bug1_query_date_str_is_midnight_on_event_date(self, tmp_path):
+        """The date_str passed to query_pushed_event_ids must be midnight on
+        the event's local date so the AppleScript window covers the full day.
+        """
+        p = write_md(tmp_path, "event.md", CODE_REVIEW_MD)
+        state = PushedState(tmp_path / "state.jsonl")
+
+        with patch(
+            "mac_calendar_bridge.watcher.query_pushed_event_ids",
+            return_value=[],
+        ) as mock_query, patch("mac_calendar_bridge.watcher.push_event"):
+            push_if_new(p, state, "Homunculus")
+
+        call_args = mock_query.call_args
+        date_str = call_args[0][1]  # second positional arg
+        # Sep 18 2026 is a Friday; midnight should be in the string
+        assert "September 18, 2026" in date_str
+        assert "12:00 AM" in date_str

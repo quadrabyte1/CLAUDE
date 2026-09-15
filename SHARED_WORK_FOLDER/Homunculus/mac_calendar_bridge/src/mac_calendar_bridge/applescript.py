@@ -258,20 +258,22 @@ def push_event(event: EventRecord, calendar_name: str) -> None:
 
     starts_str = format_applescript_date(event.starts_at, event.tz)
     ends_str = format_applescript_date(event.ends_at, event.tz)
-    title_escaped = event.title.replace('"', '\\"')
+    # Use display_title (strips [handle]/[handle!] vault markers) so the
+    # Calendar surface shows "✓ ..." or "🔥 ..." instead of raw brackets.
+    title_escaped = event.display_title.replace('"', '\\"')
     url = event.homunculus_url
 
     script = f"""
 tell application "Calendar"
     tell calendar "{calendar_name}"
-        set newEvent to make new event with properties {{summary:"{title_escaped}", start date:date "{starts_str}", end date:date "{ends_str}"}}
-        set url of newEvent to "{url}"
+        make new event with properties {{summary:"{title_escaped}", start date:date "{starts_str}", end date:date "{ends_str}", url:"{url}"}}
     end tell
 end tell
 """.strip()
 
     log.info(
-        "Pushing event '%s' (%s) → Calendar '%s'",
+        "Pushing event '%s' (vault title: %r) (%s) → Calendar '%s'",
+        event.display_title,
         event.title,
         event.event_id,
         calendar_name,

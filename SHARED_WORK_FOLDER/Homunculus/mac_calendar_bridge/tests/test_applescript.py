@@ -381,3 +381,113 @@ class TestConfigV012:
         from mac_calendar_bridge.config import Config
         cfg = Config.from_env()
         assert cfg.calendar_name == "MyCalendar"
+
+
+# ---------------------------------------------------------------------------
+# v0.1.5 TDD Bug 2: push_event must include url in make-new-event properties,
+# not as a separate "set url" statement (which can silently fail / roll back).
+# ---------------------------------------------------------------------------
+
+@_DARWIN_ONLY
+class TestPushEventUrlInProperties:
+    """Bug 2 regression suite: the Sep 18 'code review with myself' event was
+    logged as pushed but never appeared in Calendar.app.
+
+    Root cause: push_event used a TWO-step AppleScript pattern:
+        1. make new event with properties {summary, start date, end date}
+        2. set url of newEvent to "..."
+
+    On some Calendar.app builds (notably macOS 15.x), step 2 can fail silently
+    or trigger an internal rollback that discards the event without raising a
+    non-zero osascript exit code.  The result is a "pushed successfully" log
+    entry and an empty Calendar.
+
+    Fix: include `url:"..."` directly in the `make new event with properties`
+    dict so the event is created atomically with its URL in a single statement.
+
+    All tests in this class use mocked osascript — no live Calendar.app calls.
+    """
+
+    def test_url_in_make_properties_not_separate_set(self):
+        """FAILING (pre-fix): push_event script must include url in the
+        make new event with properties dict, not as a separate 'set url' call.
+        """
+        event = _make_event(
+            event_id="2026-09-18-code-review-with-myself",
+            title="code review with myself",
+            starts_at=_utc(2026, 9, 18, 14, 0),  # 10 AM EDT
+            ends_at=_utc(2026, 9, 18, 14, 30),
+        )
+        with patch("mac_calendar_bridge.applescript.run_applescript") as mock_run:
+            mock_run.return_value = ""
+            push_event(event, "Homunculus")
+        script = mock_run.call_args[0][0]
+
+        # The url must be part of the 'make new event with properties' dict
+        # i.e. the make-properties record must contain 'url:' key
+        assert "url:" in script, (
+            "url must be in the 'make new event with properties' dict, "
+            f"not as a separate 'set url' call. Script:\n{script}"
+        )
+        # The separate 'set url of newEvent' statement must NOT appear
+        assert "set url of" not in script, (
+            "'set url of newEvent' two-step pattern must be replaced with "
+            "url in make-properties to prevent silent Calendar.app rollback."
+        )
+
+    def test_no_separate_set_url_statement_for_any_event(self):
+        """FAILING (pre-fix): the two-step 'make then set url' pattern must not
+        appear for any event — not just the Friday Sep 18 event.
+        """
+        event = _make_event()  # Monday Sep 15
+        with patch("mac_calendar_bridge.applescript.run_applescript") as mock_run:
+            mock_run.return_value = ""
+            push_event(event, "Homunculus")
+        script = mock_run.call_args[0][0]
+        assert "set url of" not in script, (
+            "Separate 'set url of' statement is the two-step pattern that "
+            "can cause silent Calendar.app event rollback."
+        )
+
+    def test_applescript_error_propagates_loudly(self):
+        """FAILING (pre-fix intent): if run_applescript raises AppleScriptError,
+        push_event must re-raise it — never swallow it.
+
+        'No silent failure paths' rule from the v0.1.5 spec.
+        """
+        event = _make_event(
+            event_id="2026-09-18-code-review-with-myself",
+            title="code review with myself",
+            starts_at=_utc(2026, 9, 18, 14, 0),
+            ends_at=_utc(2026, 9, 18, 14, 30),
+        )
+        with patch(
+            "mac_calendar_bridge.applescript.run_applescript",
+            side_effect=AppleScriptError("Calendar.app rejected the event"),
+        ):
+            with pytest.raises(AppleScriptError, match="Calendar.app rejected the event"):
+                push_event(event, "Homunculus")
+
+    def test_friday_event_url_included_in_make_properties(self):
+        """Specific regression for the Sep 18 Friday event that went missing.
+
+        The event ID must appear in the make-properties url: field so Calendar
+        can find it via homunculus://event/... query later.
+        """
+        event = _make_event(
+            event_id="2026-09-18-code-review-with-myself",
+            title="code review with myself",
+            starts_at=_utc(2026, 9, 18, 14, 0),
+            ends_at=_utc(2026, 9, 18, 14, 30),
+        )
+        with patch("mac_calendar_bridge.applescript.run_applescript") as mock_run:
+            mock_run.return_value = ""
+            push_event(event, "Homunculus")
+        script = mock_run.call_args[0][0]
+        # The URL must be in the make-properties record (before any closing })
+        make_block_end = script.find("}")
+        make_block = script[:make_block_end + 1] if make_block_end != -1 else script
+        assert "homunculus://event/2026-09-18-code-review-with-myself" in make_block, (
+            "The event URL must be included in the 'make new event with properties' "
+            "dict, not set afterwards."
+        )

@@ -57,6 +57,33 @@ class EventRecord:
         return self.ends_at.astimezone(ZoneInfo(self.tz))
 
     @property
+    def display_title(self) -> str:
+        """
+        Calendar-surface title: strips Herman's vault prefixes and replaces them
+        with a compact visual marker suited to Calendar.app, iPhone, and Watch.
+
+        Mapping:
+            "[handle] <subject>"  → "✓ <subject>"   (to-do, normal criticality)
+            "[handle!] <subject>" → "🔥 <subject>"  (to-do, critical)
+            "<anything else>"     → unchanged        (regular meetings need no marker)
+
+        Only a *leading* prefix is stripped — if "[handle]" appears mid-subject
+        it is left as-is, preserving the vault author's intent for whatever odd
+        reason they might have had.
+
+        The raw ``title`` field is never mutated; vault truth is preserved.
+        """
+        if self.title.startswith("[handle!]"):
+            remainder = self.title[len("[handle!]"):]
+            subject = remainder.lstrip(" ")
+            return f"🔥 {subject}" if subject else "🔥"
+        if self.title.startswith("[handle]"):
+            remainder = self.title[len("[handle]"):]
+            subject = remainder.lstrip(" ")
+            return f"✓ {subject}" if subject else "✓"
+        return self.title
+
+    @property
     def homunculus_url(self) -> str:
         """Canonical URL used to identify this event in Calendar.app."""
         return f"homunculus://event/{self.event_id}"

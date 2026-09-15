@@ -42,8 +42,16 @@ from watchdog.events import (
 )
 from watchdog.observers import Observer
 
+from datetime import timezone
+
 from . import VERSION
-from .applescript import AppleScriptError, push_event, verify_calendar_exists
+from .applescript import (
+    AppleScriptError,
+    format_applescript_date,
+    push_event,
+    query_pushed_event_ids,
+    verify_calendar_exists,
+)
 from .config import (
     BRIDGE_CALENDAR_NAME,
     BRIDGE_STATE_FILE,
@@ -64,6 +72,25 @@ SWEEP_INTERVAL_SECONDS = 60
 # Push helper — shared by cold-boot sweep and watchdog handler
 # ---------------------------------------------------------------------------
 
+def _midnight_date_str(record: "EventRecord") -> str:
+    """
+    Return an AppleScript-formatted date string for midnight on the event's
+    local date (the start of the day in the event's declared timezone).
+
+    Used as the window start for query_pushed_event_ids() so the query covers
+    the full local calendar day of the event.
+    """
+    from zoneinfo import ZoneInfo
+    from datetime import datetime as _datetime
+
+    local = record.starts_at.astimezone(ZoneInfo(record.tz))
+    midnight_utc = _datetime(
+        local.year, local.month, local.day, 0, 0, 0,
+        tzinfo=ZoneInfo(record.tz),
+    ).astimezone(timezone.utc)
+    return format_applescript_date(midnight_utc, record.tz)
+
+
 def push_if_new(
     path: Path,
     state: PushedState,
@@ -72,7 +99,23 @@ def push_if_new(
     """
     Parse *path* and push the event if it hasn't been pushed yet.
 
-    Fast path: check state.is_pushed() first.
+    Idempotency is belt-and-suspenders in v0.1.5:
+
+    1. **Fast path** — check state.is_pushed() (in-memory + pushed.jsonl).
+       If found → skip.  Returns immediately, no Calendar.app round-trip.
+
+    2. **Slow path** (authoritative second check) — call
+       query_pushed_event_ids() to ask Calendar.app directly whether the
+       event's URL is already present on the target date.  If found →
+       self-heal pushed.jsonl (so future lookups hit the fast path) and skip.
+
+    3. **Push** — only if both checks say "not present" → call push_event()
+       then mark_pushed().
+
+    The slow path exists because pushed.jsonl can be wiped (e.g. during a
+    migration).  Without it, every event would be re-pushed on cold boot,
+    producing duplicates in Calendar.app (the v0.1.4 incident).
+
     Does nothing if the file extension isn't .md.
 
     Args:
@@ -90,8 +133,31 @@ def push_if_new(
         log.warning("Cannot parse %s: %s", path, exc)
         return
 
+    # --- Fast path: pushed.jsonl ---
     if state.is_pushed(record.event_id):
         log.debug("Already pushed %s; skipping", record.event_id)
+        return
+
+    # --- Slow path: authoritative Calendar.app query ---
+    try:
+        date_str = _midnight_date_str(record)
+        existing_ids = query_pushed_event_ids(calendar_name, date_str)
+    except (AppleScriptError, NotImplementedError) as exc:
+        # On Linux or if Calendar is unreachable, skip the slow check.
+        log.debug(
+            "query_pushed_event_ids unavailable for %s (%s); proceeding to push",
+            record.event_id,
+            exc,
+        )
+        existing_ids = []
+
+    if record.event_id in existing_ids:
+        log.info(
+            "Self-heal: %s already in Calendar.app but missing from pushed.jsonl; "
+            "healing pushed.jsonl and skipping push",
+            record.event_id,
+        )
+        state.mark_pushed(record.event_id)
         return
 
     try:

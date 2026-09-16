@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -24,6 +24,7 @@ from . import VERSION, DESIGN_VERSION
 from . import activity_log
 from . import calendar as cal
 from . import capture_parsed
+from . import dashboard as dash
 from . import intent_router
 from . import llm
 from . import reminders as rem
@@ -227,6 +228,41 @@ def create_app() -> FastAPI:
             },
         )
         return result
+
+    # --- v1.5.0 dashboard -----------------------------------------------------
+    # Read-only activity feed. No LLM call, no external I/O. Just JSONL read.
+
+    @app.get("/dashboard/", response_class=HTMLResponse, include_in_schema=False)
+    async def dashboard_page() -> HTMLResponse:
+        return HTMLResponse(content=dash.DASHBOARD_HTML, status_code=200)
+
+    @app.get("/dashboard/data")
+    async def dashboard_data(
+        limit: int = Query(default=200, ge=1, le=1000),
+        since: Optional[str] = None,
+    ) -> dict:
+        """Return activity rows reverse-chronological.
+
+        Optional ``?since=<iso8601>`` returns only rows newer than that
+        timestamp (exclusive), for incremental auto-refresh.
+        ``?limit=N`` caps results; default 200, max 1000.
+        """
+        since_dt: Optional[datetime] = None
+        if since:
+            try:
+                since_dt = datetime.fromisoformat(since)
+                if since_dt.tzinfo is None:
+                    from datetime import timezone as _tz
+                    since_dt = since_dt.replace(tzinfo=_tz.utc)
+            except ValueError:
+                raise HTTPException(400, f"invalid since timestamp: {since!r}")
+
+        rows, latest_at = dash.read_recent(
+            config.vault_path,
+            limit=limit,
+            since=since_dt,
+        )
+        return {"rows": rows, "latest_at": latest_at}
 
     # --- v1.2.1 test client ---------------------------------------------------
     # Single-page browser harness for hand-exercising the brain end-to-end

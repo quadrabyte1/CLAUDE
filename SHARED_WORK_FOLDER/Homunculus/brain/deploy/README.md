@@ -1,6 +1,6 @@
-# Herman Deploy — v1.4.0
+# Herman Deploy — v1.5.0
 
-> **Herman (Homunculus brain) v1.4.0 — 2026-09-13**
+> **Herman (Homunculus brain) v1.5.0 — 2026-09-15**
 > Process supervision assets: launchd (macOS) + systemd (Linux).
 
 ## Files
@@ -31,7 +31,7 @@ launchctl list | grep homunculus
 curl http://localhost:8765/health
 ```
 
-The `/health` response should show `package_version: "1.4.0"` and the correct `vault_path`.
+The `/health` response should show `package_version: "1.5.0"` and the correct `vault_path`.
 
 ## Migrating from nohup
 

@@ -1,7 +1,7 @@
-# Herman Runbook — v1.4.0
+# Herman Runbook — v1.5.0
 
 > **Herman (Homunculus brain) — Operations Reference**
-> Updated: 2026-09-13 | Rune
+> Updated: 2026-09-15 | Rune
 
 This runbook covers day-to-day operations of Herman running as a supervised
 launchd agent (macOS) or systemd user unit (Linux).
@@ -99,13 +99,13 @@ journalctl --user -u homunculus-brain -f
 curl http://localhost:8765/health
 ```
 
-Expected response (v1.4.0):
+Expected response (v1.5.0):
 
 ```json
 {
   "status": "ok",
-  "design_version": "1.4",
-  "package_version": "1.4.0",
+  "design_version": "1.5",
+  "package_version": "1.5.0",
   "vault_path": "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault"
 }
 ```
@@ -243,3 +243,4 @@ When the brain moves to a Linux box (expected: NVIDIA GPU, vLLM serving):
 | Version | Date | Notes |
 |---------|------|-------|
 | v1.4.0 | 2026-09-13 | Initial launchd agent + systemd unit. Fixes vault-path bug by setting HOMUNCULUS_VAULT explicitly. |
+| v1.5.0 | 2026-09-15 | Activity dashboard at /dashboard/. Read-only JSONL feed, auto-refresh every 5 s, ?since= incremental poll. No new dependencies. |

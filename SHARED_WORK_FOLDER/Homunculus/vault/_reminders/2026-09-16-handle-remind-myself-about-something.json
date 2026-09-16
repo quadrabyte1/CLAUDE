@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-16-handle-remind-myself-about-something",
+  "schedule": [
+    {
+      "event_id": "2026-09-16-handle-remind-myself-about-something",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-16T07:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: [handle] remind myself about something at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-remind-myself-about-something",
+      "kind": "pre_5",
+      "fire_at": "2026-09-16T07:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: [handle] remind myself about something at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-remind-myself-about-something",
+      "kind": "strike_0",
+      "fire_at": "2026-09-16T08:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "[handle] remind myself about something is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-remind-myself-about-something",
+      "kind": "strike_5",
+      "fire_at": "2026-09-16T08:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? [handle] remind myself about something started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-remind-myself-about-something",
+      "kind": "strike_10",
+      "fire_at": "2026-09-16T08:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: [handle] remind myself about something \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-remind-myself-about-something",
+      "kind": "strike_15",
+      "fire_at": "2026-09-16T08:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. [handle] remind myself about something. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

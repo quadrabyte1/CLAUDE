@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.homunculus.mac_notes_bridge</string>
+
+    <!--
+    IMPORTANT: Do NOT launchctl load this plist until:
+    1. You have created a "Homunculus" folder in Notes.app under the iCloud account
+       manually via Notes.app UI. See docs/FIRST_RUN.md Step 1.
+    2. Automation permission has been granted for the mac-notes-bridge process
+       to control Notes.app (macOS will prompt on first run, or grant via
+       System Settings → Privacy & Security → Automation).
+
+    To load (after completing Step 1 in FIRST_RUN.md):
+        launchctl load ~/Library/LaunchAgents/com.homunculus.mac_notes_bridge.plist
+
+    To unload:
+        launchctl unload ~/Library/LaunchAgents/com.homunculus.mac_notes_bridge.plist
+
+    To check status:
+        launchctl list | grep mac_notes_bridge
+
+    To watch logs:
+        tail -f /tmp/mac_notes_bridge.log
+    -->
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/fourierflight/.local/bin/mac_notes_bridge.sh</string>
+    </array>
+
+    <!-- Keep the bridge running; launchd restarts it on crash. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Wait 10 seconds before restarting a crashed process. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Environment variables for the bridge process. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!--
+        PATH: launchd provides a minimal environment. Include Homebrew and
+        standard system paths so Python resolves correctly without absolute paths.
+        -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+
+        <!--
+        Vault path — must match Herman's HERMAN_VAULT_PATH.
+        Override if your vault lives elsewhere.
+        -->
+        <key>HERMAN_VAULT_PATH</key>
+        <string>/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault</string>
+
+        <!-- Notes.app folder name. Must match the manually-created folder. -->
+        <key>BRIDGE_FOLDER_NAME</key>
+        <string>Homunculus</string>
+
+        <!-- Notes.app account name. Default is "iCloud". -->
+        <key>BRIDGE_NOTES_ACCOUNT</key>
+        <string>iCloud</string>
+
+        <!-- State file for idempotency tracking. -->
+        <key>BRIDGE_STATE_FILE</key>
+        <string>/Users/fourierflight/.local/share/mac_notes_bridge/pushed.jsonl</string>
+
+        <key>BRIDGE_LOG_LEVEL</key>
+        <string>INFO</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/mac_notes_bridge.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/mac_notes_bridge_err.log</string>
+</dict>
+</plist>

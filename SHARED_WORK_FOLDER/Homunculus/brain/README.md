@@ -10,6 +10,13 @@ client will register with `UNUserNotificationCenter` over Tailscale.
 
 ## Status
 
+- v1.5.0 shipped 2026-09-15. Activity dashboard at `GET /dashboard/`. Single-page
+  vanilla HTML/JS, dark theme, reverse-chronological feed of `_activity.jsonl`,
+  per-row icons by verb/kind, confidence pills, click-to-expand detail panels.
+  Auto-refreshes every 5 s via `?since=<timestamp>` incremental poll. Serves
+  directly from FastAPI — no build step, no new dependencies. 128 tests pass
+  (118 baseline + 10 new in `tests/test_dashboard.py`).
+
 - v1.4.0 shipped 2026-09-13. Deployment infrastructure milestone. Ships a
   proper launchd LaunchAgent (`deploy/com.homunculus.brain.plist`) so Herman
   survives reboots and restarts automatically on crash. Matching systemd user

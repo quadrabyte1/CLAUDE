@@ -1,0 +1,2 @@
+[console_scripts]
+mac-notes-bridge = mac_notes_bridge.watcher:main

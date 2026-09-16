@@ -1,0 +1,22 @@
+[Unit]
+Description=Herman/Homunculus mac_notes_bridge — vault/notes → Notes.app bridge
+# This unit is a portability artifact. Notes.app is macOS-only; this service
+# will not do useful work on Linux. It exists so the launchd/systemd pair
+# ships together, consistent with the portability religion in Rune's persona.
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/lib/mac_notes_bridge/venv/bin/python -m mac_notes_bridge.watcher
+Environment=HERMAN_VAULT_PATH=/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault
+Environment=BRIDGE_FOLDER_NAME=Homunculus
+Environment=BRIDGE_NOTES_ACCOUNT=iCloud
+Environment=BRIDGE_STATE_FILE=%h/.local/share/mac_notes_bridge/pushed.jsonl
+Environment=BRIDGE_LOG_LEVEL=INFO
+StandardOutput=append:/tmp/mac_notes_bridge.log
+StandardError=append:/tmp/mac_notes_bridge_err.log
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

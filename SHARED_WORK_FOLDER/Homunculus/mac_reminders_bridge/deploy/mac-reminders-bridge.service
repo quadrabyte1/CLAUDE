@@ -1,0 +1,28 @@
+[Unit]
+Description=Homunculus mac_reminders_bridge — vault/reminders/ watcher
+Documentation=file:///Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/mac_reminders_bridge/docs/FIRST_RUN.md
+After=network.target
+
+# Note: This service is Mac-only at runtime (Reminders.app / AppleScript).
+# On Linux, the watcher process starts and scans the vault but raises
+# NotImplementedError on AppleScript calls. Provided as a systemd sibling
+# for reference / future portability.
+
+[Service]
+Type=simple
+ExecStart=%h/.local/lib/mac_reminders_bridge/venv/bin/python -m mac_reminders_bridge.watcher
+Restart=on-failure
+RestartSec=10
+
+# Environment — override to match your vault path
+Environment=HERMAN_VAULT_PATH=/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault
+Environment=BRIDGE_LIST_NAME=Homunculus
+Environment=BRIDGE_STATE_FILE=%h/.local/share/mac_reminders_bridge/pushed.jsonl
+Environment=BRIDGE_LOG_LEVEL=INFO
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mac_reminders_bridge
+
+[Install]
+WantedBy=default.target

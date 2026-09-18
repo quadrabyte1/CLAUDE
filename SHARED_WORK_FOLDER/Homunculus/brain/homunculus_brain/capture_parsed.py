@@ -1,13 +1,23 @@
-"""Sprite → Herman parsed-capture pipeline (v1.3).
+"""Sprite → Herman parsed-capture pipeline (v1.6).
 
 Sprite (the on-device watcher that turns .m4a voice memos into structured
 records) POSTs each parsed record to ``/capture/parsed``. Herman decides
-where it lands based on the four verbs:
+where it lands based on the five verbs:
 
-    schedule → calendar event (with the full reminder chain)
+    schedule → calendar event (vault/calendar/) with the full reminder chain
     note     → timestamped markdown in the vault's notes folder
-    handle   → reminder chain (escalated tier if critical)
+    handle   → reminder markdown in vault/reminders/ with strike chain
+    remind   → synonym for handle; preferred for "remind me…" phrasing
     avoid    → append to ``sprite/warnings.md`` (surfaced in morning summary)
+
+v1.6 changes:
+  - handle / remind now write to vault/reminders/<event-id>.md instead of
+    vault/calendar/.  vault/calendar/ remains for schedule events only.
+  - Title no longer carries [handle] / [handle!] prefix — the vault/reminders/
+    directory is itself the semantic signal.  criticality is expressed via
+    a frontmatter tag ``criticality: critical``.
+  - verb=remind is accepted as a full synonym for verb=handle; both route to
+    _handle_handle().  The original verb value is preserved in the response.
 
 Design notes:
 
@@ -58,6 +68,7 @@ log = logging.getLogger(__name__)
 _IDEMPOTENCY_FILENAME = "_capture_idempotency.jsonl"
 _WARNINGS_HEADER = "# Sprite standing warnings\n\nOne line per warning — appended by the brain's /capture/parsed avoid handler.\n\n"
 _NOTES_DIRNAME = "notes"
+_REMINDERS_DIRNAME = "reminders"  # vault/reminders/ — markdown files for handle/remind captures
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +103,10 @@ def dispatch(
         resp = _handle_schedule(req, config=config, tz=tz, record_id=record_id)
     elif req.verb is CaptureVerb.NOTE:
         resp = _handle_note(req, config=config, tz=tz, record_id=record_id)
-    elif req.verb is CaptureVerb.HANDLE:
+    elif req.verb in (CaptureVerb.HANDLE, CaptureVerb.REMIND):
+        # remind is a full synonym for handle — both write to vault/reminders/.
+        # The original verb value is preserved in req.verb and returned in the
+        # response; we never rewrite remind → handle or vice versa.
         resp = _handle_handle(req, config=config, tz=tz, record_id=record_id)
     elif req.verb is CaptureVerb.AVOID:
         resp = _handle_avoid(req, config=config, tz=tz, record_id=record_id)
@@ -317,19 +331,24 @@ def _handle_handle(
     tz: ZoneInfo,
     record_id: str,
 ) -> ParsedCaptureResponse:
-    """Create a Herman reminder for a to-do.
+    """Create a Herman reminder for a to-do (handle or remind verb).
 
-    A ``handle`` is a to-do, not a calendar event with an obligation to
-    show up somewhere — but Herman's reminder machinery is per-event, so
-    we synthesize a lightweight calendar event to hang the strike chain
-    on. The event's title carries a ``[handle]`` marker so it is visually
-    distinct in the vault.
+    v1.6 semantics:
+      - Writes to vault/reminders/<event-id>.md, NOT vault/calendar/.
+      - Title carries no [handle] / [handle!] prefix — the vault/reminders/
+        directory is the semantic signal for "this is a reminder, not a meeting".
+      - criticality=critical is expressed via frontmatter tag criticality: critical
+        instead of a title prefix.
+      - Both verb=handle and verb=remind route here; the original verb value is
+        preserved in the response (never rewritten).
 
-    - ``when`` is honored when present; otherwise we schedule the first
-      alert for 1 hour before the start of the next business day.
-    - ``criticality == "critical"`` bumps the whole chain forward by 30
-      minutes so the head-of-chain alert fires earlier. That's Herman's
-      "escalation tier" today; v1.x can add a proper tiered chain.
+    Reminder schedule (unchanged):
+      - when is honored when present; otherwise schedules first alert for 1h
+        before the start of the next business day.
+      - criticality=critical bumps the whole chain 30 minutes earlier so the
+        head-of-chain fires sooner. Herman's escalation tier.
+      - Strike-chain JSON sidecars continue to live in vault/_reminders/ —
+        the system-managed sidecar directory is unrelated to vault/reminders/.
     """
     # Precedence: explicit when wins; fall through to hints; then default.
     if req.when is not None:
@@ -354,14 +373,19 @@ def _handle_handle(
         next_morning = _next_business_morning(req.captured_at, config=config, tz=tz)
         first_alert = next_morning - timedelta(hours=1)
 
-    if req.criticality is CaptureCriticality.CRITICAL:
+    is_critical = req.criticality is CaptureCriticality.CRITICAL
+    if is_critical:
         # Bump the whole chain earlier so the head-of-chain fires sooner.
         starts_at = first_alert - timedelta(minutes=30)
-        title = f"[handle!] {req.subject}"
     else:
         starts_at = first_alert
-        title = f"[handle] {req.subject}"
 
+    # Clean subject title — no [handle] / [handle!] prefix.
+    # The vault/reminders/ directory is the semantic marker.
+    title = req.subject
+
+    # Build a synthetic CalendarEvent to hang the strike chain on.
+    # The event_id drives the sidecar at vault/_reminders/<event-id>.json.
     duration = config.default_event_duration_minutes
     event = cal.create_event(
         config.vault_path,
@@ -369,19 +393,58 @@ def _handle_handle(
         starts_at=starts_at,
         duration_minutes=duration,
         tz_name=str(tz),
-        tags=["handle"] + (["critical"] if req.criticality is CaptureCriticality.CRITICAL else []),
+        tags=(["critical"] if is_critical else []),
         source_utterance=req.raw_transcript,
     )
     rows = rem.build_event_schedule(event)
     rem.persist_event_schedule(config.vault_path, event, rows)
     rem.push_to_phone(rows)
 
-    written = vault.calendar_event_path(config.vault_path, event.starts_at, event.title)
+    # Write the markdown reminder file to vault/reminders/ (not vault/calendar/).
+    # We create the file directly here rather than using cal.create_event's
+    # calendar_event_path, which would put it under vault/calendar/.
+    reminders_dir = config.vault_path / _REMINDERS_DIRNAME
+    reminders_dir.mkdir(parents=True, exist_ok=True)
+    reminder_md_path = reminders_dir / f"{event.id}.md"
+
+    frontmatter: dict = {
+        "id": event.id,
+        "title": title,
+        "starts_at": event.starts_at.isoformat(),
+        "tz": str(tz),
+        "source": "sprite",
+        "audio_path": req.audio_path,
+        "confidence": req.confidence,
+        "verb": req.verb.value,
+        "created_at": event.created_at.isoformat(),
+    }
+    if is_critical:
+        frontmatter["criticality"] = "critical"
+
+    body = (
+        f"# {title}\n\n"
+        f"*Captured {_ensure_tz(req.captured_at, tz).strftime('%Y-%m-%d %H:%M %Z')} via Sprite.*\n\n"
+        f"{req.raw_transcript.strip()}\n"
+    )
+    vault.write_markdown(reminder_md_path, frontmatter, body)
+
+    # Also remove the calendar file that cal.create_event wrote — we do NOT
+    # want handle/remind events appearing in vault/calendar/.
+    calendar_path = vault.calendar_event_path(
+        config.vault_path, event.starts_at, event.title
+    )
+    import contextlib as _contextlib
+    with _contextlib.suppress(FileNotFoundError):
+        calendar_path.unlink()
+    # Remove the now-empty month directory if it became empty.
+    with _contextlib.suppress(Exception):
+        calendar_path.parent.rmdir()
+
     return ParsedCaptureResponse(
         stored=True,
         record_id=record_id,
         verb=req.verb,
-        written_path=_relative(config.vault_path, written),
+        written_path=_relative(config.vault_path, reminder_md_path),
         event_id=event.id,
     )
 

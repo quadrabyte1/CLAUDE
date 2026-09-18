@@ -1,0 +1,5 @@
+httpx>=0.25
+tzdata
+
+[dev]
+pytest>=8.0

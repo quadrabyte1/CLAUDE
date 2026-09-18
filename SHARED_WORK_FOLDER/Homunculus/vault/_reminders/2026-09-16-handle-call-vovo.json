@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-16-handle-call-vovo",
+  "schedule": [
+    {
+      "event_id": "2026-09-16-handle-call-vovo",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-16T07:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: [handle] Call Vovo at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-vovo",
+      "kind": "pre_5",
+      "fire_at": "2026-09-16T07:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: [handle] Call Vovo at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-vovo",
+      "kind": "strike_0",
+      "fire_at": "2026-09-16T08:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "[handle] Call Vovo is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-vovo",
+      "kind": "strike_5",
+      "fire_at": "2026-09-16T08:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? [handle] Call Vovo started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-vovo",
+      "kind": "strike_10",
+      "fire_at": "2026-09-16T08:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: [handle] Call Vovo \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-vovo",
+      "kind": "strike_15",
+      "fire_at": "2026-09-16T08:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. [handle] Call Vovo. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

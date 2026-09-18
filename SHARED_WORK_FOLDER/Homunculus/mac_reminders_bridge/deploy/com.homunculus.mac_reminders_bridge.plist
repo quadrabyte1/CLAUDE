@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.homunculus.mac_reminders_bridge</string>
+
+    <!--
+    IMPORTANT: Do NOT launchctl load this plist until:
+    1. You have created a "Homunculus" list in Reminders.app manually:
+       open Reminders.app, choose File → New List, select the iCloud account,
+       name it exactly "Homunculus". See docs/FIRST_RUN.md Step 1.
+    2. Automation permission has been granted to the mac-reminders-bridge process
+       for Reminders.app (macOS will prompt on first run, or grant via
+       System Settings → Privacy & Security → Automation).
+
+    To load (after completing Step 1 in FIRST_RUN.md):
+        launchctl load ~/Library/LaunchAgents/com.homunculus.mac_reminders_bridge.plist
+
+    To unload:
+        launchctl unload ~/Library/LaunchAgents/com.homunculus.mac_reminders_bridge.plist
+
+    To check status:
+        launchctl list | grep mac_reminders_bridge
+
+    To watch logs:
+        tail -f /tmp/mac_reminders_bridge.log
+    -->
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/fourierflight/.local/bin/mac_reminders_bridge.sh</string>
+    </array>
+
+    <!-- Keep the bridge running; launchd restarts it on crash. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Wait 10 seconds before restarting a crashed process. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Environment variables for the bridge process. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!--
+        PATH: launchd provides a minimal environment. Include Homebrew and
+        standard system paths so Python resolves correctly without absolute paths.
+        -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+
+        <!--
+        Vault path — must match Herman's HERMAN_VAULT_PATH.
+        Override if your vault lives elsewhere.
+        -->
+        <key>HERMAN_VAULT_PATH</key>
+        <string>/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/vault</string>
+
+        <!-- Reminders.app list name. Must match the manually-created list. -->
+        <key>BRIDGE_LIST_NAME</key>
+        <string>Homunculus</string>
+
+        <!-- State file for idempotency tracking. -->
+        <key>BRIDGE_STATE_FILE</key>
+        <string>/Users/fourierflight/.local/share/mac_reminders_bridge/pushed.jsonl</string>
+
+        <key>BRIDGE_LOG_LEVEL</key>
+        <string>INFO</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/mac_reminders_bridge.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/mac_reminders_bridge_err.log</string>
+</dict>
+</plist>

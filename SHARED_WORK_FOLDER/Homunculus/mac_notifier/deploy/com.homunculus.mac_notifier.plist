@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.homunculus.mac_notifier</string>
+
+    <!--
+    mac_notifier v0.1.0 — launchd agent for Herman Mac notifications.
+
+    No special Automation/Privacy permissions needed for `display notification`
+    (unlike Calendar/Notes bridges). Just load and go.
+
+    To load:
+        launchctl load ~/Library/LaunchAgents/com.homunculus.mac_notifier.plist
+
+    To unload:
+        launchctl unload ~/Library/LaunchAgents/com.homunculus.mac_notifier.plist
+
+    To check status:
+        launchctl list | grep mac_notifier
+
+    To watch logs:
+        tail -f /tmp/mac_notifier.log
+        tail -f /tmp/mac_notifier_err.log
+
+    Known caveat (v0.1):
+        Notifications appear branded as "Script Editor" rather than "Homunculus".
+        This is a macOS limitation for osascript-based notifications run outside
+        a bundled app. The mechanism works — notifications fire and sound.
+        See v0.2 roadmap in README.md for the fix (terminal-notifier or .app bundle).
+    -->
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/fourierflight/.local/bin/mac_notifier.sh</string>
+    </array>
+
+    <!-- Keep the notifier running; launchd restarts it on crash. -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Wait 10 seconds before restarting a crashed process. -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Environment variables for the notifier process. -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!--
+        PATH: launchd provides a minimal environment. Include Homebrew and
+        standard system paths so Python resolves correctly.
+        -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+
+        <!-- Herman base URL. Default: http://localhost:8765 -->
+        <key>NOTIFIER_HERMAN_URL</key>
+        <string>http://localhost:8765</string>
+
+        <!-- Poll interval in seconds. Default: 60 (generous — reliability over speed). -->
+        <key>NOTIFIER_POLL_INTERVAL</key>
+        <string>60</string>
+
+        <!-- Grace window in seconds. Default: 90 (catches poller-was-down-for-a-minute case). -->
+        <key>NOTIFIER_GRACE_WINDOW</key>
+        <string>90</string>
+
+        <!-- State file for fired-notification dedup. -->
+        <key>NOTIFIER_STATE_FILE</key>
+        <string>/Users/fourierflight/.local/share/mac_notifier/fired.jsonl</string>
+
+        <key>NOTIFIER_LOG_LEVEL</key>
+        <string>INFO</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/mac_notifier.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/mac_notifier_err.log</string>
+</dict>
+</plist>

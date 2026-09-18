@@ -181,11 +181,15 @@ class AckResponse(BaseModel):
 
 
 class CaptureVerb(str, Enum):
-    """The four Sprite verbs.
+    """The five Sprite verbs (v1.6.0: remind added as alias for handle).
 
     - ``schedule``: put an event on the calendar.
     - ``note``: append a timestamped note to the vault (long-form memory).
-    - ``handle``: create a Herman reminder chain (short-form to-do).
+    - ``handle``: create a reminder in vault/reminders/ (short-form to-do).
+    - ``remind``: synonym for ``handle`` — preferred when the utterance starts
+      with "remind me" or "don't let me forget". Both route to the same
+      handler and write to vault/reminders/. The original verb value is
+      preserved in the response; neither is rewritten to the other.
     - ``avoid``: append to the standing-warnings file surfaced in the
       morning summary. No reminder, no calendar row — it is context the
       user wants Herman to have.
@@ -194,6 +198,7 @@ class CaptureVerb(str, Enum):
     SCHEDULE = "schedule"
     NOTE = "note"
     HANDLE = "handle"
+    REMIND = "remind"
     AVOID = "avoid"
 
 

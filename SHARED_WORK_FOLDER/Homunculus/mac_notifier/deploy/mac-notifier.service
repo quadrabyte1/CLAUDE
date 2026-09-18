@@ -1,0 +1,41 @@
+# mac-notifier.service — systemd unit for mac_notifier (Linux portability companion)
+#
+# NOTE: mac_notifier fires macOS notifications via osascript. On Linux, osascript
+# is not available and fire_notification() raises NotImplementedError. The poller
+# will still run and poll Herman — notifications will be logged as "Platform does
+# not support osascript notifications; marking as fired" — but no visual/audio
+# notifications will appear.
+#
+# This unit is provided for portability completeness (Rune's portability religion).
+# The real value on Linux would be from a future v0.2 that uses notify-send or
+# a cross-platform notification library. For v0.1, this file documents intent.
+#
+# Usage (Linux):
+#   cp mac-notifier.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable mac-notifier
+#   systemctl --user start mac-notifier
+#   journalctl --user -u mac-notifier -f
+
+[Unit]
+Description=mac_notifier — Herman reminder notification poller
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/lib/mac_notifier/venv/bin/python -m mac_notifier.poller
+Restart=always
+RestartSec=10
+
+Environment=NOTIFIER_HERMAN_URL=http://localhost:8765
+Environment=NOTIFIER_POLL_INTERVAL=60
+Environment=NOTIFIER_GRACE_WINDOW=90
+Environment=NOTIFIER_STATE_FILE=%h/.local/share/mac_notifier/fired.jsonl
+Environment=NOTIFIER_LOG_LEVEL=INFO
+Environment=NOTIFIER_LOG_FILE=/tmp/mac_notifier.log
+
+StandardOutput=append:/tmp/mac_notifier.log
+StandardError=append:/tmp/mac_notifier_err.log
+
+[Install]
+WantedBy=default.target

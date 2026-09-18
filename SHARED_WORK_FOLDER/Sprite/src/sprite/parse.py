@@ -3,7 +3,7 @@
 Design:
   1. Preprocessor runs first (no LLM). Regex patterns extract:
      - criticality: "mark critical", "important", "urgent", "don't let me forget"
-     - verb hints: schedule / note / handle / avoid
+     - verb hints: schedule / note / handle / remind / avoid
   2. Ollama call with format=JSON schema (constrained decoding via GBNF).
      Temperature 0.2. Few-shot examples in system prompt. Math NEVER in prompt.
   3. Post-process: merge preprocessor criticality (LLM cannot override it
@@ -14,6 +14,14 @@ of a ``when`` string. The LLM does NOT know what today is. It does NOT compute
 dates. It copies verbatim day/time expressions from the utterance into the two
 hint fields. Herman's authoritative ``date_resolver`` (pure Python, no LLM) is
 the only entity that resolves those hints to a UTC datetime.
+
+v0.7.0 — remind verb added as a synonym for handle:
+  - ``remind`` and ``handle`` are synonyms routing to the same Reminders surface
+    in Herman (vault/reminders/).
+  - Use ``remind`` when the utterance starts with "remind me" or "don't let me
+    forget". Use ``handle`` for bare imperatives like "call the vet" or "pick up
+    milk". Both go to the reminders surface.
+  - The original verb value is forwarded to Herman unchanged. Herman accepts both.
 
 Portability:
   No MLX, no CoreML, no Mac-only audio. Talks to Ollama HTTP API only.
@@ -63,8 +71,14 @@ _INTENT_JSON_SCHEMA = {
     "properties": {
         "verb": {
             "type": "string",
-            "enum": ["schedule", "note", "handle", "avoid"],
-            "description": "Primary action verb.",
+            "enum": ["schedule", "note", "handle", "remind", "avoid"],
+            "description": (
+                "Primary action verb. "
+                "'remind' and 'handle' are synonyms — both go to the reminders surface. "
+                "Use 'remind' when the utterance starts with 'remind me' or "
+                "'don't let me forget'. Use 'handle' for bare imperatives like "
+                "'call the vet' or 'pick up milk'."
+            ),
         },
         "subject": {
             "type": "string",
@@ -139,7 +153,7 @@ downstream date resolver do the math.
 
 Output these keys:
 
-  verb           — one of: schedule, note, handle, avoid
+  verb           — one of: schedule, note, handle, remind, avoid
   subject        — short noun phrase (what this is about)
   day_hint       — verbatim day expression ("tomorrow", "Thursday", "next Monday",
                    "September 18th"), or null if no day reference
@@ -155,7 +169,12 @@ Output these keys:
 Verb definitions:
   schedule — put something on the calendar (requires a time reference)
   note     — remember a fact, insight, or reference (no deadline)
-  handle   — do-this-soon to-do (may or may not have a deadline)
+  handle   — do-this-soon to-do expressed as a bare imperative
+             ("call the vet", "pick up milk", "fix the screen door")
+  remind   — do-this-soon to-do that starts with "remind me" or "don't let me
+             forget". Synonym for handle — both go to the reminders surface.
+             Use remind when the utterance begins with "remind me" or
+             "don't let me forget". Use handle for bare imperatives.
   avoid    — standing warning or constraint ("avoid scheduling X", "Sam is allergic to Y")
 
 AM/PM rule:
@@ -186,6 +205,14 @@ Output:
 Transcript: "remember to call the deck contractor Thursday, mark critical"
 Output:
 {"verb":"handle","subject":"call deck contractor","day_hint":"Thursday","time_hint":null,"when":null,"criticality":"critical","confidence":0.88,"ambiguous_fields":[]}
+
+Transcript: "remind me to pick up the dry cleaning"
+Output:
+{"verb":"remind","subject":"pick up dry cleaning","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.90,"ambiguous_fields":[]}
+
+Transcript: "remind me Thursday to call the plumber"
+Output:
+{"verb":"remind","subject":"call the plumber","day_hint":"Thursday","time_hint":null,"when":null,"criticality":"normal","confidence":0.87,"ambiguous_fields":[]}
 
 Transcript: "note that the LED reflects off the terrazzo"
 Output:

@@ -174,9 +174,15 @@ def test_verb_handle_critical_bumps_chain_earlier(tmp_path, monkeypatch):
     strike_0 = next(r for r in rows if r.kind.value == "strike_0")
     assert strike_0.fire_at == when - timedelta(minutes=30)
 
-    # And the title carries the critical marker so the vault shows it.
-    events = cal.list_events(tmp_path)
-    assert any("[handle!]" in e.title for e in events)
+    # v1.6: title no longer carries [handle!] prefix — criticality is in frontmatter.
+    # The vault/reminders/ markdown file should have criticality: critical.
+    reminders_dir = tmp_path / "reminders"
+    md_files = list(reminders_dir.rglob("*.md"))
+    assert md_files, "Expected reminder markdown file"
+    content = md_files[0].read_text()
+    assert "criticality: critical" in content, (
+        f"Expected 'criticality: critical' frontmatter tag. File:\n{content[:300]}"
+    )
 
 
 def test_verb_handle_null_when_defaults_to_next_business_morning_minus_hour(tmp_path, monkeypatch):

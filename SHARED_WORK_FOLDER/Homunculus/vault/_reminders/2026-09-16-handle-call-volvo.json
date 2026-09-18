@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-16-handle-call-volvo",
+  "schedule": [
+    {
+      "event_id": "2026-09-16-handle-call-volvo",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-16T15:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: [handle] call Volvo at 4:00 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-volvo",
+      "kind": "pre_5",
+      "fire_at": "2026-09-16T15:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: [handle] call Volvo at 4:00 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-volvo",
+      "kind": "strike_0",
+      "fire_at": "2026-09-16T16:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "[handle] call Volvo is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-volvo",
+      "kind": "strike_5",
+      "fire_at": "2026-09-16T16:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? [handle] call Volvo started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-volvo",
+      "kind": "strike_10",
+      "fire_at": "2026-09-16T16:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: [handle] call Volvo \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-16-handle-call-volvo",
+      "kind": "strike_15",
+      "fire_at": "2026-09-16T16:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. [handle] call Volvo. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

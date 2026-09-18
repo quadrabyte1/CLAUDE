@@ -1,0 +1,2 @@
+[console_scripts]
+mac-notifier = mac_notifier.poller:main

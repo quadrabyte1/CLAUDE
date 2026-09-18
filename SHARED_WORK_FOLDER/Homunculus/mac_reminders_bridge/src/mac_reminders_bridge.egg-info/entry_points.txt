@@ -1,0 +1,2 @@
+[console_scripts]
+mac-reminders-bridge = mac_reminders_bridge.watcher:main

@@ -1,0 +1,28 @@
+[project]
+name = "mac-notifier"
+version = "0.1.0"
+description = "Mac notification poller for Herman/Homunculus — surfaces scheduled reminders as macOS notifications."
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.25",
+    "tzdata",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+mac-notifier = "mac_notifier.poller:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mac_notifier*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

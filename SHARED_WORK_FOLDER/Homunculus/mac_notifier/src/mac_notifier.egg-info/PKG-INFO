@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: mac-notifier
+Version: 0.1.0
+Summary: Mac notification poller for Herman/Homunculus — surfaces scheduled reminders as macOS notifications.
+Requires-Python: >=3.11
+Requires-Dist: httpx>=0.25
+Requires-Dist: tzdata
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"

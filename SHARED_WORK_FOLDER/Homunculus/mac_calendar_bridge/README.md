@@ -1,10 +1,17 @@
 # mac_calendar_bridge
 
-**Version:** 0.1.2 | **Status:** Active | **Platform:** macOS only
+**Version:** 0.2.0 | **Status:** Active | **Platform:** macOS only
 
-Herman writes calendar events to the markdown vault. `mac_calendar_bridge`
-watches that vault and pushes new events into macOS Calendar.app via
-AppleScript, so they show up in Calendar.app and sync to iPhone via iCloud.
+Herman writes **calendar events** (verb=`schedule`) to `vault/calendar/`.
+`mac_calendar_bridge` watches that directory and pushes new events into macOS
+Calendar.app via AppleScript, so they appear in Calendar.app and sync to iPhone
+via iCloud.
+
+**Scope clarification (v0.2.0):** This bridge handles `verb=schedule` events
+**only**. Reminder-type captures (`verb=handle`, `verb=remind`) now write to
+`vault/reminders/` and are handled by `mac_reminders_bridge`. The
+`[handle]`/`[handle!]` display-title transform is retained as a safety net for
+any legacy events that pre-date the v1.6 migration.
 
 ---
 

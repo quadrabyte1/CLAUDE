@@ -1111,3 +1111,39 @@ Config:
   include_genres: (any)
   exclude_genres: (none)
 ========================================
+========================================
+Scan run_id=11 — 2026-09-16T07:00:06Z → 2026-09-16T07:00:40Z
+Status: done
+Scanned: 1,218,114 rows | New titles: 189 | Matches: 0
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: (none)
+========================================
+========================================
+Scan run_id=12 — 2026-09-17T07:00:05Z → 2026-09-17T07:00:37Z
+Status: done
+Scanned: 1,218,389 rows | New titles: 334 | Matches: 0
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: (none)
+========================================
+========================================
+Scan run_id=13 — 2026-09-18T07:00:07Z → 2026-09-18T07:00:39Z
+Status: done
+Scanned: 1,218,463 rows | New titles: 94 | Matches: 0
+Config:
+  min_rating: 7.0
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: (any)
+  exclude_genres: (none)
+========================================

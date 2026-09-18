@@ -172,11 +172,27 @@ def prompt_path(vault_path: Path, captured_at: datetime, title: str) -> Path:
 
 
 def reminders_dir(vault_path: Path) -> Path:
+    """System-managed _reminders/ directory for strike-chain JSON sidecars."""
     return vault_path / "_reminders"
 
 
 def reminder_path(vault_path: Path, event_id_: str) -> Path:
     return reminders_dir(vault_path) / f"{event_id_}.json"
+
+
+def vault_reminders_dir(vault_path: Path) -> Path:
+    """User-visible vault/reminders/ directory for handle/remind markdown files.
+
+    Distinct from _reminders/ (which holds JSON strike-chain sidecars):
+      vault/reminders/  — markdown files, one per handle/remind capture
+      vault/_reminders/ — JSON strike-chain sidecars (system-managed)
+    """
+    return vault_path / "reminders"
+
+
+def vault_reminder_path(vault_path: Path, event_id_: str) -> Path:
+    """Path to the markdown file for a single handle/remind capture."""
+    return vault_reminders_dir(vault_path) / f"{event_id_}.md"
 
 
 def inbox_path(vault_path: Path) -> Path:

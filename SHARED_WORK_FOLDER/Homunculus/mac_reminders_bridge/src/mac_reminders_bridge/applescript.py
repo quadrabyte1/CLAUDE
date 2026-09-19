@@ -10,13 +10,16 @@ Design:
   Reminders.app does NOT require `tell account` — it uses a flat list
   namespace like Calendar.app. This was verified by attempted testing; see
   docs/FIRST_RUN.md for the manual list creation requirement.
-- Each reminder gets url = "homunculus://reminder/<event_id>" for reliable
-  URL-based deduplication (Reminders.app DOES expose a `url` property,
-  unlike Notes.app which has no URL field).
 - ATOMIC creation: `make new reminder with properties {name:..., body:...}`
   in a SINGLE osascript command. No two-step make-then-set-body.
   The Calendar bridge v0.1.5 teaches us: two-step patterns can silently
   roll back on macOS 15.x. One command = atomic.
+- NO url property in the properties dict. Reminders.app's AppleScript
+  dictionary does NOT expose a url property — attempting to set it causes
+  AppleScript error -1700 ("Can't make ... into type properties of reminder").
+  Empirically confirmed on 2026-09-19: adding a url field to the properties
+  dict triggers -1700; omitting it succeeds. The [herman-id:<event_id>] body
+  marker is the durable idempotency key. No url property needed.
 - NO `remind me date` alarm. Herman's strike chain (mac_notifier) is the
   authoritative notification mechanism. Setting native Reminders.app alarms
   would double-fire (persona rule #14: the reminder schedule is the signature).
@@ -25,11 +28,14 @@ Design:
   starts_at is available from frontmatter.
 - "Homunculus" list must be created manually by the user in Reminders.app UI
   (File → New List → iCloud → "Homunculus"). See docs/FIRST_RUN.md Step 1.
+- Idempotency slow path: query_pushed_reminder_ids() iterates reminder bodies
+  and extracts event_ids via the [herman-id:<event_id>] regex. No URL query.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 import subprocess
 import sys
 from datetime import datetime
@@ -39,6 +45,9 @@ from zoneinfo import ZoneInfo
 from .vault_reader import ReminderRecord
 
 log = logging.getLogger(__name__)
+
+# Regex to extract event_id from body sentinel: [herman-id:<event_id>]
+_HERMAN_ID_RE = re.compile(r"\[herman-id:([^\]]+)\]")
 
 
 # ---------------------------------------------------------------------------
@@ -181,19 +190,20 @@ def query_pushed_reminder_ids(list_name: str) -> list[str]:
     """
     Return a list of homunculus event_ids already in Reminders.app.
 
-    Queries the list for reminders whose URL starts with
-    ``homunculus://reminder/``. Used for the slow-but-authoritative
+    Queries the list for reminder bodies and extracts event_ids from the
+    ``[herman-id:<event_id>]`` body sentinel. Used for the slow-but-authoritative
     idempotency check after pushed.jsonl is absent or incomplete.
 
-    Reminders.app DOES expose a `url` property in its AppleScript
-    dictionary (unlike Notes.app, which has no URL field). This enables
-    reliable event_id-based dedup without polluting the visible note body.
+    NOTE: Reminders.app's AppleScript dictionary does NOT expose a `url`
+    property (attempts to set or read `url` of a reminder cause error -1700).
+    The [herman-id:<event_id>] body marker is the durable idempotency key.
+    Empirically confirmed 2026-09-19.
 
     Args:
         list_name: Name of the Reminders.app list.
 
     Returns:
-        List of event_id strings (extracted from the URL suffix).
+        List of event_id strings extracted from body sentinels.
 
     Raises:
         NotImplementedError: on non-Darwin platforms.
@@ -208,10 +218,8 @@ tell application "Reminders"
         set allReminders to every reminder
         repeat with r in allReminders
             try
-                set rUrl to url of r
-                if rUrl starts with "homunculus://reminder/" then
-                    set end of result to rUrl
-                end if
+                set rBody to body of r
+                set end of result to rBody
             end try
         end repeat
     end tell
@@ -220,9 +228,14 @@ return result
 """.strip()
 
     raw = run_applescript(script)
-    prefix = "homunculus://reminder/"
-    urls = [u.strip() for u in raw.split(",") if u.strip().startswith(prefix)]
-    ids = [u.removeprefix(prefix) for u in urls]
+    if not raw:
+        return []
+
+    # osascript serialises an AppleScript list as comma-separated items.
+    # Each item is a reminder body string. Extract [herman-id:...] from each.
+    # Bodies may themselves contain commas, but the sentinel is at the end and
+    # uses a distinctive bracket pattern that won't collide with prose.
+    ids: list[str] = _HERMAN_ID_RE.findall(raw)
     log.debug("query_pushed_reminder_ids: found %d homunculus reminders", len(ids))
     return ids
 
@@ -242,9 +255,12 @@ def push_reminder(record: ReminderRecord, list_name: str) -> None:
     Sets:
       - name: record.display_title (clean subject, no [handle] prefix)
       - body: record.reminders_body (prose + [herman-id:<event_id>] sentinel)
-      - url:  record.homunculus_url ("homunculus://reminder/<event_id>")
       - due date: record.starts_at expressed in local time (if available)
         — WITHOUT a `remind me date` alarm, so no double-fire with mac_notifier.
+
+    NOTE: `url:` is intentionally OMITTED from the properties dict.
+    Reminders.app's AppleScript dictionary rejects url: with error -1700.
+    The [herman-id:<event_id>] body sentinel is the idempotency key.
 
     The list must already exist — call verify_list_exists() at startup and
     exit if it returns False. See docs/FIRST_RUN.md for how to create it.
@@ -262,7 +278,6 @@ def push_reminder(record: ReminderRecord, list_name: str) -> None:
     # Escape double-quotes for AppleScript string embedding.
     title_escaped = record.display_title.replace("\\", "\\\\").replace('"', '\\"')
     body_escaped = record.reminders_body.replace("\\", "\\\\").replace('"', '\\"')
-    url = record.homunculus_url
 
     if record.starts_at is not None:
         # Include due date (without alarm) so the reminder surfaces in
@@ -272,7 +287,7 @@ def push_reminder(record: ReminderRecord, list_name: str) -> None:
         script = f"""
 tell application "Reminders"
     tell list "{list_name}"
-        make new reminder with properties {{name:"{title_escaped}", body:"{body_escaped}", url:"{url}", due date:date "{due_str}"}}
+        make new reminder with properties {{name:"{title_escaped}", body:"{body_escaped}", due date:date "{due_str}"}}
     end tell
 end tell
 """.strip()
@@ -281,7 +296,7 @@ end tell
         script = f"""
 tell application "Reminders"
     tell list "{list_name}"
-        make new reminder with properties {{name:"{title_escaped}", body:"{body_escaped}", url:"{url}"}}
+        make new reminder with properties {{name:"{title_escaped}", body:"{body_escaped}"}}
     end tell
 end tell
 """.strip()

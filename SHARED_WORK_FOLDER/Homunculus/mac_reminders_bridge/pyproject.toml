@@ -1,6 +1,6 @@
 [project]
 name = "mac-reminders-bridge"
-version = "0.1.0"
+version = "0.1.1"
 description = "Mac Reminders bridge for Homunculus/Herman — watches vault/reminders/ and pushes handle/remind captures to Reminders.app via AppleScript."
 requires-python = ">=3.11"
 dependencies = [

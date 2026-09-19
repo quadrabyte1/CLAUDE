@@ -1,0 +1,24 @@
+{
+  "isElevation": true,
+  "imageUrl": "https://d12k1qhoidj8cp.cloudfront.net/77933/75/900/1620/9416.png?Expires=1789815486&Signature=eb4yyHoXRFjFVM7C0Ayecn9bHOnKP52oPnuvDy34RmsO4Cao-in29L9czT~PdiLULM4m0Ja80NqA3VCRw5tSYjNlwzWhttp0U45JBCZawMCoyAOOVJXhGhxedWa6jjAGdKq208pEDgIeFhuVrjA3fW6QnropvqqIRnd4AVnU7l3rtlceMixMFzr921rD3NdyFpX9RwC6tIjtKzpkeCcDKtTMdO3q6E1MyYDuqoemKOcsdB3NHAAxcd82KsXWYDx128x2WXNxt52sc3OW6uW9UiK21jQfzkvMhX4ny0IC9FIh8ABSkvp4PChFB2OsGuKu8PHcdD0UZHaRNClhxifTUg__&Key-Pair-Id=K245W2W1XKHPZX",
+  "imageWidth": 900,
+  "imageHeight": 1620,
+  "padding": 75,
+  "holeId": 5396,
+  "par": 3,
+  "yardage": 186,
+  "holeNumber": 8,
+  "renderedOn": "2026-09-04T10:54:29.337",
+  "renderProperties": {
+    "trueNorth": 0,
+    "heading": 264.844775060635,
+    "greenGPSCoordinate": {
+      "latitude": 37.42378494,
+      "longitude": -122.18968299
+    },
+    "meterToPixelScale": 0.030385645754893553,
+    "greenDepth": 31.152937019891624,
+    "greenWidth": 22.78923431617017,
+    "greenBorder": null
+  }
+}

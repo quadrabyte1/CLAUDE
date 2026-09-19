@@ -15,10 +15,10 @@ Design notes:
 
 Idempotency strategy (belt-and-suspenders):
   Fast path: pushed.jsonl in-memory set (O(1) lookup).
-  Slow path: query Reminders.app for a reminder with the matching URL
-             (homunculus://reminder/<event_id>). If found, self-heal.
-  Unlike Notes.app (no URL field), Reminders.app DOES expose a `url`
-  property in its AppleScript dictionary, enabling reliable URL-based dedup.
+  Slow path: query Reminders.app for reminders whose body contains a
+             [herman-id:<event_id>] sentinel. If found, self-heal.
+  The body sentinel is the durable idempotency key — Reminders.app's
+  AppleScript dictionary does not expose a url property (error -1700).
 """
 
 from __future__ import annotations

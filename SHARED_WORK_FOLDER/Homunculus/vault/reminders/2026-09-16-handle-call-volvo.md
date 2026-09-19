@@ -1,16 +1,15 @@
 ---
 id: 2026-09-16-handle-call-volvo
-title: '[handle] call Volvo'
-starts_at: '2026-09-16T16:00:00-04:00'
-ends_at: '2026-09-16T16:30:00-04:00'
+title: call Volvo
 tz: America/New_York
-duration_minutes: 30
-people: []
-tags:
-- handle
+verb: handle
+starts_at: '2026-09-16T16:00:00-04:00'
 source: voice
 source_utterance: reminder called Volvo at 9 no strike that at 4 p.m. tomorrow you'll
   be with the girls
+people: []
+tags:
+- handle
 created_at: '2026-09-15T21:25:21.711555-04:00'
 updated_at: '2026-09-15T21:25:21.711555-04:00'
 ---

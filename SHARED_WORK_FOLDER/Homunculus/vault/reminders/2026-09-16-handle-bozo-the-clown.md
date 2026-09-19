@@ -1,15 +1,14 @@
 ---
 id: 2026-09-16-handle-bozo-the-clown
-title: '[handle] bozo the clown'
-starts_at: '2026-09-16T08:00:00-04:00'
-ends_at: '2026-09-16T08:30:00-04:00'
+title: bozo the clown
 tz: America/New_York
-duration_minutes: 30
+verb: handle
+starts_at: '2026-09-16T08:00:00-04:00'
+source: voice
+source_utterance: Handle bozo the clown.
 people: []
 tags:
 - handle
-source: voice
-source_utterance: Handle bozo the clown.
 created_at: '2026-09-16T07:26:39.053000-04:00'
 updated_at: '2026-09-16T07:26:39.053000-04:00'
 ---

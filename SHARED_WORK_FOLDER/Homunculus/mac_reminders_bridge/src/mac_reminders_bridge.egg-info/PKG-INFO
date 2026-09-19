@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: mac-reminders-bridge
-Version: 0.1.0
+Version: 0.1.1
 Summary: Mac Reminders bridge for Homunculus/Herman — watches vault/reminders/ and pushes handle/remind captures to Reminders.app via AppleScript.
 Requires-Python: >=3.11
 Requires-Dist: python-frontmatter>=1.1

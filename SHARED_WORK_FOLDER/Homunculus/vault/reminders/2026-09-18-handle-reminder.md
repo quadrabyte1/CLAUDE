@@ -1,16 +1,15 @@
 ---
 id: 2026-09-18-handle-reminder
-title: '[handle] reminder'
-starts_at: '2026-09-18T08:00:00-04:00'
-ends_at: '2026-09-18T08:30:00-04:00'
+title: reminder
 tz: America/New_York
-duration_minutes: 30
-people: []
-tags:
-- handle
+verb: handle
+starts_at: '2026-09-18T08:00:00-04:00'
 source: voice
 source_utterance: reminder by some 60 cubitron 2 and some 80 cubitron 2 and everything
   will be good
+people: []
+tags:
+- handle
 created_at: '2026-09-17T12:02:32.461453-04:00'
 updated_at: '2026-09-17T12:02:32.461453-04:00'
 ---

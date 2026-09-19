@@ -16,8 +16,8 @@ Expected frontmatter shape (from Herman v1.6.0 capture_parsed._handle_handle):
     created_at: '2026-09-16T05:35:55.086346-04:00'
 
 The event_id field is used as the idempotency key. It is embedded in the note body
-for the Reminders.app slow-path dedup check (since Reminders.app has a `url` property
-that we can use, unlike Notes.app).
+via the [herman-id:<event_id>] sentinel in reminders_body. The slow-path dedup in
+query_pushed_reminder_ids() extracts these sentinels by iterating reminder bodies.
 """
 
 from __future__ import annotations
@@ -72,17 +72,6 @@ class ReminderRecord:
         """
         prose = self.body.strip()
         return f"{prose}\n\n[herman-id:{self.event_id}]"
-
-    @property
-    def homunculus_url(self) -> str:
-        """Canonical URL for this reminder — embeds event_id for deduplication.
-
-        Reminders.app DOES expose a `url` property in its AppleScript dictionary,
-        unlike Notes.app. We use `homunculus://reminder/<event_id>` so the
-        slow-path can query by URL instead of by title.
-        """
-        return f"homunculus://reminder/{self.event_id}"
-
 
 # ---------------------------------------------------------------------------
 # Parsing helpers

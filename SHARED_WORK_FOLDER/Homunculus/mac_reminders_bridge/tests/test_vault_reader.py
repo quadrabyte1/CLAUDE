@@ -188,13 +188,12 @@ class TestReminderRecordProperties:
         record = self._make_record(body="Kiss the baby again.")
         assert "Kiss the baby again" in record.reminders_body
 
-    def test_homunculus_url_format(self):
+    def test_reminders_body_sentinel_is_idempotency_key(self):
+        """v0.1.1: body sentinel [herman-id:...] is the sole idempotency key
+        (homunculus_url removed — Reminders.app does not support url property)."""
         record = self._make_record(event_id="2026-09-16-kiss-the-baby")
-        assert record.homunculus_url == "homunculus://reminder/2026-09-16-kiss-the-baby"
-
-    def test_homunculus_url_prefix(self):
-        record = self._make_record(event_id="abc123")
-        assert record.homunculus_url.startswith("homunculus://reminder/")
+        # Sentinel must be in reminders_body so slow-path dedup can find it
+        assert "[herman-id:2026-09-16-kiss-the-baby]" in record.reminders_body
 
 
 # ---------------------------------------------------------------------------

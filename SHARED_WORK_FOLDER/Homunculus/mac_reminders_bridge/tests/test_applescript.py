@@ -7,6 +7,7 @@ Platform-guard tests are exercised by patching sys.platform.
 
 from __future__ import annotations
 
+import importlib
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -205,20 +206,26 @@ class TestQueryPushedReminderIds:
             ids = query_pushed_reminder_ids("Homunculus")
         assert ids == []
 
-    def test_parses_single_url(self):
-        raw = "homunculus://reminder/2026-09-16-kiss-the-baby"
+    def test_parses_single_body_sentinel(self):
+        """Body containing [herman-id:...] yields the event_id."""
+        raw = "Kiss the baby.\n\n[herman-id:2026-09-16-kiss-the-baby]"
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw):
             ids = query_pushed_reminder_ids("Homunculus")
         assert ids == ["2026-09-16-kiss-the-baby"]
 
-    def test_parses_multiple_urls(self):
-        raw = "homunculus://reminder/abc123, homunculus://reminder/def456"
+    def test_parses_multiple_body_sentinels(self):
+        """Multiple reminder bodies (comma-separated by osascript) are all extracted."""
+        raw = (
+            "Pick up the dry cleaning\n\n[herman-id:abc123], "
+            "Call the vet\n\n[herman-id:def456]"
+        )
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw):
             ids = query_pushed_reminder_ids("Homunculus")
         assert set(ids) == {"abc123", "def456"}
 
-    def test_ignores_non_homunculus_urls(self):
-        raw = "https://example.com, homunculus://reminder/real-id"
+    def test_ignores_bodies_without_sentinel(self):
+        """Reminder bodies with no [herman-id:...] are silently skipped."""
+        raw = "No sentinel here (non-homunculus reminder), [herman-id:real-id]"
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw):
             ids = query_pushed_reminder_ids("Homunculus")
         assert ids == ["real-id"]
@@ -261,12 +268,16 @@ class TestPushReminder:
         script = mock_run.call_args[0][0]
         assert "call the vet" in script
 
-    def test_script_contains_homunculus_url(self):
+    def test_script_does_not_contain_url_property(self):
+        """v0.1.1: url: removed from properties dict — Reminders.app rejects it (-1700)."""
         record = _make_record(event_id="2026-09-16-kiss-the-baby")
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
             push_reminder(record, "Homunculus")
         script = mock_run.call_args[0][0]
-        assert "homunculus://reminder/2026-09-16-kiss-the-baby" in script
+        props_start = script.index("{")
+        props_end = script.rindex("}")
+        props_block = script[props_start : props_end + 1].lower()
+        assert "url:" not in props_block
 
     def test_script_contains_body_sentinel(self):
         record = _make_record(event_id="2026-09-16-kiss-the-baby")
@@ -337,3 +348,152 @@ class TestPushReminder:
             push_reminder(record, "Homunculus")
         script = mock_run.call_args[0][0]
         assert script.count("make new reminder") == 1
+
+
+# ---------------------------------------------------------------------------
+# v0.1.1 regression tests — URL: property removed (AppleScript -1700 fix)
+# ---------------------------------------------------------------------------
+
+class TestV011RegressionNoUrlProperty:
+    """
+    Regression guard: Reminders.app rejects any properties dict that includes
+    a URL: field, erroring with AppleScript error -1700.
+
+    Empirically confirmed on Thomas's Mac 2026-09-19:
+        {name:"test-url", body:"...", URL:"homunculus://reminder/test"} → -1700
+        {name:"test-body", body:"..."} → success
+
+    The body [herman-id:<event_id>] marker is the durable idempotency key.
+    No URL property is needed.
+    """
+
+    def test_push_reminder_script_does_not_contain_url_property(self):
+        """
+        Regression #1: push_reminder must NOT emit URL: in the properties dict.
+
+        This is the direct cause of the -1700 errors on cold-boot sweep.
+        All 9 reminders failed because URL: appeared in the properties dict.
+        """
+        record = _make_record(event_id="2026-09-16-kiss-the-baby")
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
+            push_reminder(record, "Homunculus")
+        script = mock_run.call_args[0][0]
+        # URL: must not appear inside the properties dict
+        # (check for 'url:' case-insensitively — AppleScript is case-insensitive)
+        props_start = script.index("{")
+        props_end = script.rindex("}")
+        props_block = script[props_start : props_end + 1].lower()
+        assert "url:" not in props_block, (
+            f"push_reminder emitted 'url:' in properties dict — Reminders.app "
+            f"rejects this with -1700. Properties block: {props_block!r}"
+        )
+
+    def test_push_reminder_script_contains_body_sentinel(self):
+        """
+        Regression #2: body must still contain [herman-id:<event_id>].
+
+        The body marker is the idempotency key after URL is removed.
+        This test likely already passes but is explicitly locked here.
+        """
+        record = _make_record(event_id="2026-09-16-kiss-the-baby")
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
+            push_reminder(record, "Homunculus")
+        script = mock_run.call_args[0][0]
+        assert "[herman-id:2026-09-16-kiss-the-baby]" in script, (
+            "body sentinel missing — idempotency slow-path cannot function"
+        )
+
+    def test_query_pushed_reminder_ids_extracts_from_body(self):
+        """
+        Regression #3: query_pushed_reminder_ids must extract event_ids from
+        body [herman-id:...] markers, not from URL: property.
+
+        Mock: osascript returns a newline-delimited list of reminder bodies
+        as if we called `body of r` on each reminder in the list.
+        """
+        # Simulate what Reminders.app returns: comma-separated body strings
+        # (AppleScript list → osascript stdout joins items with ", ")
+        raw_bodies = (
+            "Pick up the dry cleaning\n\n[herman-id:2026-09-14-dry-cleaning], "
+            "Call the vet\n\n[herman-id:2026-09-15-call-vet], "
+            "No sentinel here (non-homunculus reminder)"
+        )
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw_bodies):
+            ids = query_pushed_reminder_ids("Homunculus")
+        assert set(ids) == {"2026-09-14-dry-cleaning", "2026-09-15-call-vet"}, (
+            f"Expected 2 extracted event_ids, got: {ids!r}"
+        )
+
+    def test_push_if_new_skips_when_event_id_in_body(self):
+        """
+        Regression #4: idempotency end-to-end via mock.
+
+        push_if_new should skip a reminder whose event_id is already returned
+        by query_pushed_reminder_ids (body-marker slow path).
+        """
+        from mac_reminders_bridge.watcher import push_if_new
+        from mac_reminders_bridge.state import PushedState
+
+        event_id = "2026-09-16-kiss-the-baby"
+
+        # Simulate a temp state file (fast path miss → slow path hit)
+        import tempfile, os
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state = PushedState(Path(tmpdir) / "pushed.jsonl")
+
+            # Create a minimal vault .md file
+            md_path = Path(tmpdir) / f"{event_id}.md"
+            md_path.write_text(
+                f"---\nid: {event_id}\ntitle: kiss the baby\ntz: America/New_York\nverb: handle\n---\nKiss the baby.\n",
+                encoding="utf-8",
+            )
+
+            push_reminder_calls = []
+
+            def fake_push(record, list_name):
+                push_reminder_calls.append(record.event_id)
+
+            # Slow path returns event_id already present
+            with patch(
+                "mac_reminders_bridge.watcher.query_pushed_reminder_ids",
+                return_value=[event_id],
+            ), patch(
+                "mac_reminders_bridge.watcher.push_reminder",
+                side_effect=fake_push,
+            ):
+                push_if_new(md_path, state, "Homunculus")
+
+        # push_reminder must NOT have been called
+        assert push_reminder_calls == [], (
+            f"push_reminder was called despite event_id being in Reminders.app: "
+            f"{push_reminder_calls}"
+        )
+
+    def test_no_url_scheme_in_applescript_module(self):
+        """
+        Regression #5: codebase guard.
+
+        After the fix, the string 'homunculus://reminder/' must not appear
+        in the AppleScript source module, and 'url:' must not appear in any
+        AppleScript template strings in applescript.py.
+        """
+        import mac_reminders_bridge.applescript as as_mod
+        src_path = Path(as_mod.__file__)
+        src_text = src_path.read_text(encoding="utf-8")
+
+        assert "homunculus://reminder/" not in src_text, (
+            "homunculus://reminder/ URL scheme still present in applescript.py — "
+            "Reminders.app does not support a url: property"
+        )
+
+        # Also assert 'url:' does not appear in any AppleScript template block
+        # (i.e., inside an f-string that contains 'make new reminder with properties')
+        # We do a focused check: if a line has 'url:' and 'properties' nearby, fail.
+        lines = src_text.splitlines()
+        for i, line in enumerate(lines):
+            stripped = line.strip().lower()
+            if "url:" in stripped and "name:" in stripped:
+                raise AssertionError(
+                    f"applescript.py line {i+1} looks like it emits url: in a "
+                    f"properties dict: {line.strip()!r}"
+                )

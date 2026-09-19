@@ -1,7 +1,7 @@
 """
 mac_reminders_bridge — Push Herman vault reminders to macOS Reminders.app.
 
-Version 0.1.0 — first release.
+Version 0.1.1 — remove url: property from push_reminder (AppleScript -1700 fix).
 
 Design:
 - Watches vault/reminders/*.md for new files (watchdog + 60s periodic sweep).
@@ -22,4 +22,4 @@ Alarm policy: NO `remind me date` alarm is set. Herman's strike chain via
   surfaces in Calendar.app's sidebar.
 """
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"

@@ -76,10 +76,10 @@ def push_if_new(
 
     2. **Slow path** (authoritative second check) — call
        query_pushed_reminder_ids() to ask Reminders.app directly whether
-       a reminder with this event_id URL is already present.
+       a reminder with this event_id body sentinel is already present.
        If found → self-heal pushed.jsonl and skip.
-       Reminders.app has a `url` property (unlike Notes.app), enabling
-       reliable URL-based dedup without a title-collision risk.
+       The [herman-id:<event_id>] body sentinel is the durable key
+       (Reminders.app does not expose a url property in AppleScript).
 
     3. **Push** — only if both checks say "not present" → call push_reminder()
        then mark_pushed().

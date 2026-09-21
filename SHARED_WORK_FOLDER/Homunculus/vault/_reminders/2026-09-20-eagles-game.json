@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-20-eagles-game",
+  "schedule": [
+    {
+      "event_id": "2026-09-20-eagles-game",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-20T08:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: Eagles game at 9:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-20-eagles-game",
+      "kind": "pre_5",
+      "fire_at": "2026-09-20T08:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: Eagles game at 9:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-20-eagles-game",
+      "kind": "strike_0",
+      "fire_at": "2026-09-20T09:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "Eagles game is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-20-eagles-game",
+      "kind": "strike_5",
+      "fire_at": "2026-09-20T09:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? Eagles game started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-20-eagles-game",
+      "kind": "strike_10",
+      "fire_at": "2026-09-20T09:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: Eagles game \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-20-eagles-game",
+      "kind": "strike_15",
+      "fire_at": "2026-09-20T09:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. Eagles game. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

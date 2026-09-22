@@ -28,6 +28,7 @@ from . import dashboard as dash
 from . import intent_router
 from . import llm
 from . import reminders as rem
+from . import timers as timer_module
 from .config import load_config
 from .schemas import (
     AckRequest,
@@ -39,6 +40,12 @@ from .schemas import (
     ParsedCaptureResponse,
     ParsedIntent,
     ReminderRow,
+    TimerStartRequest,
+    TimerStartResponse,
+    TimerStopRequest,
+    TimerStopResponse,
+    RunningTimer,
+    ProjectTotal,
 )
 from fastapi.responses import JSONResponse
 
@@ -229,12 +236,119 @@ def create_app() -> FastAPI:
         )
         return result
 
+    # --- v2.0.0 timer endpoints -----------------------------------------------
+
+    @app.post("/timer/start")
+    async def timer_start(req: TimerStartRequest) -> dict:
+        """Start a named project stopwatch."""
+        tz = _resolve_tz(req.speaker_tz, config.default_tz_name)
+        manager = timer_module.TimerManager(config.vault_path)
+        captured_at = req.captured_at
+        if captured_at.tzinfo is None:
+            captured_at = captured_at.replace(tzinfo=tz)
+        result = manager.start(project=req.project, captured_at=captured_at, tz=tz)
+        return {
+            "stored": result.stored,
+            "record_id": result.record_id,
+            "project": result.project,
+            "slug": result.slug,
+            "started_at": result.started_at.isoformat(),
+        }
+
+    @app.post("/timer/stop")
+    async def timer_stop(req: TimerStopRequest) -> JSONResponse:
+        """Stop a running project stopwatch and emit elapsed + total."""
+        tz = _resolve_tz(req.speaker_tz, config.default_tz_name)
+        manager = timer_module.TimerManager(config.vault_path)
+        captured_at = req.captured_at
+        if captured_at.tzinfo is None:
+            captured_at = captured_at.replace(tzinfo=tz)
+        try:
+            result = manager.stop(project=req.project, captured_at=captured_at, tz=tz)
+        except timer_module.NoRunningTimer as exc:
+            return JSONResponse(
+                status_code=400,
+                content={"stored": False, "error": str(exc)},
+            )
+        return JSONResponse(content={
+            "stored": result.stored,
+            "record_id": result.record_id,
+            "project": result.project,
+            "slug": result.slug,
+            "duration_seconds": result.duration_seconds,
+            "total_seconds": result.total_seconds,
+            "session_started_at": result.session_started_at.isoformat(),
+            "session_ended_at": result.session_ended_at.isoformat(),
+        })
+
+    @app.get("/timers/running")
+    async def timers_running() -> list[dict]:
+        """Return all currently-running timers."""
+        manager = timer_module.TimerManager(config.vault_path)
+        running = manager.get_running()
+        return [
+            {
+                "project": r.project,
+                "slug": r.slug,
+                "started_at": r.started_at.isoformat(),
+                "elapsed_seconds": r.elapsed_seconds,
+            }
+            for r in running
+        ]
+
+    @app.get("/timers/totals")
+    async def timers_totals() -> list[dict]:
+        """Return cumulative totals for all projects."""
+        manager = timer_module.TimerManager(config.vault_path)
+        totals = manager.get_totals()
+        return [
+            {
+                "project": t.project,
+                "slug": t.slug,
+                "total_seconds": t.total_seconds,
+                "last_touched_at": t.last_touched_at.isoformat(),
+                "is_running": t.is_running,
+            }
+            for t in totals
+        ]
+
     # --- v1.5.0 dashboard -----------------------------------------------------
     # Read-only activity feed. No LLM call, no external I/O. Just JSONL read.
 
     @app.get("/dashboard/", response_class=HTMLResponse, include_in_schema=False)
     async def dashboard_page() -> HTMLResponse:
         return HTMLResponse(content=dash.DASHBOARD_HTML, status_code=200)
+
+    @app.get("/dashboard/timers")
+    async def dashboard_timers() -> dict:
+        """Return running timers + totals for the dashboard Timers panel."""
+        manager = timer_module.TimerManager(config.vault_path)
+        running = manager.get_running()
+        totals = manager.get_totals()
+        # Sort: running first (by longest elapsed), then totals (by last_touched_at desc)
+        running_sorted = sorted(running, key=lambda r: r.elapsed_seconds, reverse=True)
+        totals_sorted = sorted(totals, key=lambda t: t.last_touched_at, reverse=True)
+        return {
+            "running": [
+                {
+                    "project": r.project,
+                    "slug": r.slug,
+                    "started_at": r.started_at.isoformat(),
+                    "elapsed_seconds": r.elapsed_seconds,
+                }
+                for r in running_sorted
+            ],
+            "totals": [
+                {
+                    "project": t.project,
+                    "slug": t.slug,
+                    "total_seconds": t.total_seconds,
+                    "last_touched_at": t.last_touched_at.isoformat(),
+                    "is_running": t.is_running,
+                }
+                for t in totals_sorted
+            ],
+        }
 
     @app.get("/dashboard/data")
     async def dashboard_data(

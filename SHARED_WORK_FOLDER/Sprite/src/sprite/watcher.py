@@ -265,6 +265,7 @@ def process_file(path: Path, config: SpriteConfig) -> bool:
         sprite_uuid=uuid,
         day_hint=parse_result.day_hint if not iso_when else None,
         time_hint=parse_result.time_hint if not iso_when else None,
+        project=parse_result.project,
     )
 
     try:
@@ -427,7 +428,7 @@ class _VoiceMemoHandler(FileSystemEventHandler):
 def main() -> None:
     config = load_config()
 
-    log.info("Sprite watcher v0.8.1 starting")
+    log.info("Sprite watcher v0.9.0 starting")
     log.info("  recordings:  %s", config.recordings_dir)
     log.info("  audio arch:  %s", config.audio_archive)
     log.info("  state file:  %s", config.state_file)

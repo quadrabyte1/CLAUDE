@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-23-dogwash",
+  "schedule": [
+    {
+      "event_id": "2026-09-23-dogwash",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-23T08:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: dogwash at 9:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-23-dogwash",
+      "kind": "pre_5",
+      "fire_at": "2026-09-23T08:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: dogwash at 9:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-23-dogwash",
+      "kind": "strike_0",
+      "fire_at": "2026-09-23T09:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "dogwash is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-23-dogwash",
+      "kind": "strike_5",
+      "fire_at": "2026-09-23T09:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? dogwash started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-23-dogwash",
+      "kind": "strike_10",
+      "fire_at": "2026-09-23T09:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: dogwash \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-23-dogwash",
+      "kind": "strike_15",
+      "fire_at": "2026-09-23T09:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. dogwash. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

@@ -911,3 +911,345 @@ def test_v180_e2e_handle_bare_hour_3_still_asks(tmp_path, monkeypatch):
     )
     # Nothing stored in vault.
     assert cal.list_events(tmp_path) == []
+
+
+# ===========================================================================
+# TDD REGRESSION SUITE — v1.9.0 (must FAIL before fix, pass after fix)
+#
+# Bug: "Pick up the dry cleaning on Friday" (verb=handle, day_hint="Friday",
+# time_hint=null) was rejected with:
+#   stored=False, clarifying_question="Did you mean AM or PM?"
+# which is nonsense — there is no time to be ambiguous about.
+#
+# Root cause: _resolve_from_hints() treats time_hint=None the same as
+# time_hint=bare-hour (both set ambiguous=['time']). Fix: when
+# verb in (handle, remind) AND time_hint is None, apply the default
+# handle-hour (morning_anchor_hour - 1) and do NOT ask.
+#
+# Tests 1-8 defined here; the green→red transition is shown in the handoff.
+# ===========================================================================
+
+NOW_V19 = datetime(2026, 9, 22, 9, 5, tzinfo=TZ)  # Monday morning after the incident
+
+
+def _v19_client(tmp_path: Path, monkeypatch) -> TestClient:
+    monkeypatch.setenv("HOMUNCULUS_VAULT", str(tmp_path))
+    monkeypatch.setenv("HOMUNCULUS_TZ", "America/New_York")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("SPRITE_WARNINGS_PATH", str(tmp_path / "sprite" / "warnings.md"))
+    monkeypatch.setenv("HOMUNCULUS_MIN_CONFIDENCE", "0.6")
+    return TestClient(create_app())
+
+
+# --- Test 1: Live regression — handle + day_hint + null time_hint → 8 AM default
+
+
+def test_v190_handle_day_hint_null_time_stores_at_8am(tmp_path, monkeypatch):
+    """POST /capture/parsed with verb=handle, day_hint='Friday', time_hint=null,
+    captured_at=Monday 9:05 AM → stored=True, strike_0 fires Friday at 8:00 AM local.
+
+    This is the dry-cleaning incident. Herman must NOT ask "AM or PM?" when
+    there was no time in the utterance at all.
+    """
+    client = _v19_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "handle",
+        "subject": "pick up dry cleaning",
+        "when": None,
+        "day_hint": "Friday",
+        "time_hint": None,
+        "criticality": "normal",
+        "confidence": 0.85,
+        "raw_transcript": "Pick up the dry cleaning on Friday.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-22.m4a",
+        "captured_at": NOW_V19.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True, (
+        f"verb=handle + day_hint only must store without asking. Got: {body}"
+    )
+    assert body["event_id"] is not None
+
+    # Strike chain must anchor to Friday 8:00 AM (morning_anchor_hour=9, default − 1 = 8).
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(r for r in rows if r.kind.value == "strike_0")
+    assert strike_0.fire_at.weekday() == 4, (
+        f"Expected Friday (weekday=4), got weekday={strike_0.fire_at.weekday()}"
+    )
+    assert strike_0.fire_at.hour == 8, (
+        f"Expected 8 AM default (morning_anchor_hour-1), got hour={strike_0.fire_at.hour}"
+    )
+    assert strike_0.fire_at.minute == 0
+    # Also confirm date is 2026-09-25 (next Friday from Monday 2026-09-22).
+    assert strike_0.fire_at.date().isoformat() == "2026-09-25", (
+        f"Expected 2026-09-25, got {strike_0.fire_at.date().isoformat()}"
+    )
+
+
+# --- Test 2: remind verb — same rule
+
+
+def test_v190_remind_day_hint_null_time_stores_at_8am(tmp_path, monkeypatch):
+    """verb=remind + day_hint='Friday' + time_hint=null → stored=True, 8 AM anchor.
+
+    remind is a synonym for handle; both must get the null-time default.
+    """
+    client = _v19_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "remind",
+        "subject": "call dentist office",
+        "when": None,
+        "day_hint": "Friday",
+        "time_hint": None,
+        "criticality": "normal",
+        "confidence": 0.82,
+        "raw_transcript": "Remind me to call the dentist office on Friday.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-22b.m4a",
+        "captured_at": NOW_V19.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True, (
+        f"verb=remind + day_hint only must store without asking. Got: {body}"
+    )
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(r for r in rows if r.kind.value == "strike_0")
+    assert strike_0.fire_at.weekday() == 4
+    assert strike_0.fire_at.hour == 8
+    assert strike_0.fire_at.date().isoformat() == "2026-09-25"
+
+
+# --- Test 3: schedule verb unchanged — null time still asks
+
+
+def test_v190_schedule_day_hint_null_time_still_asks(tmp_path, monkeypatch):
+    """POST /capture/parsed with verb=schedule, day_hint='Friday', time_hint=null
+    → stored=False with a clarifying question.
+
+    Untimed calendar events remain ambiguous (all-day? 9 AM? TBD?).
+    The null-time default is scoped to handle/remind only.
+    """
+    client = _v19_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "schedule",
+        "subject": "board meeting",
+        "when": None,
+        "day_hint": "Friday",
+        "time_hint": None,
+        "criticality": "normal",
+        "confidence": 0.88,
+        "raw_transcript": "Schedule board meeting on Friday.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-22c.m4a",
+        "captured_at": NOW_V19.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is False, (
+        f"verb=schedule + null time must still ask for a time. Got: {body}"
+    )
+    assert body.get("clarifying_question") is not None
+    # Nothing stored in vault.
+    assert cal.list_events(tmp_path) == []
+
+
+# --- Test 4: strike chain intact for the dry-cleaning case
+
+
+def test_v190_strike_chain_complete_for_null_time_handle(tmp_path, monkeypatch):
+    """Verify all 6 strike rows exist for a handle + day_hint + null time capture.
+
+    The chain should be: heads_up_30, pre_5, strike_0, strike_5, strike_10,
+    strike_15 — all hanging off the 8 AM anchor on Friday.
+    """
+    client = _v19_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "handle",
+        "subject": "return library books",
+        "when": None,
+        "day_hint": "Friday",
+        "time_hint": None,
+        "criticality": "normal",
+        "confidence": 0.87,
+        "raw_transcript": "Return library books on Friday.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-22d.m4a",
+        "captured_at": NOW_V19.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    kinds = {row.kind.value for row in rows}
+    expected_kinds = {"heads_up_30", "pre_5", "strike_0", "strike_5", "strike_10", "strike_15"}
+    assert expected_kinds == kinds, (
+        f"Expected all 6 strike kinds. Got: {kinds}"
+    )
+
+    # All rows must anchor off 8 AM on Friday 2026-09-25.
+    anchor = datetime(2026, 9, 25, 8, 0, tzinfo=TZ)
+    kind_to_offset = {
+        "heads_up_30": -30,
+        "pre_5": -5,
+        "strike_0": 0,
+        "strike_5": 5,
+        "strike_10": 10,
+        "strike_15": 15,
+    }
+    for row in rows:
+        expected_fire = anchor + timedelta(minutes=kind_to_offset[row.kind.value])
+        actual_fire = row.fire_at.astimezone(TZ)
+        assert actual_fire == expected_fire, (
+            f"Row {row.kind.value}: expected {expected_fire}, got {actual_fire}"
+        )
+
+
+# --- Test 5: configurable morning anchor — anchor=10 → default becomes 9 AM
+
+
+def test_v190_configurable_morning_anchor_shifts_default_hour(tmp_path, monkeypatch):
+    """When HOMUNCULUS_MORNING_ANCHOR=10, the null-time default for handle/remind
+    should resolve to 10-1 = 9 AM (morning_anchor_hour - 1).
+    """
+    monkeypatch.setenv("HOMUNCULUS_VAULT", str(tmp_path))
+    monkeypatch.setenv("HOMUNCULUS_TZ", "America/New_York")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("SPRITE_WARNINGS_PATH", str(tmp_path / "sprite" / "warnings.md"))
+    monkeypatch.setenv("HOMUNCULUS_MIN_CONFIDENCE", "0.6")
+    monkeypatch.setenv("HOMUNCULUS_MORNING_ANCHOR", "10")  # anchor at 10 → default = 9 AM
+    client = TestClient(create_app())
+
+    payload = {
+        "verb": "handle",
+        "subject": "check mail",
+        "when": None,
+        "day_hint": "Friday",
+        "time_hint": None,
+        "criticality": "normal",
+        "confidence": 0.85,
+        "raw_transcript": "Check the mail on Friday.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-22e.m4a",
+        "captured_at": NOW_V19.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(row for row in rows if row.kind.value == "strike_0")
+    assert strike_0.fire_at.hour == 9, (
+        f"morning_anchor=10 → default hour should be 9. Got: {strike_0.fire_at.hour}"
+    )
+    assert strike_0.fire_at.date().isoformat() == "2026-09-25"
+
+
+# --- Test 6: when time_hint IS given, existing logic applies (unchanged)
+
+
+def test_v190_handle_with_explicit_time_hint_uses_that_time(tmp_path, monkeypatch):
+    """verb=handle, day_hint='Friday', time_hint='3 PM' → still resolves to Friday 15:00.
+
+    The null-time default must NOT override a real time_hint.
+    """
+    client = _v19_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "handle",
+        "subject": "call the accountant",
+        "when": None,
+        "day_hint": "Friday",
+        "time_hint": "3 PM",
+        "criticality": "normal",
+        "confidence": 0.88,
+        "raw_transcript": "Call the accountant Friday at 3 PM.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-22f.m4a",
+        "captured_at": NOW_V19.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(row for row in rows if row.kind.value == "strike_0")
+    assert strike_0.fire_at.hour == 15, (
+        f"Expected 15:00 (3 PM), got hour={strike_0.fire_at.hour}"
+    )
+    assert strike_0.fire_at.date().isoformat() == "2026-09-25"
+
+
+# --- Test 7: bare-hour ambiguous time_hint still asks (unchanged from v1.8)
+
+
+def test_v190_handle_bare_hour_time_hint_still_asks(tmp_path, monkeypatch):
+    """verb=handle, day_hint='Friday', time_hint='3' (bare hour, no AM/PM)
+    → stored=False, clarifying_question, ambiguous_fields=['time'].
+
+    This fix is ONLY about null time_hint. A bare-hour time_hint is genuinely
+    ambiguous and must still ask.
+    """
+    client = _v19_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "handle",
+        "subject": "pick up prescriptions",
+        "when": None,
+        "day_hint": "Friday",
+        "time_hint": "3",
+        "criticality": "normal",
+        "confidence": 0.84,
+        "raw_transcript": "Pick up prescriptions Friday at 3.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-22g.m4a",
+        "captured_at": NOW_V19.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is False, (
+        f"bare-hour time_hint must still ask. Got: {body}"
+    )
+    assert body.get("clarifying_question") is not None
+    assert "time" in body.get("ambiguous_fields", [])
+    assert cal.list_events(tmp_path) == []
+
+
+# --- Test 8: full regression — all 161 existing tests still pass (enforced by
+#     the overall pytest run; this test documents the contract explicitly)
+
+def test_v190_regression_null_time_handle_writes_reminder_markdown(tmp_path, monkeypatch):
+    """Regression: vault/reminders/<event_id>.md exists and has correct frontmatter
+    for a null-time handle capture. Confirms the full write path fires, not just
+    the response object.
+    """
+    client = _v19_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "handle",
+        "subject": "water the garden",
+        "when": None,
+        "day_hint": "Friday",
+        "time_hint": None,
+        "criticality": "normal",
+        "confidence": 0.86,
+        "raw_transcript": "Water the garden on Friday.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-22h.m4a",
+        "captured_at": NOW_V19.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["written_path"] is not None
+
+    # The reminder markdown must exist under vault/reminders/.
+    written = tmp_path / body["written_path"]
+    assert written.exists(), f"Expected reminder markdown at {written}"
+    contents = written.read_text(encoding="utf-8")
+    assert "starts_at:" in contents
+    assert "verb: handle" in contents
+    # starts_at must be on 2026-09-25 at 08:00.
+    assert "2026-09-25T08:00:00" in contents or "2026-09-25 08:00:00" in contents, (
+        f"starts_at should be on Friday 2026-09-25 at 08:00. Frontmatter:\n{contents[:400]}"
+    )

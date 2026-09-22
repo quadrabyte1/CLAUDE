@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-25-pick-up-dry-cleaning",
+  "schedule": [
+    {
+      "event_id": "2026-09-25-pick-up-dry-cleaning",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-25T07:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: pick up dry cleaning at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-pick-up-dry-cleaning",
+      "kind": "pre_5",
+      "fire_at": "2026-09-25T07:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: pick up dry cleaning at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-pick-up-dry-cleaning",
+      "kind": "strike_0",
+      "fire_at": "2026-09-25T08:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "pick up dry cleaning is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-pick-up-dry-cleaning",
+      "kind": "strike_5",
+      "fire_at": "2026-09-25T08:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? pick up dry cleaning started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-pick-up-dry-cleaning",
+      "kind": "strike_10",
+      "fire_at": "2026-09-25T08:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: pick up dry cleaning \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-pick-up-dry-cleaning",
+      "kind": "strike_15",
+      "fire_at": "2026-09-25T08:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. pick up dry cleaning. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

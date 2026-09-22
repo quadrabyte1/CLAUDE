@@ -54,6 +54,7 @@ from . import date_resolver
 from . import reminders as rem
 from . import vault
 from .config import Config
+from . import timers as timer_module
 from .schemas import (
     CaptureCriticality,
     CaptureVerb,
@@ -92,12 +93,18 @@ def dispatch(
     """
     record_id = compute_record_id(req)
 
-    # Idempotency short-circuit: if we've stored this exact record before,
-    # return the same response without touching downstream state.
-    prior = _lookup_prior(config.vault_path, record_id)
-    if prior is not None:
-        log.info("capture/parsed idempotent replay for record_id=%s", record_id)
-        return ParsedCaptureResponse(**prior)
+    # Timer verbs handle their own idempotency internally (TimerManager is
+    # the authority on timer state). Skip the capture_parsed idempotency log
+    # for timer verbs so each start/stop routes to TimerManager every time.
+    is_timer_verb = req.verb in (CaptureVerb.START_TIMER, CaptureVerb.STOP_TIMER)
+
+    if not is_timer_verb:
+        # Idempotency short-circuit: if we've stored this exact record before,
+        # return the same response without touching downstream state.
+        prior = _lookup_prior(config.vault_path, record_id)
+        if prior is not None:
+            log.info("capture/parsed idempotent replay for record_id=%s", record_id)
+            return ParsedCaptureResponse(**prior)
 
     if req.verb is CaptureVerb.SCHEDULE:
         resp = _handle_schedule(req, config=config, tz=tz, record_id=record_id)
@@ -110,6 +117,10 @@ def dispatch(
         resp = _handle_handle(req, config=config, tz=tz, record_id=record_id)
     elif req.verb is CaptureVerb.AVOID:
         resp = _handle_avoid(req, config=config, tz=tz, record_id=record_id)
+    elif req.verb is CaptureVerb.START_TIMER:
+        resp = _handle_start_timer(req, config=config, tz=tz, record_id=record_id)
+    elif req.verb is CaptureVerb.STOP_TIMER:
+        resp = _handle_stop_timer(req, config=config, tz=tz, record_id=record_id)
     else:  # pragma: no cover — enum guarantees no other branch
         raise ValueError(f"unhandled verb: {req.verb!r}")
 
@@ -125,7 +136,8 @@ def dispatch(
         )
         return resp
 
-    _record_stored(config.vault_path, record_id, resp)
+    if not is_timer_verb:
+        _record_stored(config.vault_path, record_id, resp)
     activity_log.log(
         config.vault_path,
         "capture_parsed",
@@ -359,16 +371,44 @@ def _handle_handle(
         clarify = _resolve_from_hints(req, config=config, tz=tz, record_id=record_id)
         if clarify is not None:
             return clarify
-        resolved = date_resolver.resolve(
-            req.day_hint,
-            req.time_hint,
-            req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz),
-            tz,
-            morning_anchor_hour=config.morning_anchor_hour,
-            verb=req.verb.value,
-        )
-        assert resolved.resolved_at is not None
-        first_alert = resolved.resolved_at
+        # v1.9.0: null time_hint for handle/remind means "sometime that day" — apply
+        # the default handle-hour (morning_anchor_hour - 1) on the user-specified day.
+        # _resolve_from_hints already validated the day; if it returned None without
+        # asking, the day is clean and time was absent → use the default.
+        _no_time = not (req.time_hint or "").strip()
+        if _no_time:
+            # Resolve the day only (time_hint="morning" is just to get a valid datetime;
+            # we then replace the hour with the default handle-hour).
+            now_local = (
+                req.captured_at if req.captured_at.tzinfo
+                else req.captured_at.replace(tzinfo=tz)
+            )
+            day_resolved = date_resolver.resolve(
+                req.day_hint,
+                "morning",  # stand-in to get a valid day; hour replaced below
+                now_local,
+                tz,
+                morning_anchor_hour=config.morning_anchor_hour,
+                verb=req.verb.value,
+            )
+            assert day_resolved.resolved_at is not None, (
+                "day should have resolved cleanly — _resolve_from_hints already checked"
+            )
+            default_hour = max(0, config.morning_anchor_hour - 1)
+            first_alert = day_resolved.resolved_at.replace(
+                hour=default_hour, minute=0, second=0, microsecond=0
+            )
+        else:
+            resolved = date_resolver.resolve(
+                req.day_hint,
+                req.time_hint,
+                req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz),
+                tz,
+                morning_anchor_hour=config.morning_anchor_hour,
+                verb=req.verb.value,
+            )
+            assert resolved.resolved_at is not None
+            first_alert = resolved.resolved_at
     else:
         # Default: 1 hour before start of next business day (business day
         # begins at ``morning_anchor_hour``).
@@ -499,6 +539,58 @@ def append_warning(warnings_path: Path, line: str) -> None:
         os.fsync(f.fileno())
 
 
+def _handle_start_timer(
+    req: ParsedCaptureRequest,
+    *,
+    config: Config,
+    tz: ZoneInfo,
+    record_id: str,
+) -> ParsedCaptureResponse:
+    """Route verb=start_timer to TimerManager.start()."""
+    project = req.project or req.subject
+    manager = timer_module.TimerManager(config.vault_path)
+    captured_at = req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz)
+    result = manager.start(project=project, captured_at=captured_at, tz=tz)
+    return ParsedCaptureResponse(
+        stored=True,
+        record_id=result.record_id,
+        verb=req.verb,
+        written_path=f"timers/{result.slug}.json",
+        event_id=result.slug,
+    )
+
+
+def _handle_stop_timer(
+    req: ParsedCaptureRequest,
+    *,
+    config: Config,
+    tz: ZoneInfo,
+    record_id: str,
+) -> ParsedCaptureResponse:
+    """Route verb=stop_timer to TimerManager.stop()."""
+    project = req.project or req.subject
+    manager = timer_module.TimerManager(config.vault_path)
+    captured_at = req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz)
+    try:
+        result = manager.stop(project=project, captured_at=captured_at, tz=tz)
+    except timer_module.NoRunningTimer as exc:
+        # Return a clarifying response instead of raising
+        return ParsedCaptureResponse(
+            stored=False,
+            record_id=record_id,
+            verb=req.verb,
+            clarifying_question=str(exc),
+            ambiguous_fields=[],
+        )
+    return ParsedCaptureResponse(
+        stored=True,
+        record_id=result.record_id,
+        verb=req.verb,
+        written_path=f"timers/{result.slug}.json",
+        event_id=result.slug,
+    )
+
+
 def read_recent_warnings(warnings_path: Path, n: int = 20) -> list[str]:
     """Return the last ``n`` warning lines (most recent first), header stripped.
 
@@ -541,7 +633,55 @@ def _resolve_from_hints(
     so the resolver can apply verb-specific heuristics (e.g. schedule + bare
     hour 1-5 → assume PM instead of asking). Non-schedule verbs keep the
     original caution.
+
+    v1.9.0 — null time_hint for handle/remind is NOT ambiguous:
+
+    When ``verb in ("handle", "remind")`` AND ``time_hint`` is absent (None
+    or empty string), the user gave a day but no time.  That is not an AM/PM
+    ambiguity — it is a silent instruction to remind them "sometime that day."
+    In this case we return ``None`` immediately (no clarification needed) so
+    the verb handler applies the default handle-hour (``morning_anchor_hour - 1``).
+
+    The AM/PM clarifying question only makes sense when the user DID supply a
+    time but left it ambiguous (e.g. "at 3").  Asking "AM or PM?" when there
+    was no time at all is confusing and blocks legitimate captures.
+
+    This override does NOT apply to ``verb=schedule``.  A calendar event
+    without a time is genuinely ambiguous (all-day? TBD? morning?) and should
+    still prompt for a time.
     """
+    # v1.9.0: null time_hint for handle/remind → not ambiguous, use default hour.
+    _no_time = not (req.time_hint or "").strip()
+    if _no_time and req.verb.value in ("handle", "remind"):
+        # No time was given at all — let the verb handler apply the default.
+        # We still need to validate that the day_hint resolves cleanly; if the
+        # day is unparseable we should ask.  Run the resolver with a stub time
+        # so we only surface day ambiguity, not time ambiguity.
+        now = req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz)
+        day_check = date_resolver.resolve(
+            req.day_hint,
+            "morning",  # non-null, unambiguous stand-in — just to get day resolution
+            now,
+            tz,
+            morning_anchor_hour=config.morning_anchor_hour,
+            verb=req.verb.value,
+        )
+        if day_check.ambiguous:
+            # Day was unparseable — ask about the day, not the time.
+            parts = []
+            if "day" in day_check.ambiguous:
+                parts.append("I couldn't understand the day — could you be more specific?")
+            question = " ".join(parts)
+            return ParsedCaptureResponse(
+                stored=False,
+                record_id=record_id,
+                verb=req.verb,
+                clarifying_question=question,
+                ambiguous_fields=list(day_check.ambiguous),
+            )
+        # Day resolved cleanly and there's no time hint → no clarification needed.
+        return None
+
     now = req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz)
     result = date_resolver.resolve(
         req.day_hint,
@@ -555,9 +695,9 @@ def _resolve_from_hints(
         # Build a clarifying question matching the /capture/text style.
         parts = []
         if "time" in result.ambiguous:
-            parts.append(f"Did you mean AM or PM? (e.g. '9 AM' or '9 PM')")
+            parts.append("Did you mean AM or PM? (e.g. '9 AM' or '9 PM')")
         if "day" in result.ambiguous:
-            parts.append(f"I couldn't understand the day — could you be more specific?")
+            parts.append("I couldn't understand the day — could you be more specific?")
         question = " ".join(parts)
         return ParsedCaptureResponse(
             stored=False,

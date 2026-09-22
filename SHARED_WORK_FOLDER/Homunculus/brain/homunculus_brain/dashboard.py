@@ -24,7 +24,7 @@ from typing import Any, Optional
 # Constants
 # ---------------------------------------------------------------------------
 
-DASHBOARD_VERSION = "v0.1"
+DASHBOARD_VERSION = "v0.2"
 
 _VERB_ICONS: dict[str, str] = {
     "schedule": "📅",
@@ -32,6 +32,8 @@ _VERB_ICONS: dict[str, str] = {
     "note": "📝",
     "avoid": "⚠️",
     "event_ack": "✔️",
+    "timer_start": "⏱",
+    "timer_stop": "⏱",
 }
 _DEFAULT_ICON = "🔹"
 
@@ -62,10 +64,35 @@ def _summary_for(row: dict[str, Any]) -> str:
         if verb or subject:
             return f"verb={verb}  {subject}".strip()
 
+    if kind == "timer_start" and isinstance(details, dict):
+        project = details.get("project", "")
+        return f"Started: {project}" if project else "Timer started"
+
+    if kind == "timer_stop" and isinstance(details, dict):
+        project = details.get("project", "")
+        duration = details.get("duration_seconds", 0)
+        total = details.get("total_seconds", 0)
+        dur_str = _short_duration(duration)
+        total_str = _short_duration(total)
+        if project:
+            return f"Stopped: {project} — {dur_str} (total {total_str})"
+        return "Timer stopped"
+
     # Fallback: raw_text truncated
     if raw:
         return raw[:80] + ("…" if len(raw) > 80 else "")
     return kind or "(no summary)"
+
+
+def _short_duration(seconds: int) -> str:
+    """Short format for dashboard feed rows: '47m 32s' or '4h 12m'."""
+    if seconds < 3600:
+        mins = seconds // 60
+        secs = seconds % 60
+        return f"{mins}m {secs}s"
+    hours = seconds // 3600
+    mins = (seconds % 3600) // 60
+    return f"{hours}h {mins}m"
 
 
 def _confidence_for(row: dict[str, Any]) -> Optional[float]:
@@ -184,7 +211,7 @@ def read_recent(
 # Dashboard HTML
 # ---------------------------------------------------------------------------
 
-_DASHBOARD_HTML = r"""<!DOCTYPE html>
+_DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -378,6 +405,90 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
     white-space: pre;
     overflow-x: auto;
   }
+
+  /* ---- TIMERS PANEL ---- */
+  #timers-panel {
+    max-width: 900px;
+    margin: 12px auto 0;
+    padding: 0 12px;
+  }
+
+  .timers-section {
+    background: #161616;
+    border: 1px solid #252525;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+  }
+
+  .timers-section-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 12px 4px;
+    border-bottom: 1px solid #1e1e1e;
+  }
+
+  .timer-row {
+    display: flex;
+    align-items: center;
+    padding: 7px 12px;
+    border-bottom: 1px solid #1a1a1a;
+    gap: 8px;
+  }
+  .timer-row:last-child { border-bottom: none; }
+
+  .timer-icon { font-size: 14px; }
+
+  .timer-project {
+    flex: 1;
+    font-size: 13px;
+    color: #ccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .timer-elapsed {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: #4caf8a;
+    font-weight: 500;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  .timer-total {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: #888;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .timer-touched {
+    font-size: 11px;
+    color: #555;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  .timer-running-badge {
+    font-size: 10px;
+    background: #1a3a2a;
+    color: #4caf8a;
+    border: 1px solid #2a5a3a;
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+
+  .timers-empty {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #555;
+  }
 </style>
 </head>
 <body>
@@ -390,6 +501,18 @@ _DASHBOARD_HTML = r"""<!DOCTYPE html>
   <button class="refresh-link" onclick="refreshNow()">Refresh now</button>
   <span class="disconnected-badge" id="disconn-badge">⚠️ Disconnected</span>
 </header>
+
+<!-- Timers Panel (above activity feed) -->
+<div id="timers-panel">
+  <div class="timers-section" id="timers-running-section">
+    <div class="timers-section-header">⏱ Running Timers</div>
+    <div id="timers-running-body"><div class="timers-empty">No timers running.</div></div>
+  </div>
+  <div class="timers-section" id="timers-totals-section">
+    <div class="timers-section-header">Project Totals</div>
+    <div id="timers-totals-body"><div class="timers-empty">No project totals yet.</div></div>
+  </div>
+</div>
 
 <div id="feed">
   <div class="empty-state" id="empty-state" style="display:none">
@@ -599,10 +722,106 @@ function refreshNow() {
   rowCount  = 0;
   latestAt  = null;
   initialLoad();
+  fetchTimers();
 }
+
+// ---- Timers Panel ---------------------------------------------------------
+
+const TIMERS_URL = "/dashboard/timers";
+let timersPollTimer = null;
+// Track running timers client-side for the 1-sec tick
+let runningTimers = [];  // [{slug, started_at_ms, project}]
+
+function fmtElapsed(totalSec) {
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return h + "h " + m + "m " + String(s).padStart(2, "0") + "s";
+  return m + "m " + String(s).padStart(2, "0") + "s";
+}
+
+function fmtTotal(totalSec) {
+  if (totalSec < 3600) {
+    const m = Math.floor(totalSec / 60);
+    return m + "m";
+  }
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  return h + "h " + m + "m";
+}
+
+function renderRunning(items) {
+  const el = document.getElementById("timers-running-body");
+  if (!items || items.length === 0) {
+    el.innerHTML = '<div class="timers-empty">No timers running.</div>';
+    runningTimers = [];
+    return;
+  }
+  runningTimers = items.map(r => ({
+    slug: r.slug,
+    project: r.project,
+    started_at_ms: new Date(r.started_at).getTime(),
+  }));
+  let html = "";
+  for (const r of items) {
+    const elapsed = r.elapsed_seconds;
+    html += `<div class="timer-row" id="trow-${esc(r.slug)}">
+      <span class="timer-icon">⏱</span>
+      <span class="timer-project">${esc(r.project)}</span>
+      <span class="timer-running-badge">RUNNING</span>
+      <span class="timer-elapsed" id="elapsed-${esc(r.slug)}">${fmtElapsed(elapsed)}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+function renderTotals(items) {
+  const el = document.getElementById("timers-totals-body");
+  if (!items || items.length === 0) {
+    el.innerHTML = '<div class="timers-empty">No project totals yet.</div>';
+    return;
+  }
+  let html = "";
+  for (const t of items) {
+    const runBadge = t.is_running
+      ? '<span class="timer-running-badge">RUNNING</span>' : "";
+    html += `<div class="timer-row">
+      <span class="timer-icon">⏱</span>
+      <span class="timer-project">${esc(t.project)}</span>
+      ${runBadge}
+      <span class="timer-total">${fmtTotal(t.total_seconds)}</span>
+      <span class="timer-touched">${relativeTime(t.last_touched_at)}</span>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function fetchTimers() {
+  try {
+    const data = await fetchData(TIMERS_URL);
+    renderRunning(data.running || []);
+    renderTotals(data.totals || []);
+  } catch (e) {
+    // Non-fatal; timers panel shows stale data
+  }
+  timersPollTimer = setTimeout(fetchTimers, 5000);
+}
+
+// 1-second tick to update elapsed times client-side without a server round-trip
+setInterval(() => {
+  const now = Date.now();
+  for (const rt of runningTimers) {
+    const el = document.getElementById("elapsed-" + rt.slug);
+    if (el) {
+      const elapsed = Math.floor((now - rt.started_at_ms) / 1000);
+      el.textContent = fmtElapsed(elapsed);
+    }
+  }
+}, 1000);
 
 // ---- Boot -----------------------------------------------------------------
 initialLoad();
+fetchTimers();
 </script>
 </body>
 </html>

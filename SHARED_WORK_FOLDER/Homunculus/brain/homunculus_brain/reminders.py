@@ -19,6 +19,7 @@ When the phone exists, swap the stub for an HTTPS POST over Tailscale.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timedelta, time
 from pathlib import Path
@@ -356,7 +357,61 @@ def collect_upcoming_rows(
             if now <= r.fire_at <= window_end:
                 out.append(r)
 
+    # v2.0.0: include timer_stop notification sidecars
+    timer_rows = _collect_timer_notifications(vault_path, events_from=events_from, window_end=window_end, include_fired=include_fired)
+    out.extend(timer_rows)
+
     out.sort(key=lambda r: r.fire_at)
+    return out
+
+
+def _collect_timer_notifications(
+    vault_path: Path,
+    *,
+    events_from: datetime,
+    window_end: datetime,
+    include_fired: bool,
+) -> list[ReminderRow]:
+    """Read timer_stop notification sidecars from _reminders/.
+
+    These are written by TimerManager._enqueue_stop_notification().
+    They use identifiers starting with 'timer.' and kind='timer_stop'.
+    """
+    from .schemas import ReminderKind
+    reminders_dir = vault_path / "_reminders"
+    if not reminders_dir.exists():
+        return []
+
+    out: list[ReminderRow] = []
+    for path in reminders_dir.glob("timer.*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for raw in data.get("schedule", []):
+            if raw.get("kind") != "timer_stop":
+                continue
+            try:
+                fire_at = datetime.fromisoformat(raw["fire_at"])
+                if fire_at.tzinfo is None:
+                    from datetime import timezone as _tz
+                    fire_at = fire_at.replace(tzinfo=_tz.utc)
+            except (ValueError, KeyError):
+                continue
+            status = raw.get("status", "pending")
+            if not include_fired and status in ("acked", "cancelled", "fired"):
+                continue
+            in_window = (events_from <= fire_at <= window_end) if include_fired else True
+            if not in_window:
+                continue
+            out.append(ReminderRow(
+                event_id=raw["event_id"],
+                kind=ReminderKind.TIMER_STOP,
+                fire_at=fire_at,
+                tz=raw.get("tz", "UTC"),
+                body=raw.get("body", ""),
+                status=status,
+            ))
     return out
 
 

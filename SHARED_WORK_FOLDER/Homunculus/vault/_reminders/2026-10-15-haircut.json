@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-10-15-haircut",
+  "schedule": [
+    {
+      "event_id": "2026-10-15-haircut",
+      "kind": "heads_up_30",
+      "fire_at": "2026-10-15T14:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: haircut at 3:00 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-15-haircut",
+      "kind": "pre_5",
+      "fire_at": "2026-10-15T14:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: haircut at 3:00 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-15-haircut",
+      "kind": "strike_0",
+      "fire_at": "2026-10-15T15:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "haircut is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-15-haircut",
+      "kind": "strike_5",
+      "fire_at": "2026-10-15T15:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? haircut started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-15-haircut",
+      "kind": "strike_10",
+      "fire_at": "2026-10-15T15:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: haircut \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-15-haircut",
+      "kind": "strike_15",
+      "fire_at": "2026-10-15T15:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. haircut. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

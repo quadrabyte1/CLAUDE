@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-10-30-renew-car-registration",
+  "schedule": [
+    {
+      "event_id": "2026-10-30-renew-car-registration",
+      "kind": "heads_up_30",
+      "fire_at": "2026-10-30T09:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: renew car registration at 10:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-30-renew-car-registration",
+      "kind": "pre_5",
+      "fire_at": "2026-10-30T09:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: renew car registration at 10:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-30-renew-car-registration",
+      "kind": "strike_0",
+      "fire_at": "2026-10-30T10:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "renew car registration is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-30-renew-car-registration",
+      "kind": "strike_5",
+      "fire_at": "2026-10-30T10:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? renew car registration started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-30-renew-car-registration",
+      "kind": "strike_10",
+      "fire_at": "2026-10-30T10:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: renew car registration \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-30-renew-car-registration",
+      "kind": "strike_15",
+      "fire_at": "2026-10-30T10:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. renew car registration. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

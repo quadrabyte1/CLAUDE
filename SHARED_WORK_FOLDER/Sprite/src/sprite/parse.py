@@ -71,13 +71,28 @@ _INTENT_JSON_SCHEMA = {
     "properties": {
         "verb": {
             "type": "string",
-            "enum": ["schedule", "note", "handle", "remind", "avoid"],
+            "enum": ["schedule", "note", "handle", "remind", "avoid",
+                     "start_timer", "stop_timer"],
             "description": (
                 "Primary action verb. "
                 "'remind' and 'handle' are synonyms — both go to the reminders surface. "
                 "Use 'remind' when the utterance starts with 'remind me' or "
                 "'don't let me forget'. Use 'handle' for bare imperatives like "
-                "'call the vet' or 'pick up milk'."
+                "'call the vet' or 'pick up milk'. "
+                "Use 'start_timer' when the user says 'start X', 'start the X', or "
+                "'start working on X' and X is a project/activity (no time reference). "
+                "Use 'stop_timer' when the user says 'stop X', 'end X', or 'pause X'. "
+                "Distinguish from 'schedule': 'start dinner at 6' → schedule (has a time); "
+                "'start gym' → start_timer (no time, activity name only)."
+            ),
+        },
+        "project": {
+            "type": ["string", "null"],
+            "description": (
+                "For start_timer and stop_timer only: the project/activity name "
+                "exactly as the user said it (verbatim noun phrase after the verb). "
+                "E.g. 'Start gym' → 'gym'; 'Stop deck construction' → 'deck construction'. "
+                "Null for all other verbs."
             ),
         },
         "subject": {
@@ -176,6 +191,19 @@ Verb definitions:
              Use remind when the utterance begins with "remind me" or
              "don't let me forget". Use handle for bare imperatives.
   avoid    — standing warning or constraint ("avoid scheduling X", "Sam is allergic to Y")
+  start_timer — begin a stopwatch for a named project or activity.
+             Use when the utterance is "start X" or "start the X" with NO time reference.
+             The project field carries the activity name verbatim.
+  stop_timer  — end a running stopwatch. Use when the utterance is "stop X", "end X",
+             or "pause X". The project field carries the activity name verbatim.
+
+Timer disambiguation rules:
+  "Start gym" → verb=start_timer, project="gym"
+  "Stop gym" → verb=stop_timer, project="gym"
+  "Start deck construction" → verb=start_timer, project="deck construction"
+  "Start dinner at 6" → verb=schedule (has a time reference — NOT a timer)
+  "Start reminding me about the coffee" → verb=remind (has 'reminding me' — NOT a timer)
+  Timer verbs NEVER have day_hint or time_hint. If a time is present, use schedule.
 
 AM/PM rule:
   If the user says "5:35" without AM or PM, copy "5:35" into time_hint as-is.
@@ -237,6 +265,30 @@ Output:
 Transcript: "Schedule the team call on Tuesday at 6"
 Output:
 {"verb":"schedule","subject":"team call","day_hint":"Tuesday","time_hint":"6","when":null,"criticality":"normal","confidence":0.84,"ambiguous_fields":["time_hint"]}
+
+Transcript: "Start gym"
+Output:
+{"verb":"start_timer","subject":"gym","project":"gym","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.96,"ambiguous_fields":[]}
+
+Transcript: "Stop gym"
+Output:
+{"verb":"stop_timer","subject":"gym","project":"gym","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.96,"ambiguous_fields":[]}
+
+Transcript: "Start deck construction"
+Output:
+{"verb":"start_timer","subject":"deck construction","project":"deck construction","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.94,"ambiguous_fields":[]}
+
+Transcript: "Start dinner at 6"
+Output:
+{"verb":"schedule","subject":"dinner","project":null,"day_hint":null,"time_hint":"6","when":null,"criticality":"normal","confidence":0.88,"ambiguous_fields":["time_hint"]}
+
+Transcript: "Start reminding me about the coffee"
+Output:
+{"verb":"remind","subject":"coffee","project":null,"day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.85,"ambiguous_fields":[]}
+
+Transcript: "End the gym session"
+Output:
+{"verb":"stop_timer","subject":"gym","project":"gym","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.92,"ambiguous_fields":[]}
 """
 
 # ---------------------------------------------------------------------------
@@ -282,7 +334,7 @@ def _preprocess(transcript: str) -> PreprocessorHints:
 
 @dataclass
 class ParseResult:
-    verb: str               # schedule | note | handle | avoid
+    verb: str               # schedule | note | handle | avoid | start_timer | stop_timer
     subject: str
     day_hint: Optional[str]   # verbatim day expression from utterance, or None
     time_hint: Optional[str]  # verbatim time expression from utterance, or None
@@ -290,9 +342,14 @@ class ParseResult:
     confidence: float
     ambiguous_fields: list[str]
     raw_llm_json: dict        # for provenance / debugging
+    project: Optional[str] = None  # timer verbs only: activity name
     # `when` is intentionally absent. If the LLM emits an ISO string in the
     # optional `when` field, we expose it via `raw_llm_json["when"]`. The
     # watcher pipeline checks raw_llm_json to detect the rare ISO case.
+
+
+# Keep ParsedIntent as an alias for external use (test_timers.py imports it)
+ParsedIntent = ParseResult
 
 
 class OllamaUnreachable(RuntimeError):
@@ -419,4 +476,5 @@ def parse_intent(
         confidence=float(data["confidence"]),
         ambiguous_fields=ambiguous_fields,
         raw_llm_json=data,
+        project=data.get("project") or None,
     )

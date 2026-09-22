@@ -109,6 +109,7 @@ class ReminderKind(str, Enum):
     STRIKE_5 = "strike_5"
     STRIKE_10 = "strike_10"
     STRIKE_15 = "strike_15"
+    TIMER_STOP = "timer_stop"  # v2.0.0: immediate notification on timer stop
 
 
 class ReminderRow(BaseModel):
@@ -181,7 +182,7 @@ class AckResponse(BaseModel):
 
 
 class CaptureVerb(str, Enum):
-    """The five Sprite verbs (v1.6.0: remind added as alias for handle).
+    """Sprite verbs (v2.0.0: start_timer and stop_timer added).
 
     - ``schedule``: put an event on the calendar.
     - ``note``: append a timestamped note to the vault (long-form memory).
@@ -193,6 +194,8 @@ class CaptureVerb(str, Enum):
     - ``avoid``: append to the standing-warnings file surfaced in the
       morning summary. No reminder, no calendar row — it is context the
       user wants Herman to have.
+    - ``start_timer``: start a named project stopwatch.
+    - ``stop_timer``: stop a named project stopwatch, emit elapsed + cumulative total.
     """
 
     SCHEDULE = "schedule"
@@ -200,11 +203,65 @@ class CaptureVerb(str, Enum):
     HANDLE = "handle"
     REMIND = "remind"
     AVOID = "avoid"
+    START_TIMER = "start_timer"
+    STOP_TIMER = "stop_timer"
 
 
 class CaptureCriticality(str, Enum):
     NORMAL = "normal"
     CRITICAL = "critical"
+
+
+class TimerStartRequest(BaseModel):
+    """Request body for POST /timer/start."""
+    project: str = Field(min_length=1)
+    captured_at: datetime
+    speaker_tz: Optional[str] = None
+
+
+class TimerStartResponse(BaseModel):
+    """Response for POST /timer/start."""
+    stored: bool = True
+    record_id: str
+    project: str
+    slug: str
+    started_at: datetime
+
+
+class TimerStopRequest(BaseModel):
+    """Request body for POST /timer/stop."""
+    project: str = Field(min_length=1)
+    captured_at: datetime
+    speaker_tz: Optional[str] = None
+
+
+class TimerStopResponse(BaseModel):
+    """Response for POST /timer/stop."""
+    stored: bool = True
+    record_id: str
+    project: str
+    slug: str
+    duration_seconds: int
+    total_seconds: int
+    session_started_at: datetime
+    session_ended_at: datetime
+
+
+class RunningTimer(BaseModel):
+    """A currently-running timer."""
+    project: str
+    slug: str
+    started_at: datetime
+    elapsed_seconds: int
+
+
+class ProjectTotal(BaseModel):
+    """Cumulative total for a project."""
+    project: str
+    slug: str
+    total_seconds: int
+    last_touched_at: datetime
+    is_running: bool
 
 
 class ParsedCaptureRequest(BaseModel):
@@ -237,6 +294,10 @@ class ParsedCaptureRequest(BaseModel):
     raw_transcript: str
     audio_path: str  # absolute path to the source .m4a (provenance)
     captured_at: datetime  # mtime of the .m4a
+    # v2.0.0: timer verbs — the project/activity name (normalized + slugified by Herman)
+    project: Optional[str] = None
+    # Optional speaker tz forwarded from Sprite
+    speaker_tz: Optional[str] = None
 
 
 class ParsedCaptureResponse(BaseModel):

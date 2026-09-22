@@ -70,6 +70,7 @@ def build_request(
     sprite_uuid: Optional[str] = None,
     day_hint: Optional[str] = None,
     time_hint: Optional[str] = None,
+    project: Optional[str] = None,
 ) -> dict:
     """Build the JSON payload for POST /capture/parsed.
 
@@ -103,6 +104,8 @@ def build_request(
         payload["time_hint"] = time_hint
     if sprite_uuid is not None:
         payload["sprite_uuid"] = sprite_uuid
+    if project is not None:
+        payload["project"] = project
     return payload
 
 

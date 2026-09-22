@@ -911,6 +911,7 @@ def generate_from_egm(
     output_dir: str | None = None,
     print_size_mm: float = PRINT_SIZE_MM,
     thickness_override: dict[str, float] | None = None,
+    serial: int | None = None,
 ) -> list[dict[str, str]]:
     """
     Generate one combined 3MF from EGM boundary data, containing the green,
@@ -922,6 +923,11 @@ def generate_from_egm(
     output_dir       : Directory for output files.  Defaults to owner_inbox/.
     print_size_mm    : Largest printed dimension in mm (default 178 = 7 inches).
     thickness_override: Map of polygon type → thickness in mm (overrides defaults).
+    serial           : Global serial number for this generate run.  When provided
+                       it is embedded in the filename as ``[N]`` and the global
+                       counter is NOT touched.  Callers (Flask route, CLI) should
+                       obtain this by calling ``commit_global_serial()`` BEFORE
+                       calling into the pipeline.
 
     Returns
     -------
@@ -1092,12 +1098,10 @@ def generate_from_egm(
     # --- 8. Export combined 3MF and individual STLs ---
     base_slug = _slugify(f"{course}_hole_{hole}")
     if len(scene.geometry) > 0:
-        try:
-            from serial_engraver import peek_next_serial as _peek_serial
-            _serial = _peek_serial(course)
-        except Exception:
-            _serial = None
-        fname_3mf = _3mf_filename(course, hole, serial=_serial)
+        # Use the serial passed in by the caller (commit_global_serial() was
+        # called at the route/CLI level before entering the pipeline).
+        # Never peek/commit here — the counter is owned by the caller.
+        fname_3mf = _3mf_filename(course, hole, serial=serial)
         path_3mf = os.path.join(output_dir_3mf, fname_3mf)
         scene.export(path_3mf)
         generated.append({"name": fname_3mf, "path": path_3mf, "type": "3mf"})
@@ -1129,12 +1133,22 @@ def generate_from_egm(
 def generate_from_egm_file(
     egm_path: str,
     output_dir: str | None = None,
+    serial: int | None = None,
     **kwargs,
 ) -> list[dict[str, str]]:
-    """Convenience wrapper: load an .egm file and call generate_from_egm()."""
+    """Convenience wrapper: load an .egm file and call generate_from_egm().
+
+    Parameters
+    ----------
+    egm_path   : Path to the .egm project file.
+    output_dir : Directory for output files.  Defaults to owner_inbox/.
+    serial     : Global serial number obtained from commit_global_serial() by
+                 the caller.  When None, the filename has no serial bracket.
+    **kwargs   : Forwarded to generate_from_egm().
+    """
     with open(egm_path) as f:
         data = json.load(f)
-    return generate_from_egm(data, output_dir=output_dir, **kwargs)
+    return generate_from_egm(data, output_dir=output_dir, serial=serial, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -1150,7 +1164,14 @@ if __name__ == "__main__":
 
     egm_path = sys.argv[1]
     out_dir = sys.argv[2] if len(sys.argv) > 2 else None
-    results = generate_from_egm_file(egm_path, output_dir=out_dir)
+
+    # Burn a global serial just like a Generate click in the editor.
+    # Running the CLI is another form of pressing Generate.
+    from serial_engraver import commit_global_serial as _commit_global
+    _cli_serial = _commit_global()
+    print(f"[generate_stl_3mf] Global serial: {_cli_serial}")
+
+    results = generate_from_egm_file(egm_path, output_dir=out_dir, serial=_cli_serial)
     print("\nGenerated files:")
     for r in results:
         print(f"  [{r['type'].upper():3s}] {r['path']}")

@@ -7394,6 +7394,7 @@ def run_pipeline(
     egm_path: str,
     include_boundary_region: bool | None = None,
     apply_fringe_frame_cap: bool | None = None,
+    serial: int | None = None,
 ) -> str:
     """Run the full gradient surface pipeline for a given EGM file path.
 
@@ -7415,6 +7416,10 @@ def run_pipeline(
         where it exceeds the frame. Green/trap/water caps are unaffected.
         When None, fall back to the ``applyFringeFrameCap`` flag persisted
         inside the EGM file (missing → True).
+    serial : int | None, optional
+        Global serial number for this generate run.  Obtained by the caller
+        via ``commit_global_serial()`` BEFORE calling run_pipeline.  When
+        None, the serial is omitted from the filename.
 
     Returns the absolute path to the generated .3mf file.
     """
@@ -8061,19 +8066,16 @@ def run_pipeline(
     # ── 10. Assemble 3MF ────────────────────────────────────────────────────
     print("\n[10] Assembling 3MF…")
 
-    # ── 10b. Peek serial before building filename so it can be embedded in it ──
-    # One Generate press == one serial number, engraved on *every* item produced.
-    # The counter is persisted per-course (starting at 100) and only advanced
-    # AFTER the 3MF is successfully written to disk.
-    from serial_engraver import (
-        peek_next_serial as _peek_serial,
-        commit_serial as _commit_serial,
-        engrave_scene_geometries as _engrave_scene,
-    )
-    serial_number = _peek_serial(course)
-    # Embed serial in filename: "Course (Hole NN) [SN].3mf"
+    # ── 10b. Build filename with global serial ───────────────────────────────
+    # The serial was committed by the caller (Flask route or CLI) before entering
+    # the pipeline.  We simply use the value that was passed in.
+    from serial_engraver import engrave_scene_geometries as _engrave_scene
+    serial_number = serial   # may be None if caller didn't provide one
     hole_label = str(hole).zfill(2) if str(hole).isdigit() else str(hole)
-    fname_3mf = f"{course} (Hole {hole_label}) [{serial_number}].3mf"
+    if serial_number is not None:
+        fname_3mf = f"{course} (Hole {hole_label}) [{serial_number}].3mf"
+    else:
+        fname_3mf = f"{course} (Hole {hole_label}).3mf"
     path_3mf = os.path.abspath(os.path.join(_3mf_dir, fname_3mf))
     print(f"    [generate] output 3MF file:     {path_3mf}")
 
@@ -8186,12 +8188,11 @@ def run_pipeline(
     except Exception as exc:
         print(f"  WARNING: failed to inject extruder metadata: {exc}")
 
-    # ── 10c. Export succeeded → advance the course's serial counter ──
-    try:
-        used = _commit_serial(course)
-        print(f"  Serial committed: used s/n {used}, next will be s/n {used + 1}")
-    except Exception as exc:
-        print(f"  WARNING: failed to persist serial counter: {exc}")
+    # ── 10c. Serial was already committed by the caller before run_pipeline. ──
+    # Nothing to do here — the global counter was incremented at the Generate
+    # click (Flask route or CLI entrypoint) before we were called.
+    if serial_number is not None:
+        print(f"  Serial used: s/n {serial_number} (committed by caller)")
 
     print("\n" + "=" * 60)
     print("Done.")
@@ -8206,7 +8207,11 @@ def run_pipeline(
 def main() -> None:
     search = sys.argv[1] if len(sys.argv) > 1 else "Moffett"
     egm_path = find_egm(search)
-    run_pipeline(egm_path)
+    # Burn a global serial — running the CLI is another form of pressing Generate.
+    from serial_engraver import commit_global_serial as _commit_global
+    _cli_serial = _commit_global()
+    print(f"[gradient_surface_diagnostic] Global serial: {_cli_serial}")
+    run_pipeline(egm_path, serial=_cli_serial)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,166 @@
+{
+  "course": "Stanford",
+  "hole": "8gi",
+  "image": "Stanford (Hole 8, GolfIntelligence).png",
+  "imageCourse": "Stanford",
+  "imageSize": {
+    "width": 1346,
+    "height": 1939
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 0.05,
+  "greenStyle": "terraced",
+  "elevationRange": 14.5,
+  "greenScale": 1.0065,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "applyFringeFrameCap": true,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 758,
+          "y": 160
+        },
+        {
+          "x": 226,
+          "y": 393
+        },
+        {
+          "x": 118,
+          "y": 903
+        },
+        {
+          "x": 269,
+          "y": 1419
+        },
+        {
+          "x": 512,
+          "y": 1685
+        },
+        {
+          "x": 896,
+          "y": 1556
+        },
+        {
+          "x": 1230,
+          "y": 1019
+        },
+        {
+          "x": 1143,
+          "y": 335
+        }
+      ]
+    },
+    {
+      "name": "Water 1",
+      "type": "water",
+      "closed": true,
+      "points": [
+        {
+          "x": 1276,
+          "y": 1635
+        },
+        {
+          "x": 1633,
+          "y": 1184
+        },
+        {
+          "x": 1632,
+          "y": 1936
+        },
+        {
+          "x": 1556,
+          "y": 1967
+        },
+        {
+          "x": 1090,
+          "y": 1948
+        }
+      ]
+    },
+    {
+      "name": "Trap 1",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 9,
+          "y": 1149
+        },
+        {
+          "x": 82,
+          "y": 1243
+        },
+        {
+          "x": 108,
+          "y": 1334
+        },
+        {
+          "x": 146,
+          "y": 1390
+        },
+        {
+          "x": 69,
+          "y": 1442
+        },
+        {
+          "x": 86,
+          "y": 1527
+        },
+        {
+          "x": 201,
+          "y": 1539
+        },
+        {
+          "x": 263,
+          "y": 1605
+        },
+        {
+          "x": 272,
+          "y": 1666
+        },
+        {
+          "x": 323,
+          "y": 1687
+        },
+        {
+          "x": 333,
+          "y": 1728
+        },
+        {
+          "x": 426,
+          "y": 1742
+        },
+        {
+          "x": 452,
+          "y": 1800
+        },
+        {
+          "x": 338,
+          "y": 1938
+        },
+        {
+          "x": -285,
+          "y": 1929
+        },
+        {
+          "x": -284,
+          "y": 1576
+        }
+      ]
+    }
+  ],
+  "elevationSpikes": [],
+  "tee_hole": {
+    "x_mm": 30,
+    "y_mm": 30
+  }
+}

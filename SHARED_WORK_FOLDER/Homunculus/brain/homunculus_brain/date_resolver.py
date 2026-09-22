@@ -53,12 +53,22 @@ def resolve(
     now: datetime,
     tz: ZoneInfo,
     morning_anchor_hour: int = 9,
+    verb: Optional[str] = None,
 ) -> ResolvedDateTime:
     """Combine day + time hints into a single tz-aware datetime.
 
     `now` must be tz-aware. Returns an `ambiguous` list naming any field we
     couldn't pin down; the router uses that to decide whether to ask a
     clarifying question.
+
+    ``verb`` is optional context from the capture verb (e.g. "schedule",
+    "handle", "remind"). When ``verb == "schedule"`` and ``time_hint`` is a
+    bare hour in {1, 2, 3, 4, 5} with no AM/PM marker, the resolver assumes
+    PM (adds 12) instead of flagging ambiguity. The user's explicit direction:
+    "if I put something at 3 and I meant 3 AM, that's on me to correct it."
+    Hours 6-12 remain ambiguous for all verbs (6 AM vs 6 PM are both common).
+    Non-schedule verbs (handle, remind, etc.) keep the original caution for all
+    bare hours — reminders can legitimately fire at 3 AM.
     """
     if now.tzinfo is None:
         raise ValueError("now must be tz-aware")
@@ -67,7 +77,7 @@ def resolve(
 
     resolved_date, day_ambiguous, day_note = _resolve_day(day_hint, now_local)
     resolved_time, time_ambiguous, time_note = _resolve_time(
-        time_hint, morning_anchor_hour
+        time_hint, morning_anchor_hour, verb=verb
     )
 
     ambiguous: list[str] = []
@@ -165,7 +175,10 @@ _TIME_REGEX = re.compile(
 )
 
 
-def _resolve_time(time_hint: Optional[str], morning_anchor_hour: int):
+_SCHEDULE_PM_HOURS = frozenset({1, 2, 3, 4, 5})
+
+
+def _resolve_time(time_hint: Optional[str], morning_anchor_hour: int, verb: Optional[str] = None):
     hint = _normalize(time_hint)
 
     if not hint:
@@ -183,6 +196,19 @@ def _resolve_time(time_hint: Optional[str], morning_anchor_hour: int):
     hour = int(match.group("hour"))
     minute = int(match.group("minute") or 0)
     ampm = (match.group("ampm") or "").replace(".", "").lower()
+
+    # v1.8.0 — schedule verb PM inference for bare hours 1-5.
+    #
+    # For verb=schedule AND a bare hour in {1,2,3,4,5} (no AM/PM marker, no
+    # minutes qualifier), assume PM. Design rationale from Thomas (2026-09-21):
+    # "a whole chunk of the day can't possibly be scheduled at those hours.
+    # If I put something at 3 and I meant 3 AM, that's on me to correct it."
+    # Hours 6-12 remain ambiguous (6 AM breakfast call vs 6 PM dinner are
+    # both common). Non-schedule verbs (handle, remind) keep the original
+    # caution — reminders can legitimately fire at 3 AM (medication, alarms).
+    if not ampm and verb == "schedule" and hour in _SCHEDULE_PM_HOURS and minute == 0:
+        hour += 12
+        return time(hour=hour, minute=minute), False, f"schedule bare-hour inferred PM: '{time_hint}' -> {hour:02d}:00"
 
     # v1.2.2 fix — silent guessing is the failure mode that destroys trust in
     # a memory-support product (persona rule: `ambiguous_fields` is a first-
@@ -227,17 +253,67 @@ def _try_absolute_date(hint: str, now_local: datetime):
     if iso:
         return datetime(int(iso.group(1)), int(iso.group(2)), int(iso.group(3))).date()
 
-    month_day = re.match(r"^([a-z]+)\s+(\d{1,2})$", hint)
+    # Strip ordinal suffixes from the day number ("20th" → "20", "1st" → "1",
+    # "2nd" → "2", "3rd" → "3"). This allows natural speech forms like
+    # "September 20th", "October 1st", "February 2nd", "March 3rd".
+    hint_stripped = re.sub(r"(\d+)(?:st|nd|rd|th)\b", r"\1", hint)
+
+    # "Month Day Year" — explicit year given; roll-forward does not apply.
+    month_day_year = re.match(r"^([a-z]+)\s+(\d{1,2})\s+(\d{4})$", hint_stripped)
+    if month_day_year:
+        month_name = month_day_year.group(1)
+        month = _MONTHS.get(month_name)
+        if month is not None:
+            day = int(month_day_year.group(2))
+            year = int(month_day_year.group(3))
+            try:
+                return datetime(year, month, day).date()
+            except ValueError:
+                return None  # invalid date (e.g. Feb 29 in a non-leap year given explicitly)
+
+    # "Month Day" — no year. Apply the roll-forward rule:
+    #   today or future → current year
+    #   already passed  → next year
+    # Special case: February 29 in a non-leap year → scan forward to the next
+    # leap year rather than silently degrading to Feb 28 or raising.
+    month_day = re.match(r"^([a-z]+)\s+(\d{1,2})$", hint_stripped)
     if month_day:
         month_name = month_day.group(1)
         month = _MONTHS.get(month_name)
         if month is not None:
             day = int(month_day.group(2))
-            year = now_local.year
-            candidate = datetime(year, month, day).date()
-            # If the date is more than 30 days in the past, assume next year.
-            if (now_local.date() - candidate).days > 30:
+            today = now_local.date()
+
+            # Feb 29 requires a leap year — find the right one.
+            if month == 2 and day == 29:
+                return _next_feb29(today)
+
+            year = today.year
+            try:
+                candidate = datetime(year, month, day).date()
+            except ValueError:
+                return None  # invalid month/day combination (e.g. June 31)
+            if candidate < today:
                 candidate = datetime(year + 1, month, day).date()
             return candidate
 
     return None
+
+
+def _next_feb29(today):
+    """Return the date of the next (or current) February 29th on or after today.
+
+    If today is exactly Feb 29, returns today.  Otherwise scans forward through
+    leap years until it finds the first Feb 29 >= today.
+    """
+    import calendar as _cal
+
+    year = today.year
+    # Scan at most 8 years forward (worst case: just missed a leap year).
+    for _ in range(8):
+        if _cal.isleap(year):
+            candidate = datetime(year, 2, 29).date()
+            if candidate >= today:
+                return candidate
+        year += 1
+    return None  # should never happen in practice

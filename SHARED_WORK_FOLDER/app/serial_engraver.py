@@ -1,38 +1,45 @@
 """
-serial_engraver.py — Per-course serial-number engraving for generated 3MF items.
+serial_engraver.py — Global serial-number engraving for generated 3MF items.
 
-Each golf course has its own serial counter, starting at 100 and advancing by
-one after every successful Generate run.  The serial is engraved as a 1 mm
-deep relief (recessed cut) into the back (z=0) face of every item produced in
-that Generate call.
+A single global counter (app/global_serial.json) increments on every Generate
+click, regardless of course or hole.  Serial numbers are cheap; burning one on
+a failed generate is fine.  Filenames still carry course+hole context, so
+serial + filename together uniquely identify any print.
 
-Text format: ``s/n: NNN`` (e.g. ``s/n: 100``)
+Text format: ``s/n: NNN`` (e.g. ``s/n: 1042``)
 Font size  : 8 point (1 pt = 1/72 inch ≈ 0.3528 mm)
 Depth      : 1 mm recessed into the back face
 
-The counter is persisted at ``<course_dir>/serial.json`` with the shape
-``{"next_serial": 101}``.  The file is only written *after* the 3MF export
-succeeds, so a crash mid-generate never burns a serial number.
+Global counter is persisted at ``app/global_serial.json`` with the shape
+``{"next_serial": 1001}`` and is written atomically (tmp + os.replace) so a
+crash mid-generate never corrupts it.
 
-Public API:
-    peek_next_serial(course) -> int
-        Read (without advancing) the serial that would be used on the next
-        Generate.  Creates the file at 100 if missing.
-    commit_serial(course) -> int
-        Advance the course's serial counter by one and persist.  Returns the
-        serial that *was* just used (i.e. the value from peek_next_serial
-        before this call).
+Public API (v2):
+    peek_next_global_serial() -> int
+        Read (without advancing) the serial that would be used next.
+    commit_global_serial() -> int
+        Atomically increment the counter and return the value just used.
+        Call this at the TOP of every Generate handler, before calling into
+        the pipeline.  Never call it inside the pipeline itself.
     engrave_serial_on_mesh(mesh, serial_number, ...) -> trimesh.Trimesh
         Return a new mesh with ``s/n: NNN`` carved 1 mm deep into the back
-        (z ≈ 0) face.
+        (z ≈ 0) face.  Unchanged from v1.
     engrave_scene_geometries(scene, serial_number) -> None
-        In-place: engrave every geometry in a trimesh.Scene.
+        In-place: engrave every geometry in a trimesh.Scene.  Unchanged.
+
+Deprecated shims (remove in v0.2 after full audit):
+    peek_next_serial(course) -> int
+        Logs DeprecationWarning; routes to peek_next_global_serial().
+    commit_serial(course) -> int
+        Logs DeprecationWarning; routes to commit_global_serial().
 """
 
 from __future__ import annotations
 
 import json
 import os
+import threading
+import warnings
 from typing import Optional
 
 import numpy as np
@@ -52,6 +59,18 @@ except ImportError:
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
+# --- Global counter (v2) ---
+# Higher than any existing per-course serial (~252 max as of 2026-09-21),
+# so old and new serials are immediately distinguishable at a glance.
+STARTING_GLOBAL_SERIAL: int = 1000
+GLOBAL_SERIAL_FILENAME: str = "global_serial.json"
+# Resolved at import time; patched to a tmp path during tests.
+GLOBAL_SERIAL_PATH: str = os.path.join(os.path.dirname(__file__), GLOBAL_SERIAL_FILENAME)
+
+# Thread-safety lock for the global counter
+_GLOBAL_SERIAL_LOCK = threading.Lock()
+
+# --- Per-course counter (v1, deprecated) ---
 STARTING_SERIAL: int = 100
 SERIAL_FILENAME: str = "serial.json"
 
@@ -114,29 +133,92 @@ def _write_counter(path: str, next_serial: int) -> None:
     os.replace(tmp, path)
 
 
-def peek_next_serial(course: str) -> int:
-    """Return the serial that the next Generate run will use (no increment).
+# ── Global counter read / write ─────────────────────────────────────────────
 
-    Creates the counter file on first read so repeated peeks return the same
-    value until commit_serial() is called.
+def _read_global_counter() -> int:
+    """Read ``next_serial`` from the global serial file.
+
+    Returns STARTING_GLOBAL_SERIAL if the file is absent or corrupt.
     """
-    path = _serial_path(course)
-    val = _read_counter(path)
-    if not os.path.exists(path):
-        _write_counter(path, val)
-    return val
+    try:
+        with open(GLOBAL_SERIAL_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        val = int(data.get("next_serial", STARTING_GLOBAL_SERIAL))
+        if val < STARTING_GLOBAL_SERIAL:
+            val = STARTING_GLOBAL_SERIAL
+        return val
+    except (FileNotFoundError, json.JSONDecodeError, ValueError, TypeError):
+        return STARTING_GLOBAL_SERIAL
+
+
+def _write_global_counter(next_serial: int) -> None:
+    """Atomically persist ``next_serial`` to the global serial file."""
+    os.makedirs(os.path.dirname(os.path.abspath(GLOBAL_SERIAL_PATH)), exist_ok=True)
+    tmp = GLOBAL_SERIAL_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump({"next_serial": int(next_serial)}, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, GLOBAL_SERIAL_PATH)
+
+
+def peek_next_global_serial() -> int:
+    """Return the serial that the next Generate call will use (no increment).
+
+    This is safe to call multiple times; it never advances the counter.
+    Useful for UI preview or logging.
+    """
+    return _read_global_counter()
+
+
+def commit_global_serial() -> int:
+    """Atomically increment the global counter; return the value just used.
+
+    Call at the TOP of every Generate handler (Flask route or CLI entrypoint),
+    before calling into the pipeline.  The pipeline receives the returned int
+    as an explicit argument — it must NOT call this function itself.
+
+    Thread-safe: uses a process-level lock so concurrent Flask workers can't
+    both see the same counter value.  For multi-process deployments an OS-level
+    file lock would be needed; single-process Werkzeug/gunicorn-with-threads is
+    the target here.
+    """
+    with _GLOBAL_SERIAL_LOCK:
+        used = _read_global_counter()
+        _write_global_counter(used + 1)
+        return used
+
+
+# ── Per-course counter (v1) — deprecated, shims only ───────────────────────
+
+def peek_next_serial(course: str) -> int:
+    """DEPRECATED — routes to peek_next_global_serial(); ignores `course`.
+
+    The per-course serial scheme was replaced by a single global counter in
+    September 2026 (task 562).  These shims exist so any lingering callers
+    surface a warning rather than breaking silently.  Remove in v0.2 after a
+    full caller audit.
+    """
+    warnings.warn(
+        "peek_next_serial(course) is deprecated; use peek_next_global_serial() instead. "
+        "The course argument is ignored.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return peek_next_global_serial()
 
 
 def commit_serial(course: str) -> int:
-    """Advance the course's counter by one; return the serial *just used*.
+    """DEPRECATED — routes to commit_global_serial(); ignores `course`.
 
-    Call AFTER the 3MF is successfully written to disk so a crash doesn't
-    burn a serial number.
+    See peek_next_serial() deprecation notice above.
     """
-    path = _serial_path(course)
-    used = _read_counter(path)
-    _write_counter(path, used + 1)
-    return used
+    warnings.warn(
+        "commit_serial(course) is deprecated; use commit_global_serial() instead. "
+        "The course argument is ignored.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return commit_global_serial()
 
 
 # ── Text mesh construction ───────────────────────────────────────────────────

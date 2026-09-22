@@ -738,3 +738,176 @@ def test_hint_fields_round_trip_through_pydantic_model():
     assert req2.day_hint == "thursday"
     assert req2.time_hint == "9am"
     assert req2.when is None
+
+
+# ---------------------------------------------------------------------------
+# v1.7 end-to-end regression — Thomas's live incident (2026-09-21)
+#
+# POST /capture/parsed with day_hint="September 20th", time_hint="10 AM",
+# captured_at=2026-09-21 should:
+#   - return stored=True
+#   - resolve to 2027-09-20 10:00 EDT (roll-forward because Sept 20 < Sept 21)
+#   - written_path must point at calendar/2027-09/...
+# ---------------------------------------------------------------------------
+
+NOW_INCIDENT = datetime(2026, 9, 21, 11, 2, tzinfo=TZ)  # Thomas's memo time
+
+
+def _incident_payload(**overrides) -> dict:
+    payload = {
+        "verb": "schedule",
+        "subject": "appointment",
+        "when": None,
+        "day_hint": "September 20th",
+        "time_hint": "10 AM",
+        "criticality": "normal",
+        "confidence": 0.76,
+        "raw_transcript": "That appointment at September 20th at 10am, I'm going to tea...",
+        "audio_path": "/Users/thomas/sprite/inbox/2026-09-21.m4a",
+        "captured_at": NOW_INCIDENT.isoformat(),
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _client_incident(tmp_path: Path, monkeypatch) -> TestClient:
+    monkeypatch.setenv("HOMUNCULUS_VAULT", str(tmp_path))
+    monkeypatch.setenv("HOMUNCULUS_TZ", "America/New_York")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("SPRITE_WARNINGS_PATH", str(tmp_path / "sprite" / "warnings.md"))
+    monkeypatch.setenv("HOMUNCULUS_MIN_CONFIDENCE", "0.6")
+    return TestClient(create_app())
+
+
+def test_v17_e2e_sept20_hint_rolls_to_2027_and_written_path_correct(tmp_path, monkeypatch):
+    """POST /capture/parsed with day_hint='September 20th', time_hint='10 AM',
+    captured_at=2026-09-21 → stored=True, event on 2027-09-20, written_path
+    under calendar/2027-09/.
+
+    This is the router-level end-to-end test for the live incident that
+    motivated v1.7.
+    """
+    client = _client_incident(tmp_path, monkeypatch)
+    r = client.post("/capture/parsed", json=_incident_payload())
+    assert r.status_code == 200, r.text
+    body = r.json()
+
+    assert body["stored"] is True, f"expected stored=True, got: {body}"
+    assert body["event_id"] is not None
+
+    # written_path must point into 2027-09
+    written_path = body.get("written_path", "")
+    assert "2027-09" in written_path, (
+        f"expected written_path under calendar/2027-09/, got: {written_path!r}"
+    )
+
+    # The vault event itself must resolve to Sept 20 2027 at 10:00.
+    events = cal.list_events(tmp_path)
+    assert len(events) == 1
+    ev = events[0]
+    assert ev.starts_at.year == 2027
+    assert ev.starts_at.month == 9
+    assert ev.starts_at.day == 20
+    assert ev.starts_at.hour == 10
+    assert ev.starts_at.minute == 0
+
+
+# ===========================================================================
+# TDD REGRESSION SUITE — v1.8.0 (must fail before fix, pass after fix)
+#
+# Tests 10-12: end-to-end schedule bare-hour PM inference through Herman's
+# /capture/parsed endpoint. The date_resolver now accepts verb= so the
+# schedule handler can pass context through. handle/remind keep the old caution.
+# ===========================================================================
+
+NOW_V18 = datetime(2026, 9, 21, 13, 36, tzinfo=TZ)  # exact incident time
+
+
+def _v18_client(tmp_path: Path, monkeypatch) -> TestClient:
+    monkeypatch.setenv("HOMUNCULUS_VAULT", str(tmp_path))
+    monkeypatch.setenv("HOMUNCULUS_TZ", "America/New_York")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("SPRITE_WARNINGS_PATH", str(tmp_path / "sprite" / "warnings.md"))
+    monkeypatch.setenv("HOMUNCULUS_MIN_CONFIDENCE", "0.6")
+    return TestClient(create_app())
+
+
+# --- Test 10: schedule + bare '3' → stored=True, event at 15:00 (3 PM)
+
+def test_v180_e2e_schedule_bare_hour_3_resolves_pm(tmp_path, monkeypatch):
+    """POST /capture/parsed with verb=schedule, time_hint='3', day_hint='September 20th',
+    captured_at=2026-09-21 → stored=True, event on 2027-09-20 at 15:00 (3 PM, not ambiguous).
+
+    This is the Jake's VCA fix end-to-end: a bare hour 1-5 in a schedule request
+    must pass through Herman's date_resolver as PM without raising a clarifying question.
+    """
+    client = _v18_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "schedule",
+        "subject": "Jake's VCA check",
+        "when": None,
+        "day_hint": "September 20th",
+        "time_hint": "3",
+        "criticality": "normal",
+        "confidence": 0.87,
+        "raw_transcript": "Let's set Jake's VCA annual check-up on September 20th at three.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-21.m4a",
+        "captured_at": NOW_V18.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True, (
+        f"verb=schedule + bare hour 3 must resolve as PM and store. Got: {body}"
+    )
+    assert body["event_id"] is not None
+
+    events = cal.list_events(tmp_path)
+    assert len(events) == 1
+    ev = events[0]
+    assert ev.starts_at.year == 2027, f"roll-forward expected 2027, got {ev.starts_at.year}"
+    assert ev.starts_at.month == 9
+    assert ev.starts_at.day == 20
+    assert ev.starts_at.hour == 15, (
+        f"Bare hour 3 + verb=schedule must resolve to 15:00 (3 PM). "
+        f"Got hour={ev.starts_at.hour}"
+    )
+    assert ev.starts_at.minute == 0
+
+
+# --- Test 11: handle + bare '3' → stored=False, clarifying question (old behavior)
+
+def test_v180_e2e_handle_bare_hour_3_still_asks(tmp_path, monkeypatch):
+    """POST /capture/parsed with verb=handle, time_hint='3'
+    → stored=False, clarifying_question about AM/PM.
+
+    The PM-inference rule is scoped to verb=schedule only. Reminders can
+    legitimately be at 3 AM (medication, alarms). Handle must still ask.
+    """
+    client = _v18_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "handle",
+        "subject": "call the pharmacy",
+        "when": None,
+        "day_hint": "September 22nd",
+        "time_hint": "3",
+        "criticality": "normal",
+        "confidence": 0.83,
+        "raw_transcript": "call the pharmacy at 3",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-21b.m4a",
+        "captured_at": NOW_V18.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is False, (
+        f"verb=handle + bare hour must still ask (stored=False). Got: {body}"
+    )
+    assert body.get("clarifying_question"), (
+        f"Expected a clarifying_question for handle + bare hour. Got: {body}"
+    )
+    assert "time" in body.get("ambiguous_fields", []), (
+        f"Expected 'time' in ambiguous_fields. Got: {body.get('ambiguous_fields')}"
+    )
+    # Nothing stored in vault.
+    assert cal.list_events(tmp_path) == []

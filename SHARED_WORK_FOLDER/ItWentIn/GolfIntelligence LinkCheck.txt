@@ -1,0 +1,1813 @@
+●
+     https://golfintelligence.com
+200
+     https://golfintelligence.com
+(Skip to content)
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/personal-golf-app
+(build a golf app | "Use it to build a golf app. The course data behind category leaders and partner apps — including Garmin, 18Birdies, The …")
+     https://golfintelligence.com/scoring-data
+(scorecard | "Search is free. A full course (scorecard + GPS) is 3 credits. 3D green slope data, elevation, and live lie elevation are…")
+     https://golfintelligence.com/golf-course-gps
+(GPS | "Search is free. A full course (scorecard + GPS) is 3 credits. 3D green slope data, elevation, and live lie elevation are…")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "…ree. A full course (scorecard + GPS) is 3 credits. 3D green slope data, elevation, and live lie elevation are one call e…")
+     https://console.golfintelligence.com
+(console.golfintelligence.com | "Tester $49/mo · 100 credits · console.golfintelligence.com · passwordless email + code")
+     https://golfintelligence.com/our-services
+(course, GPS, and green layers | "…olf Intelligence through direct feeds. You get the same course, GPS, and green layers through the Golf Intelligence API.")
+     https://golfintelligence.com/gps-app-technology
+(branded iOS / Android GPS and shot-tracking app | "No development team? We can ship a branded iOS / Android GPS and shot-tracking app — your brand, our data, no sensors. T…")
+     https://golfintelligence.com/book-a-demo
+(Book a white-label demo | "Book a white-label demo")
+     https://golfintelligence.com/okf/dataset.md
+(proprietary curated course dataset | "…ld of AI agents building apps, this is the proprietary curated course dataset to build a golfer experience. Facts for AI…")
+     https://golfintelligence.com/for-ai
+(AI info | "…ing apps, this is the proprietary curated course dataset to build a golfer experience. Facts for AI assistants: AI info.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "…velopers pulling live JSON for an app start at golf courses for developers; agents that need mapped course layers rather…")
+     https://golfintelligence.com/golf-course-ai-world-models
+(golf course AI world models | "…for developers; agents that need mapped course layers rather than generated images start at golf course AI world models.")
+     https://golfintelligence.com/golf-course-database
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/platform
+200
+     https://golfintelligence.com/platform
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/3d-green-slope-data
+(green slope | "Tester is $49/mo for 100 credits to download courses, green slope, and elevation. Email data@golfintelligence.com for St…")
+     https://golfintelligence.com/scoring-data
+(scorecard | "…ntelligence.com for Starter or partner volume. Course search is free. Full course detail (scorecard + GPS) is 3 credits.")
+     https://golfintelligence.com/okf/dataset.md
+(20 years of proprietary course data | "Every endpoint sits on 20 years of proprietary course data — proprietary golf course data to serve the industry. Daily c…")
+     https://golfintelligence.com/golf-course-database
+(Course database → | "Course database →")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS data → | "GPS data →")
+     https://golfintelligence.com/gps-app-technology
+(GPS app technology | "…, no sensor. Shot sharing like a PGA TOUR shot tracker. We ship this as GPS app technology — talk to us, not a checkout.")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/api-pricing
+200
+     https://golfintelligence.com/api-pricing
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://console.golfintelligence.com
+(Open console | "Start Tester — $49/mo Open console Email us for Starter Email us for Facility")
+     https://golfintelligence.com/okf/dataset.md
+(20 years of proprietary course data | "You are buying access to 20 years of proprietary course data, not a scraped map. Proprietary golf course data to serve t…")
+     https://golfintelligence.com/scoring-data
+(course scorecards | "…dustry. Daily course updates around the world since 2007. Credits cover course scorecards, GPS, and 3D green slope data.")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "…dustry. Daily course updates around the world since 2007. Credits cover course scorecards, GPS, and 3D green slope data.")
+     https://golfintelligence.com/personal-golf-app
+(Build a personal golf app with Claude or Grok | "Build a personal golf app with Claude or Grok — paste-in prompt, first three calls, and how far 100 Tester credits go.")
+     https://golfintelligence.com/gps-app-technology
+(GPS app | "Don’t have a development team? We provide a complete GPS app — your logos and colors, iOS and Android under your account…")
+     https://golfintelligence.com/book-a-demo
+(demo page | "…p — your logos and colors, iOS and Android under your account. Talk to us on the demo page. Not a self-serve storefront.")
+     https://golfintelligence.com/golf-course-database
+     https://golfintelligence.com/golf-course-gps-app-data
+     https://golfintelligence.com/for-ai
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://api.golfintelligence.com/swagger/index.html
+200
+no links found
+●
+     https://golfintelligence.com/contact-us
+200
+     https://golfintelligence.com/contact-us
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://console.golfintelligence.com
+(console.golfintelligence.com | "console.golfintelligence.com Email + verification code. Start Tester — $49/mo. Credits are added in the console after pa…")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/personal-golf-app
+200
+     https://golfintelligence.com/personal-golf-app
+(Skip to content)
+     https://golfintelligence.com
+(Golf Intelligence, by Stracka | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://console.golfintelligence.com
+(Open console | "Start Tester — $49/mo Open console Paste-in prompt")
+     https://golfintelligence.com/docs
+(first three calls | "Also: first three calls · API pricing · For AI · llms.txt · machine sibling")
+     https://golfintelligence.com/for-ai
+(For AI | "Also: first three calls · API pricing · For AI · llms.txt · machine sibling")
+     https://golfintelligence.com/llms.txt
+(llms.txt | "Also: first three calls · API pricing · For AI · llms.txt · machine sibling")
+     https://golfintelligence.com/okf/personal-golf-app.md
+(machine sibling | "Also: first three calls · API pricing · For AI · llms.txt · machine sibling")
+     https://thegolfwire.com/stracka-golf-course-data-api
+(Golf Wire | "…r own game — search is free, then hydrate a course. The Golf Wire piece on the Stracka golf course data API is the earne…")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/scoring-data
+200
+     https://golfintelligence.com/scoring-data
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/okf/dataset.md
+(20 years of proprietary course data | "Scorecards sit on 20 years of proprietary course data, kept current with daily course updates around the world since 200…")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "… GPS + metadata. That is the call most apps should make after a free search — then add 3D green slope data hole by hole.")
+     https://console.golfintelligence.com
+(Open console | "Open console See API pricing Email us for Starter")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/golf-course-gps
+200
+     https://golfintelligence.com/golf-course-gps
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "Green shapes — ready for putting UIs; pair with 3D green slope data for break and elevation")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Software developers building an app start at golf courses for developers. Builders shipping a personal yardage or green-…")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "…ing a personal yardage or green-map helper start at personal golf app. AI assistants that need the official facts cite f…")
+     https://golfintelligence.com/for-ai
+(for AI | "…olf app. AI assistants that need the official facts cite for AI. Pricing, console, and Tester ($49/mo · 100 credits) liv…")
+     https://console.golfintelligence.com
+(Open console | "Go to homepage Open console See API pricing Email us for Starter")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/3d-green-slope-data
+200
+     https://golfintelligence.com/3d-green-slope-data
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/okf/dataset.md
+(20-year proprietary course dataset | "…een slope and elevation come from the same 20-year proprietary course dataset. Proprietary golf course data to serve the…")
+     https://golfintelligence.com/scoring-data
+(course scorecard | "…pdates around the world since 2007. Apps usually pair this with a course scorecard and GPS on the Golf Intelligence API.")
+     https://console.golfintelligence.com
+(Open console | "Open console See API pricing Email us for Starter")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://console.golfintelligence.com
+200
+     https://console.golfintelligence.com
+     https://console.golfintelligence.com/register
+(Not registered? Sign up here. | "Not registered? Sign up here.")
+●
+     https://golfintelligence.com/our-services
+200
+     https://golfintelligence.com/our-services
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/3d-green-slope-data
+(green slope | "Tester is $49/mo for 100 credits to download courses, green slope, and elevation. Email data@golfintelligence.com for St…")
+     https://golfintelligence.com/scoring-data
+(scorecard | "…ntelligence.com for Starter or partner volume. Course search is free. Full course detail (scorecard + GPS) is 3 credits.")
+     https://golfintelligence.com/okf/dataset.md
+(20 years of proprietary course data | "Every endpoint sits on 20 years of proprietary course data — proprietary golf course data to serve the industry. Daily c…")
+     https://golfintelligence.com/golf-course-database
+(Course database → | "Course database →")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS data → | "GPS data →")
+     https://golfintelligence.com/gps-app-technology
+(GPS app technology | "…, no sensor. Shot sharing like a PGA TOUR shot tracker. We ship this as GPS app technology — talk to us, not a checkout.")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/gps-app-technology
+200
+     https://golfintelligence.com/gps-app-technology
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/book-a-demo
+(demo page | "…e data for Strokes Gained statistics. Talk to us on the demo page — this is not a self-serve storefront. Teams that only…")
+     https://golfintelligence.com/okf/dataset.md
+(proprietary curated course dataset | "A white-label GPS app runs on the same proprietary curated course dataset: 20 years of proprietary golf course data to s…")
+     https://golfintelligence.com/3d-green-slope-data
+(green maps | "…? Golf course data for a simulator, VR / AR, a private-label GPS or shot-logging app, or detailed green maps in your UI.")
+     https://console.golfintelligence.com
+(Open console | "Open console See API pricing Email us for Starter")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/book-a-demo
+200
+     https://golfintelligence.com/book-a-demo
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/gps-app-technology
+(white-label GPS | "Demo is for Enterprise, Unlimited, white-label GPS, or a custom region bundle. If you are trying the API, Start Tester —…")
+     https://console.golfintelligence.com
+(console.golfintelligence.com | "…Credits are added in the console after payment. Credits follow API pricing. Use the API at console.golfintelligence.com.")
+     https://golfintelligence.com/okf/dataset.md
+(20 years of proprietary course data | "The conversation is about 20 years of proprietary course data — proprietary golf course data to serve the industry, with…")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/okf/dataset.md
+200
+no links found
+●
+     https://golfintelligence.com/for-ai
+200
+     https://golfintelligence.com/for-ai
+(Skip to content)
+     https://golfintelligence.com
+(Golf Intelligence, by Stracka | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/llms.txt
+(llms.txt | "…dels. Humans can read this too. Canonical machine file: llms.txt. Knowledge bundle: /okf/. Product site: golfintelligenc…")
+     https://golfintelligence.com/okf
+(/okf/ | "…Humans can read this too. Canonical machine file: llms.txt. Knowledge bundle: /okf/. Product site: golfintelligence.com.")
+     https://thegolfwire.com/stracka-golf-course-data-api
+(Golf Wire | "The Golf Wire piece is the earned source.")
+     https://golfintelligence.com/scoring-data
+(scorecards | "The API serves course search, scorecards, GPS layers (tees, fairways, bunkers, penalty areas, hole outlines, greens), 3D…")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "… and elevation, and live lie elevation. Human pages for those layers: scorecards, 3D green slope data, and the homepage.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Software developers building an app start at golf courses for developers; agents that need mapped course layers, not gen…")
+     https://golfintelligence.com/golf-course-ai-world-models
+(golf course AI world models | "…urses for developers; agents that need mapped course layers, not generated images, start at golf course AI world models.")
+     https://golfintelligence.com/personal-golf-app
+(Personal golf app | "Personal golf app")
+     https://golfintelligence.com/okf/dataset.md
+(dataset.md | "…y. Daily course updates around the world since 2007. Structured knowledge: dataset.md, collection.md, bundle root /okf/.")
+     https://golfintelligence.com/okf/collection.md
+(collection.md | "…y. Daily course updates around the world since 2007. Structured knowledge: dataset.md, collection.md, bundle root /okf/.")
+     https://console.golfintelligence.com
+(     https://console.golfintelligence.com/ | "Console:      https://console.golfintelligence.com/")
+     https://api.golfintelligence.com
+(     https://api.golfintelligence.com | "API:      https://api.golfintelligence.com")
+     https://golfintelligence.com/docs
+(/docs/ | "First three calls: /docs/")
+     https://golfintelligence.com/terms-of-use
+(terms | "…sim. No A–Z course scrape. No AI training on the dataset (terms). Tester is $49/mo for 100 credits. Search is free. Canc…")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+●
+     https://golfintelligence.com/golf-courses-for-developers
+200
+     https://golfintelligence.com/golf-courses-for-developers
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Start Tester — $49/mo First three calls Pricing")
+     https://golfintelligence.com/docs/search-course-groups
+(/docs/search-course-groups/ | "…ready have a token, the free search call is at /docs/search-course-groups/ and the flagship hydrate is at /docs/course-g…")
+     https://golfintelligence.com/docs/course-group-detail
+(/docs/course-group-detail/ | "…-course-groups/ and the flagship hydrate is at /docs/course-group-detail/. The searchable catalog is the golf course dat…")
+     https://golfintelligence.com/golf-course-database
+(golf course database | "…urse-group-detail/. The searchable catalog is the golf course database. Own-game builders start at personal golf app. Fa…")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "…he golf course database. Own-game builders start at personal golf app. Facts for assistants: for AI. The Golf Wire piece…")
+     https://golfintelligence.com/for-ai
+(for AI | "…e. Own-game builders start at personal golf app. Facts for assistants: for AI. The Golf Wire piece is the earned source.")
+     https://thegolfwire.com/stracka-golf-course-data-api
+(Golf Wire | "…e. Own-game builders start at personal golf app. Facts for assistants: for AI. The Golf Wire piece is the earned source.")
+     https://golfintelligence.com/golf-course-ai-world-models
+(golf course AI world models | "…hing you are building is an agent that has to step through a hole — not just draw one — see golf course AI world models.")
+     https://golfintelligence.com/terms-of-use
+(terms | "…nd sim. Cache a specific course on a device for up to one year. No A–Z catalog dump. No training on the dataset (terms).")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+●
+     https://golfintelligence.com/golf-course-ai-world-models
+200
+     https://golfintelligence.com/golf-course-ai-world-models
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Start Tester — $49/mo First three calls For AI")
+     https://golfintelligence.com/for-ai
+(For AI | "Start Tester — $49/mo First three calls For AI")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "…ys, bunkers, penalty areas, hole outlines, greens. 3D green slope data returns a hosted slope image plus geometry so a p…")
+     https://golfintelligence.com/golf-course-database
+(golf course database | "…— uphill, downhill, sidehill — not a coming-soon tile. Those layers sit on the same records as the golf course database.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "…pers wiring the same JSON into an app start at golf courses for developers. Facts for assistants: for AI. The Golf Wire …")
+     https://thegolfwire.com/stracka-golf-course-data-api
+(Golf Wire | "…nto an app start at golf courses for developers. Facts for assistants: for AI. The Golf Wire piece is the earned source.")
+     https://golfintelligence.com/terms-of-use
+(terms | "… dump. No A–Z catalog scrape. No training on the dataset (terms). Tester is $49/mo for 100 credits. After that, email da…")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/personal-golf-app
+(Personal golf app | "Personal golf app")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+●
+     https://golfintelligence.com/golf-course-database
+200
+     https://golfintelligence.com/golf-course-database
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://console.golfintelligence.com
+(Open console | "Open console See API pricing Email us for Starter")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs
+200
+     https://golfintelligence.com/docs
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://console.golfintelligence.com
+(console.golfintelligence.com | "…ification code — no password). Use the API at console.golfintelligence.com. Start Tester — $49/mo. After that, email dat…")
+     https://golfintelligence.com/llms.txt
+(/llms.txt | "…r token. Exchange it first, then call search for free. A short machine file is at /llms.txt; credits are on API pricing.")
+     https://golfintelligence.com/docs/authenticate-token
+(POST /auth/authenticateToken | "POST /auth/authenticateToken")
+     https://golfintelligence.com/docs/search-course-groups
+(POST /courses/searchCourseGroups | "POST /courses/searchCourseGroups")
+     https://golfintelligence.com/docs/course-group-detail
+(GET /courses/getCourseGroupDetail?PublicId= | "GET /courses/getCourseGroupDetail?PublicId=")
+     https://golfintelligence.com/personal-golf-app
+(Personal golf app | "Building a personal golf app with Claude or Grok? Everything you need is on Personal golf app — Tester is $49/mo for 100…")
+     https://golfintelligence.com/docs/search-course-groups-by-country-region
+(/courses/searchCourseGroupsByCountryRegion | "/courses/searchCourseGroupsByCountryRegion")
+     https://golfintelligence.com/docs/course-group-scorecard
+(/courses/getCourseGroupScorecard | "/courses/getCourseGroupScorecard")
+     https://golfintelligence.com/docs/course-group-gps
+(/courses/getCourseGroupGPS | "/courses/getCourseGroupGPS")
+     https://golfintelligence.com/docs/green-slope-image
+(/greens/getSlopeImage | "/greens/getSlopeImage")
+     https://golfintelligence.com/docs/green-elevation-image
+(/greens/getElevationImage | "/greens/getElevationImage")
+     https://golfintelligence.com/docs/geohash-elevation
+(/holeProfile/getGeoHashElevation | "/holeProfile/getGeoHashElevation")
+     https://golfintelligence.com/docs/hole-profile
+(/holeProfile/getHoleProfile | "/holeProfile/getHoleProfile")
+     https://golfintelligence.com/terms-of-use
+(Terms of Use | "…ata in a licensed app (sim / caddie) is Normal Use. Scraping, training, RAG, or catalog dumps are not. See Terms of Use.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+●
+     https://golfintelligence.com/golf-course-gps-app-data
+200
+     https://golfintelligence.com/golf-course-gps-app-data
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/golf-course-database
+(golf course database | "… of proprietary course data. GPS sits on the same golf course database records as scorecards. See API pricing — Tester i…")
+     https://console.golfintelligence.com
+(Open console | "Open console See API pricing Email us for Starter")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/about
+200
+     https://golfintelligence.com/about
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://strackagolf.com
+(StrackaGolf | "…ry in 2007, the team has built course data used across StrackaGolf, StrackaLine, and partner apps. Daily course updates …")
+     https://strackaline.com
+(StrackaLine | "…he team has built course data used across StrackaGolf, StrackaLine, and partner apps. Daily course updates around the wo…")
+     https://golfintelligence.com/okf/dataset.md
+(proprietary course data | "…gy to market faster. The work is twenty years of proprietary course data — proprietary golf course data to serve the ind…")
+     https://console.golfintelligence.com
+(Open console | "Open console See API pricing Email us for Starter")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/blogs
+200
+     https://golfintelligence.com/blogs
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/blogs/how-to-pick-a-golf-course-data-api-2026
+(September 1, 2026 How to pick a golf course data API in 2026… | "…ourse data API in 2026 A September 2026 note for Claude Code and Grok builders on who collected the records, which JSON …")
+     https://golfintelligence.com/unlock-success-with-golf-data-analytics-and-api-integration
+(April 3, 2026 Unlock Success with Golf Data Analytics and AP… | "…k Success with Golf Data Analytics and API Integration Building the next big app in the golf industry requires more than…")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/privacy-policy
+200
+     https://golfintelligence.com/privacy-policy
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/terms-of-use
+200
+     https://golfintelligence.com/terms-of-use
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+●
+     https://golfintelligence.com/llms.txt
+200
+no links found
+●
+     https://golfintelligence.com/okf/personal-golf-app.md
+200
+no links found
+●
+     https://console.golfintelligence.com/register
+200
+     https://console.golfintelligence.com
+     https://console.golfintelligence.com/login
+(Already registered? Sign in here. | "Already registered? Sign in here.")
+●
+     https://golfintelligence.com/okf
+200
+     https://golfintelligence.com/okf
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/okf/index.md
+(/okf/index.md | "… data API. Fetch the .md files directly. Bundle root: /okf/index.md. A shorter machine file is llms.txt. Tester is $49/m…")
+     https://golfintelligence.com/llms.txt
+(llms.txt | "…. Bundle root: /okf/index.md. A shorter machine file is llms.txt. Tester is $49/mo for 100 credits — Start Tester — $49/…")
+     https://golfintelligence.com/dataset.md
+(STRACKAGOLF DATA INTELLIGENCE course dataset | "STRACKAGOLF DATA INTELLIGENCE course dataset — Twenty years of proprietary golf course data.")
+     https://golfintelligence.com/api.md
+(Golf Intelligence API | "Golf Intelligence API — Public JSON API for course search, scorecards, GPS layers, 3D green slope, and live lie elevatio…")
+     https://golfintelligence.com/collection.md
+(Proprietary golf course data | "Proprietary golf course data — Twenty years of proprietary golf course data to serve the industry. Daily course updates …")
+     https://golfintelligence.com/personal-golf-app.md
+(Personal golf app | "Personal golf app — Build a personal golf app with Claude Code, Grok, Cursor, or ChatGPT.")
+     https://golfintelligence.com/golf-courses-for-developers
+(Golf courses for developers | "Golf courses for developers — software developers")
+     https://golfintelligence.com/golf-course-ai-world-models
+(Golf course AI world models | "Golf course AI world models — AI world models = mapped course layers, not generated images.")
+     https://golfintelligence.com/index.md
+(index.md | "index.md")
+     https://golfintelligence.com/log.md
+(log.md | "log.md")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/okf/collection.md
+200
+no links found
+●
+     https://api.golfintelligence.com
+200
+     https://api.golfintelligence.com/swagger/v1/swagger.json
+(/swagger/v1/swagger.json | "Golf Intelligence API v1 /swagger/v1/swagger.json")
+●
+     https://golfintelligence.com/docs/search-course-groups
+200
+     https://golfintelligence.com/docs/search-course-groups
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/docs/authenticate-token
+(token exchange | "Every call needs Authorization: Bearer YOUR_ACCESS_TOKEN after token exchange.")
+     https://golfintelligence.com/golf-course-database
+(golf course database | "Search sits on the golf course database. First three calls live on /docs/.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/course-group-detail
+200
+     https://golfintelligence.com/docs/course-group-detail
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/docs/green-slope-image
+(getSlopeImage | "Authorization: Bearer YOUR_ACCESS_TOKEN. Green images are separate: getSlopeImage and getElevationImage.")
+     https://golfintelligence.com/docs/green-elevation-image
+(getElevationImage | "Authorization: Bearer YOUR_ACCESS_TOKEN. Green images are separate: getSlopeImage and getElevationImage.")
+     https://golfintelligence.com/golf-course-database
+(golf course database | "Flagship hydrate for the golf course database. Scorecard-only and GPS-only are cheaper splits if you do not need both.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/authenticate-token
+200
+     https://golfintelligence.com/docs/authenticate-token
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Auth is the first of the first three calls. Own-game builders start at personal golf app.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/search-course-groups-by-country-region
+200
+     https://golfintelligence.com/docs/search-course-groups-by-country-region
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/docs/search-course-groups
+(searchCourseGroups | "POST body is the same PublicCourseGroupSearchRequestDto as searchCourseGroups:")
+     https://golfintelligence.com/golf-course-database
+(golf course database | "Location search belongs with the golf course database. Keyword search is searchCourseGroups.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/course-group-scorecard
+200
+     https://golfintelligence.com/docs/course-group-scorecard
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/docs/course-group-gps
+(getCourseGroupGPS | "…earer YOUR_ACCESS_TOKEN. If you need GPS on the same record, use getCourseGroupGPS or the flagship getCourseGroupDetail.")
+     https://golfintelligence.com/docs/course-group-detail
+(getCourseGroupDetail | "…earer YOUR_ACCESS_TOKEN. If you need GPS on the same record, use getCourseGroupGPS or the flagship getCourseGroupDetail.")
+     https://golfintelligence.com/scoring-data
+(scoring data | "Scorecards live on scoring data. Search first at searchCourseGroups.")
+     https://golfintelligence.com/docs/search-course-groups
+(searchCourseGroups | "Scorecards live on scoring data. Search first at searchCourseGroups.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/course-group-gps
+200
+     https://golfintelligence.com/docs/course-group-gps
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/docs/course-group-scorecard
+(getCourseGroupScorecard | "…ion: Bearer YOUR_ACCESS_TOKEN. Scorecard-only is getCourseGroupScorecard. Both layers together are getCourseGroupDetail.")
+     https://golfintelligence.com/docs/course-group-detail
+(getCourseGroupDetail | "…ion: Bearer YOUR_ACCESS_TOKEN. Scorecard-only is getCourseGroupScorecard. Both layers together are getCourseGroupDetail.")
+     https://golfintelligence.com/golf-course-gps
+(golf course GPS | "GPS polygons sit on golf course GPS. Search first, then hydrate.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/green-slope-image
+200
+     https://golfintelligence.com/docs/green-slope-image
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/docs/green-elevation-image
+(getElevationImage | "…R_ACCESS_TOKEN. holeId comes from a hydrated course group, not from search alone. Elevation render is getElevationImage.")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "Green slope belongs with 3D green slope data. Hydrate the course first via getCourseGroupDetail.")
+     https://golfintelligence.com/docs/course-group-detail
+(getCourseGroupDetail | "Green slope belongs with 3D green slope data. Hydrate the course first via getCourseGroupDetail.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/green-elevation-image
+200
+     https://golfintelligence.com/docs/green-elevation-image
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/docs/geohash-elevation
+(getGeoHashElevation | "Authorization: Bearer YOUR_ACCESS_TOKEN. Live lie elevation (not a render) is getGeoHashElevation.")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "Elevation renders sit on 3D green slope data. Slope image is the sibling getSlopeImage call.")
+     https://golfintelligence.com/docs/green-slope-image
+(getSlopeImage | "Elevation renders sit on 3D green slope data. Slope image is the sibling getSlopeImage call.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/geohash-elevation
+200
+     https://golfintelligence.com/docs/geohash-elevation
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/docs/green-slope-image
+(getSlopeImage | "…strongest in the US and UK — do not treat this as a global layer. Rendered greens are getSlopeImage / getElevationImage.")
+     https://golfintelligence.com/docs/green-elevation-image
+(getElevationImage | "…strongest in the US and UK — do not treat this as a global layer. Rendered greens are getSlopeImage / getElevationImage.")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "Live lie elevation belongs with 3D green slope data. This is not a screenshot of a hole.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/docs/hole-profile
+200
+     https://golfintelligence.com/docs/hole-profile
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/docs
+(First three calls | "Go to the homepage First three calls Swagger UI")
+     https://golfintelligence.com/3d-green-slope-data
+(3D green slope data | "Hole profile sits with 3D green slope data. Course-group search and hydrate stay on the golf course database.")
+     https://golfintelligence.com/golf-course-database
+(golf course database | "Hole profile sits with 3D green slope data. Course-group search and hydrate stay on the golf course database.")
+     https://golfintelligence.com/golf-courses-for-developers
+(golf courses for developers | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://golfintelligence.com/personal-golf-app
+(personal golf app | "Also: /docs/ · golf courses for developers · personal golf app.")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/blogs
+(Blog | "Blog")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/blogs/how-to-pick-a-golf-course-data-api-2026
+200
+     https://golfintelligence.com/blogs/how-to-pick-a-golf-course-data-api-2026
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/personal-golf-app
+(golfintelligence.com/personal-golf-app/ | "…for a personal golf app already lives on golfintelligence.com/personal-golf-app/ — Claude Code, Grok / Grok Bot, Cursor,…")
+     https://thegolfwire.com/stracka-golf-course-data-api
+(The Golf Wire’s report on the Stracka golf course data API | "In The Golf Wire’s report on the Stracka golf course data API, I put it this way: AI has lowered the barrier to building…")
+     https://golfintelligence.com/golf-course-database
+(golf course database | "The H1 on our golf course database page is the fact: twenty years of proprietary golf course data to serve the industry.…")
+     https://golfintelligence.com/for-ai
+(/for-ai | "…ng on the dataset. Machine-readable facts for agents are on /for-ai and the OKF bundle; prefer those over random clones.")
+     https://golfintelligence.com/blogs
+(← All posts | "← All posts")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://console.golfintelligence.com
+(Open console | "Open console")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://golfintelligence.com/unlock-success-with-golf-data-analytics-and-api-integration
+200
+     https://golfintelligence.com/unlock-success-with-golf-data-analytics-and-api-integration
+(Skip to content)
+     https://golfintelligence.com
+(STRACKAGOLF DATA INTELLIGENCE | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/platform
+(Platform | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/api-pricing
+(Pricing | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://api.golfintelligence.com/swagger/index.html
+(Docs | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://golfintelligence.com/contact-us
+(Contact | "Platform Pricing Docs Contact Start Tester — $49/mo")
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+(Start Tester — $49/mo | "Start Tester — $49/mo")
+     https://golfintelligence.com/blogs
+(← All posts | "← All posts")
+     https://console.golfintelligence.com
+(Open console | "Open console See API pricing Email us for Starter")
+     https://strackagolf.com
+(strackagolf.com | "strackagolf.com")
+     https://golfintelligence.com/docs
+(First three calls | "First three calls")
+     https://golfintelligence.com/golf-course-database
+(Course database | "Course database")
+     https://golfintelligence.com/golf-course-gps-app-data
+(GPS layers | "GPS layers")
+     https://golfintelligence.com/3d-green-slope-data
+(3D greens + lie | "3D greens + lie")
+     https://golfintelligence.com/scoring-data
+(Scorecards | "Scorecards")
+     https://golfintelligence.com/gps-app-technology
+(White-label app | "White-label app")
+     https://golfintelligence.com/about
+(About | "About")
+     https://golfintelligence.com/book-a-demo
+(Book a demo | "Book a demo")
+     https://golfintelligence.com/for-ai
+(For AI | "For AI")
+     https://strackaline.com
+(StrackaLine | "StrackaLine")
+     https://golfintelligence.com/privacy-policy
+(Privacy | "Privacy")
+     https://golfintelligence.com/terms-of-use
+(Terms | "Terms")
+●
+     https://buy.stripe.com/6oU6oI7xx0AYgSecsjdnW0g
+200
+no links found
+●
+     https://strackagolf.com
+200
+no links found
+●
+     https://strackaline.com
+200
+no links found
+●
+     https://thegolfwire.com/stracka-golf-course-data-api
+200
+no links found

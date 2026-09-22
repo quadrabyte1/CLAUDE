@@ -21,7 +21,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.55"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.56"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks with id strictly greater than the
@@ -1593,11 +1593,21 @@ def generate_models():
 
     print(f"[generate_models] EGM path:        {egm_path}")
 
+    # ── Commit global serial at click time ───────────────────────────────────
+    # The serial is burned here, BEFORE calling into the pipeline, so that:
+    #  (a) The filename reflects this exact Generate press.
+    #  (b) Even a pipeline failure leaves the counter advanced (serials are
+    #      cheap; we never reuse one, even on error).
+    from serial_engraver import commit_global_serial as _commit_global_serial
+    _serial = _commit_global_serial()
+    print(f"[generate_models] Global serial:   {_serial}")
+
     try:
         three_mf_path = run_pipeline(
             egm_path,
             include_boundary_region=include_boundary_region,
             apply_fringe_frame_cap=apply_fringe_frame_cap,
+            serial=_serial,
         )
     except Exception as exc:
         return jsonify({"status": "error", "msg": str(exc)}), 500

@@ -248,6 +248,7 @@ def _handle_schedule(
             req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz),
             tz,
             morning_anchor_hour=config.morning_anchor_hour,
+            verb=req.verb.value,
         )
         # resolved_at is non-None here because _resolve_from_hints would have
         # returned a clarification response if it were None.
@@ -364,6 +365,7 @@ def _handle_handle(
             req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz),
             tz,
             morning_anchor_hour=config.morning_anchor_hour,
+            verb=req.verb.value,
         )
         assert resolved.resolved_at is not None
         first_alert = resolved.resolved_at
@@ -534,6 +536,11 @@ def _resolve_from_hints(
     ``resolved_at`` datetime.  (We call resolve twice in the success path to
     keep the control flow in the verb handlers readable — date_resolver is
     pure Python and cheap.)
+
+    The ``verb`` value from the request is forwarded to ``date_resolver.resolve``
+    so the resolver can apply verb-specific heuristics (e.g. schedule + bare
+    hour 1-5 → assume PM instead of asking). Non-schedule verbs keep the
+    original caution.
     """
     now = req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz)
     result = date_resolver.resolve(
@@ -542,6 +549,7 @@ def _resolve_from_hints(
         now,
         tz,
         morning_anchor_hour=config.morning_anchor_hour,
+        verb=req.verb.value,
     )
     if result.ambiguous:
         # Build a clarifying question matching the /capture/text style.

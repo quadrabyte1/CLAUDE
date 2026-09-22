@@ -659,3 +659,391 @@ def test_ollama_missing_required_key_raises_parse_error():
                 ollama_base_url="http://mock",
                 ollama_model="qwen2.5:7b",
             )
+
+
+# ===========================================================================
+# TDD REGRESSION SUITE — v0.8.0 (must fail before fix, pass after fix)
+#
+# Design rule: for verb=schedule AND time_hint is a bare hour in {1,2,3,4,5}
+# (no AM/PM marker, no minutes) → LLM must emit ambiguous_fields=[] (PM assumed).
+# All other cases keep the existing caution (ambiguous_fields=["time_hint"]).
+# ===========================================================================
+
+
+# --- Sprite Test 1: Jake's VCA incident — schedule at bare-hour 3 → NOT ambiguous
+
+def test_v080_schedule_bare_hour_3_not_ambiguous():
+    """Live incident: 'Schedule Jake's VCA check on September 20th at 3'
+    → verb=schedule, time_hint='3', ambiguous_fields=[] (PM assumed, no question).
+
+    The LLM must emit an empty ambiguous_fields for verb=schedule + bare hour 1-5.
+    The _SYSTEM_PROMPT must teach this rule with a few-shot example.
+    ParseResult.ambiguous_fields must be [] when the LLM says so.
+    """
+    result = _call_parse(
+        "Schedule Jake's VCA check on September 20th at 3",
+        {
+            "verb": "schedule",
+            "subject": "Jake's VCA check",
+            "day_hint": "September 20th",
+            "time_hint": "3",
+            "criticality": "normal",
+            "confidence": 0.87,
+            "ambiguous_fields": [],   # <-- new behavior: PM inferred, no flag
+        },
+    )
+    assert result.verb == "schedule"
+    assert result.time_hint == "3"
+    assert result.ambiguous_fields == [], (
+        f"For verb=schedule + bare hour 1-5, ambiguous_fields must be [] "
+        f"(PM assumed). Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- Sprite Test 2: verb=remind + bare hour 3 → STILL ambiguous
+
+def test_v080_remind_bare_hour_3_still_ambiguous():
+    """Remind at bare-hour 3 MUST still flag time_hint as ambiguous.
+
+    The PM-inference rule is scoped to verb=schedule only. Reminders can be
+    middle-of-night (medication, alarm clocks). Only schedule gets the inference.
+    """
+    result = _call_parse(
+        "Remind me at 3 to call the vet",
+        {
+            "verb": "remind",
+            "subject": "call the vet",
+            "day_hint": None,
+            "time_hint": "3",
+            "criticality": "normal",
+            "confidence": 0.85,
+            "ambiguous_fields": ["time_hint"],   # <-- kept: AM or PM?
+        },
+    )
+    assert result.verb == "remind"
+    assert result.time_hint == "3"
+    assert "time_hint" in result.ambiguous_fields, (
+        f"For verb=remind + bare hour, time_hint must remain in ambiguous_fields. "
+        f"Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- Sprite Test 3: schedule at hour 6 → STILL ambiguous (6 out of PM window)
+
+def test_v080_schedule_bare_hour_6_still_ambiguous():
+    """Schedule at bare hour 6 must still be ambiguous.
+
+    6 AM (early-morning call) vs 6 PM (after-work meeting) are both common.
+    The PM-inference window is locked to hours 1-5 only (per design rule).
+    """
+    result = _call_parse(
+        "Schedule the team sync on Tuesday at 6",
+        {
+            "verb": "schedule",
+            "subject": "team sync",
+            "day_hint": "Tuesday",
+            "time_hint": "6",
+            "criticality": "normal",
+            "confidence": 0.84,
+            "ambiguous_fields": ["time_hint"],   # 6 stays ambiguous
+        },
+    )
+    assert result.verb == "schedule"
+    assert result.time_hint == "6"
+    assert "time_hint" in result.ambiguous_fields, (
+        f"Hour 6 must stay ambiguous (not in the 1-5 PM window). "
+        f"Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- Sprite Test 4: schema guard — _SYSTEM_PROMPT contains the new few-shot examples
+
+def test_v080_system_prompt_contains_schedule_bare_hour_pm_example():
+    """_SYSTEM_PROMPT must contain a few-shot example demonstrating that
+    verb=schedule + time_hint='3' (bare hour) → ambiguous_fields=[].
+
+    This documents the rule in the prompt so the LLM can follow it.
+    The example must be distinguishable from the 'remind at 3 → ambiguous' example.
+    """
+    prompt = _SYSTEM_PROMPT
+
+    # Must contain an example with schedule + bare hour + empty ambiguous list.
+    schedule_bare_pm = (
+        '"verb":"schedule"' in prompt.replace(" ", "") and
+        '"ambiguous_fields":[]' in prompt.replace(" ", "")
+    )
+    assert schedule_bare_pm, (
+        "_SYSTEM_PROMPT must include a few-shot example showing "
+        "verb=schedule + bare time_hint + ambiguous_fields=[] (PM assumed). "
+        "This teaches the LLM the new PM-inference rule."
+    )
+
+    # Must also show that remind/handle with the same bare hour stays ambiguous.
+    has_remind_stays_ambiguous = (
+        '"verb":"remind"' in prompt.replace(" ", "") or
+        '"verb":"handle"' in prompt.replace(" ", "")
+    )
+    assert has_remind_stays_ambiguous, (
+        "_SYSTEM_PROMPT must include at least one remind/handle few-shot example "
+        "showing that bare-hour ambiguity is KEPT for non-schedule verbs."
+    )
+
+
+# --- Sprite Test 12: cross-repo wire-shape round-trip (v0.8.0 PM-inferred payload)
+
+@pytest.mark.skipif(not _HERMAN_AVAILABLE, reason="Herman package not on path")
+def test_v080_wire_shape_schedule_bare_hour_round_trips_herman():
+    """Sprite's build_request() with verb=schedule, time_hint='3', ambiguous=[]
+    must survive ParsedCaptureRequest.model_validate_json() round-trip.
+
+    This is the cross-repo wire-shape drift-detection guard: if Sprite emits
+    time_hint='3' without flagging it ambiguous, Herman must accept it cleanly
+    (not reject it for schema reasons). The clarifying-question vs. PM-inference
+    decision lives in date_resolver at request-dispatch time, not at the schema
+    level.
+    """
+    import json
+    from sprite.herman import build_request
+
+    payload = build_request(
+        verb="schedule",
+        subject="Jake's VCA check",
+        when=None,
+        criticality="normal",
+        confidence=0.87,
+        raw_transcript="Let's set Jake's VCA annual check-up on September 20th at three.",
+        audio_path="/Users/thomas/sprite/audio/2026-09-21.m4a",
+        captured_at=datetime(2026, 9, 21, 13, 36, 0, tzinfo=timezone.utc),
+        day_hint="September 20th",
+        time_hint="3",
+    )
+    # The payload must be accepted by Herman's ParsedCaptureRequest without error.
+    req = ParsedCaptureRequest.model_validate_json(json.dumps(payload))
+    assert req.verb.value == "schedule"
+    assert req.time_hint == "3"
+    assert req.day_hint == "September 20th"
+    assert req.when is None, "when must be None — hints are the source"
+
+
+# ===========================================================================
+# TDD REGRESSION SUITE — v0.8.1 (must fail before fix, pass after fix)
+#
+# Root cause: The 7B model ignores the prompt's exception rule and flags
+# time_hint as ambiguous even for verb=schedule + bare 1-5. Prompt-only
+# fixes don't hold reliably. The fix is a post-LLM code override in
+# parse_intent() that mirrors the existing preprocessor-criticality override:
+# "LLM output is a suggestion; code has authority on the conditional."
+#
+# These tests simulate the LLM's known-bad output (ambiguous_fields includes
+# "time_hint") and assert that the post-processor strips it.
+# ===========================================================================
+
+
+# --- v0.8.1 Test 1: Live incident regression — LLM returns time_hint ambiguous
+#     for schedule + bare-3. Post-processor must strip it.
+
+def test_v081_live_incident_schedule_bare_3_llm_returns_ambiguous_post_strips():
+    """Live incident 2026-09-21: LLM returned
+      {verb='schedule', time_hint='3', ambiguous_fields=['time_hint']}
+    even with the v0.8.0 prompt teaching the exception. The 7B model ignored
+    the rule. After v0.8.1 the post-LLM code override strips 'time_hint' from
+    ambiguous_fields for verb=schedule + bare 1-5.
+
+    This test simulates the exact bad LLM output and asserts the fix.
+    """
+    result = _call_parse(
+        "Schedule Jake's VCA annual check-up on September 20th at three.",
+        {
+            "verb": "schedule",
+            "subject": "Jake's VCA annual check-up",
+            "day_hint": "September 20th",
+            "time_hint": "3",
+            "criticality": "normal",
+            "confidence": 0.844,
+            "ambiguous_fields": ["time_hint"],  # LLM's bad output — must be stripped
+        },
+    )
+    assert result.ambiguous_fields == [], (
+        f"Post-processor must strip 'time_hint' for verb=schedule + bare hour 1-5. "
+        f"LLM returned ambiguous_fields=['time_hint'] but code override must clear it. "
+        f"Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- v0.8.1 Test 2: Pattern coverage — all 10 bare values stripped for schedule
+
+_BARE_1_5_DIGIT = ["1", "2", "3", "4", "5"]
+_BARE_1_5_WORD = ["one", "two", "three", "four", "five"]
+
+
+@pytest.mark.parametrize("time_hint_val", _BARE_1_5_DIGIT + _BARE_1_5_WORD)
+def test_v081_schedule_all_bare_1_5_llm_ambiguous_stripped(time_hint_val):
+    """For all 10 bare-1-5 values (digit and word), if LLM flags time_hint
+    ambiguous and verb=schedule, the post-processor must strip it.
+    """
+    result = _call_parse(
+        f"Schedule something at {time_hint_val}",
+        {
+            "verb": "schedule",
+            "subject": "something",
+            "day_hint": "tomorrow",
+            "time_hint": time_hint_val,
+            "criticality": "normal",
+            "confidence": 0.85,
+            "ambiguous_fields": ["time_hint"],  # LLM's bad output
+        },
+    )
+    assert result.ambiguous_fields == [], (
+        f"time_hint={time_hint_val!r}: post-processor must strip 'time_hint' "
+        f"for verb=schedule + bare 1-5. Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- v0.8.1 Test 3: Scoping — remind verb keeps caution (no stripping)
+
+def test_v081_remind_bare_3_llm_ambiguous_not_stripped():
+    """verb=remind + bare hour 3 + LLM flags ambiguous → post-processor must
+    NOT strip it. The PM-inference rule is schedule-only.
+    Reminders can legitimately fire at 3 AM (medication, alarms).
+    """
+    result = _call_parse(
+        "Remind me at 3 to take the medication",
+        {
+            "verb": "remind",
+            "subject": "take the medication",
+            "day_hint": None,
+            "time_hint": "3",
+            "criticality": "normal",
+            "confidence": 0.85,
+            "ambiguous_fields": ["time_hint"],
+        },
+    )
+    assert "time_hint" in result.ambiguous_fields, (
+        f"For verb=remind + bare hour, 'time_hint' must remain in ambiguous_fields. "
+        f"Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- v0.8.1 Test 4: Scoping — handle verb keeps caution (no stripping)
+
+def test_v081_handle_bare_3_llm_ambiguous_not_stripped():
+    """verb=handle + bare hour 3 + LLM flags ambiguous → post-processor must
+    NOT strip it. Bare-hour do-items can be AM or PM.
+    """
+    result = _call_parse(
+        "Call the vet at 3",
+        {
+            "verb": "handle",
+            "subject": "call the vet",
+            "day_hint": None,
+            "time_hint": "3",
+            "criticality": "normal",
+            "confidence": 0.85,
+            "ambiguous_fields": ["time_hint"],
+        },
+    )
+    assert "time_hint" in result.ambiguous_fields, (
+        f"For verb=handle + bare hour, 'time_hint' must remain in ambiguous_fields. "
+        f"Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- v0.8.1 Test 5: Hour 6 preserved for schedule verb (out of PM window)
+
+def test_v081_schedule_bare_6_llm_ambiguous_not_stripped():
+    """verb=schedule + bare hour 6 + LLM flags ambiguous → post-processor must
+    NOT strip it. Hour 6 is outside the 1-5 PM-inference window by design.
+    """
+    result = _call_parse(
+        "Schedule the team call on Tuesday at 6",
+        {
+            "verb": "schedule",
+            "subject": "team call",
+            "day_hint": "Tuesday",
+            "time_hint": "6",
+            "criticality": "normal",
+            "confidence": 0.84,
+            "ambiguous_fields": ["time_hint"],
+        },
+    )
+    assert "time_hint" in result.ambiguous_fields, (
+        f"Hour 6 must stay ambiguous (not in 1-5 PM window). "
+        f"Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- v0.8.1 Test 6: Explicit AM/PM present — no stripping, not an override case
+
+def test_v081_schedule_explicit_pm_llm_sends_clean_no_change():
+    """verb=schedule + time_hint='3 PM' (explicit AM/PM) + LLM sends ambiguous=[]
+    → post-processor leaves it alone. Not an override case — explicit is fine.
+    """
+    result = _call_parse(
+        "Schedule the meeting at 3 PM",
+        {
+            "verb": "schedule",
+            "subject": "the meeting",
+            "day_hint": "tomorrow",
+            "time_hint": "3 PM",
+            "criticality": "normal",
+            "confidence": 0.90,
+            "ambiguous_fields": [],
+        },
+    )
+    assert result.ambiguous_fields == [], (
+        f"Explicit PM with clean ambiguous_fields must stay clean. "
+        f"Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- v0.8.1 Test 7: Colon present (minutes qualifier) — not stripped
+
+def test_v081_schedule_colon_time_ambiguous_not_stripped():
+    """verb=schedule + time_hint='3:30' (has colon/minutes) + LLM flags ambiguous
+    → post-processor must NOT strip. The rule only covers bare hours with
+    no colon (no minutes qualifier).
+    """
+    result = _call_parse(
+        "Schedule the call at 3:30",
+        {
+            "verb": "schedule",
+            "subject": "the call",
+            "day_hint": "tomorrow",
+            "time_hint": "3:30",
+            "criticality": "normal",
+            "confidence": 0.85,
+            "ambiguous_fields": ["time_hint"],
+        },
+    )
+    assert "time_hint" in result.ambiguous_fields, (
+        f"time_hint='3:30' has minutes; must NOT be stripped by bare-hour rule. "
+        f"Got {result.ambiguous_fields!r}"
+    )
+
+
+# --- v0.8.1 Test 8: Only time_hint stripped, other ambiguous fields preserved
+
+def test_v081_schedule_strips_only_time_hint_preserves_others():
+    """When verb=schedule + bare 1-5 + LLM flags ['time_hint', 'day_hint'],
+    the post-processor strips ONLY 'time_hint' and leaves 'day_hint' intact.
+    """
+    result = _call_parse(
+        "Schedule something at 3 some time soon",
+        {
+            "verb": "schedule",
+            "subject": "something",
+            "day_hint": "some time soon",
+            "time_hint": "3",
+            "criticality": "normal",
+            "confidence": 0.60,
+            "ambiguous_fields": ["time_hint", "day_hint"],
+        },
+    )
+    assert "time_hint" not in result.ambiguous_fields, (
+        f"'time_hint' must be stripped for schedule + bare 1-5. "
+        f"Got {result.ambiguous_fields!r}"
+    )
+    assert "day_hint" in result.ambiguous_fields, (
+        f"'day_hint' must be preserved (not stripped). "
+        f"Got {result.ambiguous_fields!r}"
+    )

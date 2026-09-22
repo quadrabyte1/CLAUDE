@@ -182,6 +182,14 @@ AM/PM rule:
   Do NOT guess whether it is morning or afternoon. Add "time_hint" to
   ambiguous_fields so the resolver can ask.
 
+  Exception — schedule verb, bare hours 1-5 (no AM/PM, no minutes):
+  When verb=schedule AND the time is a bare hour in {1, 2, 3, 4, 5} with no
+  AM/PM marker and no minutes qualifier (e.g. "at 3", "at five"), do NOT add
+  "time_hint" to ambiguous_fields. The resolver will assume PM. Hours 6 and
+  above remain ambiguous (6 AM early call vs 6 PM dinner are both common).
+  Non-schedule verbs (remind, handle) always flag bare hours as ambiguous —
+  reminders can legitimately be set for middle of the night.
+
 Emit JSON only. No prose. No markdown fences.
 
 --- EXAMPLES ---
@@ -217,6 +225,18 @@ Output:
 Transcript: "note that the LED reflects off the terrazzo"
 Output:
 {"verb":"note","subject":"LED reflects off terrazzo","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.85,"ambiguous_fields":[]}
+
+Transcript: "Schedule Jake's VCA check on September 20th at 3"
+Output:
+{"verb":"schedule","subject":"Jake's VCA check","day_hint":"September 20th","time_hint":"3","when":null,"criticality":"normal","confidence":0.87,"ambiguous_fields":[]}
+
+Transcript: "Remind me at 3 to take the medication"
+Output:
+{"verb":"remind","subject":"take the medication","day_hint":null,"time_hint":"3","when":null,"criticality":"normal","confidence":0.85,"ambiguous_fields":["time_hint"]}
+
+Transcript: "Schedule the team call on Tuesday at 6"
+Output:
+{"verb":"schedule","subject":"team call","day_hint":"Tuesday","time_hint":"6","when":null,"criticality":"normal","confidence":0.84,"ambiguous_fields":["time_hint"]}
 """
 
 # ---------------------------------------------------------------------------
@@ -366,13 +386,37 @@ def parse_intent(
     if hints.forced_critical:
         criticality = "critical"
 
+    # Post-LLM time_hint override: for verb=schedule + bare hours 1-5
+    # (digits "1"–"5" or words "one"–"five", no AM/PM marker, no colon),
+    # strip "time_hint" from ambiguous_fields regardless of what the LLM said.
+    #
+    # Rationale (v0.8.1): the 7B model ignores the prompt's exception rule and
+    # flags these as ambiguous anyway. Prompt-only fixes don't hold reliably for
+    # multi-condition rules in small models (Rune persona rule #1). Code has
+    # authority on this conditional — same discipline as the criticality
+    # preprocessor override above. Herman's date_resolver will assume PM.
+    _BARE_1_5 = frozenset({
+        "1", "2", "3", "4", "5",
+        "one", "two", "three", "four", "five",
+    })
+    verb = data["verb"]
+    time_hint_raw = data.get("time_hint") or ""
+    time_hint_stripped = time_hint_raw.strip().lower()
+    ambiguous_fields = list(data.get("ambiguous_fields", []))
+    if (
+        verb == "schedule"
+        and time_hint_stripped in _BARE_1_5
+        and ":" not in time_hint_stripped  # no minutes qualifier
+    ):
+        ambiguous_fields = [f for f in ambiguous_fields if f != "time_hint"]
+
     return ParseResult(
-        verb=data["verb"],
+        verb=verb,
         subject=data["subject"],
         day_hint=data.get("day_hint"),
         time_hint=data.get("time_hint"),
         criticality=criticality,
         confidence=float(data["confidence"]),
-        ambiguous_fields=list(data.get("ambiguous_fields", [])),
+        ambiguous_fields=ambiguous_fields,
         raw_llm_json=data,
     )

@@ -1,6 +1,6 @@
 [project]
 name = "homunculus-brain"
-version = "1.6.0"
+version = "1.8.0"
 description = "Mac-side brain for the Homunculus voice assistant — markdown-backed capture, scheduling, and reminders."
 requires-python = ">=3.11"
 dependencies = [

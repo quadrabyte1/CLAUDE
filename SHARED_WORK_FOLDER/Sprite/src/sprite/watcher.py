@@ -428,7 +428,7 @@ class _VoiceMemoHandler(FileSystemEventHandler):
 def main() -> None:
     config = load_config()
 
-    log.info("Sprite watcher v0.9.0 starting")
+    log.info("Sprite watcher v0.10.0 starting")
     log.info("  recordings:  %s", config.recordings_dir)
     log.info("  audio arch:  %s", config.audio_archive)
     log.info("  state file:  %s", config.state_file)

@@ -20,7 +20,7 @@ from mac_reminders_bridge.applescript import (
     AppleScriptError,
     format_applescript_date,
     push_reminder,
-    query_pushed_reminder_ids,
+    query_pushed_reminder_names,
     run_applescript,
     verify_list_exists,
 )
@@ -197,47 +197,34 @@ class TestVerifyListExists:
 
 
 # ---------------------------------------------------------------------------
-# query_pushed_reminder_ids
+# query_pushed_reminder_names (v0.1.2 — replaced query_pushed_reminder_ids)
 # ---------------------------------------------------------------------------
 
-class TestQueryPushedReminderIds:
+class TestQueryPushedReminderNamesCompat:
+    """Basic contract tests for query_pushed_reminder_names — kept in the
+    pre-v0.1.2 test class location for continuity; full tests in
+    TestQueryPushedReminderNames below."""
+
     def test_returns_empty_for_no_reminders(self):
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value=""):
-            ids = query_pushed_reminder_ids("Homunculus")
-        assert ids == []
+            names = query_pushed_reminder_names("Homunculus")
+        assert names == []
 
-    def test_parses_single_body_sentinel(self):
-        """Body containing [herman-id:...] yields the event_id."""
-        raw = "Kiss the baby.\n\n[herman-id:2026-09-16-kiss-the-baby]"
+    def test_returns_names_from_osascript_output(self):
+        raw = "kiss the baby, call the vet"
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw):
-            ids = query_pushed_reminder_ids("Homunculus")
-        assert ids == ["2026-09-16-kiss-the-baby"]
-
-    def test_parses_multiple_body_sentinels(self):
-        """Multiple reminder bodies (comma-separated by osascript) are all extracted."""
-        raw = (
-            "Pick up the dry cleaning\n\n[herman-id:abc123], "
-            "Call the vet\n\n[herman-id:def456]"
-        )
-        with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw):
-            ids = query_pushed_reminder_ids("Homunculus")
-        assert set(ids) == {"abc123", "def456"}
-
-    def test_ignores_bodies_without_sentinel(self):
-        """Reminder bodies with no [herman-id:...] are silently skipped."""
-        raw = "No sentinel here (non-homunculus reminder), [herman-id:real-id]"
-        with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw):
-            ids = query_pushed_reminder_ids("Homunculus")
-        assert ids == ["real-id"]
+            names = query_pushed_reminder_names("Homunculus")
+        assert "kiss the baby" in names
+        assert "call the vet" in names
 
     def test_raises_not_implemented_on_linux(self):
         with patch.object(sys, "platform", "linux"):
             with pytest.raises(NotImplementedError):
-                query_pushed_reminder_ids("Homunculus")
+                query_pushed_reminder_names("Homunculus")
 
     def test_script_contains_list_name(self):
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
-            query_pushed_reminder_ids("MyList")
+            query_pushed_reminder_names("MyList")
         script = mock_run.call_args[0][0]
         assert "MyList" in script
 
@@ -247,7 +234,7 @@ class TestQueryPushedReminderIds:
             side_effect=AppleScriptError("timeout"),
         ):
             with pytest.raises(AppleScriptError):
-                query_pushed_reminder_ids("Homunculus")
+                query_pushed_reminder_names("Homunculus")
 
 
 # ---------------------------------------------------------------------------
@@ -279,12 +266,13 @@ class TestPushReminder:
         props_block = script[props_start : props_end + 1].lower()
         assert "url:" not in props_block
 
-    def test_script_contains_body_sentinel(self):
+    def test_script_does_not_contain_body_sentinel(self):
+        """v0.1.2: [herman-id:...] sentinel removed — body must be clean utterance only."""
         record = _make_record(event_id="2026-09-16-kiss-the-baby")
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
             push_reminder(record, "Homunculus")
         script = mock_run.call_args[0][0]
-        assert "[herman-id:2026-09-16-kiss-the-baby]" in script
+        assert "[herman-id:" not in script
 
     def test_script_contains_list_name(self):
         record = _make_record()
@@ -388,60 +376,49 @@ class TestV011RegressionNoUrlProperty:
             f"rejects this with -1700. Properties block: {props_block!r}"
         )
 
-    def test_push_reminder_script_contains_body_sentinel(self):
+    def test_push_reminder_script_does_not_contain_body_sentinel(self):
         """
-        Regression #2: body must still contain [herman-id:<event_id>].
+        Regression #2 (updated v0.1.2): body must NOT contain [herman-id:<event_id>].
 
-        The body marker is the idempotency key after URL is removed.
-        This test likely already passes but is explicitly locked here.
+        v0.1.1 used the body marker as the idempotency key. v0.1.2 removes it
+        to keep the Reminders.app body field clean for the user.
+        Idempotency is now via pushed.jsonl + name matching.
         """
         record = _make_record(event_id="2026-09-16-kiss-the-baby")
         with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
             push_reminder(record, "Homunculus")
         script = mock_run.call_args[0][0]
-        assert "[herman-id:2026-09-16-kiss-the-baby]" in script, (
-            "body sentinel missing — idempotency slow-path cannot function"
+        assert "[herman-id:" not in script, (
+            "body sentinel still present in v0.1.2 — must be removed"
         )
 
-    def test_query_pushed_reminder_ids_extracts_from_body(self):
+    def test_query_pushed_reminder_names_returns_names(self):
         """
-        Regression #3: query_pushed_reminder_ids must extract event_ids from
-        body [herman-id:...] markers, not from URL: property.
-
-        Mock: osascript returns a newline-delimited list of reminder bodies
-        as if we called `body of r` on each reminder in the list.
+        Regression #3 (updated v0.1.2): query_pushed_reminder_names returns
+        reminder names (not event_ids extracted from body sentinels).
         """
-        # Simulate what Reminders.app returns: comma-separated body strings
-        # (AppleScript list → osascript stdout joins items with ", ")
-        raw_bodies = (
-            "Pick up the dry cleaning\n\n[herman-id:2026-09-14-dry-cleaning], "
-            "Call the vet\n\n[herman-id:2026-09-15-call-vet], "
-            "No sentinel here (non-homunculus reminder)"
-        )
-        with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw_bodies):
-            ids = query_pushed_reminder_ids("Homunculus")
-        assert set(ids) == {"2026-09-14-dry-cleaning", "2026-09-15-call-vet"}, (
-            f"Expected 2 extracted event_ids, got: {ids!r}"
-        )
+        raw_names = "kiss the baby, renew car registration, call the vet"
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw_names):
+            names = query_pushed_reminder_names("Homunculus")
+        assert "kiss the baby" in names
+        assert "renew car registration" in names
 
-    def test_push_if_new_skips_when_event_id_in_body(self):
+    def test_push_if_new_skips_when_title_in_reminders(self):
         """
-        Regression #4: idempotency end-to-end via mock.
+        Regression #4 (updated v0.1.2): idempotency end-to-end via mock.
 
-        push_if_new should skip a reminder whose event_id is already returned
-        by query_pushed_reminder_ids (body-marker slow path).
+        push_if_new should skip a reminder whose display_title is already
+        returned by query_pushed_reminder_names (name-based slow path).
         """
         from mac_reminders_bridge.watcher import push_if_new
         from mac_reminders_bridge.state import PushedState
 
         event_id = "2026-09-16-kiss-the-baby"
 
-        # Simulate a temp state file (fast path miss → slow path hit)
         import tempfile, os
         with tempfile.TemporaryDirectory() as tmpdir:
             state = PushedState(Path(tmpdir) / "pushed.jsonl")
 
-            # Create a minimal vault .md file
             md_path = Path(tmpdir) / f"{event_id}.md"
             md_path.write_text(
                 f"---\nid: {event_id}\ntitle: kiss the baby\ntz: America/New_York\nverb: handle\n---\nKiss the baby.\n",
@@ -453,19 +430,18 @@ class TestV011RegressionNoUrlProperty:
             def fake_push(record, list_name):
                 push_reminder_calls.append(record.event_id)
 
-            # Slow path returns event_id already present
+            # Slow path returns title already present
             with patch(
-                "mac_reminders_bridge.watcher.query_pushed_reminder_ids",
-                return_value=[event_id],
+                "mac_reminders_bridge.watcher.query_pushed_reminder_names",
+                return_value=["kiss the baby"],
             ), patch(
                 "mac_reminders_bridge.watcher.push_reminder",
                 side_effect=fake_push,
             ):
                 push_if_new(md_path, state, "Homunculus")
 
-        # push_reminder must NOT have been called
         assert push_reminder_calls == [], (
-            f"push_reminder was called despite event_id being in Reminders.app: "
+            f"push_reminder was called despite title being in Reminders.app: "
             f"{push_reminder_calls}"
         )
 
@@ -497,3 +473,117 @@ class TestV011RegressionNoUrlProperty:
                     f"applescript.py line {i+1} looks like it emits url: in a "
                     f"properties dict: {line.strip()!r}"
                 )
+
+
+# ---------------------------------------------------------------------------
+# v0.1.2 — Sentinel removed from AppleScript; name-based slow path
+# ---------------------------------------------------------------------------
+
+class TestV012NoSentinelInPushedBody:
+    """
+    v0.1.2: push_reminder must NOT embed [herman-id:...] in the AppleScript body.
+    The sentinel was the v0.1.1 idempotency key; v0.1.2 uses name matching instead.
+    """
+
+    def test_push_reminder_body_has_no_herman_id_sentinel(self):
+        """Primary assertion: no [herman-id:...] anywhere in the generated script."""
+        record = _make_record(event_id="2026-09-16-kiss-the-baby", body="Kiss the baby.")
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
+            push_reminder(record, "Homunculus")
+        script = mock_run.call_args[0][0]
+        assert "[herman-id:" not in script, (
+            f"[herman-id:...] sentinel found in generated AppleScript — "
+            f"must be removed in v0.1.2.\nScript:\n{script}"
+        )
+
+    def test_push_reminder_body_has_no_heading_line(self):
+        """Body must not contain # heading lines — strip before embedding."""
+        record = _make_record(body="# kiss the baby\n\nKiss the baby.")
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
+            push_reminder(record, "Homunculus")
+        script = mock_run.call_args[0][0]
+        assert "# kiss" not in script, (
+            "Heading line found in generated AppleScript body"
+        )
+
+    def test_push_reminder_body_has_no_captured_caption(self):
+        """Body must not contain *Captured ... via Sprite.* caption."""
+        record = _make_record(
+            body="*Captured 2026-09-22 13:43 UTC via Sprite.*\n\nKiss the baby."
+        )
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
+            push_reminder(record, "Homunculus")
+        script = mock_run.call_args[0][0]
+        assert "Captured" not in script or "Sprite" not in script, (
+            "Italic caption found in generated AppleScript body"
+        )
+
+    def test_no_herman_id_anywhere_in_applescript_module_source(self):
+        """
+        Hard codebase guard: the string '[herman-id:' must not appear anywhere
+        in applescript.py after v0.1.2 (not in templates, not in comments,
+        not in regex patterns).
+        """
+        import mac_reminders_bridge.applescript as as_mod
+        src_path = Path(as_mod.__file__)
+        src_text = src_path.read_text(encoding="utf-8")
+        assert "[herman-id:" not in src_text, (
+            "applescript.py still contains '[herman-id:' — this string must be "
+            "completely removed in v0.1.2 (sentinel removed from UX + slow path)"
+        )
+
+
+class TestQueryPushedReminderNames:
+    """
+    v0.1.2: query_pushed_reminder_names() replaces query_pushed_reminder_ids().
+    It queries `name of every reminder` (not `body of r`) and returns reminder
+    names. Callers compare against the name they're about to push to detect dupes.
+    """
+
+    def test_returns_empty_for_no_reminders(self):
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value=""):
+            names = query_pushed_reminder_names("Homunculus")
+        assert names == []
+
+    def test_returns_single_name(self):
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value="kiss the baby"):
+            names = query_pushed_reminder_names("Homunculus")
+        assert names == ["kiss the baby"]
+
+    def test_returns_multiple_names(self):
+        # osascript serialises an AppleScript list as comma-separated items
+        raw = "kiss the baby, renew car registration, call the vet"
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value=raw):
+            names = query_pushed_reminder_names("Homunculus")
+        assert len(names) == 3
+        assert "kiss the baby" in names
+        assert "renew car registration" in names
+
+    def test_script_queries_name_not_body(self):
+        """The AppleScript must query name, not body."""
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
+            query_pushed_reminder_names("Homunculus")
+        script = mock_run.call_args[0][0]
+        assert "name" in script.lower()
+        assert "body" not in script.lower(), (
+            "query_pushed_reminder_names script queries body — should query name"
+        )
+
+    def test_script_contains_list_name(self):
+        with patch("mac_reminders_bridge.applescript.run_applescript", return_value="") as mock_run:
+            query_pushed_reminder_names("MyList")
+        script = mock_run.call_args[0][0]
+        assert "MyList" in script
+
+    def test_raises_not_implemented_on_linux(self):
+        with patch.object(sys, "platform", "linux"):
+            with pytest.raises(NotImplementedError):
+                query_pushed_reminder_names("Homunculus")
+
+    def test_propagates_applescript_error(self):
+        with patch(
+            "mac_reminders_bridge.applescript.run_applescript",
+            side_effect=AppleScriptError("timeout"),
+        ):
+            with pytest.raises(AppleScriptError):
+                query_pushed_reminder_names("Homunculus")

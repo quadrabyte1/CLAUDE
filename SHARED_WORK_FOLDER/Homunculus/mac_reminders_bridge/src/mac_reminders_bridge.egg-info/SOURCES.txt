@@ -12,6 +12,7 @@ src/mac_reminders_bridge.egg-info/entry_points.txt
 src/mac_reminders_bridge.egg-info/requires.txt
 src/mac_reminders_bridge.egg-info/top_level.txt
 tests/test_applescript.py
+tests/test_cleanup_script.py
 tests/test_state.py
 tests/test_vault_reader.py
 tests/test_watcher.py

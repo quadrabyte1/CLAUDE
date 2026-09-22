@@ -44,6 +44,10 @@ from .schemas import (
     TimerStartResponse,
     TimerStopRequest,
     TimerStopResponse,
+    TimerStopAllRequest,
+    TimerStopAllResponse,
+    TimerResetRequest,
+    TimerResetResponse,
     RunningTimer,
     ProjectTotal,
 )
@@ -279,6 +283,58 @@ def create_app() -> FastAPI:
             "total_seconds": result.total_seconds,
             "session_started_at": result.session_started_at.isoformat(),
             "session_ended_at": result.session_ended_at.isoformat(),
+        })
+
+    @app.post("/timer/stop_all")
+    async def timer_stop_all(req: TimerStopAllRequest) -> JSONResponse:
+        """Stop every running project stopwatch in one operation.
+
+        Returns a list of individual stop results — one per timer that was
+        running. Empty list (stored=True) when nothing was running.
+        """
+        tz = _resolve_tz(req.speaker_tz, config.default_tz_name)
+        manager = timer_module.TimerManager(config.vault_path)
+        captured_at = req.captured_at or datetime.now(tz)
+        if captured_at.tzinfo is None:
+            captured_at = captured_at.replace(tzinfo=tz)
+        results = manager.stop_all(captured_at=captured_at, tz=tz)
+        stopped = [
+            {
+                "stored": r.stored,
+                "record_id": r.record_id,
+                "project": r.project,
+                "slug": r.slug,
+                "duration_seconds": r.duration_seconds,
+                "total_seconds": r.total_seconds,
+                "session_started_at": r.session_started_at.isoformat(),
+                "session_ended_at": r.session_ended_at.isoformat(),
+            }
+            for r in results
+        ]
+        return JSONResponse(content={"stored": True, "stopped": stopped})
+
+    @app.post("/timer/reset")
+    async def timer_reset(req: TimerResetRequest) -> JSONResponse:
+        """Reset a project's accumulated total to zero.
+
+        Stops the timer silently if it's running (no notification fired).
+        Preserves the project file so the user can start accumulating again
+        without re-typing the project name.
+
+        Returns stored=False with a clarifying_question when the project
+        doesn't exist.
+        """
+        tz = _resolve_tz(req.speaker_tz, config.default_tz_name)
+        manager = timer_module.TimerManager(config.vault_path)
+        captured_at = req.captured_at or datetime.now(tz)
+        if captured_at.tzinfo is None:
+            captured_at = captured_at.replace(tzinfo=tz)
+        result = manager.reset(project=req.project, captured_at=captured_at, tz=tz)
+        return JSONResponse(content={
+            "stored": result.stored,
+            "cleared_seconds": result.cleared_seconds,
+            "cleared_session_count": result.cleared_session_count,
+            "clarifying_question": result.clarifying_question,
         })
 
     @app.get("/timers/running")

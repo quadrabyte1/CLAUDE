@@ -182,7 +182,7 @@ class AckResponse(BaseModel):
 
 
 class CaptureVerb(str, Enum):
-    """Sprite verbs (v2.0.0: start_timer and stop_timer added).
+    """Sprite verbs (v2.1.0: stop_all_timers and reset_timer added).
 
     - ``schedule``: put an event on the calendar.
     - ``note``: append a timestamped note to the vault (long-form memory).
@@ -196,6 +196,8 @@ class CaptureVerb(str, Enum):
       user wants Herman to have.
     - ``start_timer``: start a named project stopwatch.
     - ``stop_timer``: stop a named project stopwatch, emit elapsed + cumulative total.
+    - ``stop_all_timers``: stop every running timer in one operation. No project field.
+    - ``reset_timer``: zero a project's accumulated total without deleting the file.
     """
 
     SCHEDULE = "schedule"
@@ -205,6 +207,8 @@ class CaptureVerb(str, Enum):
     AVOID = "avoid"
     START_TIMER = "start_timer"
     STOP_TIMER = "stop_timer"
+    STOP_ALL_TIMERS = "stop_all_timers"
+    RESET_TIMER = "reset_timer"
 
 
 class CaptureCriticality(str, Enum):
@@ -329,3 +333,49 @@ class ParsedCaptureResponse(BaseModel):
 class ParsedCaptureLowConfidenceResponse(BaseModel):
     stored: bool = False
     reason: Literal["low_confidence"] = "low_confidence"
+
+
+# --- v2.1.0: stop_all_timers and reset_timer schemas --------------------------
+
+
+class TimerStopAllRequest(BaseModel):
+    """Request body for POST /timer/stop_all.
+
+    ``captured_at`` is optional; defaults to server now when omitted.
+    ``speaker_tz`` is optional; defaults to server default tz.
+    No ``project`` field — this stops everything.
+    """
+    captured_at: Optional[datetime] = None
+    speaker_tz: Optional[str] = None
+
+
+class TimerStopAllResponse(BaseModel):
+    """Response for POST /timer/stop_all.
+
+    ``stopped`` is a list of serialisable stop-result dicts, one per timer
+    that was running at the time of the call.  Empty list when nothing was
+    running — still ``stored=True`` (silent success).
+    """
+    stored: bool = True
+    stopped: list[dict] = Field(default_factory=list)
+
+
+class TimerResetRequest(BaseModel):
+    """Request body for POST /timer/reset."""
+    project: str = Field(min_length=1)
+    captured_at: Optional[datetime] = None
+    speaker_tz: Optional[str] = None
+
+
+class TimerResetResponse(BaseModel):
+    """Response for POST /timer/reset.
+
+    When ``stored=True``: ``cleared_seconds`` and ``cleared_session_count``
+    report what was wiped.
+    When ``stored=False``: ``clarifying_question`` explains the problem (e.g.
+    the project doesn't exist yet).
+    """
+    stored: bool
+    cleared_seconds: int = 0
+    cleared_session_count: int = 0
+    clarifying_question: Optional[str] = None

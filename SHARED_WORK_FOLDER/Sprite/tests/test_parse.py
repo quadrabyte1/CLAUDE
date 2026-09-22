@@ -1047,3 +1047,172 @@ def test_v081_schedule_strips_only_time_hint_preserves_others():
         f"'day_hint' must be preserved (not stripped). "
         f"Got {result.ambiguous_fields!r}"
     )
+
+
+# ===========================================================================
+# v0.10.0 TDD — stop_all_timers and reset_timer new verbs
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Test 1 (v0.10): LLM mocked → stop_all_timers on "Stop all timers"
+# ---------------------------------------------------------------------------
+
+def test_stop_all_timers_verb_parsed_from_mock():
+    """LLM mock returning stop_all_timers → ParsedIntent.verb == 'stop_all_timers'."""
+    result = _call_parse(
+        "Stop all timers",
+        {
+            "verb": "stop_all_timers",
+            "subject": "all timers",
+            "project": None,
+            "day_hint": None,
+            "time_hint": None,
+            "criticality": "normal",
+            "confidence": 0.97,
+            "ambiguous_fields": [],
+        },
+    )
+    assert result.verb == "stop_all_timers", f"Expected stop_all_timers, got {result.verb!r}"
+    assert result.project is None, f"project must be None for stop_all_timers, got {result.project!r}"
+
+
+def test_stop_all_timers_stop_everything_variant():
+    """LLM mock on 'Stop everything' → verb=stop_all_timers."""
+    result = _call_parse(
+        "Stop everything",
+        {
+            "verb": "stop_all_timers",
+            "subject": "everything",
+            "project": None,
+            "day_hint": None,
+            "time_hint": None,
+            "criticality": "normal",
+            "confidence": 0.95,
+            "ambiguous_fields": [],
+        },
+    )
+    assert result.verb == "stop_all_timers"
+
+
+def test_stop_all_timers_stop_all_variant():
+    """LLM mock on 'Stop all' → verb=stop_all_timers."""
+    result = _call_parse(
+        "Stop all",
+        {
+            "verb": "stop_all_timers",
+            "subject": "all",
+            "project": None,
+            "day_hint": None,
+            "time_hint": None,
+            "criticality": "normal",
+            "confidence": 0.96,
+            "ambiguous_fields": [],
+        },
+    )
+    assert result.verb == "stop_all_timers"
+
+
+# ---------------------------------------------------------------------------
+# Test 2 (v0.10): LLM mocked → reset_timer on "Reset gym"
+# ---------------------------------------------------------------------------
+
+def test_reset_timer_verb_parsed_from_mock():
+    """LLM mock returning reset_timer → ParsedIntent.verb == 'reset_timer', project='gym'."""
+    result = _call_parse(
+        "Reset gym",
+        {
+            "verb": "reset_timer",
+            "subject": "gym",
+            "project": "gym",
+            "day_hint": None,
+            "time_hint": None,
+            "criticality": "normal",
+            "confidence": 0.96,
+            "ambiguous_fields": [],
+        },
+    )
+    assert result.verb == "reset_timer", f"Expected reset_timer, got {result.verb!r}"
+    assert result.project == "gym", f"Expected project='gym', got {result.project!r}"
+
+
+def test_reset_timer_clear_variant():
+    """LLM mock on 'Clear gym timer' → verb=reset_timer, project='gym'."""
+    result = _call_parse(
+        "Clear gym timer",
+        {
+            "verb": "reset_timer",
+            "subject": "gym",
+            "project": "gym",
+            "day_hint": None,
+            "time_hint": None,
+            "criticality": "normal",
+            "confidence": 0.94,
+            "ambiguous_fields": [],
+        },
+    )
+    assert result.verb == "reset_timer"
+    assert result.project == "gym"
+
+
+# ---------------------------------------------------------------------------
+# Test 3 (v0.10): Schema enum guard — both new verbs in enum
+# ---------------------------------------------------------------------------
+
+def test_schema_enum_contains_stop_all_timers():
+    """_INTENT_JSON_SCHEMA verb enum must include 'stop_all_timers'."""
+    verb_enum = _INTENT_JSON_SCHEMA["properties"]["verb"]["enum"]
+    assert "stop_all_timers" in verb_enum, (
+        f"'stop_all_timers' not in verb enum. Current enum: {verb_enum}"
+    )
+
+
+def test_schema_enum_contains_reset_timer():
+    """_INTENT_JSON_SCHEMA verb enum must include 'reset_timer'."""
+    verb_enum = _INTENT_JSON_SCHEMA["properties"]["verb"]["enum"]
+    assert "reset_timer" in verb_enum, (
+        f"'reset_timer' not in verb enum. Current enum: {verb_enum}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 4 (v0.10): Prompt guard — few-shot examples in _SYSTEM_PROMPT
+# ---------------------------------------------------------------------------
+
+def test_system_prompt_has_stop_all_timers_example():
+    """_SYSTEM_PROMPT must contain a few-shot example for stop_all_timers."""
+    assert "stop_all_timers" in _SYSTEM_PROMPT, (
+        "_SYSTEM_PROMPT must include at least one 'stop_all_timers' example."
+    )
+
+
+def test_system_prompt_has_reset_timer_example():
+    """_SYSTEM_PROMPT must contain a few-shot example for reset_timer."""
+    assert "reset_timer" in _SYSTEM_PROMPT, (
+        "_SYSTEM_PROMPT must include at least one 'reset_timer' example."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 5 (v0.10): Disambiguation — "Stop gym" stays stop_timer, not stop_all_timers
+# ---------------------------------------------------------------------------
+
+def test_stop_gym_stays_stop_timer_not_stop_all():
+    """'Stop gym' must parse as stop_timer (single project), not stop_all_timers."""
+    result = _call_parse(
+        "Stop gym",
+        {
+            "verb": "stop_timer",
+            "subject": "gym",
+            "project": "gym",
+            "day_hint": None,
+            "time_hint": None,
+            "criticality": "normal",
+            "confidence": 0.96,
+            "ambiguous_fields": [],
+        },
+    )
+    assert result.verb == "stop_timer", (
+        f"'Stop gym' must be stop_timer (not stop_all_timers). Got: {result.verb!r}"
+    )
+    assert result.project == "gym"

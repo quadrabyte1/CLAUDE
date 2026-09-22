@@ -18,8 +18,7 @@ Design:
   dictionary does NOT expose a url property — attempting to set it causes
   AppleScript error -1700 ("Can't make ... into type properties of reminder").
   Empirically confirmed on 2026-09-19: adding a url field to the properties
-  dict triggers -1700; omitting it succeeds. The [herman-id:<event_id>] body
-  marker is the durable idempotency key. No url property needed.
+  dict triggers -1700; omitting it succeeds.
 - NO `remind me date` alarm. Herman's strike chain (mac_notifier) is the
   authoritative notification mechanism. Setting native Reminders.app alarms
   would double-fire (persona rule #14: the reminder schedule is the signature).
@@ -28,14 +27,16 @@ Design:
   starts_at is available from frontmatter.
 - "Homunculus" list must be created manually by the user in Reminders.app UI
   (File → New List → iCloud → "Homunculus"). See docs/FIRST_RUN.md Step 1.
-- Idempotency slow path: query_pushed_reminder_ids() iterates reminder bodies
-  and extracts event_ids via the [herman-id:<event_id>] regex. No URL query.
+- v0.1.2 idempotency slow path: query_pushed_reminder_names() queries
+  `name of every reminder` and returns the set of reminder names. The watcher
+  compares the record's display_title against this set to detect duplicates.
+  No body sentinel needed — the body marker was removed in v0.1.2 to keep the
+  Reminders.app body field clean for the user.
 """
 
 from __future__ import annotations
 
 import logging
-import re
 import subprocess
 import sys
 from datetime import datetime
@@ -45,9 +46,6 @@ from zoneinfo import ZoneInfo
 from .vault_reader import ReminderRecord
 
 log = logging.getLogger(__name__)
-
-# Regex to extract event_id from body sentinel: [herman-id:<event_id>]
-_HERMAN_ID_RE = re.compile(r"\[herman-id:([^\]]+)\]")
 
 
 # ---------------------------------------------------------------------------
@@ -186,45 +184,41 @@ end tell
 # Reminder queries (idempotency slow path)
 # ---------------------------------------------------------------------------
 
-def query_pushed_reminder_ids(list_name: str) -> list[str]:
+def query_pushed_reminder_names(list_name: str) -> list[str]:
     """
-    Return a list of homunculus event_ids already in Reminders.app.
+    Return the names of all reminders in *list_name* in Reminders.app.
 
-    Queries the list for reminder bodies and extracts event_ids from the
-    ``[herman-id:<event_id>]`` body sentinel. Used for the slow-but-authoritative
-    idempotency check after pushed.jsonl is absent or incomplete.
+    v0.1.2 slow-path idempotency: callers compare a record's ``display_title``
+    against this list to detect duplicates without needing a body sentinel.
 
-    NOTE: Reminders.app's AppleScript dictionary does NOT expose a `url`
-    property (attempts to set or read `url` of a reminder cause error -1700).
-    The [herman-id:<event_id>] body marker is the durable idempotency key.
-    Empirically confirmed 2026-09-19.
+    The previous v0.1.1 approach queried reminder bodies and extracted
+    body sentinels — those sentinels leaked implementation detail into the
+    user-visible body field. v0.1.2 replaces that approach with a simple
+    name query.
+
+    osascript serialises an AppleScript list as comma-delimited items. Reminder
+    names are unlikely to contain commas, but callers should be aware of this
+    limitation when splitting. For the typical Homunculus use case (short, direct
+    reminder titles) the split is reliable.
 
     Args:
         list_name: Name of the Reminders.app list.
 
     Returns:
-        List of event_id strings extracted from body sentinels.
+        List of reminder name strings (stripped).
 
     Raises:
         NotImplementedError: on non-Darwin platforms.
         AppleScriptError: if the osascript call fails.
     """
-    _require_darwin("query_pushed_reminder_ids")
+    _require_darwin("query_pushed_reminder_names")
 
     script = f"""
-set result to {{}}
 tell application "Reminders"
     tell list "{list_name}"
-        set allReminders to every reminder
-        repeat with r in allReminders
-            try
-                set rBody to body of r
-                set end of result to rBody
-            end try
-        end repeat
+        return name of every reminder
     end tell
 end tell
-return result
 """.strip()
 
     raw = run_applescript(script)
@@ -232,12 +226,9 @@ return result
         return []
 
     # osascript serialises an AppleScript list as comma-separated items.
-    # Each item is a reminder body string. Extract [herman-id:...] from each.
-    # Bodies may themselves contain commas, but the sentinel is at the end and
-    # uses a distinctive bracket pattern that won't collide with prose.
-    ids: list[str] = _HERMAN_ID_RE.findall(raw)
-    log.debug("query_pushed_reminder_ids: found %d homunculus reminders", len(ids))
-    return ids
+    names = [n.strip() for n in raw.split(",") if n.strip()]
+    log.debug("query_pushed_reminder_names: found %d reminders in list", len(names))
+    return names
 
 
 # ---------------------------------------------------------------------------
@@ -254,13 +245,13 @@ def push_reminder(record: ReminderRecord, list_name: str) -> None:
 
     Sets:
       - name: record.display_title (clean subject, no [handle] prefix)
-      - body: record.reminders_body (prose + [herman-id:<event_id>] sentinel)
+      - body: record.reminders_body (clean utterance only — no chrome)
       - due date: record.starts_at expressed in local time (if available)
         — WITHOUT a `remind me date` alarm, so no double-fire with mac_notifier.
 
     NOTE: `url:` is intentionally OMITTED from the properties dict.
     Reminders.app's AppleScript dictionary rejects url: with error -1700.
-    The [herman-id:<event_id>] body sentinel is the idempotency key.
+    v0.1.2: no body sentinel — idempotency via pushed.jsonl + name matching.
 
     The list must already exist — call verify_list_exists() at startup and
     exit if it returns False. See docs/FIRST_RUN.md for how to create it.

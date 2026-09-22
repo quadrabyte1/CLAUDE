@@ -1,0 +1,13 @@
+{
+  "event_id": "timer.amunculus.d7025cfd-f891-4135-a883-c5ce58618613",
+  "schedule": [
+    {
+      "event_id": "timer.amunculus.d7025cfd-f891-4135-a883-c5ce58618613",
+      "kind": "timer_stop",
+      "fire_at": "2026-09-22T15:19:12.280875-04:00",
+      "tz": "UTC",
+      "body": "Amunculus session: 13 minutes 5 seconds. Total: 13 minutes 5 seconds (all-time).",
+      "status": "pending"
+    }
+  ]
+}

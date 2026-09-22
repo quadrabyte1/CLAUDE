@@ -96,7 +96,12 @@ def dispatch(
     # Timer verbs handle their own idempotency internally (TimerManager is
     # the authority on timer state). Skip the capture_parsed idempotency log
     # for timer verbs so each start/stop routes to TimerManager every time.
-    is_timer_verb = req.verb in (CaptureVerb.START_TIMER, CaptureVerb.STOP_TIMER)
+    is_timer_verb = req.verb in (
+        CaptureVerb.START_TIMER,
+        CaptureVerb.STOP_TIMER,
+        CaptureVerb.STOP_ALL_TIMERS,
+        CaptureVerb.RESET_TIMER,
+    )
 
     if not is_timer_verb:
         # Idempotency short-circuit: if we've stored this exact record before,
@@ -121,6 +126,10 @@ def dispatch(
         resp = _handle_start_timer(req, config=config, tz=tz, record_id=record_id)
     elif req.verb is CaptureVerb.STOP_TIMER:
         resp = _handle_stop_timer(req, config=config, tz=tz, record_id=record_id)
+    elif req.verb is CaptureVerb.STOP_ALL_TIMERS:
+        resp = _handle_stop_all_timers(req, config=config, tz=tz, record_id=record_id)
+    elif req.verb is CaptureVerb.RESET_TIMER:
+        resp = _handle_reset_timer(req, config=config, tz=tz, record_id=record_id)
     else:  # pragma: no cover — enum guarantees no other branch
         raise ValueError(f"unhandled verb: {req.verb!r}")
 
@@ -585,6 +594,52 @@ def _handle_stop_timer(
     return ParsedCaptureResponse(
         stored=True,
         record_id=result.record_id,
+        verb=req.verb,
+        written_path=f"timers/{result.slug}.json",
+        event_id=result.slug,
+    )
+
+
+def _handle_stop_all_timers(
+    req: ParsedCaptureRequest,
+    *,
+    config: Config,
+    tz: ZoneInfo,
+    record_id: str,
+) -> ParsedCaptureResponse:
+    """Route verb=stop_all_timers to TimerManager.stop_all()."""
+    manager = timer_module.TimerManager(config.vault_path)
+    captured_at = req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz)
+    manager.stop_all(captured_at=captured_at, tz=tz)
+    return ParsedCaptureResponse(
+        stored=True,
+        record_id=record_id,
+        verb=req.verb,
+    )
+
+
+def _handle_reset_timer(
+    req: ParsedCaptureRequest,
+    *,
+    config: Config,
+    tz: ZoneInfo,
+    record_id: str,
+) -> ParsedCaptureResponse:
+    """Route verb=reset_timer to TimerManager.reset()."""
+    project = req.project or req.subject
+    manager = timer_module.TimerManager(config.vault_path)
+    captured_at = req.captured_at if req.captured_at.tzinfo else req.captured_at.replace(tzinfo=tz)
+    result = manager.reset(project=project, captured_at=captured_at, tz=tz)
+    if not result.stored:
+        return ParsedCaptureResponse(
+            stored=False,
+            record_id=record_id,
+            verb=req.verb,
+            clarifying_question=result.clarifying_question,
+        )
+    return ParsedCaptureResponse(
+        stored=True,
+        record_id=record_id,
         verb=req.verb,
         written_path=f"timers/{result.slug}.json",
         event_id=result.slug,

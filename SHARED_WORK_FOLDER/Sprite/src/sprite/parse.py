@@ -72,7 +72,7 @@ _INTENT_JSON_SCHEMA = {
         "verb": {
             "type": "string",
             "enum": ["schedule", "note", "handle", "remind", "avoid",
-                     "start_timer", "stop_timer"],
+                     "start_timer", "stop_timer", "stop_all_timers", "reset_timer"],
             "description": (
                 "Primary action verb. "
                 "'remind' and 'handle' are synonyms — both go to the reminders surface. "
@@ -81,7 +81,13 @@ _INTENT_JSON_SCHEMA = {
                 "'call the vet' or 'pick up milk'. "
                 "Use 'start_timer' when the user says 'start X', 'start the X', or "
                 "'start working on X' and X is a project/activity (no time reference). "
-                "Use 'stop_timer' when the user says 'stop X', 'end X', or 'pause X'. "
+                "Use 'stop_timer' when the user says 'stop X', 'end X', or 'pause X' "
+                "for a SPECIFIC named project (e.g. 'stop gym'). "
+                "Use 'stop_all_timers' when the user says 'stop all timers', "
+                "'stop everything', 'stop all', or similar global-stop phrases. "
+                "No project field for stop_all_timers. "
+                "Use 'reset_timer' when the user says 'reset X', 'clear X timer', "
+                "'start X over', or 'zero out X'. Requires a project field. "
                 "Distinguish from 'schedule': 'start dinner at 6' → schedule (has a time); "
                 "'start gym' → start_timer (no time, activity name only)."
             ),
@@ -194,12 +200,24 @@ Verb definitions:
   start_timer — begin a stopwatch for a named project or activity.
              Use when the utterance is "start X" or "start the X" with NO time reference.
              The project field carries the activity name verbatim.
-  stop_timer  — end a running stopwatch. Use when the utterance is "stop X", "end X",
-             or "pause X". The project field carries the activity name verbatim.
+  stop_timer  — end a running stopwatch for a SPECIFIC project. Use when the utterance
+             is "stop X", "end X", or "pause X" AND X is a named project.
+             The project field carries the activity name verbatim.
+  stop_all_timers — end ALL running stopwatches at once. Use when the utterance is
+             "stop all timers", "stop everything", "stop all", or similar global-stop
+             phrases. No project field — this is a global operation.
+  reset_timer — zero out a project's accumulated total without deleting it. Use when
+             the utterance is "reset X", "clear X timer", "start X over", or
+             "zero out X". The project field carries the activity name verbatim.
 
 Timer disambiguation rules:
   "Start gym" → verb=start_timer, project="gym"
-  "Stop gym" → verb=stop_timer, project="gym"
+  "Stop gym" → verb=stop_timer, project="gym"      ← SINGLE project, NOT stop_all
+  "Stop all timers" → verb=stop_all_timers          ← NO project field
+  "Stop everything" → verb=stop_all_timers          ← NO project field
+  "Stop all" → verb=stop_all_timers                 ← NO project field
+  "Reset gym" → verb=reset_timer, project="gym"
+  "Clear gym timer" → verb=reset_timer, project="gym"
   "Start deck construction" → verb=start_timer, project="deck construction"
   "Start dinner at 6" → verb=schedule (has a time reference — NOT a timer)
   "Start reminding me about the coffee" → verb=remind (has 'reminding me' — NOT a timer)
@@ -289,6 +307,34 @@ Output:
 Transcript: "End the gym session"
 Output:
 {"verb":"stop_timer","subject":"gym","project":"gym","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.92,"ambiguous_fields":[]}
+
+Transcript: "Stop all timers"
+Output:
+{"verb":"stop_all_timers","subject":"all timers","project":null,"day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.97,"ambiguous_fields":[]}
+
+Transcript: "Stop everything"
+Output:
+{"verb":"stop_all_timers","subject":"everything","project":null,"day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.95,"ambiguous_fields":[]}
+
+Transcript: "Stop all"
+Output:
+{"verb":"stop_all_timers","subject":"all","project":null,"day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.96,"ambiguous_fields":[]}
+
+Transcript: "Reset gym"
+Output:
+{"verb":"reset_timer","subject":"gym","project":"gym","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.96,"ambiguous_fields":[]}
+
+Transcript: "Clear gym timer"
+Output:
+{"verb":"reset_timer","subject":"gym","project":"gym","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.94,"ambiguous_fields":[]}
+
+Transcript: "Start gym over"
+Output:
+{"verb":"reset_timer","subject":"gym","project":"gym","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.92,"ambiguous_fields":[]}
+
+Transcript: "Zero out the deck construction timer"
+Output:
+{"verb":"reset_timer","subject":"deck construction","project":"deck construction","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.91,"ambiguous_fields":[]}
 """
 
 # ---------------------------------------------------------------------------
@@ -334,7 +380,7 @@ def _preprocess(transcript: str) -> PreprocessorHints:
 
 @dataclass
 class ParseResult:
-    verb: str               # schedule | note | handle | avoid | start_timer | stop_timer
+    verb: str               # schedule | note | handle | avoid | start_timer | stop_timer | stop_all_timers | reset_timer
     subject: str
     day_hint: Optional[str]   # verbatim day expression from utterance, or None
     time_hint: Optional[str]  # verbatim time expression from utterance, or None

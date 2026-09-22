@@ -15,14 +15,16 @@ Expected frontmatter shape (from Herman v1.6.0 capture_parsed._handle_handle):
     criticality: critical   (only present when critical)
     created_at: '2026-09-16T05:35:55.086346-04:00'
 
-The event_id field is used as the idempotency key. It is embedded in the note body
-via the [herman-id:<event_id>] sentinel in reminders_body. The slow-path dedup in
-query_pushed_reminder_ids() extracts these sentinels by iterating reminder bodies.
+v0.1.2 idempotency change: the [herman-id:<event_id>] body sentinel was removed.
+Idempotency is now via pushed.jsonl fast-path + name-matching slow-path.
+reminders_body contains only the clean utterance — no heading, no italic caption,
+no sentinel, no blank lines.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +33,19 @@ from typing import Any, Optional
 import frontmatter  # python-frontmatter
 
 log = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Body-cleaning regexes (v0.1.2)
+# ---------------------------------------------------------------------------
+
+# Matches a markdown heading line: # heading, ## heading, etc.
+_HEADING_RE = re.compile(r"^#{1,6}\s+.*$", re.MULTILINE)
+
+# Matches the Sprite-inserted italic caption: *Captured <date/time> UTC via Sprite.*
+_CAPTION_RE = re.compile(r"^\*Captured [^*]+via [^*]+\.\*\s*$", re.MULTILINE)
+
+# Matches the legacy [herman-id:<anything>] sentinel
+_HERMAN_ID_RE = re.compile(r"\[herman-id:[^\]]*\]")
 
 
 @dataclass
@@ -64,14 +79,73 @@ class ReminderRecord:
     @property
     def reminders_body(self) -> str:
         """
-        Body string for Reminders.app `body` property.
+        Body string for Reminders.app ``body`` property.
 
-        Embeds the event_id as a sentinel so the slow-path idempotency check
-        can find this reminder in Reminders.app without needing a title match.
-        The event_id sentinel is appended after the prose body.
+        v0.1.2: returns only the raw utterance — one clean line, no chrome.
+
+        Strips from the raw vault body:
+          - ``# heading`` lines (duplicate the title field)
+          - ``*Captured ... via Sprite.*`` italic captions (metadata already
+            in Reminders.app's own timestamp)
+          - ``[herman-id:...]`` legacy sentinels (v0.1.1 idempotency key,
+            now removed — idempotency via pushed.jsonl + name matching)
+          - Leading/trailing blank lines
+          - Consecutive interior blank lines (collapsed to zero)
+
+        Falls back to ``self.title`` if the body is empty after stripping.
+
+        No ``[herman-id:...]`` sentinel is appended. The sentinel was a UX
+        leak and is not needed: idempotency is now belt-and-suspenders via
+        pushed.jsonl (fast path) + query_pushed_reminder_names() (slow path).
         """
-        prose = self.body.strip()
-        return f"{prose}\n\n[herman-id:{self.event_id}]"
+        return _clean_body(self.body, fallback=self.title)
+
+# ---------------------------------------------------------------------------
+# Body-cleaning helper (v0.1.2)
+# ---------------------------------------------------------------------------
+
+def _clean_body(raw: str, fallback: str = "") -> str:
+    """
+    Strip all chrome from a vault reminder body and return the clean utterance.
+
+    Removes:
+      - Markdown heading lines (# / ## / …)
+      - Sprite italic captions (*Captured … via Sprite.*)
+      - Legacy [herman-id:…] sentinels
+      - Leading/trailing blank lines
+      - Consecutive interior blank lines
+
+    Falls back to *fallback* (the reminder's frontmatter title) if the result
+    is empty after stripping.
+
+    Returns a single stripped string with no leading/trailing whitespace.
+    """
+    text = raw
+
+    # Strip heading lines
+    text = _HEADING_RE.sub("", text)
+
+    # Strip italic caption lines
+    text = _CAPTION_RE.sub("", text)
+
+    # Strip [herman-id:...] sentinels (inline or on their own line)
+    text = _HERMAN_ID_RE.sub("", text)
+
+    # Remove blank lines entirely — collapse all interior blank lines to zero.
+    # Per Thomas's requirement: no blank lines between lines in Reminders.app.
+    # First normalise \r\n to \n
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # Keep only non-empty lines (strips all blank lines — leading, trailing, interior)
+    result_lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+
+    cleaned = "\n".join(result_lines).strip()
+
+    if not cleaned:
+        return fallback.strip()
+
+    return cleaned
+
 
 # ---------------------------------------------------------------------------
 # Parsing helpers

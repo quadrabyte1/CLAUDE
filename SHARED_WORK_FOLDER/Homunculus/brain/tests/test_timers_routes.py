@@ -399,3 +399,316 @@ def test_dashboard_data_timer_rows_have_stopwatch_icon(tmp_path: Path, monkeypat
     timer_rows = [row for row in body["rows"] if row["kind"] in ("timer_start", "timer_stop")]
     for row in timer_rows:
         assert row["icon"] == "⏱", f"Expected ⏱ icon, got {row['icon']!r}"
+
+
+# ===========================================================================
+# v2.1.0 TDD — POST /timer/stop_all and POST /timer/reset routes
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Test 14: POST /timer/stop_all returns 200 with TimerStopAllResponse
+# ---------------------------------------------------------------------------
+
+
+def test_timer_stop_all_returns_200_empty(tmp_path: Path, monkeypatch):
+    """POST /timer/stop_all with 0 running timers returns 200 with stopped=[]."""
+    with _client(tmp_path, monkeypatch) as client:
+        r = client.post("/timer/stop_all", json={})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["stopped"] == []
+
+
+def test_timer_stop_all_returns_stopped_list(tmp_path: Path, monkeypatch):
+    """POST /timer/stop_all with 2 running timers returns stopped list of 2."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload("gym", offset_seconds=0))
+        client.post("/timer/start", json=_start_payload("deck", offset_seconds=60))
+        r = client.post("/timer/stop_all", json={"captured_at": (NOW + timedelta(seconds=1800)).isoformat()})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    slugs = {item["slug"] for item in body["stopped"]}
+    assert "gym" in slugs
+    assert "deck" in slugs
+
+
+# ---------------------------------------------------------------------------
+# Test 15: POST /timer/reset returns 200 with cleared_seconds
+# ---------------------------------------------------------------------------
+
+
+def test_timer_reset_valid_project_returns_200(tmp_path: Path, monkeypatch):
+    """POST /timer/reset on a valid project returns 200 with cleared_seconds."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload(offset_seconds=0))
+        client.post("/timer/stop", json=_stop_payload(offset_seconds=1800))
+        r = client.post("/timer/reset", json={
+            "project": "gym",
+            "captured_at": (NOW + timedelta(seconds=3600)).isoformat(),
+        })
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["cleared_seconds"] > 0
+    assert "cleared_session_count" in body
+
+
+def test_timer_reset_zeros_totals(tmp_path: Path, monkeypatch):
+    """POST /timer/reset zeroes the total for the project."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload(offset_seconds=0))
+        client.post("/timer/stop", json=_stop_payload(offset_seconds=1800))
+        client.post("/timer/reset", json={
+            "project": "gym",
+            "captured_at": (NOW + timedelta(seconds=3600)).isoformat(),
+        })
+        r = client.get("/timers/totals")
+    totals = r.json()
+    assert len(totals) == 1
+    assert totals[0]["total_seconds"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Test 16: POST /timer/reset with unknown project returns stored=False
+# ---------------------------------------------------------------------------
+
+
+def test_timer_reset_unknown_project_returns_stored_false(tmp_path: Path, monkeypatch):
+    """POST /timer/reset with unknown project returns 200 with stored=False."""
+    with _client(tmp_path, monkeypatch) as client:
+        r = client.post("/timer/reset", json={
+            "project": "nonexistent",
+            "captured_at": NOW.isoformat(),
+        })
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is False
+    assert "clarifying_question" in body
+    assert body["clarifying_question"]
+
+
+# ---------------------------------------------------------------------------
+# Test 17: POST /capture/parsed with verb=stop_all_timers dispatches
+# ---------------------------------------------------------------------------
+
+
+def test_capture_parsed_stop_all_timers_dispatches(tmp_path: Path, monkeypatch):
+    """POST /capture/parsed with verb=stop_all_timers dispatches correctly."""
+    # Start timers first
+    client_ctx = _client(tmp_path, monkeypatch)
+    with client_ctx as client:
+        client.post("/timer/start", json=_start_payload("gym", offset_seconds=0))
+        payload = {
+            "verb": "stop_all_timers",
+            "subject": "stop all",
+            "project": None,
+            "when": None,
+            "criticality": "normal",
+            "confidence": 0.95,
+            "raw_transcript": "Stop all timers",
+            "audio_path": "/tmp/test.m4a",
+            "captured_at": (NOW + timedelta(seconds=1800)).isoformat(),
+            "speaker_tz": "America/New_York",
+        }
+        r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["verb"] == "stop_all_timers"
+
+
+# ---------------------------------------------------------------------------
+# Test 18: POST /capture/parsed with verb=reset_timer dispatches
+# ---------------------------------------------------------------------------
+
+
+def test_capture_parsed_reset_timer_dispatches(tmp_path: Path, monkeypatch):
+    """POST /capture/parsed with verb=reset_timer dispatches correctly."""
+    with _client(tmp_path, monkeypatch) as client:
+        # Start and stop first
+        client.post("/timer/start", json=_start_payload(offset_seconds=0))
+        client.post("/timer/stop", json=_stop_payload(offset_seconds=1800))
+        # Now reset
+        payload = {
+            "verb": "reset_timer",
+            "subject": "gym",
+            "project": "gym",
+            "when": None,
+            "criticality": "normal",
+            "confidence": 0.95,
+            "raw_transcript": "Reset gym",
+            "audio_path": "/tmp/test.m4a",
+            "captured_at": (NOW + timedelta(seconds=3600)).isoformat(),
+            "speaker_tz": "America/New_York",
+        }
+        r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True
+    assert body["verb"] == "reset_timer"
+
+
+# ---------------------------------------------------------------------------
+# Test 19: stop_all activity log — one timer_stop row per project
+# ---------------------------------------------------------------------------
+
+
+def test_stop_all_activity_log_has_stop_per_project(tmp_path: Path, monkeypatch):
+    """After /timer/stop_all with 2 timers, _activity.jsonl has 2 timer_stop rows."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload("gym", offset_seconds=0))
+        client.post("/timer/start", json=_start_payload("deck", offset_seconds=60))
+        client.post("/timer/stop_all", json={
+            "captured_at": (NOW + timedelta(seconds=1800)).isoformat(),
+        })
+
+    activity_path = tmp_path / "_activity.jsonl"
+    entries = [json.loads(ln) for ln in activity_path.read_text().splitlines() if ln.strip()]
+    timer_stops = [e for e in entries if e.get("kind") == "timer_stop"]
+    slugs = {e.get("details", {}).get("slug") for e in timer_stops}
+    assert "gym" in slugs
+    assert "deck" in slugs
+
+
+# ---------------------------------------------------------------------------
+# Test 20: reset activity log — timer_reset row with pre-reset total
+# ---------------------------------------------------------------------------
+
+
+def test_reset_activity_log_has_timer_reset_row(tmp_path: Path, monkeypatch):
+    """After /timer/reset, _activity.jsonl has a timer_reset row."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload(offset_seconds=0))
+        client.post("/timer/stop", json=_stop_payload(offset_seconds=1800))
+        client.post("/timer/reset", json={
+            "project": "gym",
+            "captured_at": (NOW + timedelta(seconds=3600)).isoformat(),
+        })
+
+    activity_path = tmp_path / "_activity.jsonl"
+    entries = [json.loads(ln) for ln in activity_path.read_text().splitlines() if ln.strip()]
+    resets = [e for e in entries if e.get("kind") == "timer_reset"]
+    assert resets, "Expected timer_reset row in _activity.jsonl"
+    details = resets[0].get("details", {})
+    assert details.get("cleared_seconds", -1) > 0
+
+
+# ---------------------------------------------------------------------------
+# Test 21: stop_all enqueues individual notifications
+# ---------------------------------------------------------------------------
+
+
+def test_stop_all_enqueues_individual_notifications(tmp_path: Path, monkeypatch):
+    """stop_all with 2 running timers produces 2 entries in /reminders/upcoming."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload("gym", offset_seconds=0))
+        client.post("/timer/start", json=_start_payload("deck", offset_seconds=60))
+        client.post("/timer/stop_all", json={
+            "captured_at": (NOW + timedelta(seconds=1800)).isoformat(),
+        })
+        r = client.get("/reminders/upcoming?include_fired=true")
+
+    rows = r.json()
+    timer_stop_rows = [row for row in rows if row.get("kind") == "timer_stop"]
+    assert len(timer_stop_rows) >= 2, (
+        f"Expected >=2 timer_stop notification rows, got {len(timer_stop_rows)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 22: reset does NOT enqueue a notification
+# ---------------------------------------------------------------------------
+
+
+def test_reset_does_not_enqueue_notification(tmp_path: Path, monkeypatch):
+    """reset() on a running project does NOT write a _reminders sidecar."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload(offset_seconds=0))
+        client.post("/timer/reset", json={
+            "project": "gym",
+            "captured_at": (NOW + timedelta(seconds=1800)).isoformat(),
+        })
+        r = client.get("/reminders/upcoming?include_fired=true")
+
+    rows = r.json()
+    timer_stop_rows = [row for row in rows if row.get("kind") == "timer_stop"]
+    assert timer_stop_rows == [], (
+        f"reset() must not enqueue a notification. Got: {timer_stop_rows}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 23: Dashboard data after reset shows timer_reset row
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_data_after_reset_shows_timer_reset_row(tmp_path: Path, monkeypatch):
+    """GET /dashboard/data after a reset shows a timer_reset row."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload(offset_seconds=0))
+        client.post("/timer/stop", json=_stop_payload(offset_seconds=1800))
+        client.post("/timer/reset", json={
+            "project": "gym",
+            "captured_at": (NOW + timedelta(seconds=3600)).isoformat(),
+        })
+        r = client.get("/dashboard/data")
+
+    body = r.json()
+    kinds = {row["kind"] for row in body["rows"]}
+    assert "timer_reset" in kinds, f"Expected timer_reset in dashboard rows. Got: {kinds}"
+
+
+def test_dashboard_reset_row_summary_format(tmp_path: Path, monkeypatch):
+    """timer_reset summary contains 'Reset: gym' and cleared duration."""
+    with _client(tmp_path, monkeypatch) as client:
+        client.post("/timer/start", json=_start_payload(offset_seconds=0))
+        client.post("/timer/stop", json=_stop_payload(offset_seconds=15120))  # 4h 12m
+        client.post("/timer/reset", json={
+            "project": "gym",
+            "captured_at": (NOW + timedelta(seconds=20000)).isoformat(),
+        })
+        r = client.get("/dashboard/data")
+
+    body = r.json()
+    reset_rows = [row for row in body["rows"] if row["kind"] == "timer_reset"]
+    assert reset_rows, "No timer_reset row in dashboard data"
+    summary = reset_rows[0]["summary"]
+    assert "Reset" in summary
+    assert "gym" in summary.lower()
+
+
+# ---------------------------------------------------------------------------
+# Test 24: Dashboard data after stop_all shows 3 timer_stop rows
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_data_after_stop_all_shows_stop_rows(tmp_path: Path, monkeypatch):
+    """GET /dashboard/data after stop_all with 3 running returns 3 timer_stop rows."""
+    with _client(tmp_path, monkeypatch) as client:
+        for proj in ("gym", "deck", "amunculus"):
+            client.post("/timer/start", json=_start_payload(proj, offset_seconds=0))
+        client.post("/timer/stop_all", json={
+            "captured_at": (NOW + timedelta(seconds=1800)).isoformat(),
+        })
+        r = client.get("/dashboard/data")
+
+    body = r.json()
+    timer_stop_rows = [row for row in body["rows"] if row["kind"] == "timer_stop"]
+    assert len(timer_stop_rows) >= 3, (
+        f"Expected >=3 timer_stop rows after stopping 3 timers, got {len(timer_stop_rows)}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test 25: Dashboard version badge v0.3
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_version_badge_v03(tmp_path: Path, monkeypatch):
+    """Dashboard HTML contains version badge v0.3."""
+    from homunculus_brain.dashboard import DASHBOARD_HTML, DASHBOARD_VERSION
+    assert DASHBOARD_VERSION == "v0.3", f"Expected v0.3, got {DASHBOARD_VERSION!r}"
+    assert "v0.3" in DASHBOARD_HTML

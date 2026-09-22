@@ -421,3 +421,268 @@ def test_stop_logs_timer_stop_to_activity(tmp_path: Path):
     stop_entry = timer_stops[0]
     details = stop_entry.get("details", stop_entry)
     assert details.get("project") == "gym" or stop_entry.get("project") == "gym"
+
+
+# ===========================================================================
+# v2.1.0 TDD — stop_all_timers + reset_timer
+# ===========================================================================
+
+
+# ---------------------------------------------------------------------------
+# Test 6: stop_all() with 0 running timers — no-op, empty list
+# ---------------------------------------------------------------------------
+
+
+def test_stop_all_empty_returns_empty_list(tmp_path: Path):
+    """stop_all() with 0 running timers returns [] with no state change."""
+    manager = _make_manager(tmp_path)
+    result = manager.stop_all(captured_at=_now(), tz=TZ)
+    assert result == [], f"Expected [], got {result!r}"
+
+
+def test_stop_all_empty_no_files_created(tmp_path: Path):
+    """stop_all() with 0 timers does not create any files."""
+    manager = _make_manager(tmp_path)
+    manager.stop_all(captured_at=_now(), tz=TZ)
+    timers_dir = tmp_path / "timers"
+    if timers_dir.exists():
+        assert list(timers_dir.glob("*.json")) == []
+
+
+# ---------------------------------------------------------------------------
+# Test 7: stop_all() with 2 running timers stops both
+# ---------------------------------------------------------------------------
+
+
+def test_stop_all_stops_all_running_timers(tmp_path: Path):
+    """stop_all() with 2 running timers returns 2 TimerStopResult entries."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.start(project="deck", captured_at=_now(60), tz=TZ)
+
+    results = manager.stop_all(captured_at=_now(1800), tz=TZ)
+    assert len(results) == 2
+    slugs = {r.slug for r in results}
+    assert slugs == {"gym", "deck"}
+
+
+def test_stop_all_files_show_running_none(tmp_path: Path):
+    """After stop_all(), both timer files have running=null."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.start(project="deck", captured_at=_now(60), tz=TZ)
+    manager.stop_all(captured_at=_now(1800), tz=TZ)
+
+    for slug in ("gym", "deck"):
+        data = json.loads((tmp_path / "timers" / f"{slug}.json").read_text())
+        assert data["running"] is None, f"{slug}.json still shows running"
+        assert data["total_seconds"] > 0, f"{slug}.json total_seconds should be > 0"
+
+
+def test_stop_all_each_result_is_timer_stop_result(tmp_path: Path):
+    """Each entry in stop_all result is a TimerStopResult dataclass."""
+    from homunculus_brain.timers import TimerStopResult
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    results = manager.stop_all(captured_at=_now(1800), tz=TZ)
+    assert len(results) == 1
+    assert isinstance(results[0], TimerStopResult)
+
+
+# ---------------------------------------------------------------------------
+# Test 8: reset() on a non-running project
+# ---------------------------------------------------------------------------
+
+
+def test_reset_nonrunning_clears_sessions_and_total(tmp_path: Path):
+    """reset() on a stopped project zeroes total_seconds and clears sessions."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.stop(project="gym", captured_at=_now(1800), tz=TZ)
+
+    from homunculus_brain.timers import TimerResetResult
+    result = manager.reset(project="gym", captured_at=_now(3600), tz=TZ)
+
+    assert result.stored is True
+    assert result.cleared_seconds == 1800  # ~30 min, allow tolerance in check below
+    data = json.loads((tmp_path / "timers" / "gym.json").read_text())
+    assert data["total_seconds"] == 0
+    assert data["sessions"] == []
+
+
+def test_reset_nonrunning_clears_seconds_matches_old_total(tmp_path: Path):
+    """reset() cleared_seconds matches the pre-reset total."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.stop(project="gym", captured_at=_now(1800), tz=TZ)
+
+    pre_data = json.loads((tmp_path / "timers" / "gym.json").read_text())
+    old_total = pre_data["total_seconds"]
+
+    from homunculus_brain.timers import TimerResetResult
+    result = manager.reset(project="gym", captured_at=_now(3600), tz=TZ)
+
+    assert result.cleared_seconds == old_total
+
+
+# ---------------------------------------------------------------------------
+# Test 9: reset() on a running project — silent stop first, then reset
+# ---------------------------------------------------------------------------
+
+
+def test_reset_running_stops_first_then_resets(tmp_path: Path):
+    """reset() on a running timer stops it silently then zeros state."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+
+    from homunculus_brain.timers import TimerResetResult
+    result = manager.reset(project="gym", captured_at=_now(1800), tz=TZ)
+
+    assert result.stored is True
+    data = json.loads((tmp_path / "timers" / "gym.json").read_text())
+    assert data["running"] is None, "Timer should be stopped after reset"
+    assert data["total_seconds"] == 0
+    assert data["sessions"] == []
+
+
+# ---------------------------------------------------------------------------
+# Test 10: reset() on nonexistent project returns stored=False
+# ---------------------------------------------------------------------------
+
+
+def test_reset_nonexistent_project_returns_stored_false(tmp_path: Path):
+    """reset() on unknown project returns stored=False with clarifying message."""
+    manager = _make_manager(tmp_path)
+    from homunculus_brain.timers import TimerResetResult
+    result = manager.reset(project="nonexistent", captured_at=_now(), tz=TZ)
+    assert result.stored is False
+    assert result.clarifying_question is not None
+    assert "nonexistent" in result.clarifying_question.lower() or "no timer" in result.clarifying_question.lower()
+
+
+# ---------------------------------------------------------------------------
+# Test 11: Idempotent reset — second reset is a no-op
+# ---------------------------------------------------------------------------
+
+
+def test_reset_idempotent_second_call(tmp_path: Path):
+    """Resetting twice in a row — second call sees total=0 already, clears 0."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.stop(project="gym", captured_at=_now(1800), tz=TZ)
+
+    from homunculus_brain.timers import TimerResetResult
+    result1 = manager.reset(project="gym", captured_at=_now(3600), tz=TZ)
+    result2 = manager.reset(project="gym", captured_at=_now(7200), tz=TZ)
+
+    assert result1.stored is True
+    assert result2.stored is True
+    assert result2.cleared_seconds == 0  # already at 0
+
+
+# ---------------------------------------------------------------------------
+# Test 12: reset preserves the project file (file exists after reset)
+# ---------------------------------------------------------------------------
+
+
+def test_reset_preserves_project_file(tmp_path: Path):
+    """reset() must NOT delete the timer file — it zeroes it in place."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.stop(project="gym", captured_at=_now(1800), tz=TZ)
+    manager.reset(project="gym", captured_at=_now(3600), tz=TZ)
+
+    timer_path = tmp_path / "timers" / "gym.json"
+    assert timer_path.exists(), "Timer file must exist after reset (project preserved)"
+
+    data = json.loads(timer_path.read_text())
+    assert data["project"] == "gym"
+    assert data["slug"] == "gym"
+
+
+# ---------------------------------------------------------------------------
+# Test 13: Silent stop in reset does NOT enqueue a mac_notifier row
+# ---------------------------------------------------------------------------
+
+
+def test_reset_silent_stop_no_notification_sidecar(tmp_path: Path):
+    """reset() stopping a running timer does NOT write a _reminders sidecar."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.reset(project="gym", captured_at=_now(1800), tz=TZ)
+
+    reminders_dir = tmp_path / "_reminders"
+    if reminders_dir.exists():
+        timer_sidecars = list(reminders_dir.glob("timer.gym.*.json"))
+        assert timer_sidecars == [], (
+            f"reset() must not enqueue a notification. Found: {timer_sidecars}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Activity log rows for stop_all and reset
+# ---------------------------------------------------------------------------
+
+
+def test_stop_all_writes_timer_stop_activity_per_project(tmp_path: Path):
+    """stop_all() writes one timer_stop activity row per project stopped."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.start(project="deck", captured_at=_now(60), tz=TZ)
+    manager.stop_all(captured_at=_now(1800), tz=TZ)
+
+    activity_path = tmp_path / "_activity.jsonl"
+    entries = [json.loads(ln) for ln in activity_path.read_text().splitlines() if ln.strip()]
+    timer_stops = [e for e in entries if e.get("kind") == "timer_stop"]
+    slugs = {e.get("details", {}).get("slug") for e in timer_stops}
+    assert "gym" in slugs
+    assert "deck" in slugs
+
+
+def test_reset_writes_timer_reset_activity_row(tmp_path: Path):
+    """reset() writes a timer_reset activity row with the pre-reset total."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.stop(project="gym", captured_at=_now(1800), tz=TZ)
+    old_total = json.loads((tmp_path / "timers" / "gym.json").read_text())["total_seconds"]
+
+    manager.reset(project="gym", captured_at=_now(3600), tz=TZ)
+
+    activity_path = tmp_path / "_activity.jsonl"
+    entries = [json.loads(ln) for ln in activity_path.read_text().splitlines() if ln.strip()]
+    resets = [e for e in entries if e.get("kind") == "timer_reset"]
+    assert resets, "Expected a timer_reset row in _activity.jsonl"
+    details = resets[0].get("details", {})
+    assert details.get("cleared_seconds") == old_total
+
+
+def test_reset_running_writes_timer_stop_activity_row(tmp_path: Path):
+    """reset() on a running project writes a timer_stop row (silent audit)."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.reset(project="gym", captured_at=_now(1800), tz=TZ)
+
+    activity_path = tmp_path / "_activity.jsonl"
+    entries = [json.loads(ln) for ln in activity_path.read_text().splitlines() if ln.strip()]
+    timer_stops = [e for e in entries if e.get("kind") == "timer_stop"]
+    assert timer_stops, "reset() on running timer must write a timer_stop activity row"
+
+
+# ---------------------------------------------------------------------------
+# stop_all notifications — each stop fires individual notification
+# ---------------------------------------------------------------------------
+
+
+def test_stop_all_fires_individual_notifications(tmp_path: Path):
+    """stop_all() with 2 running timers writes 2 notification sidecars."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.start(project="deck", captured_at=_now(60), tz=TZ)
+    manager.stop_all(captured_at=_now(1800), tz=TZ)
+
+    reminders_dir = tmp_path / "_reminders"
+    assert reminders_dir.exists()
+    timer_sidecars = [f for f in reminders_dir.glob("timer.*.json")]
+    assert len(timer_sidecars) == 2, (
+        f"Expected 2 notification sidecars, got {len(timer_sidecars)}: {timer_sidecars}"
+    )

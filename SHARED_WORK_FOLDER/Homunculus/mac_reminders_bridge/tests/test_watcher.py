@@ -68,12 +68,13 @@ class TestPushIfNewFastPath:
 
 class TestPushIfNewSlowPath:
     def test_self_heals_when_in_reminders_but_not_state(self, tmp_path):
-        path = _write_md(tmp_path / "ev.md", event_id="ev-heal")
+        # title="test" (default) — mock returns this title as the existing name
+        path = _write_md(tmp_path / "ev.md", event_id="ev-heal", title="test")
         state = _make_state(tmp_path)
         with (
             patch(
-                "mac_reminders_bridge.watcher.query_pushed_reminder_ids",
-                return_value=["ev-heal"],
+                "mac_reminders_bridge.watcher.query_pushed_reminder_names",
+                return_value=["test"],  # v0.1.2: match on title, not event_id
             ),
             patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
         ):
@@ -86,7 +87,7 @@ class TestPushIfNewSlowPath:
         state = _make_state(tmp_path)
         with (
             patch(
-                "mac_reminders_bridge.watcher.query_pushed_reminder_ids",
+                "mac_reminders_bridge.watcher.query_pushed_reminder_names",
                 return_value=[],
             ),
             patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
@@ -100,7 +101,7 @@ class TestPushIfNewSlowPath:
         state = _make_state(tmp_path)
         with (
             patch(
-                "mac_reminders_bridge.watcher.query_pushed_reminder_ids",
+                "mac_reminders_bridge.watcher.query_pushed_reminder_names",
                 side_effect=AppleScriptError("timeout"),
             ),
             patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
@@ -113,7 +114,7 @@ class TestPushIfNewSlowPath:
         state = _make_state(tmp_path)
         with (
             patch(
-                "mac_reminders_bridge.watcher.query_pushed_reminder_ids",
+                "mac_reminders_bridge.watcher.query_pushed_reminder_names",
                 side_effect=NotImplementedError(),
             ),
             patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
@@ -131,7 +132,7 @@ class TestPushIfNewPushStep:
         path = _write_md(tmp_path / "ev.md", event_id="ev-mark")
         state = _make_state(tmp_path)
         with (
-            patch("mac_reminders_bridge.watcher.query_pushed_reminder_ids", return_value=[]),
+            patch("mac_reminders_bridge.watcher.query_pushed_reminder_names", return_value=[]),
             patch("mac_reminders_bridge.watcher.push_reminder"),
         ):
             push_if_new(path, state, "Homunculus")
@@ -141,7 +142,7 @@ class TestPushIfNewPushStep:
         path = _write_md(tmp_path / "ev.md", event_id="ev-fail")
         state = _make_state(tmp_path)
         with (
-            patch("mac_reminders_bridge.watcher.query_pushed_reminder_ids", return_value=[]),
+            patch("mac_reminders_bridge.watcher.query_pushed_reminder_names", return_value=[]),
             patch(
                 "mac_reminders_bridge.watcher.push_reminder",
                 side_effect=AppleScriptError("oh no"),
@@ -272,7 +273,7 @@ class TestVaultRemindersHandlerCreated:
         path = _write_md(tmp_path / "ev.md", event_id="h-created")
 
         with (
-            patch("mac_reminders_bridge.watcher.query_pushed_reminder_ids", return_value=[]),
+            patch("mac_reminders_bridge.watcher.query_pushed_reminder_names", return_value=[]),
             patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
         ):
             event = FileCreatedEvent(str(path))
@@ -309,7 +310,7 @@ class TestVaultRemindersHandlerMoved:
         src = tmp_path / "ev.md.tmp.999"
 
         with (
-            patch("mac_reminders_bridge.watcher.query_pushed_reminder_ids", return_value=[]),
+            patch("mac_reminders_bridge.watcher.query_pushed_reminder_names", return_value=[]),
             patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
         ):
             event = FileMovedEvent(str(src), str(dest))
@@ -345,7 +346,7 @@ class TestVaultRemindersHandlerModified:
         path = _write_md(tmp_path / "ev.md", event_id="h-modified")
 
         with (
-            patch("mac_reminders_bridge.watcher.query_pushed_reminder_ids", return_value=[]),
+            patch("mac_reminders_bridge.watcher.query_pushed_reminder_names", return_value=[]),
             patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
         ):
             event = FileModifiedEvent(str(path))
@@ -373,3 +374,86 @@ class TestVaultRemindersHandlerModified:
             event = FileModifiedEvent(str(txt))
             handler.on_modified(event)
         mock_push.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# v0.1.2 — Name-based slow path idempotency
+# ---------------------------------------------------------------------------
+
+class TestV012NameBasedSlowPath:
+    """
+    v0.1.2: slow path uses query_pushed_reminder_names() (name matching)
+    instead of query_pushed_reminder_ids() (body sentinel extraction).
+
+    push_if_new must:
+    1. Fast path: check pushed.jsonl (unchanged).
+    2. Slow path: call query_pushed_reminder_names() and compare the
+       record's display_title against the returned names.
+    3. Only push if both say "not present".
+    """
+
+    def test_state_file_fast_path_still_works(self, tmp_path):
+        """pushed.jsonl fast path must still skip known event_ids."""
+        path = _write_md(tmp_path / "ev.md", event_id="ev-fast")
+        state = _make_state(tmp_path)
+        state.mark_pushed("ev-fast")
+
+        with patch("mac_reminders_bridge.watcher.push_reminder") as mock_push:
+            push_if_new(path, state, "Homunculus")
+        mock_push.assert_not_called()
+
+    def test_slow_path_name_match_skips_push(self, tmp_path):
+        """
+        Slow path: state file wiped (no fast-path hit), but Reminders.app
+        already contains a reminder with this title → skip push.
+        """
+        path = _write_md(tmp_path / "ev.md", event_id="ev-name-dup", title="kiss the baby")
+        state = _make_state(tmp_path)  # fresh — nothing in pushed.jsonl
+
+        with (
+            patch(
+                "mac_reminders_bridge.watcher.query_pushed_reminder_names",
+                return_value=["kiss the baby"],
+            ),
+            patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
+        ):
+            push_if_new(path, state, "Homunculus")
+
+        mock_push.assert_not_called()
+
+    def test_slow_path_name_miss_proceeds_to_push(self, tmp_path):
+        """
+        Slow path: name not in Reminders.app → push must proceed.
+        """
+        path = _write_md(tmp_path / "ev.md", event_id="ev-name-new", title="brand new task")
+        state = _make_state(tmp_path)
+
+        with (
+            patch(
+                "mac_reminders_bridge.watcher.query_pushed_reminder_names",
+                return_value=["some other reminder"],
+            ),
+            patch("mac_reminders_bridge.watcher.push_reminder") as mock_push,
+        ):
+            push_if_new(path, state, "Homunculus")
+
+        mock_push.assert_called_once()
+
+    def test_slow_path_self_heals_state_on_name_hit(self, tmp_path):
+        """
+        When name-based slow path finds a match, mark_pushed must be called
+        so subsequent fast-path lookups work without another Reminders.app query.
+        """
+        path = _write_md(tmp_path / "ev.md", event_id="ev-heal-name", title="heal me")
+        state = _make_state(tmp_path)
+
+        with (
+            patch(
+                "mac_reminders_bridge.watcher.query_pushed_reminder_names",
+                return_value=["heal me"],
+            ),
+            patch("mac_reminders_bridge.watcher.push_reminder"),
+        ):
+            push_if_new(path, state, "Homunculus")
+
+        assert state.is_pushed("ev-heal-name") is True

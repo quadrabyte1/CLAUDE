@@ -24,7 +24,7 @@ from typing import Any, Optional
 # Constants
 # ---------------------------------------------------------------------------
 
-DASHBOARD_VERSION = "v0.2"
+DASHBOARD_VERSION = "v0.3"
 
 _VERB_ICONS: dict[str, str] = {
     "schedule": "📅",
@@ -34,6 +34,7 @@ _VERB_ICONS: dict[str, str] = {
     "event_ack": "✔️",
     "timer_start": "⏱",
     "timer_stop": "⏱",
+    "timer_reset": "⏱",
 }
 _DEFAULT_ICON = "🔹"
 
@@ -77,6 +78,14 @@ def _summary_for(row: dict[str, Any]) -> str:
         if project:
             return f"Stopped: {project} — {dur_str} (total {total_str})"
         return "Timer stopped"
+
+    if kind == "timer_reset" and isinstance(details, dict):
+        project = details.get("project", "")
+        cleared = details.get("cleared_seconds", 0)
+        cleared_str = _short_duration(cleared)
+        if project:
+            return f"Reset: {project} — cleared {cleared_str}"
+        return "Timer reset"
 
     # Fallback: raw_text truncated
     if raw:
@@ -233,10 +242,15 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     position: fixed;
     top: 8px;
     left: 10px;
-    font-size: 11px;
-    color: #555;
+    font-size: 13px;
+    font-weight: 600;
+    color: #aaa;
     letter-spacing: 0.04em;
     z-index: 100;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid #333;
   }
 
   /* ---- HEADER ---- */

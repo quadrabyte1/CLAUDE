@@ -82,6 +82,11 @@ class NoRunningTimer(ValueError):
     pass
 
 
+class NoSuchTimer(ValueError):
+    """Raised when an operation references a project that has no timer file."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Return types (plain dataclasses — no Pydantic overhead in the module layer)
 # ---------------------------------------------------------------------------
@@ -123,6 +128,16 @@ class ProjectTotal:
     total_seconds: int
     last_touched_at: datetime
     is_running: bool
+
+
+@dataclass
+class TimerResetResult:
+    stored: bool
+    project: str
+    slug: str
+    cleared_seconds: int
+    cleared_session_count: int
+    clarifying_question: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -393,7 +408,146 @@ class TimerManager:
         result.sort(key=lambda t: t.last_touched_at, reverse=True)
         return result
 
+    def stop_all(self, captured_at: datetime, tz: ZoneInfo) -> list[TimerStopResult]:
+        """Stop every currently-running timer.
+
+        Iterates ``get_running()`` and calls ``stop()`` on each. Returns a list
+        of ``TimerStopResult``, one per timer that was running. Returns an empty
+        list (not an error) when nothing is running.
+
+        Each individual stop fires its own notification sidecar via the existing
+        ``_enqueue_stop_notification`` path — no batching.
+        """
+        running = self.get_running()
+        results: list[TimerStopResult] = []
+        for rt in running:
+            try:
+                result = self.stop(project=rt.project, captured_at=captured_at, tz=tz)
+                results.append(result)
+            except NoRunningTimer:
+                # Race: timer was stopped between get_running() and stop() — skip silently.
+                log.warning("timer: stop_all race condition on '%s' — already stopped", rt.slug)
+        return results
+
+    def reset(self, project: str, captured_at: datetime, tz: ZoneInfo) -> TimerResetResult:
+        """Reset a project's accumulated total to zero.
+
+        Steps:
+        1. If the timer is currently running, stop it *silently* (no notification
+           sidecar), but still write a ``timer_stop`` activity log row so the
+           audit trail is intact.
+        2. Record the pre-reset total as ``cleared_seconds``.
+        3. Set ``total_seconds = 0``, clear ``sessions = []``.
+        4. Update ``last_touched_at`` and write the file atomically.
+        5. Write a ``timer_reset`` activity log row.
+
+        Returns ``stored=False`` with a ``clarifying_question`` if the project
+        file doesn't exist.
+        """
+        slug = _project_slug(project)
+        data = self._load(slug)
+
+        if data is None:
+            canonical = _normalize_project(project)
+            return TimerResetResult(
+                stored=False,
+                project=canonical,
+                slug=slug,
+                cleared_seconds=0,
+                cleared_session_count=0,
+                clarifying_question=(
+                    f"No timer for '{canonical}'. "
+                    f"Say 'start {canonical}' first to begin tracking."
+                ),
+            )
+
+        canonical = data["project"]
+        now_iso = captured_at.isoformat()
+
+        # --- Silent stop if running ---
+        if data.get("running") is not None:
+            self._silent_stop(data, captured_at=captured_at, tz=tz)
+            # Reload after silent stop so cleared_seconds reflects the updated total
+            data = self._load(slug)
+            assert data is not None
+
+        cleared_seconds = data.get("total_seconds", 0)
+        cleared_session_count = len(data.get("sessions", []))
+
+        # Zero out and preserve file
+        data["total_seconds"] = 0
+        data["sessions"] = []
+        data["running"] = None
+        data["last_touched_at"] = now_iso
+        self._save(data)
+
+        # Activity log — timer_reset row with pre-reset total
+        activity_log.log(
+            self._vault,
+            "timer_reset",
+            at=captured_at,
+            details={
+                "project": canonical,
+                "slug": slug,
+                "cleared_seconds": cleared_seconds,
+                "cleared_session_count": cleared_session_count,
+            },
+        )
+
+        return TimerResetResult(
+            stored=True,
+            project=canonical,
+            slug=slug,
+            cleared_seconds=cleared_seconds,
+            cleared_session_count=cleared_session_count,
+        )
+
     # --- Private helpers --------------------------------------------------
+
+    def _silent_stop(self, data: dict, *, captured_at: datetime, tz: ZoneInfo) -> None:
+        """Stop a running timer without firing a notification.
+
+        Writes the session + total to the file and appends a ``timer_stop``
+        activity log row. Does NOT call ``_enqueue_stop_notification``.
+
+        ``data`` must be the loaded timer dict with ``running`` not None.
+        The dict is mutated in-place and saved atomically.
+        """
+        started_at = datetime.fromisoformat(data["running"]["started_at"])
+        ended_at = captured_at
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=tz)
+        if ended_at.tzinfo is None:
+            ended_at = ended_at.replace(tzinfo=tz)
+
+        duration_seconds = max(0, int((ended_at - started_at.astimezone(tz)).total_seconds()))
+        record_id = str(_uuid_module.uuid4())
+
+        session = {
+            "started_at": started_at.isoformat(),
+            "ended_at": ended_at.isoformat(),
+            "duration_seconds": duration_seconds,
+            "record_id": record_id,
+        }
+        data["sessions"].append(session)
+        data["total_seconds"] = data.get("total_seconds", 0) + duration_seconds
+        data["running"] = None
+        data["last_touched_at"] = ended_at.isoformat()
+        self._save(data)
+
+        activity_log.log(
+            self._vault,
+            "timer_stop",
+            at=captured_at,
+            details={
+                "project": data["project"],
+                "slug": data["slug"],
+                "duration_seconds": duration_seconds,
+                "total_seconds": data["total_seconds"],
+                "record_id": record_id,
+                "silent": True,  # marks this as a bookkeeping stop (no notification)
+            },
+        )
 
     def _enqueue_stop_notification(
         self,

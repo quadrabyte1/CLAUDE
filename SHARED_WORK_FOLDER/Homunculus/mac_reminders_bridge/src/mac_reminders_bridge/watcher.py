@@ -38,7 +38,7 @@ from . import VERSION
 from .applescript import (
     AppleScriptError,
     push_reminder,
-    query_pushed_reminder_ids,
+    query_pushed_reminder_names,
     verify_list_exists,
 )
 from .config import (
@@ -74,12 +74,15 @@ def push_if_new(
     1. **Fast path** — check state.is_pushed() (in-memory + pushed.jsonl).
        If found → skip. Returns immediately, no Reminders.app round-trip.
 
-    2. **Slow path** (authoritative second check) — call
-       query_pushed_reminder_ids() to ask Reminders.app directly whether
-       a reminder with this event_id body sentinel is already present.
+    2. **Slow path** (authoritative second check, v0.1.2) — call
+       query_pushed_reminder_names() to ask Reminders.app for the names of all
+       reminders in the list. Compare against record.display_title.
        If found → self-heal pushed.jsonl and skip.
-       The [herman-id:<event_id>] body sentinel is the durable key
-       (Reminders.app does not expose a url property in AppleScript).
+
+       v0.1.2 change from v0.1.1: the slow path no longer uses the
+       [herman-id:<event_id>] body sentinel. That sentinel leaked an
+       implementation detail into the user-visible body field. Name matching
+       is sufficient and produces no visible side-effects.
 
     3. **Push** — only if both checks say "not present" → call push_reminder()
        then mark_pushed().
@@ -110,23 +113,23 @@ def push_if_new(
         log.debug("Already pushed %s; skipping", record.event_id)
         return
 
-    # --- Slow path: authoritative Reminders.app query ---
+    # --- Slow path: authoritative Reminders.app name query ---
     try:
-        existing_ids = query_pushed_reminder_ids(list_name)
+        existing_names = query_pushed_reminder_names(list_name)
     except (AppleScriptError, NotImplementedError) as exc:
         # On Linux or if Reminders is unreachable, skip the slow check.
         log.debug(
-            "query_pushed_reminder_ids unavailable for %s (%s); proceeding to push",
+            "query_pushed_reminder_names unavailable for %s (%s); proceeding to push",
             record.event_id,
             exc,
         )
-        existing_ids = []
+        existing_names = []
 
-    if record.event_id in existing_ids:
+    if record.display_title in existing_names:
         log.info(
-            "Self-heal: %s already in Reminders.app but missing from pushed.jsonl; "
-            "healing pushed.jsonl and skipping push",
-            record.event_id,
+            "Self-heal: '%s' already in Reminders.app (name match) but missing "
+            "from pushed.jsonl; healing pushed.jsonl and skipping push",
+            record.display_title,
         )
         state.mark_pushed(record.event_id)
         return

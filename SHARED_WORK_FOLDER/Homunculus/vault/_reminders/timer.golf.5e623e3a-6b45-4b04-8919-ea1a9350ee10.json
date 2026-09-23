@@ -1,0 +1,13 @@
+{
+  "event_id": "timer.golf.5e623e3a-6b45-4b04-8919-ea1a9350ee10",
+  "schedule": [
+    {
+      "event_id": "timer.golf.5e623e3a-6b45-4b04-8919-ea1a9350ee10",
+      "kind": "timer_stop",
+      "fire_at": "2026-09-22T20:56:06.830175+00:00",
+      "tz": "UTC",
+      "body": "Golf session: 51 minutes 24 seconds. Total: 1 hour 4 minutes (all-time).",
+      "status": "pending"
+    }
+  ]
+}

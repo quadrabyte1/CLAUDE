@@ -114,6 +114,7 @@ def build_morning_summary(
     summary_time_local: str,
     tz: ZoneInfo,
     warnings: Optional[list[str]] = None,
+    pending_clarifications: Optional[list[dict]] = None,
 ) -> ReminderRow:
     """One summary row for a given day. Fires at `summary_time_local` in `tz`.
 
@@ -123,6 +124,10 @@ def build_morning_summary(
     ``warnings.md`` (most-recent first). When non-empty, a "Standing
     warnings" section is appended to the body. When ``None`` or empty,
     the section is omitted entirely.
+
+    ``pending_clarifications`` is a v2.2.0 addition: the list of unresolved
+    clarifying entries from ``_clarifying_pending.jsonl``. When non-empty,
+    a "Pending clarifications" section is appended mentioning the count.
     """
     hh, mm = (int(x) for x in summary_time_local.split(":"))
     fire_at = datetime.combine(
@@ -131,7 +136,12 @@ def build_morning_summary(
         tzinfo=tz,
     )
 
-    body = _compose_summary_body(events_today, missed_yesterday, warnings or [])
+    body = _compose_summary_body(
+        events_today,
+        missed_yesterday,
+        warnings or [],
+        pending_clarifications or [],
+    )
     return ReminderRow(
         event_id=f"summary-{summary_date.date().isoformat()}",
         kind=ReminderKind.MORNING_SUMMARY,
@@ -145,6 +155,7 @@ def _compose_summary_body(
     events_today: list[CalendarEvent],
     missed_yesterday: list[CalendarEvent],
     warnings: Optional[list[str]] = None,
+    pending_clarifications: Optional[list[dict]] = None,
 ) -> str:
     if not events_today:
         head = "Good morning. No events today."
@@ -158,6 +169,11 @@ def _compose_summary_body(
     if warnings:
         section = "\n\nStanding warnings:\n" + "\n".join(warnings)
         head += section
+    # v2.2.0: pending clarifications section
+    if pending_clarifications:
+        count = len(pending_clarifications)
+        noun = "clarification" if count == 1 else "clarifications"
+        head += f"\n\nYou have {count} pending {noun}. Check the Herman dashboard."
     return head
 
 
@@ -213,6 +229,10 @@ def build_daily_summary_rows(
     file are read once and appended to every day's summary body as a
     "Standing warnings" section. When the file is missing or empty, the
     section is omitted entirely — the caller doesn't need to check first.
+
+    v2.2.0: pending clarifications are read once per call from
+    ``_clarifying_pending.jsonl`` and included in every day's summary body
+    when the count is non-zero.
     """
     hh, mm = (int(x) for x in summary_time.split(":"))
     today_local = now.astimezone(anchor_tz).date()
@@ -226,6 +246,10 @@ def build_daily_summary_rows(
         # schedule/handle paths.
         from . import capture_parsed
         warnings = capture_parsed.read_recent_warnings(warnings_path, n=20)
+
+    # v2.2.0: read unresolved clarifying entries once per call.
+    from . import capture_parsed as _cp
+    pending_clarifications = _cp.read_unresolved_clarifying(vault_path)
 
     rows: list[ReminderRow] = []
     for offset in range(days_ahead):
@@ -246,6 +270,7 @@ def build_daily_summary_rows(
             summary_time_local=summary_time,
             tz=anchor_tz,
             warnings=warnings,
+            pending_clarifications=pending_clarifications,
         )
         # Use the iOS-spec identifier scheme: summary.<yyyy-mm-dd>.
         summary = summary.model_copy(update={"event_id": f"summary.{day.isoformat()}"})
@@ -361,6 +386,10 @@ def collect_upcoming_rows(
     timer_rows = _collect_timer_notifications(vault_path, events_from=events_from, window_end=window_end, include_fired=include_fired)
     out.extend(timer_rows)
 
+    # v2.2.0: include clarify_immediate notification sidecars
+    clarify_rows = _collect_clarify_notifications(vault_path, events_from=events_from, window_end=window_end, include_fired=include_fired)
+    out.extend(clarify_rows)
+
     out.sort(key=lambda r: r.fire_at)
     return out
 
@@ -407,6 +436,55 @@ def _collect_timer_notifications(
             out.append(ReminderRow(
                 event_id=raw["event_id"],
                 kind=ReminderKind.TIMER_STOP,
+                fire_at=fire_at,
+                tz=raw.get("tz", "UTC"),
+                body=raw.get("body", ""),
+                status=status,
+            ))
+    return out
+
+
+def _collect_clarify_notifications(
+    vault_path: Path,
+    *,
+    events_from: datetime,
+    window_end: datetime,
+    include_fired: bool,
+) -> list[ReminderRow]:
+    """Read clarify_immediate notification sidecars from _reminders/.
+
+    These are written by capture_parsed._enqueue_clarify_notification().
+    They use identifiers starting with 'clarify.' and kind='clarify_immediate'.
+    """
+    reminders_dir = vault_path / "_reminders"
+    if not reminders_dir.exists():
+        return []
+
+    out: list[ReminderRow] = []
+    for path in reminders_dir.glob("clarify.*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for raw in data.get("schedule", []):
+            if raw.get("kind") != "clarify_immediate":
+                continue
+            try:
+                fire_at = datetime.fromisoformat(raw["fire_at"])
+                if fire_at.tzinfo is None:
+                    from datetime import timezone as _tz
+                    fire_at = fire_at.replace(tzinfo=_tz.utc)
+            except (ValueError, KeyError):
+                continue
+            status = raw.get("status", "pending")
+            if not include_fired and status in ("acked", "cancelled", "fired"):
+                continue
+            in_window = (events_from <= fire_at <= window_end) if include_fired else True
+            if not in_window:
+                continue
+            out.append(ReminderRow(
+                event_id=raw["event_id"],
+                kind=ReminderKind.CLARIFY_IMMEDIATE,
                 fire_at=fire_at,
                 tz=raw.get("tz", "UTC"),
                 body=raw.get("body", ""),

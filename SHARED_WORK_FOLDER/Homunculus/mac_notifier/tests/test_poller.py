@@ -401,3 +401,92 @@ class TestPollCycleErrorHandling:
         assert counts["fired"] == 2
         assert state.is_fired("ev.abc:pre_5")
         assert state.is_fired("ev.abc:strike_0")
+
+
+# ---------------------------------------------------------------------------
+# v0.2.0 TDD: Extended grace window (300s) — timer_stop incident
+# ---------------------------------------------------------------------------
+
+
+class TestGraceWindowExtended:
+    """v0.2.0 grace-window extension tests.
+
+    The timer_stop incident: a notification with fire_at = now - 99s was being
+    SKIPPED because the grace window was 90s (too tight by 9s). The fix raises
+    the default from 90 → 300. These tests use GRACE_300=300 to assert the
+    new behavior independently of the constant definition test in test_config.py.
+    """
+
+    GRACE_300 = 300
+
+    @mock.patch("mac_notifier.poller.fire_notification")
+    def test_200s_past_fires_with_300s_grace(self, mock_fire, state: FiredState):
+        """fire_at = now - 200s is within 300s grace → must fire.
+
+        With the old 90s grace this row would have been skipped as 'missed'.
+        This is the direct analog of the timer_stop incident (99s drift).
+        """
+        row = _make_row(offset_seconds=-200)
+        client = _make_client_returning([row])
+        counts = run_poll_cycle(client, state, self.GRACE_300, now=NOW)
+        mock_fire.assert_called_once()
+        assert counts["fired"] == 1, (
+            "fire_at=now-200s must fire with 300s grace window."
+        )
+
+    @mock.patch("mac_notifier.poller.fire_notification")
+    def test_99s_past_fires_with_300s_grace(self, mock_fire, state: FiredState):
+        """fire_at = now - 99s fires with 300s grace.
+
+        This is the exact timer_stop incident offset. With 90s grace it was
+        skipped (99 > 90). With 300s grace it fires (99 < 300).
+        """
+        row = _make_row(offset_seconds=-99)
+        client = _make_client_returning([row])
+        counts = run_poll_cycle(client, state, self.GRACE_300, now=NOW)
+        mock_fire.assert_called_once()
+        assert counts["fired"] == 1
+
+    @mock.patch("mac_notifier.poller.fire_notification")
+    def test_400s_past_skips_with_300s_grace(self, mock_fire, state: FiredState):
+        """fire_at = now - 400s is OUTSIDE 300s grace → must skip as missed.
+
+        Genuinely stale notifications (more than 5 minutes old) must not fire.
+        This guards against the grace window being too permissive.
+        """
+        row = _make_row(offset_seconds=-400)
+        client = _make_client_returning([row])
+        counts = run_poll_cycle(client, state, self.GRACE_300, now=NOW)
+        mock_fire.assert_not_called()
+        assert counts["skipped_missed"] == 1, (
+            "fire_at=now-400s must be skipped as 'missed' with 300s grace."
+        )
+
+    @mock.patch("mac_notifier.poller.fire_notification")
+    def test_90s_past_would_have_been_skipped_with_old_grace(
+        self, mock_fire, state: FiredState, tmp_path: Path
+    ):
+        """fire_at = now - 91s: old 90s grace would skip; 300s grace fires.
+
+        Documents exactly where the old behavior broke down.
+        With GRACE=90: 91s > 90s → skipped (the bug).
+        With GRACE=300: 91s < 300s → fires (the fix).
+        """
+        row = _make_row(offset_seconds=-91)
+        client = _make_client_returning([row])
+
+        # Old behavior (90s grace): skips
+        counts_old = run_poll_cycle(client, state, 90, now=NOW)
+        mock_fire.assert_not_called()
+        assert counts_old["skipped_missed"] == 1
+
+        # New behavior (300s grace): fires
+        state2 = FiredState(tmp_path / "fired2.jsonl")
+        counts_new = run_poll_cycle(
+            _make_client_returning([_make_row(offset_seconds=-91, event_id="ev.new")]),
+            state2,
+            300,
+            now=NOW,
+        )
+        mock_fire.assert_called_once()
+        assert counts_new["fired"] == 1

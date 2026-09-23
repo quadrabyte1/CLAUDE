@@ -221,7 +221,18 @@ def test_process_file_low_confidence_goes_to_inbox(tmp_path):
     assert len(inbox_files) == 1
 
 
-def test_process_file_ambiguous_fields_goes_to_inbox(tmp_path):
+def test_process_file_ambiguous_fields_no_longer_gates_to_inbox(tmp_path):
+    """v0.11.0 regression guard: ambiguous_fields alone must NOT route to inbox.
+
+    Before v0.11.0, ANY non-empty ambiguous_fields list short-circuited to inbox,
+    preventing Herman from ever seeing the capture. This was the vet-reminder bug:
+    Sprite pre-empted Herman for the class of captures that Herman is best-placed
+    to handle (time_hint ambiguity). The fix: remove ambiguous_fields from the
+    Sprite gate. Only whisper confidence below threshold routes to inbox.
+
+    This test was previously named test_process_file_ambiguous_fields_goes_to_inbox
+    and tested the OLD (broken) behavior. That test is replaced by this one.
+    """
     config = _make_config(tmp_path)
     f = _make_m4a(config.recordings_dir)
 
@@ -229,15 +240,20 @@ def test_process_file_ambiguous_fields_goes_to_inbox(tmp_path):
         tmp_path, config,
         whisper_confidence=0.9,
         llm_confidence=0.85,
-        llm_ambiguous=["when"],  # ← ambiguous even with high confidence
+        llm_ambiguous=["time_hint"],  # ← ambiguous, but confidence is fine
     )
     with patches[0], patches[1], patches[2], patches[3] as mock_herman:
         result = process_file(f, config)
 
     assert result is True
-    mock_herman.assert_not_called()
+    # Herman MUST be called — Sprite must forward to Herman even when ambiguous.
+    mock_herman.assert_called_once()
+    # Inbox should be empty — Sprite does NOT pre-empt.
     inbox_files = list(config.inbox_dir.glob("*.md"))
-    assert len(inbox_files) == 1
+    assert len(inbox_files) == 0, (
+        "Sprite must not write to inbox for ambiguous-but-confident captures; "
+        "Herman is the authority on ambiguity."
+    )
 
 
 def test_process_file_whisper_error_marks_error(tmp_path):
@@ -541,3 +557,133 @@ def test_never_mark_posted_when_event_id_is_none(tmp_path):
                 "Invariant violated: disposition='posted' with event_id=None. "
                 "This is the original silent-drop bug."
             )
+
+
+# ---------------------------------------------------------------------------
+# v0.11.0 TDD: Sprite ambiguous_fields gate removal — vet-reminder incident
+# ---------------------------------------------------------------------------
+
+
+def test_v011_vet_remind_incident_posts_to_herman(tmp_path):
+    """v0.11.0 regression — the exact vet-reminder incident scenario.
+
+    verb=remind, ambiguous_fields=['time_hint'], conf=0.850 (whisper=0.876 llm=0.850)
+    → Sprite MUST POST to Herman, must NOT write to inbox.
+
+    This is the live incident from 2026-09-22:
+      Sprite log: confidence 0.850 < 0.6 or ambiguous=['time_hint'] → inbox
+    The OR clause was wrong. Ambiguity is Herman's domain.
+    """
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    patches = _mock_pipeline(
+        tmp_path, config,
+        whisper_text="Remind me to call the vet at 3.",
+        whisper_confidence=0.876,
+        llm_verb="remind",
+        llm_subject="call the vet",
+        llm_day_hint=None,
+        llm_time_hint="3",
+        llm_confidence=0.850,
+        llm_ambiguous=["time_hint"],
+    )
+    with patches[0], patches[1], patches[2], patches[3] as mock_herman:
+        result = process_file(f, config)
+
+    assert result is True
+    mock_herman.assert_called_once(), (
+        "Sprite must POST to Herman when ambiguous_fields=['time_hint'] and "
+        "confidence=0.85 (above the 0.6 threshold)."
+    )
+    inbox_files = list(config.inbox_dir.glob("*.md"))
+    assert len(inbox_files) == 0, (
+        "Sprite must not short-circuit to inbox. Herman decides ambiguity."
+    )
+
+
+def test_v011_confidence_gate_still_routes_to_inbox_when_below_threshold(tmp_path):
+    """v0.11.0: The whisper-confidence gate (< 0.6) must still route to inbox.
+
+    Only the ambiguous_fields gate was removed. Low-confidence captures are
+    genuinely garbled and not worth Herman's time.
+    """
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    patches = _mock_pipeline(
+        tmp_path, config,
+        whisper_confidence=0.55,   # below 0.6 threshold → inbox
+        llm_confidence=0.9,
+        llm_ambiguous=[],          # no ambiguity — confidence alone gates
+    )
+    with patches[0], patches[1], patches[2], patches[3] as mock_herman:
+        result = process_file(f, config)
+
+    assert result is True
+    mock_herman.assert_not_called()
+    inbox_files = list(config.inbox_dir.glob("*.md"))
+    assert len(inbox_files) == 1, (
+        "Low-confidence captures (< 0.6) must still go to inbox."
+    )
+
+
+def test_v011_confidence_below_threshold_with_ambiguous_goes_to_inbox(tmp_path):
+    """v0.11.0: conf=0.55 AND ambiguous=['time_hint'] → inbox.
+
+    Confidence is the sole gate. Ambiguity no longer matters for routing.
+    This is the case where BOTH conditions would have triggered the old gate —
+    confirm that confidence is the deciding factor, not ambiguity.
+    """
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    patches = _mock_pipeline(
+        tmp_path, config,
+        whisper_confidence=0.55,       # below threshold
+        llm_confidence=0.88,
+        llm_ambiguous=["time_hint"],   # also ambiguous — irrelevant to routing
+    )
+    with patches[0], patches[1], patches[2], patches[3] as mock_herman:
+        result = process_file(f, config)
+
+    assert result is True
+    mock_herman.assert_not_called()
+    inbox_files = list(config.inbox_dir.glob("*.md"))
+    assert len(inbox_files) == 1, (
+        "Confidence below threshold still wins — inbox is the right call here."
+    )
+
+
+def test_v011_schedule_override_preserved_forwards_to_herman(tmp_path):
+    """v0.11.0: v0.8.1 code override (strip time_hint from ambiguous for schedule + bare 1-5)
+    is still belt-and-suspenders, but even if LLM emits ambiguous time_hint for schedule + '3',
+    the code override strips it, and capture forwards to Herman with clean ambiguous_fields=[].
+
+    This tests the full belt-and-suspenders path: code strips the ambiguity, then
+    the (now clean) result goes to Herman as normal.
+    """
+    config = _make_config(tmp_path)
+    f = _make_m4a(config.recordings_dir)
+
+    # Simulate: LLM emits time_hint='3' and ambiguous_fields=['time_hint'] for schedule.
+    # parse_intent (mocked) returns what the REAL parse.py would after v0.8.1 override:
+    # verb=schedule, time_hint='3', ambiguous_fields=[] (stripped by code override).
+    patches = _mock_pipeline(
+        tmp_path, config,
+        whisper_confidence=0.9,
+        llm_verb="schedule",
+        llm_time_hint="3",
+        llm_confidence=0.87,
+        llm_ambiguous=[],  # code override already stripped time_hint
+    )
+    with patches[0], patches[1], patches[2], patches[3] as mock_herman:
+        result = process_file(f, config)
+
+    assert result is True
+    mock_herman.assert_called_once(), (
+        "schedule + bare hour 3 with ambiguous_fields=[] (post code-override) "
+        "must go to Herman."
+    )
+    inbox_files = list(config.inbox_dir.glob("*.md"))
+    assert len(inbox_files) == 0

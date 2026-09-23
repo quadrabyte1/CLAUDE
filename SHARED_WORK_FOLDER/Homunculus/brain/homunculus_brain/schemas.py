@@ -110,6 +110,7 @@ class ReminderKind(str, Enum):
     STRIKE_10 = "strike_10"
     STRIKE_15 = "strike_15"
     TIMER_STOP = "timer_stop"  # v2.0.0: immediate notification on timer stop
+    CLARIFY_IMMEDIATE = "clarify_immediate"  # v2.2.0: immediate notification on clarifying question
 
 
 class ReminderRow(BaseModel):

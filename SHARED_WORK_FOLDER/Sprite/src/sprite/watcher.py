@@ -196,21 +196,25 @@ def process_file(path: Path, config: SpriteConfig) -> bool:
         parse_result.ambiguous_fields,
     )
 
-    # 6. Ambiguity gate: low confidence or ambiguous fields → inbox.
-    is_ambiguous = (
-        effective_confidence < config.min_confidence
-        or bool(parse_result.ambiguous_fields)
-        # Avoid verb also routes to inbox per non-goals (M2 scope)
-        # keeping avoid out of inbox for now — it's a valid verb with a handler in Herman.
-        # Only pure ambiguity gates it.
-    )
+    # 6. Confidence gate: low whisper confidence → inbox (garbled audio).
+    #
+    # v0.11.0: ambiguous_fields are NO LONGER a gate here. Ambiguity is
+    # Herman's domain — Herman has the full date_resolver, v1.8 bare-hour PM
+    # inference, and v2.2 clarifying-question surfacing. Sprite pre-empting
+    # for ambiguous captures meant Herman never got to apply that logic.
+    # The vet-reminder incident (2026-09-22): verb=remind, ambiguous=['time_hint'],
+    # conf=0.85 was silently routed to inbox; Herman never saw it.
+    #
+    # The whisper-confidence gate stays: genuinely garbled audio (< 0.6)
+    # is not worth Herman's time. LLM-level ambiguity (ambiguous_fields) is
+    # always worth forwarding.
+    is_low_confidence = effective_confidence < config.min_confidence
 
-    if is_ambiguous:
+    if is_low_confidence:
         log.info(
-            "process: confidence %.3f < %.1f or ambiguous=%s → inbox",
+            "process: confidence %.3f < %.1f → inbox (garbled audio)",
             effective_confidence,
             config.min_confidence,
-            parse_result.ambiguous_fields,
         )
         try:
             inbox_file = append_to_inbox(
@@ -428,7 +432,7 @@ class _VoiceMemoHandler(FileSystemEventHandler):
 def main() -> None:
     config = load_config()
 
-    log.info("Sprite watcher v0.10.0 starting")
+    log.info("Sprite watcher v0.11.0 starting")
     log.info("  recordings:  %s", config.recordings_dir)
     log.info("  audio arch:  %s", config.audio_archive)
     log.info("  state file:  %s", config.state_file)

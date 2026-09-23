@@ -37,10 +37,11 @@ class TestConfigDefaults:
         assert c.poll_interval == 60
 
     def test_default_grace_window(self):
+        # v0.2.0: default raised from 90 → 300 (5 minutes, per timer_stop incident).
         env = {k: v for k, v in os.environ.items() if k != "NOTIFIER_GRACE_WINDOW"}
         with mock.patch.dict(os.environ, env, clear=True):
             c = Config.from_env()
-        assert c.grace_window == 90
+        assert c.grace_window == 300
 
     def test_default_log_level(self):
         env = {k: v for k, v in os.environ.items() if k != "NOTIFIER_LOG_LEVEL"}
@@ -138,3 +139,89 @@ class TestConfigImmutable:
         c = Config.from_env()
         with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
             c.poll_interval = 999  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# v0.2.0 TDD: Default grace window raised to 300 — timer_stop incident
+# ---------------------------------------------------------------------------
+
+
+class TestGraceWindowV020:
+    """v0.2.0 regression suite.
+
+    The timer_stop incident: notifications arriving 99s after fire_at were
+    being skipped because the 90s grace window was one second too tight.
+    The fix: raise default grace window from 90 → 300 (5 minutes).
+
+    Poll interval is 60s. Any notification can drift by up to one full poll
+    cycle (~60s) plus jitter before it's seen. 300s provides comfortable
+    headroom without letting genuinely-stale notifications fire.
+    """
+
+    def test_default_grace_window_is_300(self):
+        """Default NOTIFIER_GRACE_WINDOW must be 300, not 90.
+
+        Regression guard: any future accidental lowering will fail this test.
+        This was the timer_stop incident — 99s was 9s past the old 90s limit.
+        """
+        env = {k: v for k, v in os.environ.items() if k != "NOTIFIER_GRACE_WINDOW"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            c = Config.from_env()
+        assert c.grace_window == 300, (
+            f"Default grace_window must be 300 (5 minutes). Got {c.grace_window}. "
+            "The timer_stop incident showed 90s is too tight for a 60s poll cycle."
+        )
+
+    def test_module_level_constant_is_300(self):
+        """The module-level NOTIFIER_GRACE_WINDOW constant must also be 300.
+
+        Both the module-level constant and the Config dataclass default must
+        agree. Divergence would be a subtle source of inconsistency.
+        """
+        import importlib
+        import mac_notifier.config as cfg_mod
+        # Reload to get the module-level constant without env var influence.
+        env = {k: v for k, v in os.environ.items() if k != "NOTIFIER_GRACE_WINDOW"}
+        with mock.patch.dict(os.environ, env, clear=True):
+            importlib.reload(cfg_mod)
+            grace = cfg_mod.NOTIFIER_GRACE_WINDOW
+        assert grace == 300, (
+            f"Module-level NOTIFIER_GRACE_WINDOW must be 300. Got {grace}."
+        )
+
+    def test_env_override_still_works(self):
+        """NOTIFIER_GRACE_WINDOW env var override must still apply.
+
+        Backward-compat: operators who set NOTIFIER_GRACE_WINDOW explicitly
+        in their plist/env must continue to get their configured value.
+        """
+        with mock.patch.dict(os.environ, {"NOTIFIER_GRACE_WINDOW": "600"}):
+            c = Config.from_env()
+        assert c.grace_window == 600, (
+            "Env var override must be honored even after default change."
+        )
+
+    def test_plist_has_300(self):
+        """The deploy plist must specify NOTIFIER_GRACE_WINDOW=300.
+
+        Spec requirement: set the plist explicitly so the launchd environment
+        matches the new default. This prevents confusion if an old plist is
+        installed alongside a new binary.
+        """
+        from pathlib import Path as _Path
+        plist_path = _Path(
+            "/Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER/Homunculus/mac_notifier/"
+            "deploy/com.homunculus.mac_notifier.plist"
+        )
+        assert plist_path.exists(), f"Plist not found at {plist_path}"
+        content = plist_path.read_text(encoding="utf-8")
+        # The plist must set NOTIFIER_GRACE_WINDOW to 300.
+        # Simple text check: the string "300" must appear in a plausible position
+        # near the NOTIFIER_GRACE_WINDOW key.
+        assert "NOTIFIER_GRACE_WINDOW" in content, "Plist missing NOTIFIER_GRACE_WINDOW key"
+        # Check that the value 300 appears after the key.
+        key_pos = content.index("NOTIFIER_GRACE_WINDOW")
+        value_region = content[key_pos:key_pos + 200]
+        assert "300" in value_region, (
+            f"Plist NOTIFIER_GRACE_WINDOW must be 300. Nearby text:\n{value_region}"
+        )

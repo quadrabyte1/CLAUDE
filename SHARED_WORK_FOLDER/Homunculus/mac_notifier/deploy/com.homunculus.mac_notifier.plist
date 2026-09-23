@@ -7,7 +7,7 @@
     <string>com.homunculus.mac_notifier</string>
 
     <!--
-    mac_notifier v0.1.0 — launchd agent for Herman Mac notifications.
+    mac_notifier v0.2.0 — launchd agent for Herman Mac notifications.
 
     No special Automation/Privacy permissions needed for `display notification`
     (unlike Calendar/Notes bridges). Just load and go.
@@ -66,9 +66,12 @@
         <key>NOTIFIER_POLL_INTERVAL</key>
         <string>60</string>
 
-        <!-- Grace window in seconds. Default: 90 (catches poller-was-down-for-a-minute case). -->
+        <!-- Grace window in seconds. v0.2.0: 300 (5 minutes).
+             Poll interval is 60s; any notification can drift a full cycle before
+             being seen. 300s provides comfortable headroom so nothing slips past.
+             Override with NOTIFIER_GRACE_WINDOW=<seconds> if needed. -->
         <key>NOTIFIER_GRACE_WINDOW</key>
-        <string>90</string>
+        <string>300</string>
 
         <!-- State file for fired-notification dedup. -->
         <key>NOTIFIER_STATE_FILE</key>

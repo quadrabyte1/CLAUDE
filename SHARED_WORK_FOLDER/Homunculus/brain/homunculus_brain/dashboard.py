@@ -24,7 +24,7 @@ from typing import Any, Optional
 # Constants
 # ---------------------------------------------------------------------------
 
-DASHBOARD_VERSION = "v0.3"
+DASHBOARD_VERSION = "v0.5"
 
 _VERB_ICONS: dict[str, str] = {
     "schedule": "📅",
@@ -131,11 +131,32 @@ def _parse_at(at_str: Any) -> Optional[datetime]:
         return None
 
 
+def _is_clarifying_row(row: dict[str, Any]) -> bool:
+    """Return True if the activity row represents a stored=False clarifying question.
+
+    A clarifying row has:
+      - kind == 'capture_parsed'
+      - details.stored == False  (note: bool False, not absent)
+      - details.clarifying_question is non-empty
+    """
+    details = row.get("details")
+    if not isinstance(details, dict):
+        return False
+    # stored=False is written into details by the v2.2.0 activity log path.
+    if details.get("stored") is not False:
+        return False
+    question = details.get("clarifying_question")
+    return bool(question)
+
+
 def _shape_row(row: dict[str, Any]) -> Optional[dict[str, Any]]:
     """Convert a raw JSONL row into a dashboard-renderable dict.
 
     Returns None if the row is too malformed to render at all (e.g. no 'at'
     field that can be parsed). Non-fatal missing fields degrade gracefully.
+
+    v0.5: clarifying-question rows get a distinct icon, summary prefix, and
+    is_clarifying=True flag for the frontend renderer.
     """
     at_str = row.get("at")
     dt = _parse_at(at_str)
@@ -147,19 +168,36 @@ def _shape_row(row: dict[str, Any]) -> Optional[dict[str, Any]]:
     if not isinstance(details, dict):
         details = {}
 
-    return {
+    is_clarifying = _is_clarifying_row(row)
+
+    if is_clarifying:
+        icon = "⚠️❓"
+        question = details.get("clarifying_question", "")
+        q_truncated = (question[:57] + "…") if len(question) > 60 else question
+        summary = f"Awaiting clarification — {q_truncated}"
+        clarifying_question = question
+    else:
+        icon = _icon_for(row)
+        summary = _summary_for(row)
+        clarifying_question = None
+
+    shaped: dict[str, Any] = {
         "at": dt.isoformat(),
         "kind": row.get("kind") or "",
         "event_id": row.get("event_id"),
         "raw_text": row.get("raw_text") or "",
-        "icon": _icon_for(row),
-        "summary": _summary_for(row),
+        "icon": icon,
+        "summary": summary,
         "confidence": _confidence_for(row),
         "details": details,
         # Extras for the expand panel
         "written_path": details.get("written_path"),
         "ambiguous_fields": details.get("ambiguous_fields"),
+        # v0.5: clarifying-question flag for the frontend renderer
+        "is_clarifying": True if is_clarifying else None,
+        "clarifying_question": clarifying_question,
     }
+    return shaped
 
 
 # ---------------------------------------------------------------------------
@@ -229,124 +267,288 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  /*
+   * Dashboard v0.5 — light theme
+   *
+   * Layout model:
+   *   body         flex-column, height:100vh, overflow:hidden
+   *     header     sticky, z-index:20
+   *     #timers-panel  sticky (below header), z-index:10
+   *     #feed      flex:1, overflow-y:auto  ← only this scrolls
+   *
+   * Colours:
+   *   Main bg      #f7f7f8  (off-white)
+   *   Timers bg    #eef2f7  (subtle blue tint)
+   *   Row bg       #ffffff
+   *   Primary text #1a1a1a
+   *   Secondary    #6b7280
+   *   Border       #e5e7eb
+   *   RUNNING      #16a34a (green-700)
+   *   CLARIFY bg   #fffbeb  (warning amber tint, v0.5)
+   *   CLARIFY border #f59e0b (amber-400)
+   */
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-size: 14px;
-    background: #111;
-    color: #d4d4d4;
-    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.5;
+    background: #f7f7f8;
+    color: #1a1a1a;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
-  /* ---- VERSION BADGE (upper-left) ---- */
+  /* ---- VERSION BADGE (upper-left, inside header) ---- */
   .version-badge {
-    position: fixed;
-    top: 8px;
-    left: 10px;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
-    color: #aaa;
+    color: #ffffff;
     letter-spacing: 0.04em;
-    z-index: 100;
-    background: rgba(0, 0, 0, 0.4);
-    padding: 3px 8px;
+    background: #4b5563;
+    padding: 2px 7px;
     border-radius: 4px;
-    border: 1px solid #333;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   /* ---- HEADER ---- */
   header {
-    padding: 12px 16px 10px 140px;
-    border-bottom: 1px solid #222;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #ffffff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 10px 16px;
     display: flex;
-    align-items: baseline;
-    gap: 16px;
-    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    flex-shrink: 0;
   }
 
   header h1 {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600;
-    color: #e8e8e8;
+    color: #111827;
     letter-spacing: -0.01em;
+    white-space: nowrap;
   }
 
   .header-meta {
     font-size: 12px;
-    color: #666;
+    color: #6b7280;
     flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .refresh-link {
     font-size: 12px;
-    color: #4a9eff;
+    color: #2563eb;
     cursor: pointer;
     text-decoration: none;
     border: none;
     background: none;
     padding: 0;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .refresh-link:hover { text-decoration: underline; }
 
   .disconnected-badge {
     display: none;
     font-size: 12px;
-    color: #e07a33;
+    font-weight: 500;
+    color: #b45309;
     padding: 2px 8px;
     border-radius: 4px;
-    background: #2a1a0a;
-    border: 1px solid #5a3010;
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .disconnected-badge.visible { display: inline-block; }
 
-  /* ---- FEED ---- */
-  #feed {
+  /* ---- TIMERS PANEL (sticky below header) ---- */
+  #timers-panel {
+    position: sticky;
+    top: 45px;
+    z-index: 10;
+    background: #eef2f7;
+    border-bottom: 1px solid #d1dce8;
+    flex-shrink: 0;
+  }
+
+  .timers-inner {
     max-width: 900px;
-    margin: 12px auto;
-    padding: 0 12px;
+    margin: 0 auto;
+    padding: 10px 16px;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .timers-section {
+    background: #ffffff;
+    border: 1px solid #dbe3ed;
+    border-radius: 8px;
+    overflow: hidden;
+    flex: 1;
+    min-width: 240px;
+  }
+
+  .timers-section-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #374151;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 6px 12px 5px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8fafc;
+  }
+
+  .timer-row {
+    display: flex;
+    align-items: center;
+    padding: 7px 12px;
+    border-bottom: 1px solid #f3f4f6;
+    gap: 8px;
+  }
+  .timer-row:last-child { border-bottom: none; }
+
+  .timer-icon { font-size: 13px; flex-shrink: 0; }
+
+  .timer-project {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .timer-elapsed {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    color: #16a34a;
+    font-weight: 600;
+    min-width: 78px;
+    text-align: right;
+  }
+
+  .timer-total {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    color: #4b5563;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .timer-touched {
+    font-size: 11px;
+    color: #9ca3af;
+    min-width: 70px;
+    text-align: right;
+  }
+
+  .timer-running-badge {
+    font-size: 10px;
+    font-weight: 600;
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #86efac;
+    border-radius: 4px;
+    padding: 1px 5px;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+  }
+
+  .timers-empty {
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #9ca3af;
+    font-style: italic;
+  }
+
+  /* ---- FEED (scrollable area) ---- */
+  #feed {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  #feed-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 8px 16px 24px;
   }
 
   .empty-state {
     text-align: center;
     padding: 60px 20px;
-    color: #555;
-    line-height: 1.9;
+    color: #9ca3af;
+    line-height: 2;
   }
+  .empty-state .empty-icon {
+    font-size: 36px;
+    display: block;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+  .empty-state p { font-size: 14px; }
   .empty-state code {
     font-family: "SFMono-Regular", Consolas, monospace;
     font-size: 12px;
-    background: #1a1a1a;
+    background: #f3f4f6;
     padding: 2px 6px;
     border-radius: 3px;
-    color: #9cdcfe;
+    color: #374151;
   }
 
   /* ---- ACTIVITY ROW ---- */
   .row {
     display: grid;
-    grid-template-columns: 28px 1fr auto;
+    grid-template-columns: 30px 1fr auto;
     align-items: start;
     gap: 0 10px;
-    padding: 9px 10px;
-    border-bottom: 1px solid #1e1e1e;
+    padding: 10px 10px;
+    background: #ffffff;
+    border-bottom: 1px solid #f3f4f6;
     cursor: pointer;
     transition: background 0.1s;
+    border-radius: 0;
   }
-  .row:hover { background: #181818; }
+  .row:first-child { border-top: 1px solid #f3f4f6; }
+  .row:hover { background: #f9fafb; }
+
+  /* v0.5 — clarifying-question row: warning-amber accent */
+  .row.clarify {
+    background: #fffbeb;
+    border-left: 3px solid #f59e0b;
+  }
+  .row.clarify:hover { background: #fef3c7; }
+  .row.clarify .row-summary { color: #92400e; }
 
   /* New-row highlight animation */
   @keyframes highlightFade {
-    from { background-color: #3a3300; }
-    to   { background-color: transparent; }
+    from { background-color: #fef9c3; }
+    to   { background-color: #ffffff; }
   }
   .row.new-highlight {
-    animation: highlightFade 1s ease-out forwards;
+    animation: highlightFade 1.2s ease-out forwards;
   }
 
   .row-icon {
-    font-size: 16px;
-    line-height: 1.4;
+    font-size: 15px;
+    line-height: 1.5;
     text-align: center;
     user-select: none;
+    padding-top: 1px;
   }
 
   .row-body {
@@ -354,8 +556,9 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   }
 
   .row-summary {
-    font-size: 13px;
-    color: #ccc;
+    font-size: 14px;
+    font-weight: 500;
+    color: #111827;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -363,7 +566,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
 
   .row-meta {
     font-size: 11px;
-    color: #555;
+    color: #9ca3af;
     margin-top: 2px;
   }
 
@@ -373,166 +576,89 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     align-items: flex-end;
     gap: 4px;
     white-space: nowrap;
+    padding-top: 1px;
   }
 
   .row-time {
     font-size: 11px;
-    color: #666;
+    color: #9ca3af;
   }
 
   .conf-pill {
     font-size: 10px;
     padding: 1px 5px;
     border-radius: 3px;
-    font-weight: 500;
+    font-weight: 600;
   }
-  .conf-pill.ok   { background: #1e2a1e; color: #6a9a6a; }
-  .conf-pill.warn { background: #2a1e10; color: #c87830; }
+  .conf-pill.ok   { background: #dcfce7; color: #15803d; }
+  .conf-pill.warn { background: #fef3c7; color: #b45309; }
 
   /* ---- EXPAND PANEL ---- */
   .row-expand {
     display: none;
     grid-column: 2 / -1;
     margin-top: 6px;
-    padding: 8px 10px;
-    background: #161616;
-    border-radius: 4px;
-    border: 1px solid #252525;
+    padding: 10px 12px;
+    background: #f8fafc;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
     font-size: 12px;
     line-height: 1.6;
   }
   .row-expand.open { display: block; }
 
-  .expand-field { margin-bottom: 4px; }
-  .expand-label { color: #666; font-size: 11px; }
-  .expand-value { color: #b8b8b8; word-break: break-all; }
-  .expand-value a { color: #4a9eff; }
+  .expand-field { margin-bottom: 6px; }
+  .expand-label { color: #6b7280; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; }
+  .expand-value { color: #374151; word-break: break-all; margin-top: 1px; }
+  .expand-value a { color: #2563eb; }
 
   .expand-json {
-    margin-top: 6px;
-    background: #111;
-    border-radius: 3px;
-    padding: 6px 8px;
-    color: #9cdcfe;
+    margin-top: 8px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    padding: 8px 10px;
+    color: #334155;
     font-family: "SFMono-Regular", Consolas, monospace;
     font-size: 11px;
     white-space: pre;
     overflow-x: auto;
   }
-
-  /* ---- TIMERS PANEL ---- */
-  #timers-panel {
-    max-width: 900px;
-    margin: 12px auto 0;
-    padding: 0 12px;
-  }
-
-  .timers-section {
-    background: #161616;
-    border: 1px solid #252525;
-    border-radius: 6px;
-    margin-bottom: 10px;
-    overflow: hidden;
-  }
-
-  .timers-section-header {
-    font-size: 11px;
-    font-weight: 600;
-    color: #666;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    padding: 6px 12px 4px;
-    border-bottom: 1px solid #1e1e1e;
-  }
-
-  .timer-row {
-    display: flex;
-    align-items: center;
-    padding: 7px 12px;
-    border-bottom: 1px solid #1a1a1a;
-    gap: 8px;
-  }
-  .timer-row:last-child { border-bottom: none; }
-
-  .timer-icon { font-size: 14px; }
-
-  .timer-project {
-    flex: 1;
-    font-size: 13px;
-    color: #ccc;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .timer-elapsed {
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: #4caf8a;
-    font-weight: 500;
-    min-width: 70px;
-    text-align: right;
-  }
-
-  .timer-total {
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
-    color: #888;
-    min-width: 60px;
-    text-align: right;
-  }
-
-  .timer-touched {
-    font-size: 11px;
-    color: #555;
-    min-width: 70px;
-    text-align: right;
-  }
-
-  .timer-running-badge {
-    font-size: 10px;
-    background: #1a3a2a;
-    color: #4caf8a;
-    border: 1px solid #2a5a3a;
-    border-radius: 3px;
-    padding: 1px 5px;
-  }
-
-  .timers-empty {
-    padding: 8px 12px;
-    font-size: 12px;
-    color: #555;
-  }
 </style>
 </head>
 <body>
 
-<div class="version-badge">DASHBOARD_VERSION_PLACEHOLDER · Homunculus Dashboard</div>
-
 <header>
-  <h1>Homunculus Activity</h1>
+  <span class="version-badge">DASHBOARD_VERSION_PLACEHOLDER</span>
+  <h1>Homunculus</h1>
   <span class="header-meta" id="header-meta">Loading…</span>
-  <button class="refresh-link" onclick="refreshNow()">Refresh now</button>
-  <span class="disconnected-badge" id="disconn-badge">⚠️ Disconnected</span>
+  <button class="refresh-link" onclick="refreshNow()">Refresh</button>
+  <span class="disconnected-badge" id="disconn-badge">⚠ Disconnected</span>
 </header>
 
-<!-- Timers Panel (above activity feed) -->
+<!-- Timers Panel — sticky below header -->
 <div id="timers-panel">
-  <div class="timers-section" id="timers-running-section">
-    <div class="timers-section-header">⏱ Running Timers</div>
-    <div id="timers-running-body"><div class="timers-empty">No timers running.</div></div>
-  </div>
-  <div class="timers-section" id="timers-totals-section">
-    <div class="timers-section-header">Project Totals</div>
-    <div id="timers-totals-body"><div class="timers-empty">No project totals yet.</div></div>
+  <div class="timers-inner">
+    <div class="timers-section" id="timers-running-section">
+      <div class="timers-section-header">⏱ Running Timers</div>
+      <div id="timers-running-body"><div class="timers-empty">No timers running.</div></div>
+    </div>
+    <div class="timers-section" id="timers-totals-section">
+      <div class="timers-section-header">Project Totals</div>
+      <div id="timers-totals-body"><div class="timers-empty">No project totals yet.</div></div>
+    </div>
   </div>
 </div>
 
+<!-- Activity Feed — only this area scrolls -->
 <div id="feed">
-  <div class="empty-state" id="empty-state" style="display:none">
-    <p>No activity yet.</p>
-    <p>Record a voice memo or POST to one of these endpoints:</p>
-    <p><code>POST /capture/text</code> &nbsp;&nbsp; <code>POST /capture/parsed</code></p>
+  <div id="feed-inner">
+    <div class="empty-state" id="empty-state" style="display:none">
+      <span class="empty-icon">📭</span>
+      <p>No activity yet.</p>
+      <p>Record a voice memo or POST to one of these endpoints:</p>
+      <p><code>POST /capture/text</code> &nbsp;&nbsp; <code>POST /capture/parsed</code></p>
+    </div>
   </div>
 </div>
 
@@ -585,6 +711,13 @@ function buildRow(r, isNew) {
 
   // Build expand panel content
   let expandHtml = "";
+  // v0.5: clarifying-question rows show full question + transcript at the top
+  if (r.is_clarifying && r.clarifying_question) {
+    expandHtml += `<div class="expand-field">
+      <div class="expand-label">Clarifying question</div>
+      <div class="expand-value" style="color:#92400e;font-weight:500">${esc(r.clarifying_question)}</div>
+    </div>`;
+  }
   if (r.raw_text) {
     expandHtml += `<div class="expand-field">
       <div class="expand-label">Raw text</div>
@@ -614,7 +747,8 @@ function buildRow(r, isNew) {
   }
 
   const div = document.createElement("div");
-  div.className = "row" + (isNew ? " new-highlight" : "");
+  // v0.5: add 'clarify' class for warning-amber styling on clarifying rows
+  div.className = "row" + (isNew ? " new-highlight" : "") + (r.is_clarifying ? " clarify" : "");
   div.innerHTML = `
     <div class="row-icon">${r.icon}</div>
     <div class="row-body">
@@ -649,8 +783,8 @@ function esc(s) {
 // ---- Feed management ------------------------------------------------------
 
 function prependRows(rows, isNew) {
-  const feed  = document.getElementById("feed");
-  const empty = document.getElementById("empty-state");
+  const feedInner = document.getElementById("feed-inner");
+  const empty     = document.getElementById("empty-state");
 
   if (rows.length === 0 && rowCount === 0) {
     empty.style.display = "block";
@@ -658,12 +792,12 @@ function prependRows(rows, isNew) {
   }
   empty.style.display = "none";
 
-  // Insert newest rows at top (they come back newest-first already)
+  // Insert newest rows at top of feed-inner (they come back newest-first already)
   const frag = document.createDocumentFragment();
   for (const r of rows) {
     frag.appendChild(buildRow(r, isNew));
   }
-  feed.insertBefore(frag, feed.firstChild);
+  feedInner.insertBefore(frag, feedInner.firstChild);
   rowCount += rows.length;
   updateMeta();
 }
@@ -730,8 +864,8 @@ function setDisconnected() {
 
 function refreshNow() {
   if (pollTimer) clearTimeout(pollTimer);
-  // Full reload
-  document.getElementById("feed").innerHTML =
+  // Full reload — rebuild feed-inner, preserving the wrapper div
+  document.getElementById("feed-inner").innerHTML =
     '<div class="empty-state" id="empty-state" style="display:none">...</div>';
   rowCount  = 0;
   latestAt  = null;

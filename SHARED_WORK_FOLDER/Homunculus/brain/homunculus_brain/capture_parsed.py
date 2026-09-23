@@ -43,7 +43,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -70,6 +70,212 @@ _IDEMPOTENCY_FILENAME = "_capture_idempotency.jsonl"
 _WARNINGS_HEADER = "# Sprite standing warnings\n\nOne line per warning — appended by the brain's /capture/parsed avoid handler.\n\n"
 _NOTES_DIRNAME = "notes"
 _REMINDERS_DIRNAME = "reminders"  # vault/reminders/ — markdown files for handle/remind captures
+
+# v2.2.0: clarifying-question surfacing
+_CLARIFYING_PENDING_FILENAME = "_clarifying_pending.jsonl"  # inside vault/_reminders/
+
+
+# ---------------------------------------------------------------------------
+# v2.2.0 — clarifying-question notification helpers
+# ---------------------------------------------------------------------------
+
+
+def _clarifying_pending_path(vault_path: Path) -> Path:
+    """Path to the append-only JSONL that tracks unresolved clarifying entries."""
+    return vault_path / "_reminders" / _CLARIFYING_PENDING_FILENAME
+
+
+def _enqueue_clarify_notification(
+    vault_path: Path,
+    *,
+    record_id: str,
+    question: str,
+    transcript: str,
+    req: "ParsedCaptureRequest",
+) -> None:
+    """Write a clarify_immediate notification sidecar to vault/_reminders/.
+
+    The sidecar shape mirrors timer_stop sidecars so that
+    ``reminders._collect_clarify_notifications()`` picks it up for
+    /reminders/upcoming without any changes to mac_notifier.
+
+    Idempotent: if a sidecar for this record_id already exists, do nothing.
+    """
+    identifier = f"clarify.{record_id}"
+    sidecar_path = vault_path / "_reminders" / f"{identifier}.json"
+
+    if sidecar_path.exists():
+        # Already written — idempotent.
+        return
+
+    sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+    excerpt = transcript[:40].strip()
+    body = f"Homunculus needs input: {question} (memo about '{excerpt}')"
+    fire_at = datetime.now(timezone.utc)
+
+    row = {
+        "event_id": identifier,
+        "kind": "clarify_immediate",
+        "fire_at": fire_at.isoformat(),
+        "tz": "UTC",
+        "body": body,
+        "status": "pending",
+    }
+    data = {"event_id": identifier, "schedule": [row]}
+
+    # Atomic write-rename
+    tmp_name = f"{sidecar_path.name}.tmp.{os.getpid()}"
+    tmp_path = sidecar_path.with_name(tmp_name)
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(data, ensure_ascii=False))
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, sidecar_path)
+    except Exception:
+        import contextlib as _ctx
+        with _ctx.suppress(FileNotFoundError):
+            os.unlink(tmp_path)
+        raise
+
+
+def _append_clarifying_pending(
+    vault_path: Path,
+    *,
+    record_id: str,
+    question: str,
+    transcript: str,
+    req: "ParsedCaptureRequest",
+) -> None:
+    """Append a row to _clarifying_pending.jsonl.
+
+    Idempotent: if a row for this record_id already exists, do nothing.
+    """
+    pending_path = _clarifying_pending_path(vault_path)
+    pending_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Check for existing entry with same record_id (idempotency).
+    if pending_path.exists():
+        with pending_path.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    existing = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if existing.get("record_id") == record_id:
+                    return  # already present
+
+    excerpt = transcript[:40].strip()
+    entry = {
+        "record_id": record_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "transcript_excerpt": excerpt,
+        "question": question,
+        "verb": req.verb.value,
+        "subject": req.subject.strip().lower(),
+        "captured_at": req.captured_at.isoformat(),
+        "resolved_at": None,
+    }
+    with pending_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def _resolve_clarifying_pending(
+    vault_path: Path,
+    *,
+    req: "ParsedCaptureRequest",
+) -> None:
+    """Best-effort: mark any pending clarifying entry as resolved when a
+    successful capture (stored=True) arrives.
+
+    Heuristic: match on (verb, subject.strip().lower(), captured_at.isoformat())
+    — the same fields Sprite preserves from the original memo when the user
+    re-records with an unambiguous time.
+
+    The matching key is intentionally loose: the re-recorded memo may have a
+    different time_hint (or explicit when=), which changes the record_id hash,
+    so we cannot match on record_id directly.  We match on the stable memo
+    identity: who + what + original_mtime.
+
+    This is annotated with a TODO so the precise match can be tightened when
+    the reply-verb (v2.3) ships a canonical follow-up event_id.
+    """
+    # TODO(v2.3): replace with precise match once the reply verb carries the
+    # original clarifying record_id in its payload.
+    pending_path = _clarifying_pending_path(vault_path)
+    if not pending_path.exists():
+        return
+
+    match_verb = req.verb.value
+    match_subject = req.subject.strip().lower()
+    match_captured = req.captured_at.isoformat()
+
+    lines = pending_path.read_text(encoding="utf-8").splitlines()
+    updated = []
+    any_resolved = False
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            updated.append(line)
+            continue
+
+        if (
+            row.get("resolved_at") is None
+            and row.get("verb") == match_verb
+            and row.get("subject") == match_subject
+            and row.get("captured_at") == match_captured
+        ):
+            row["resolved_at"] = datetime.now(timezone.utc).isoformat()
+            any_resolved = True
+
+        updated.append(json.dumps(row, ensure_ascii=False))
+
+    if any_resolved:
+        # Atomic rewrite
+        tmp_name = f"{pending_path.name}.tmp.{os.getpid()}"
+        tmp = pending_path.with_name(tmp_name)
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                f.write("\n".join(updated) + "\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, pending_path)
+        except Exception:
+            import contextlib as _ctx
+            with _ctx.suppress(FileNotFoundError):
+                os.unlink(tmp)
+            raise
+
+
+def read_unresolved_clarifying(vault_path: Path) -> list[dict]:
+    """Return all unresolved clarifying entries (resolved_at is None).
+
+    Called by the morning summary generator to include a count in the body.
+    """
+    pending_path = _clarifying_pending_path(vault_path)
+    if not pending_path.exists():
+        return []
+    out = []
+    with pending_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if row.get("resolved_at") is None:
+                out.append(row)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +349,42 @@ def dispatch(
             record_id,
             resp.clarifying_question,
         )
+        # v2.2.0: surface the clarifying question via notification + pending log.
+        if resp.clarifying_question:
+            _enqueue_clarify_notification(
+                config.vault_path,
+                record_id=record_id,
+                question=resp.clarifying_question,
+                transcript=req.raw_transcript,
+                req=req,
+            )
+            _append_clarifying_pending(
+                config.vault_path,
+                record_id=record_id,
+                question=resp.clarifying_question,
+                transcript=req.raw_transcript,
+                req=req,
+            )
+            # Log to activity so the dashboard can show the clarifying row.
+            activity_log.log(
+                config.vault_path,
+                "capture_parsed",
+                at=req.captured_at,
+                event_id=None,
+                raw_text=req.raw_transcript,
+                details={
+                    "verb": req.verb.value,
+                    "subject": req.subject,
+                    "criticality": req.criticality.value,
+                    "confidence": req.confidence,
+                    "audio_path": req.audio_path,
+                    "record_id": record_id,
+                    "written_path": None,
+                    "ambiguous_fields": resp.ambiguous_fields,
+                    "clarifying_question": resp.clarifying_question,
+                    "stored": False,
+                },
+            )
         return resp
 
     if not is_timer_verb:
@@ -163,6 +405,9 @@ def dispatch(
             "written_path": resp.written_path,
         },
     )
+    # v2.2.0: best-effort resolution of any pending clarifying entry that
+    # matches this successful capture (same verb+subject+captured_at).
+    _resolve_clarifying_pending(config.vault_path, req=req)
     return resp
 
 

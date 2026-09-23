@@ -33,7 +33,7 @@ NOTIFIER_HERMAN_URL: str = os.environ.get("NOTIFIER_HERMAN_URL", "http://localho
 
 NOTIFIER_POLL_INTERVAL: int = int(os.environ.get("NOTIFIER_POLL_INTERVAL", "60"))
 
-NOTIFIER_GRACE_WINDOW: int = int(os.environ.get("NOTIFIER_GRACE_WINDOW", "90"))
+NOTIFIER_GRACE_WINDOW: int = int(os.environ.get("NOTIFIER_GRACE_WINDOW", "300"))
 
 NOTIFIER_STATE_FILE: Path = _expand(
     os.environ.get(
@@ -69,7 +69,7 @@ class Config:
         return cls(
             herman_url=os.environ.get("NOTIFIER_HERMAN_URL", "http://localhost:8765"),
             poll_interval=int(os.environ.get("NOTIFIER_POLL_INTERVAL", "60")),
-            grace_window=int(os.environ.get("NOTIFIER_GRACE_WINDOW", "90")),
+            grace_window=int(os.environ.get("NOTIFIER_GRACE_WINDOW", "300")),
             state_file=_expand(
                 os.environ.get(
                     "NOTIFIER_STATE_FILE",

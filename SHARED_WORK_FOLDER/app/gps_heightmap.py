@@ -31,10 +31,11 @@ v0.1.0 -- 2026-09-23 -- Topo
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -103,6 +104,12 @@ class HeightmapResult:
 # Stage 1: Parse .gps file
 # ---------------------------------------------------------------------------
 
+# Matches `<indent>"key": <numeric>,<garbage prose>` and captures the JSON-valid
+# prefix (up to and including the comma). Only triggers when a letter follows
+# the comma, so real JSON lines are untouched.
+_CONTAM_RE = re.compile(r'^(\s*"[^"]+"\s*:\s*-?[\d.eE+]+\s*,)\s*[A-Za-z].*$')
+
+
 def parse_gps_file(gps_path: Path) -> list[dict]:
     """
     Parse a GolfIntelligence .gps file.
@@ -135,7 +142,16 @@ def parse_gps_file(gps_path: Path) -> list[dict]:
     if json_start is None:
         raise ValueError(f"No JSON object found in {gps_path}")
 
-    json_text = "\n".join(lines[json_start:])
+    body_lines = lines[json_start:]
+    # Strip inline speech-to-text contamination: lines like
+    # `"altitude": 111.5904,Is a path to a text file...` should have
+    # everything after the trailing comma dropped. Seen in the wild in
+    # De Laveaga GPS from Stracka.txt (voice-typing landed mid-value).
+    for i, line in enumerate(body_lines):
+        m = _CONTAM_RE.match(line)
+        if m:
+            body_lines[i] = m.group(1)
+    json_text = "\n".join(body_lines)
     data = json.loads(json_text)
 
     if "geoHashCells" not in data:

@@ -162,6 +162,48 @@ class TestParseGpsFile:
         with pytest.raises(ValueError, match="geoHashCells"):
             parse_gps_file(p)
 
+    def test_strips_inline_speech_to_text_contamination(self, tmp_path):
+        """
+        Parse succeeds when a Whisper-style transcription is injected on the
+        same line as a numeric JSON value, e.g.:
+            "altitude": 111.5904,Is a path to a text file...
+
+        This is the exact defect observed in De Laveaga GPS from Stracka.txt.
+        parse_gps_file must strip the trailing garbage and return 2 cells.
+        """
+        # Build a minimal GPS file with the contamination on cell 1's altitude line
+        contaminated_json = (
+            '{\n'
+            '  "cellCount": 2,\n'
+            '  "geoHashCells": [\n'
+            '    {\n'
+            '      "gpsCoordinate": {\n'
+            '        "altitude": 106.6121,\n'
+            '        "latitude": 36.9955802,\n'
+            '        "longitude": -121.99701548\n'
+            '      },\n'
+            '      "geoHash": "9q94ryu6z"\n'
+            '    },\n'
+            '    {\n'
+            '      "gpsCoordinate": {\n'
+            '        "altitude": 111.5904,Is a path to a text file in JSON format.\n'
+            '        \n'
+            '        "latitude": 36.99562311,\n'
+            '        "longitude": -121.99705839\n'
+            '      },\n'
+            '      "geoHash": "9q94ryu7n"\n'
+            '    }\n'
+            '  ]\n'
+            '}\n'
+        )
+        p = tmp_path / "contaminated.gps"
+        p.write_text("Coverage\nAPI Account\ngeohash · hole 1\n" + contaminated_json,
+                     encoding="utf-8")
+        cells = parse_gps_file(p)
+        assert len(cells) == 2, f"Expected 2 cells, got {len(cells)}"
+        assert cells[1]["gpsCoordinate"]["altitude"] == pytest.approx(111.5904)
+        assert cells[1]["gpsCoordinate"]["latitude"] == pytest.approx(36.99562311)
+
     def test_extract_latlng_alt_arrays(self, tmp_path):
         """extract_latlng_alt returns float64 arrays with correct values."""
         cells = [

@@ -47,8 +47,7 @@ geohash · hole 55166
     },
     {
       "gpsCoordinate": {
-        "altitude": 111.5904,Is a path to a text file in JSON format that gives so-called geohash about a thousand seventy one entries each entry has a GPS coordinate and a geo hash value. And I would like to see a a 3MF file that represents the three-dimensional surface that is given by the data in this file. 
-        
+        "altitude": 111.5904,
         "latitude": 36.99562311,
         "longitude": -121.99705839
       },

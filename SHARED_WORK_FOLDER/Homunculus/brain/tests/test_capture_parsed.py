@@ -1253,3 +1253,97 @@ def test_v190_regression_null_time_handle_writes_reminder_markdown(tmp_path, mon
     assert "2026-09-25T08:00:00" in contents or "2026-09-25 08:00:00" in contents, (
         f"starts_at should be on Friday 2026-09-25 at 08:00. Frontmatter:\n{contents[:400]}"
     )
+
+
+# ===========================================================================
+# TDD REGRESSION SUITE — v2.3.0 end-to-end (must FAIL before fix, pass after)
+#
+# Tests 12-13: /capture/parsed with time_hint="9 o'clock a.m." must store
+# the event at 09:00.  Belt-and-suspenders: even if Sprite already injected
+# the qualifier, Herman's resolver must also be able to handle "o'clock" forms.
+# ===========================================================================
+
+NOW_V23_E2E = datetime(2026, 9, 25, 7, 49, tzinfo=TZ)
+
+
+def _v23_client(tmp_path: Path, monkeypatch) -> TestClient:
+    monkeypatch.setenv("HOMUNCULUS_VAULT", str(tmp_path))
+    monkeypatch.setenv("HOMUNCULUS_TZ", "America/New_York")
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:1")
+    monkeypatch.setenv("SPRITE_WARNINGS_PATH", str(tmp_path / "sprite" / "warnings.md"))
+    monkeypatch.setenv("HOMUNCULUS_MIN_CONFIDENCE", "0.6")
+    return TestClient(create_app())
+
+
+# --- Test 12: POST with time_hint="9 o'clock a.m." → stored=True, event at 09:00
+
+def test_v230_e2e_oclock_am_stores_at_0900(tmp_path, monkeypatch):
+    """POST /capture/parsed with verb=handle, day_hint='today',
+    time_hint="9 o'clock a.m.", captured_at=2026-09-25 07:49
+    → stored=True, event/reminder at 09:00 today.
+
+    This is the live-incident fix. Before v2.3.0 Herman couldn't parse
+    'o\\'clock' and returned stored=False with a clarifying question.
+    """
+    client = _v23_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "handle",
+        "subject": "put the barrier up in the car",
+        "when": None,
+        "day_hint": "today",
+        "time_hint": "9 o'clock a.m.",
+        "criticality": "normal",
+        "confidence": 0.887,
+        "raw_transcript": "You put the barrier up in the car at 9 o'clock a.m. today.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-25.m4a",
+        "captured_at": NOW_V23_E2E.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is True, (
+        f"time_hint='9 o\\'clock a.m.' must resolve and store. Got: {body}"
+    )
+    assert body["event_id"] is not None
+
+    # The reminder/event must be at 09:00 today (2026-09-25).
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(r for r in rows if r.kind.value == "strike_0")
+    local_fire = strike_0.fire_at.astimezone(TZ)
+    assert local_fire.hour == 9, (
+        f"Event must be at 09:00. Got hour={local_fire.hour}"
+    )
+    assert local_fire.date().isoformat() == "2026-09-25", (
+        f"Event must be today (2026-09-25). Got {local_fire.date().isoformat()}"
+    )
+
+
+# --- Test 13: Regression guard — bare "9 o'clock" (no qualifier) still asks
+
+def test_v230_e2e_oclock_no_qualifier_still_asks(tmp_path, monkeypatch):
+    """POST /capture/parsed with time_hint="9 o'clock" (no AM/PM qualifier)
+    → stored=False, clarifying_question. The o\\'clock normalization reveals a
+    bare '9' which is genuinely ambiguous for verb=handle.
+    """
+    client = _v23_client(tmp_path, monkeypatch)
+    payload = {
+        "verb": "handle",
+        "subject": "put the barrier up in the car",
+        "when": None,
+        "day_hint": "today",
+        "time_hint": "9 o'clock",
+        "criticality": "normal",
+        "confidence": 0.887,
+        "raw_transcript": "You put the barrier up in the car at 9 o'clock today.",
+        "audio_path": "/Users/thomas/sprite/audio/2026-09-25b.m4a",
+        "captured_at": NOW_V23_E2E.isoformat(),
+    }
+    r = client.post("/capture/parsed", json=payload)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["stored"] is False, (
+        f"Bare '9 o\\'clock' (no AM/PM) must remain ambiguous. Got: {body}"
+    )
+    assert body.get("clarifying_question") is not None, (
+        f"Expected a clarifying_question. Got: {body}"
+    )

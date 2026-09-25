@@ -1216,3 +1216,165 @@ def test_stop_gym_stays_stop_timer_not_stop_all():
         f"'Stop gym' must be stop_timer (not stop_all_timers). Got: {result.verb!r}"
     )
     assert result.project == "gym"
+
+
+# ===========================================================================
+# TDD REGRESSION SUITE — v0.12.0 (must FAIL before fix, pass after fix)
+#
+# Root cause: the LLM drops the AM/PM qualifier when producing time_hint from
+# phrases like "9 o'clock a.m.". It emits bare "9 o'clock" (or worse, "9").
+# Herman's date_resolver then sees a bare hour for verb=handle → applies the
+# "stays ambiguous" rule (correct) → asks AM/PM.  But the transcript already
+# had "a.m." — the answer was right there.
+#
+# Fix:  post-LLM code override in parse_intent() — after the LLM returns,
+# check whether the ORIGINAL TRANSCRIPT contains an AM/PM qualifier; if yes
+# AND time_hint doesn't already contain one, append the qualifier from the
+# transcript to time_hint.
+#
+# This is belt-and-suspenders with Herman's date_resolver fix (strip "o'clock").
+# ===========================================================================
+
+
+# --- v0.12.0 Test 1: Live regression — LLM drops "a.m.", transcript preserves it
+
+def test_v0120_live_regression_oclock_am_transcript_qualifier_injected():
+    """Live incident 2026-09-25: LLM emitted time_hint='9 o\\'clock' (dropped 'a.m.').
+    Transcript was 'put the barrier up in the car at 9 o\\'clock a.m. today.'
+    After v0.12.0 post-processor, time_hint must contain an AM qualifier.
+    """
+    result = _call_parse(
+        "You put the barrier up in the car at 9 o'clock a.m. today.",
+        {
+            "verb": "handle",
+            "subject": "put the barrier up in the car",
+            "day_hint": "today",
+            "time_hint": "9 o'clock",   # LLM dropped the qualifier
+            "criticality": "normal",
+            "confidence": 0.887,
+            "ambiguous_fields": ["time_hint"],
+        },
+    )
+    # After injection, time_hint must include am/pm qualifier
+    th = (result.time_hint or "").lower().replace(".", "").replace(" ", "")
+    assert "am" in th, (
+        f"After transcript AM injection, time_hint must contain an AM qualifier. "
+        f"Got time_hint={result.time_hint!r}"
+    )
+
+
+# --- v0.12.0 Test 2: LLM already includes qualifier — no double-append
+
+def test_v0120_llm_already_has_qualifier_not_doubled():
+    """If the LLM already emitted time_hint='9 o\\'clock a.m.', the post-processor
+    must NOT double-append. Exactly one 'a.m.' must appear in time_hint.
+    """
+    result = _call_parse(
+        "You put the barrier up in the car at 9 o'clock a.m. today.",
+        {
+            "verb": "handle",
+            "subject": "put the barrier up in the car",
+            "day_hint": "today",
+            "time_hint": "9 o'clock a.m.",   # LLM already correct
+            "criticality": "normal",
+            "confidence": 0.887,
+            "ambiguous_fields": [],
+        },
+    )
+    assert result.time_hint is not None
+    assert result.time_hint.lower().count("a.m.") == 1, (
+        f"Expected exactly one 'a.m.' in time_hint. Got: {result.time_hint!r}"
+    )
+
+
+# --- v0.12.0 Test 3: No AM/PM in transcript — no injection
+
+def test_v0120_no_ampm_in_transcript_no_injection():
+    """Transcript 'at 9 o\\'clock today' (no AM/PM) — LLM emits bare '9 o\\'clock'.
+    Post-processor must NOT inject any qualifier.
+    """
+    result = _call_parse(
+        "Remind me at 9 o'clock today.",
+        {
+            "verb": "handle",
+            "subject": "remind me",
+            "day_hint": "today",
+            "time_hint": "9 o'clock",
+            "criticality": "normal",
+            "confidence": 0.87,
+            "ambiguous_fields": ["time_hint"],
+        },
+    )
+    # Must be unchanged — no AM/PM in transcript to inject
+    assert result.time_hint == "9 o'clock", (
+        f"No qualifier in transcript — time_hint must remain unchanged. "
+        f"Got: {result.time_hint!r}"
+    )
+
+
+# --- v0.12.0 Test 4: Various AM/PM formats recognized from transcript
+
+@pytest.mark.parametrize("transcript_snippet,expected_token", [
+    # (transcript, lowercase token that must appear in result.time_hint after injection)
+    ("call at 9 AM today",    "am"),
+    ("call at 9am today",     "am"),
+    ("call at 9 A.M. today",  "a.m."),
+    ("call at 9 a m today",   "a m"),   # whisper sometimes drops periods
+])
+def test_v0120_various_ampm_formats_recognized(transcript_snippet, expected_token):
+    """Different ways whisper transcribes AM must all be recognized and injected
+    into time_hint when the LLM drops them.
+    """
+    result = _call_parse(
+        transcript_snippet,
+        {
+            "verb": "handle",
+            "subject": "call",
+            "day_hint": "today",
+            "time_hint": "9",   # LLM dropped qualifier
+            "criticality": "normal",
+            "confidence": 0.85,
+            "ambiguous_fields": ["time_hint"],
+        },
+    )
+    # After injection, time_hint must include the qualifier
+    assert expected_token in (result.time_hint or "").lower(), (
+        f"transcript={transcript_snippet!r}: expected {expected_token!r} injected into "
+        f"time_hint. Got: {result.time_hint!r}"
+    )
+
+
+# --- v0.12.0 Test 5: PM variant — transcript has p.m., LLM drops it
+
+def test_v0120_pm_variant_injected():
+    """Transcript 'at 3 o\\'clock p.m.' with LLM emitting bare '3 o\\'clock'
+    → post-processor appends 'p.m.' qualifier.
+    """
+    result = _call_parse(
+        "Put up the barrier at 3 o'clock p.m.",
+        {
+            "verb": "handle",
+            "subject": "put up the barrier",
+            "day_hint": None,
+            "time_hint": "3 o'clock",   # LLM dropped qualifier
+            "criticality": "normal",
+            "confidence": 0.85,
+            "ambiguous_fields": ["time_hint"],
+        },
+    )
+    th = (result.time_hint or "").lower().replace(" ", "").replace(".", "")
+    assert "pm" in th, (
+        f"Expected 'p.m.' (or pm) injected into time_hint. Got: {result.time_hint!r}"
+    )
+
+
+# --- v0.12.0 Test 6: Prompt contains o'clock a.m. few-shot example
+
+def test_v0120_system_prompt_has_oclock_am_example():
+    """_SYSTEM_PROMPT must contain a few-shot example with 'o\\'clock' to teach
+    verbatim copy of the full time expression including the qualifier.
+    """
+    assert "o'clock" in _SYSTEM_PROMPT, (
+        "_SYSTEM_PROMPT must include an example with 'o\\'clock' to teach "
+        "verbatim copy of the full time expression."
+    )

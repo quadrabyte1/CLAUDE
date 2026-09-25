@@ -437,3 +437,108 @@ def test_v180_defensive_resolve_output_not_tainted_by_legacy_ambiguous():
         f"Bare '3' with verb=schedule must resolve to 15:00 (3 PM). "
         f"Got hour={r.resolved_at.hour}"
     )
+
+
+# ===========================================================================
+# TDD REGRESSION SUITE — v2.3.0 (must FAIL before fix, pass after fix)
+#
+# Root cause: the word "o'clock" between the digit and the AM/PM qualifier
+# trips the resolver's _TIME_REGEX.  "9 o'clock a.m." does not match because
+# the regex expects the optional AM/PM to immediately follow the optional
+# minutes, with only whitespace in between.
+#
+# Fix: strip "o'clock" (and variants: "oclock", "o clock") from time_hint
+# before running _TIME_REGEX, so "9 o'clock a.m." → "9 a.m." → resolves to 09:00.
+#
+# The fix is additive: hour, minutes, and AM/PM qualifier are all preserved.
+# ===========================================================================
+
+# Reference time for v2.3 tests — matches the live incident (2026-09-25 07:49)
+NOW_V23 = datetime(2026, 9, 25, 7, 49, tzinfo=TZ)
+
+
+# --- Test 7: "9 o'clock a.m." → 09:00, unambiguous
+
+def test_v230_oclock_am_resolves_09_00():
+    """resolve(day_hint='today', time_hint="9 o'clock a.m.", ...)
+    must return 09:00 with ambiguous=[].
+
+    This is the live-incident path after Sprite's belt-and-suspenders fix
+    preserves the qualifier. The word 'o\\'clock' must not block resolution.
+    """
+    r = resolve("today", "9 o'clock a.m.", NOW_V23, TZ)
+    assert r.ambiguous == [], (
+        f"'9 o\\'clock a.m.' must resolve unambiguously. Got ambiguous={r.ambiguous!r}"
+    )
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 9, (
+        f"Expected hour=9 (AM), got hour={r.resolved_at.hour}"
+    )
+    assert r.resolved_at.minute == 0
+
+
+# --- Test 8: "9 oclock am" (no punctuation) also works
+
+def test_v230_oclock_no_punct_resolves_09_00():
+    """resolve(time_hint='9 oclock am', ...) — no apostrophe, no periods.
+    Must also strip 'oclock' and return 09:00 unambiguous.
+    """
+    r = resolve("today", "9 oclock am", NOW_V23, TZ)
+    assert r.ambiguous == [], (
+        f"'9 oclock am' must resolve unambiguously. Got ambiguous={r.ambiguous!r}"
+    )
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 9
+
+
+# --- Test 9: "3 o'clock p.m." → 15:00, unambiguous
+
+def test_v230_oclock_pm_resolves_15_00():
+    """resolve(time_hint="3 o'clock p.m.", ...) must return 15:00 unambiguous."""
+    r = resolve("today", "3 o'clock p.m.", NOW_V23, TZ)
+    assert r.ambiguous == [], (
+        f"'3 o\\'clock p.m.' must resolve unambiguously. Got ambiguous={r.ambiguous!r}"
+    )
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 15, (
+        f"Expected hour=15 (3 PM), got hour={r.resolved_at.hour}"
+    )
+    assert r.resolved_at.minute == 0
+
+
+# --- Test 10: "9 o'clock" (no AM/PM) remains ambiguous
+
+def test_v230_oclock_no_ampm_still_ambiguous():
+    """resolve(time_hint="9 o'clock", ...) — no AM/PM qualifier.
+    Must still return ambiguous=['time']. The fix strips 'o\\'clock' to reveal
+    bare '9', which is genuinely ambiguous without a qualifier.
+    """
+    r = resolve("today", "9 o'clock", NOW_V23, TZ)
+    assert "time" in r.ambiguous, (
+        f"'9 o\\'clock' (no AM/PM) must remain ambiguous. Got ambiguous={r.ambiguous!r}"
+    )
+    assert r.resolved_at is None
+
+
+# --- Regression guard: existing behavior untouched
+
+def test_v230_regression_plain_9am_still_works():
+    """Plain '9am' (no o\\'clock) must continue to resolve to 09:00."""
+    r = resolve("today", "9am", NOW_V23, TZ)
+    assert r.ambiguous == []
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 9
+
+
+def test_v230_regression_bare_9_still_ambiguous():
+    """Bare '9' (no o\\'clock, no AM/PM) remains ambiguous."""
+    r = resolve("today", "9", NOW_V23, TZ)
+    assert "time" in r.ambiguous
+
+
+def test_v230_regression_17_35_unambiguous():
+    """24-hour '17:35' remains unambiguous after the normalization."""
+    r = resolve("today", "17:35", NOW_V23, TZ)
+    assert r.ambiguous == []
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 17

@@ -6,13 +6,16 @@ Landing page: config editor + Run Now + recent runs + all matches.
 Port: 5053
 """
 
+import glob
+import io
 import json
 import os
+import shutil
 import sqlite3
 import sys
 import threading
 import time
-from datetime import date
+from datetime import datetime, date, timezone
 
 from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, flash, get_flashed_messages
 
@@ -30,7 +33,15 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.22"
+APP_VERSION = "V3.23"
+# V3.23 — Config export/import + auto-snapshot on every config save + startup
+# integrity check. Three layers of protection against config data-loss:
+#   Layer 1: auto-snapshot of scanner.db → db/backups/ on every /config POST
+#            (rolling window of 20 snapshots)
+#   Layer 2: GET /config/export → JSON download; POST /config/import → restore
+#   Layer 3: startup integrity check; missing essential keys triggers a UI banner
+#
+# V3.22 — (previous version)
 # V3.21 — Matches table now flags each row that is NEW since the
 # immediately-previous scan. Snapshot of the outgoing tconst set is
 # taken in /run right before DELETE FROM matches, into the new
@@ -113,6 +124,84 @@ def _reconcile_orphaned_runs() -> None:
 
 
 _reconcile_orphaned_runs()
+
+
+# ── Layer 1: Auto-snapshot helpers ────────────────────────────────────────
+
+_SNAPSHOT_MAX = 20   # rolling window — oldest deleted when 21st is added
+
+
+def _backup_dir() -> str:
+    """Return the path to the snapshots directory (next to scanner.db)."""
+    return os.path.join(os.path.dirname(DB_PATH), "backups")
+
+
+def _snapshot_db() -> None:
+    """Copy the live scanner.db into db/backups/scanner_YYYYMMDD_HHMMSS.db.
+
+    Called inside _save_config_from_form() AFTER a successful commit so we
+    never write a snapshot of a partial/rolled-back state.
+
+    Rotation: if the new file would make the count exceed _SNAPSHOT_MAX, the
+    oldest file (by filename sort — filenames are timestamp-based) is deleted.
+
+    Filename uniqueness: uses second-precision timestamps. If a file with
+    that name already exists (can happen when two saves land in the same
+    second — e.g. tests, or the restore route taking a safety snapshot
+    within the same second as a prior save), a _1, _2, ... suffix is
+    appended so we never overwrite an existing snapshot.
+    """
+    bdir = _backup_dir()
+    os.makedirs(bdir, exist_ok=True)
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    base_dest = os.path.join(bdir, f"scanner_{ts}.db")
+    dest = base_dest
+    counter = 0
+    while os.path.exists(dest):
+        counter += 1
+        dest = os.path.join(bdir, f"scanner_{ts}_{counter}.db")
+
+    shutil.copy2(DB_PATH, dest)
+
+    # Rolling window: keep only the most recent _SNAPSHOT_MAX files.
+    # Pattern covers both scanner_YYYYMMDD_HHMMSS.db and the _N suffixed variants.
+    all_snaps = sorted(glob.glob(os.path.join(bdir, "scanner_*.db")))
+    while len(all_snaps) > _SNAPSHOT_MAX:
+        os.remove(all_snaps.pop(0))  # pop from the front (oldest)
+
+
+# ── Layer 3: Startup integrity check ──────────────────────────────────────
+
+_ESSENTIAL_CONFIG_KEYS = {"tags", "exclude_tags", "min_rating", "omdb_api_key"}
+
+# Module-level flag set by _check_config_integrity() at startup (and after
+# a restore). The index route reads it to inject the banner.
+_config_integrity_ok: bool = True
+
+
+def _check_config_integrity() -> bool:
+    """Return True if all essential config keys are present in the DB.
+
+    Also updates the module-level ``_config_integrity_ok`` flag so the index
+    route can render the warning banner without re-querying on every request.
+    Only called at startup and after a successful restore.
+    """
+    global _config_integrity_ok
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        rows = {r[0] for r in conn.execute(
+            "SELECT key FROM config WHERE key IN (?,?,?,?)",
+            tuple(_ESSENTIAL_CONFIG_KEYS),
+        ).fetchall()}
+        conn.close()
+        _config_integrity_ok = _ESSENTIAL_CONFIG_KEYS.issubset(rows)
+    except Exception:
+        _config_integrity_ok = False
+    return _config_integrity_ok
+
+
+_check_config_integrity()
 
 
 # ── Concurrency guard ──────────────────────────────────────────────────────
@@ -239,6 +328,16 @@ def index():
     try: exclude_countries_str = ", ".join(json.loads(cfg.get("exclude_countries", "[]")))
     except json.JSONDecodeError: exclude_countries_str = ""
 
+    # Layer 3: run integrity check fresh on every index load (single SQLite
+    # read — fast enough for a local app). The module-level startup check is
+    # a belt; this is the suspender.
+    _check_config_integrity()
+
+    # Check whether the most-recent snapshot could be used to restore.
+    bdir = _backup_dir()
+    snap_files = sorted(glob.glob(os.path.join(bdir, "scanner_*.db"))) if os.path.isdir(bdir) else []
+    has_snapshot_for_restore = bool(snap_files)
+
     return render_template(
         "index.html",
         config=cfg,
@@ -254,6 +353,8 @@ def index():
         include_lc=include_lc,
         exclude_lc=exclude_lc,
         exclude_countries=exclude_countries_str,
+        config_integrity_warning=not _config_integrity_ok,
+        has_snapshot_for_restore=has_snapshot_for_restore,
     )
 
 
@@ -342,6 +443,15 @@ def _save_config_from_form():
         )
     db.commit()
     db.close()
+
+    # Layer 1: take a snapshot AFTER the commit so we only ever snapshot
+    # successfully-written state. If the snapshot write itself fails (e.g.
+    # disk full), we log but do NOT re-raise — the config save was already
+    # committed and the user's data is safe.
+    try:
+        _snapshot_db()
+    except Exception as e:
+        print(f"[MovieScanner] snapshot warning: {e}")
 
 
 def _spawn_scan_worker() -> None:
@@ -604,6 +714,164 @@ def api_metadata(tconst: str):
     client = OMDbClient(api_key=row["value"], db_path=DB_PATH)
     data = client.fetch(tconst)
     return jsonify(data)
+
+
+# ── Layer 2: Config export / import ───────────────────────────────────────
+
+_EXPORT_VERSION = "v1"
+_REQUIRED_IMPORT_KEYS = {"version", "exported_at", "config", "dismissed_tconsts"}
+
+
+@app.route("/config/export")
+def config_export():
+    """GET /config/export → download a JSON file with all config + dismissals.
+
+    JSON shape:
+        {
+            "version": "v1",
+            "exported_at": "<ISO timestamp>",
+            "config": { "<key>": "<value>", ... },
+            "dismissed_tconsts": ["tt...", ...]
+        }
+    """
+    db = _conn()
+    cfg = {r["key"]: r["value"] for r in db.execute(
+        "SELECT key, value FROM config"
+    ).fetchall()}
+    dismissed = [r["tconst"] for r in db.execute(
+        "SELECT tconst FROM dismissed_tconsts ORDER BY tconst"
+    ).fetchall()]
+    db.close()
+
+    payload = {
+        "version": _EXPORT_VERSION,
+        "exported_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "config": cfg,
+        "dismissed_tconsts": dismissed,
+    }
+
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"moviescanner_config_{ts}.json"
+
+    resp = make_response(json.dumps(payload, indent=2))
+    resp.headers["Content-Type"] = "application/json"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@app.route("/config/import_form")
+def config_import_form():
+    """GET /config/import_form → render a simple file-upload form."""
+    return render_template("config_import.html")
+
+
+@app.route("/config/import", methods=["POST"])
+def config_import():
+    """POST /config/import — accept a JSON file upload, validate, then replace
+    config + dismissed_tconsts (after taking a pre-import snapshot).
+
+    Validation rules:
+        * File must be present.
+        * File must be valid JSON.
+        * Top-level keys: version, exported_at, config, dismissed_tconsts.
+        * version must be 'v1' (the only known version for now).
+
+    On success: redirects to index with a flash message.
+    On error: HTTP 400 with a JSON error body.
+    """
+    if "file" not in request.files or request.files["file"].filename == "":
+        return (json.dumps({"error": "No file provided"}), 400,
+                {"Content-Type": "application/json"})
+
+    raw = request.files["file"].read()
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, ValueError) as exc:
+        return (json.dumps({"error": f"Malformed JSON: {exc}"}), 400,
+                {"Content-Type": "application/json"})
+
+    missing = _REQUIRED_IMPORT_KEYS - set(data.keys())
+    if missing:
+        return (json.dumps({"error": f"Missing required keys: {sorted(missing)}"}),
+                400, {"Content-Type": "application/json"})
+
+    if data["version"] != _EXPORT_VERSION:
+        return (json.dumps({"error": f"Unsupported version: {data['version']!r}. "
+                            f"Expected {_EXPORT_VERSION!r}."}),
+                400, {"Content-Type": "application/json"})
+
+    # Take a snapshot BEFORE overwriting anything (rollback safety).
+    try:
+        _snapshot_db()
+    except Exception as e:
+        print(f"[MovieScanner] pre-import snapshot warning: {e}")
+
+    cfg_to_import = data["config"]
+    dismissed_to_import = data["dismissed_tconsts"]
+
+    db = _conn()
+    # Replace config: delete all rows then re-insert from the payload.
+    db.execute("DELETE FROM config")
+    for k, v in cfg_to_import.items():
+        db.execute(
+            "INSERT INTO config (key, value) VALUES (?, ?)",
+            (str(k), str(v)),
+        )
+    # Replace dismissed_tconsts.
+    db.execute("DELETE FROM dismissed_tconsts")
+    for tconst in dismissed_to_import:
+        db.execute(
+            "INSERT OR IGNORE INTO dismissed_tconsts (tconst) VALUES (?)",
+            (str(tconst),),
+        )
+    db.commit()
+    db.close()
+
+    # Re-run integrity check now that config has been replaced.
+    _check_config_integrity()
+
+    flash(f"Config imported: {len(cfg_to_import)} settings, "
+          f"{len(dismissed_to_import)} dismissals restored.")
+    return redirect(url_for("index"))
+
+
+# ── Layer 3: Restore from most-recent snapshot ─────────────────────────────
+
+@app.route("/config/restore_latest", methods=["POST"])
+def config_restore_latest():
+    """POST /config/restore_latest — overwrite the live scanner.db with the
+    most-recent snapshot from db/backups/.
+
+    Takes a safety snapshot of the current (broken) state first so the user
+    can see what was there before the restore.
+
+    Returns:
+        302 → index on success (with flash message)
+        400 JSON if no snapshots exist
+    """
+    bdir = _backup_dir()
+    snaps = sorted(glob.glob(os.path.join(bdir, "scanner_*.db")))
+    if not snaps:
+        return (json.dumps({"error": "No snapshots available to restore from."}),
+                400, {"Content-Type": "application/json"})
+
+    latest = snaps[-1]
+
+    # Safety snapshot of the current broken state.
+    try:
+        _snapshot_db()
+    except Exception as e:
+        print(f"[MovieScanner] pre-restore snapshot warning: {e}")
+
+    # Overwrite the live DB with the latest snapshot.
+    shutil.copy2(latest, DB_PATH)
+
+    # Re-run integrity check.
+    _check_config_integrity()
+
+    snap_name = os.path.basename(latest)
+    flash(f"Config restored from snapshot: {snap_name}")
+    return redirect(url_for("index"))
 
 
 if __name__ == "__main__":

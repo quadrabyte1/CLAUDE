@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-24-pick-up-natural-gas",
+  "schedule": [
+    {
+      "event_id": "2026-09-24-pick-up-natural-gas",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-24T07:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: pick up natural gas at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-24-pick-up-natural-gas",
+      "kind": "pre_5",
+      "fire_at": "2026-09-24T07:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: pick up natural gas at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-24-pick-up-natural-gas",
+      "kind": "strike_0",
+      "fire_at": "2026-09-24T08:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "pick up natural gas is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-24-pick-up-natural-gas",
+      "kind": "strike_5",
+      "fire_at": "2026-09-24T08:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? pick up natural gas started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-24-pick-up-natural-gas",
+      "kind": "strike_10",
+      "fire_at": "2026-09-24T08:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: pick up natural gas \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-24-pick-up-natural-gas",
+      "kind": "strike_15",
+      "fire_at": "2026-09-24T08:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. pick up natural gas. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

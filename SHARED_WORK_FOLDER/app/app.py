@@ -6,6 +6,8 @@ Serves a Notion-like UI over the workspace SQLite database.
 import os
 import re
 import sqlite3
+import hashlib
+import time
 from datetime import datetime, date
 from pathlib import Path
 from dotenv import load_dotenv
@@ -21,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.56"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.60"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks with id strictly greater than the
@@ -814,6 +816,66 @@ _EGM_BASE = os.path.normpath(
 )
 _TEAM_INBOX = os.path.join(os.path.dirname(__file__), "..", "team_inbox")
 
+# ── GPS-backend helpers ────────────────────────────────────────────────────
+# Simple in-process cache for the GPS preview endpoint.
+# Key: SHA-256 of "gps_path|bbox_json|approach_m|grid_size"
+# Value: (png_bytes, expiry_timestamp)
+_GPS_PREVIEW_CACHE: dict[str, tuple[bytes, float]] = {}
+_GPS_PREVIEW_CACHE_TTL_S = 30  # seconds
+
+
+def _gps_preview_cache_key(gps_file: str, bbox_json: str, approach_m: float, grid_size: int) -> str:
+    raw = f"{gps_file}|{bbox_json}|{approach_m}|{grid_size}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def _gps_preview_cache_get(key: str) -> bytes | None:
+    """Return cached PNG bytes if the entry is still fresh, else None."""
+    entry = _GPS_PREVIEW_CACHE.get(key)
+    if entry is None:
+        return None
+    png_bytes, expiry = entry
+    if time.time() > expiry:
+        _GPS_PREVIEW_CACHE.pop(key, None)
+        return None
+    return png_bytes
+
+
+def _gps_preview_cache_set(key: str, png_bytes: bytes) -> None:
+    _GPS_PREVIEW_CACHE[key] = (png_bytes, time.time() + _GPS_PREVIEW_CACHE_TTL_S)
+
+
+def _validate_gps_prereqs(egm_data: dict) -> tuple[bool, str]:
+    """Check GPS prereqs when gpsBackend.enabled is True.
+
+    Returns (ok: bool, error_msg: str).  ok=True means pre-check passed.
+    """
+    gps = egm_data.get("gpsBackend") or {}
+    if not gps.get("enabled"):
+        return True, ""  # GPS not active — nothing to check
+
+    gps_file = gps.get("gpsFile", "").strip()
+    if not gps_file:
+        return False, (
+            "gpsBackend.enabled=true but gpsFile is not set. "
+            "Select a .gps file in the GPS backend panel."
+        )
+    if not os.path.isfile(gps_file):
+        return False, (
+            f"GPS file not found: {gps_file}. "
+            "Upload or select a .gps file in the GPS backend panel."
+        )
+
+    georef = egm_data.get("courseGeoRef")
+    if not georef:
+        return False, (
+            "courseGeoRef is not set for this course. "
+            "Open the Geo-ref setup dialog (⚙ gear icon in the GPS backend panel) "
+            "and enter the SW and NE corner lat/lngs of the course image."
+        )
+
+    return True, ""
+
 
 def _find_image_path(image_name: str, preferred_course: str = "") -> str | None:
     """Resolve an image filename to an absolute path.
@@ -1593,6 +1655,20 @@ def generate_models():
 
     print(f"[generate_models] EGM path:        {egm_path}")
 
+    # ── GPS backend pre-check ─────────────────────────────────────────────────
+    # Read the EGM to inspect gpsBackend before committing a serial number.
+    # Fail fast with a 400 + helpful message if GPS prereqs are not satisfied.
+    import json as _json
+    try:
+        with open(egm_path) as _egm_fh:
+            _egm_for_gps_check = _json.load(_egm_fh)
+    except (OSError, ValueError) as _e:
+        return jsonify({"status": "error", "msg": f"Cannot read EGM: {_e}"}), 500
+
+    _gps_ok, _gps_err = _validate_gps_prereqs(_egm_for_gps_check)
+    if not _gps_ok:
+        return jsonify({"status": "error", "msg": _gps_err}), 400
+
     # ── Commit global serial at click time ───────────────────────────────────
     # The serial is burned here, BEFORE calling into the pipeline, so that:
     #  (a) The filename reflects this exact Generate press.
@@ -1671,6 +1747,148 @@ def generate_models():
 
     return jsonify({"status": "ok", "file": result,
                     "slicer_opened": slicer_opened, "slicer_error": slicer_error})
+
+
+# ── GPS Heightmap Preview ─────────────────────────────────────────────────────
+
+@app.route("/api/gps_heightmap_preview")
+def gps_heightmap_preview():
+    """Return a server-side PNG heightmap preview for the GPS backend panel.
+
+    Query params
+    ------------
+    gps_file   : str     absolute path to the .gps file
+    bbox       : str     JSON object {"lat_min", "lng_min", "lat_max", "lng_max"}
+    approach_m : float   (optional, default 8.0)
+    grid_size  : int     (optional, default 100 — smaller for speed in preview)
+
+    Returns image/png.  Results are cached in-process for 30 s.
+    """
+    import json as _json
+    import io
+
+    gps_file = request.args.get("gps_file", "").strip()
+    bbox_raw = request.args.get("bbox", "").strip()
+
+    if not gps_file:
+        return jsonify({"status": "error", "msg": "gps_file param required"}), 400
+    if not bbox_raw:
+        return jsonify({"status": "error", "msg": "bbox param required"}), 400
+
+    if not os.path.isfile(gps_file):
+        return jsonify({"status": "error", "msg": f"GPS file not found: {gps_file}"}), 404
+
+    try:
+        bbox_dict = _json.loads(bbox_raw)
+        bbox = (
+            float(bbox_dict["lat_min"]),
+            float(bbox_dict["lng_min"]),
+            float(bbox_dict["lat_max"]),
+            float(bbox_dict["lng_max"]),
+        )
+    except (KeyError, TypeError, ValueError) as e:
+        return jsonify({"status": "error", "msg": f"Invalid bbox JSON: {e}"}), 400
+
+    try:
+        approach_m = float(request.args.get("approach_m", 8.0))
+    except ValueError:
+        approach_m = 8.0
+    try:
+        grid_size = int(request.args.get("grid_size", 100))
+    except ValueError:
+        grid_size = 100
+    grid_size = max(50, min(300, grid_size))
+
+    # ── Cache check ────────────────────────────────────────────────────────────
+    cache_key = _gps_preview_cache_key(gps_file, bbox_raw, approach_m, grid_size)
+    cached = _gps_preview_cache_get(cache_key)
+    if cached is not None:
+        return cached, 200, {"Content-Type": "image/png", "X-GPS-Preview-Cache": "hit"}
+
+    # ── Build heightmap ────────────────────────────────────────────────────────
+    try:
+        from gps_heightmap import build_heightmap_from_gps
+        import numpy as np
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as mcolors
+    except ImportError as e:
+        return jsonify({"status": "error", "msg": f"Missing dependency: {e}"}), 500
+
+    try:
+        result = build_heightmap_from_gps(
+            gps_path=Path(gps_file),
+            bbox=bbox,
+            green_polygon_latlng=[],   # no green mask for preview — show full bbox
+            approach_m=approach_m,
+            grid_size=(grid_size, grid_size),
+            vert_exag=1.0,             # no exaggeration in preview
+        )
+    except Exception as exc:
+        return jsonify({"status": "error", "msg": f"GPS heightmap error: {exc}"}), 500
+
+    # ── Render to PNG ──────────────────────────────────────────────────────────
+    try:
+        fig, ax = plt.subplots(figsize=(3, 3), dpi=100)
+        h = result.heights_mm.copy()
+        # Replace NaN with min for display (NaN appears outside mask)
+        h_min = float(np.nanmin(h)) if np.any(~np.isnan(h)) else 0.0
+        h_display = np.where(np.isnan(h), h_min, h)
+        im = ax.imshow(
+            h_display,
+            origin="lower",
+            cmap="terrain",
+            aspect="equal",
+        )
+        ax.set_title(f"{result.raw_points_used} GPS pts", fontsize=8)
+        ax.axis("off")
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="mm")
+        fig.tight_layout(pad=0.5)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=100)
+        plt.close(fig)
+        png_bytes = buf.getvalue()
+    except Exception as exc:
+        return jsonify({"status": "error", "msg": f"Render error: {exc}"}), 500
+
+    _gps_preview_cache_set(cache_key, png_bytes)
+    return png_bytes, 200, {"Content-Type": "image/png", "X-GPS-Preview-Cache": "miss"}
+
+
+@app.route("/api/gps_files")
+def list_gps_files():
+    """Return a list of .gps files found in the course folder for the given course.
+
+    Query params
+    ------------
+    course : str   course name (looks in GolfCourses/<course>/)
+
+    Returns {"status": "ok", "files": [{"name": ..., "path": ...}, ...]}
+    """
+    course = request.args.get("course", "").strip()
+    files = []
+    if course and os.path.isdir(_EGM_BASE):
+        course_dir = os.path.join(_EGM_BASE, course)
+        if os.path.isdir(course_dir):
+            for fname in sorted(os.listdir(course_dir), key=str.casefold):
+                if fname.lower().endswith(".gps"):
+                    files.append({
+                        "name": fname,
+                        "path": os.path.abspath(os.path.join(course_dir, fname)),
+                    })
+    # Also scan repo root ItWentIn/ for .gps files (legacy / Stracka exports)
+    it_went_in = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "ItWentIn"))
+    if os.path.isdir(it_went_in):
+        for fname in sorted(os.listdir(it_went_in), key=str.casefold):
+            if fname.lower().endswith(".gps") or fname.lower().endswith(".txt"):
+                # Only include if it looks like GPS data (contains "stracka" or "gps")
+                lower = fname.lower()
+                if "gps" in lower or "stracka" in lower:
+                    abs_path = os.path.abspath(os.path.join(it_went_in, fname))
+                    if not any(f["path"] == abs_path for f in files):
+                        files.append({"name": fname, "path": abs_path})
+    return jsonify({"status": "ok", "files": files})
 
 
 # ── Arrow Diagnostic ─────────────────────────────────────────────────────────
@@ -2278,6 +2496,29 @@ def _match_courses_from_line(course_line: str) -> list[str]:
     return matches
 
 
+def _smtp_config():
+    """Read SMTP settings from environment variables.
+
+    Returns a 7-tuple:
+        (smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_to, missing_vars)
+
+    ``missing_vars`` is a list of env var names whose values are empty/absent
+    from the three *required* vars (SMTP_HOST, SMTP_USER, SMTP_PASS).
+    If ``missing_vars`` is non-empty the caller must treat SMTP as unconfigured.
+    """
+    smtp_host = os.environ.get("SMTP_HOST", "").strip()
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
+    smtp_pass = os.environ.get("SMTP_PASS", "").strip()
+    missing_vars = [
+        name for name, val in [("SMTP_HOST", smtp_host), ("SMTP_USER", smtp_user), ("SMTP_PASS", smtp_pass)]
+        if not val
+    ]
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_from = os.environ.get("SMTP_FROM", smtp_user).strip() or smtp_user
+    smtp_to   = os.environ.get("SMTP_TO", "quadrabyte@pm.me").strip()
+    return smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_to, missing_vars
+
+
 @app.route("/api/generate_plate", methods=["POST"])
 def api_generate_plate():
     import smtplib
@@ -2293,22 +2534,16 @@ def api_generate_plate():
         return jsonify({"status": "error", "msg": "Provide at least one line of text."}), 400
 
     # ── SMTP config from environment ──────────────────────────────────────────
-    smtp_host = os.environ.get("SMTP_HOST", "").strip()
-    smtp_user = os.environ.get("SMTP_USER", "").strip()
-    smtp_pass = os.environ.get("SMTP_PASS", "").strip()
-    if not (smtp_host and smtp_user and smtp_pass):
-        missing = [v for v, k in [("SMTP_HOST", smtp_host), ("SMTP_USER", smtp_user), ("SMTP_PASS", smtp_pass)] if not k]
-        return jsonify({
-            "status": "error",
-            "msg": (
-                f"SMTP not configured. Set {', '.join(missing)} env vars. "
-                "See app/.env.example."
-            ),
-        }), 500
-
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    smtp_from = os.environ.get("SMTP_FROM", smtp_user).strip() or smtp_user
-    smtp_to   = os.environ.get("SMTP_TO", "quadrabyte@pm.me").strip()
+    smtp_host, smtp_port, smtp_user, smtp_pass, smtp_from, smtp_to, missing_vars = _smtp_config()
+    warnings: list[str] = []
+    if missing_vars:
+        email_mode = False
+        missing_str = ", ".join(missing_vars)
+        warning_msg = f"SMTP not configured — email skipped. Missing: {missing_str}"
+        app.logger.warning(warning_msg)
+        warnings.append(warning_msg)
+    else:
+        email_mode = True
 
     # ── Generate 3MF to a temp file ──────────────────────────────────────────
     slug = _slug_from_lines(line1, line2)
@@ -2331,62 +2566,69 @@ def api_generate_plate():
             except OSError:
                 pass
 
-    # ── Optionally write a stable copy for the default slicer ────────────────
+    # ── Write local file when: SMTP is off, OR open_in_slicer requested ──────
     stable_path = None
-    if open_in_slicer:
+    if (not email_mode) or open_in_slicer:
         stable_path = os.path.expanduser(f"~/Downloads/{attachment_name}")
         with open(stable_path, "wb") as fh:
             fh.write(attachment_bytes)
 
-    # ── Build email ───────────────────────────────────────────────────────────
-    subject_line = line1 or line2 or line3
-    msg = EmailMessage()
-    msg["Subject"] = f"Plaque: {subject_line}"
-    msg["From"]    = smtp_from
-    msg["To"]      = smtp_to
-    body_lines = [f"Line 1: {line1}", f"Line 2: {line2}", f"Line 3: {line3}"]
-    msg.set_content("\n".join(body_lines))
-    msg.add_attachment(
-        attachment_bytes,
-        maintype="application",
-        subtype="octet-stream",
-        filename=attachment_name,
-    )
-
-    # ── Send via STARTTLS ─────────────────────────────────────────────────────
+    # ── Email path (only when fully configured) ───────────────────────────────
+    email_sent = False
     smtp_error_resp = None
-    try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(smtp_user, smtp_pass)
-            server.send_message(msg)
-    except smtplib.SMTPAuthenticationError as exc:
-        smtp_error_resp = jsonify({
-            "status": "error",
-            "msg": f"SMTP authentication failed (check SMTP_USER / SMTP_PASS): {exc.smtp_error.decode(errors='replace')}",
-        }), 500
-    except ConnectionRefusedError:
-        smtp_error_resp = jsonify({
-            "status": "error",
-            "msg": f"Connection refused to {smtp_host}:{smtp_port}. Check SMTP_HOST / SMTP_PORT.",
-        }), 500
-    except smtplib.SMTPConnectError as exc:
-        smtp_error_resp = jsonify({
-            "status": "error",
-            "msg": f"Could not connect to {smtp_host}:{smtp_port}: {exc}",
-        }), 500
-    except smtplib.SMTPException as exc:
-        smtp_error_resp = jsonify({
-            "status": "error",
-            "msg": f"SMTP error: {exc}",
-        }), 500
-    except OSError as exc:
-        smtp_error_resp = jsonify({
-            "status": "error",
-            "msg": f"Network error connecting to {smtp_host}:{smtp_port}: {exc}",
-        }), 500
+    if email_mode:
+        # Build email
+        subject_line = line1 or line2 or line3
+        msg = EmailMessage()
+        msg["Subject"] = f"Plaque: {subject_line}"
+        msg["From"]    = smtp_from
+        msg["To"]      = smtp_to
+        body_lines = [f"Line 1: {line1}", f"Line 2: {line2}", f"Line 3: {line3}"]
+        msg.set_content("\n".join(body_lines))
+        msg.add_attachment(
+            attachment_bytes,
+            maintype="application",
+            subtype="octet-stream",
+            filename=attachment_name,
+        )
+
+        # ── Send via STARTTLS ─────────────────────────────────────────────────
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+            email_sent = True
+        except smtplib.SMTPAuthenticationError as exc:
+            smtp_error_resp = jsonify({
+                "status": "error",
+                "msg": f"SMTP authentication failed (check SMTP_USER / SMTP_PASS): {exc.smtp_error.decode(errors='replace')}",
+            }), 500
+        except ConnectionRefusedError:
+            smtp_error_resp = jsonify({
+                "status": "error",
+                "msg": f"Connection refused to {smtp_host}:{smtp_port}. Check SMTP_HOST / SMTP_PORT.",
+            }), 500
+        except smtplib.SMTPConnectError as exc:
+            smtp_error_resp = jsonify({
+                "status": "error",
+                "msg": f"Could not connect to {smtp_host}:{smtp_port}: {exc}",
+            }), 500
+        except smtplib.SMTPException as exc:
+            smtp_error_resp = jsonify({
+                "status": "error",
+                "msg": f"SMTP error: {exc}",
+            }), 500
+        except OSError as exc:
+            smtp_error_resp = jsonify({
+                "status": "error",
+                "msg": f"Network error connecting to {smtp_host}:{smtp_port}: {exc}",
+            }), 500
+
+        if smtp_error_resp is not None:
+            return smtp_error_resp
 
     # ── Open in default slicer (macOS file-association) ──────────────────────
     # Uses `open <file>` which honours the OS-registered .3mf handler —
@@ -2421,14 +2663,24 @@ def api_generate_plate():
             slicer_opened = False
             slicer_error  = str(exc)
 
-    if smtp_error_resp is not None:
-        return smtp_error_resp
+    # ── Compose delivery field ────────────────────────────────────────────────
+    if email_sent and stable_path:
+        delivery = "email+local"
+    elif email_sent:
+        delivery = "email"
+    else:
+        delivery = "local"
 
     return jsonify({
-        "status": "ok",
-        "msg": f"Emailed to {smtp_to}",
-        "recipient":    smtp_to,
-        "stable_path":  stable_path,
+        "status":        "ok",
+        "delivery":      delivery,
+        "email_to":      smtp_to if email_sent else None,
+        "local_path":    stable_path,
+        "warnings":      warnings,
+        # Legacy fields kept for any existing clients
+        "msg":           f"Emailed to {smtp_to}" if email_sent else f"Saved to {stable_path}",
+        "recipient":     smtp_to if email_sent else None,
+        "stable_path":   stable_path,
         "slicer_opened": slicer_opened,
         "slicer_error":  slicer_error,
     })

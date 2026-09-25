@@ -2,8 +2,10 @@
 plate_text.py — Custom text plate generator for 3MF output.
 
 Generates a Bambu Studio-compatible 3MF file with three lines of engraved
-text on the tilted front face of the plate, using the Mike Kallbrier 3MF
-as a template to preserve all geometry and transform data.
+text on the tilted front face of the plate, using a base 3MF (default:
+ItWentIn/Frames/plate_template.3mf) as a template to preserve Bambu-specific
+metadata (printer profile, filament, plate settings) around the generated
+geometry.
 
 CLI usage:
     python app/plate_text.py "Line 1" "Line 2" "Line 3" --out owner_inbox/custom_plate.3mf
@@ -41,12 +43,27 @@ ET.register_namespace("p", _NS_PROD)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.dirname(_HERE)
-_DEFAULT_TEMPLATE = os.path.join(
-    _PROJECT_ROOT, "ItWentIn", "Frames", "Mike Kallbrier.3mf"
+
+# Candidate paths for the base template, resolved at request time (not import
+# time) so a template moved/copied without restarting the editor still works.
+_TEMPLATE_CANDIDATES = (
+    ("ItWentIn", "Frames", "plate_template.3mf"),
+    # Backwards-compat: prior template name
+    ("ItWentIn", "Frames", "Mike Kallbrier.3mf"),
+    ("team_inbox", "plate_template.3mf"),
+    ("team_inbox", "Mike Kallbrier.3mf"),
 )
-# Backwards-compat fallback: team_inbox copy
-if not os.path.exists(_DEFAULT_TEMPLATE):
-    _DEFAULT_TEMPLATE = os.path.join(_PROJECT_ROOT, "team_inbox", "Mike Kallbrier.3mf")
+
+
+def _resolve_default_template() -> str:
+    """Return the first existing candidate path; raise if none found."""
+    for parts in _TEMPLATE_CANDIDATES:
+        candidate = os.path.join(_PROJECT_ROOT, *parts)
+        if os.path.exists(candidate):
+            return candidate
+    # Fall back to the primary path so the FileNotFoundError message is
+    # informative even when nothing exists.
+    return os.path.join(_PROJECT_ROOT, *_TEMPLATE_CANDIDATES[0])
 
 
 # ── Font enumeration ──────────────────────────────────────────────────────────
@@ -762,7 +779,7 @@ def generate_plate_3mf(
     freshly generated text lines.  Returns the output path.
     """
     if template_path is None:
-        template_path = _DEFAULT_TEMPLATE
+        template_path = _resolve_default_template()
 
     template_path = os.path.abspath(template_path)
     output_path = os.path.abspath(output_path)
@@ -877,7 +894,7 @@ def _cli():
     parser.add_argument(
         "--template", "-t",
         default=None,
-        help="Path to template 3MF (default: team_inbox/Mike Kallbrier.3mf).",
+        help="Path to template 3MF (default: ItWentIn/Frames/plate_template.3mf).",
     )
     parser.add_argument(
         "--font",

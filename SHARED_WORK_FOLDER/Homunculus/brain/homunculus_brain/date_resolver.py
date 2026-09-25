@@ -174,11 +174,26 @@ _TIME_REGEX = re.compile(
     re.IGNORECASE | re.VERBOSE,
 )
 
+# v2.3.0 — strip "o'clock" (and variants) from time_hint before parsing.
+# "9 o'clock a.m." → "9 a.m.", "3 o'clock p.m." → "3 p.m.",
+# "9 o'clock" → "9" (which is then correctly flagged as ambiguous without AM/PM).
+# Variants: "o'clock", "oclock", "o clock" — all case-insensitive.
+# The word sits between the digit and the AM/PM qualifier and confuses
+# _TIME_REGEX which expects the format: digit [colon minute] [AM/PM].
+_OCLOCK_RE = re.compile(r"\bo'?clock\b", re.IGNORECASE)
 
 _SCHEDULE_PM_HOURS = frozenset({1, 2, 3, 4, 5})
 
 
 def _resolve_time(time_hint: Optional[str], morning_anchor_hour: int, verb: Optional[str] = None):
+    # v2.3.0 — strip "o'clock" variants before normalizing so that
+    # "9 o'clock a.m." → "9 a.m." and "3 o'clock p.m." → "3 p.m."
+    # The word sits between the digit and the AM/PM qualifier and confuses
+    # _TIME_REGEX.  Stripping it (case-insensitive) is safe because it carries
+    # no time information beyond marking the preceding digit as an hour.
+    if time_hint:
+        time_hint = _OCLOCK_RE.sub("", time_hint).strip()
+
     hint = _normalize(time_hint)
 
     if not hint:

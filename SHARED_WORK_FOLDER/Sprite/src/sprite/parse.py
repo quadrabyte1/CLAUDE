@@ -335,6 +335,14 @@ Output:
 Transcript: "Zero out the deck construction timer"
 Output:
 {"verb":"reset_timer","subject":"deck construction","project":"deck construction","day_hint":null,"time_hint":null,"when":null,"criticality":"normal","confidence":0.91,"ambiguous_fields":[]}
+
+Transcript: "You put the barrier up in the car at 9 o'clock a.m. today."
+Output:
+{"verb":"handle","subject":"put the barrier up in the car","day_hint":"today","time_hint":"9 o'clock a.m.","when":null,"criticality":"normal","confidence":0.89,"ambiguous_fields":[]}
+
+Transcript: "Put up the barrier at 3 o'clock p.m."
+Output:
+{"verb":"handle","subject":"put up the barrier","day_hint":null,"time_hint":"3 o'clock p.m.","when":null,"criticality":"normal","confidence":0.88,"ambiguous_fields":[]}
 """
 
 # ---------------------------------------------------------------------------
@@ -513,11 +521,43 @@ def parse_intent(
     ):
         ambiguous_fields = [f for f in ambiguous_fields if f != "time_hint"]
 
+    # Post-LLM AM/PM injection override (v0.12.0)
+    #
+    # The LLM sometimes drops the AM/PM qualifier from time expressions like
+    # "9 o'clock a.m.", emitting bare "9 o'clock" or "9" into time_hint.
+    # Herman's resolver then sees a bare hour for verb=handle → correctly
+    # flags it as ambiguous → asks "AM or PM?" — even though the transcript
+    # contained the answer.
+    #
+    # Code override (same discipline as the criticality preprocessor and the
+    # v0.8.1 bare-1-5 schedule override): after the LLM returns, check whether
+    # the ORIGINAL TRANSCRIPT contains an AM/PM qualifier.  If yes AND
+    # time_hint doesn't already carry one → append the qualifier from the
+    # transcript to time_hint so it survives to Herman's date_resolver.
+    #
+    # Recognized forms (case-insensitive):
+    #   "a.m.", "p.m.", "a m", "p m", "am", "pm" (after a digit or space)
+    # The pattern uses (?<=\d) OR (?<=\s) to handle "9am" (no space) and
+    # "9 AM" (with space). The (?=...) lookahead ensures we don't consume
+    # embedded "am" inside words (e.g. "name", "camp").
+    _AMPM_IN_TEXT_RE = re.compile(
+        r"(?:(?<=\d)|(?<=\s)|(?<=^))"
+        r"(a\.m\.|p\.m\.|a\s+m(?=\s|$)|p\s+m(?=\s|$)|am(?=\s|$|\.|,)|pm(?=\s|$|\.|,))",
+        re.IGNORECASE,
+    )
+    time_hint_for_return = data.get("time_hint")
+    if time_hint_for_return is not None:
+        transcript_match = _AMPM_IN_TEXT_RE.search(transcript)
+        hint_match = _AMPM_IN_TEXT_RE.search(time_hint_for_return)
+        if transcript_match and not hint_match:
+            # Append the verbatim qualifier from the transcript.
+            time_hint_for_return = time_hint_for_return + " " + transcript_match.group(0)
+
     return ParseResult(
         verb=verb,
         subject=data["subject"],
         day_hint=data.get("day_hint"),
-        time_hint=data.get("time_hint"),
+        time_hint=time_hint_for_return,
         criticality=criticality,
         confidence=float(data["confidence"]),
         ambiguous_fields=ambiguous_fields,

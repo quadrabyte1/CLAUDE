@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-25-put-the-barrier-up-in-the-car",
+  "schedule": [
+    {
+      "event_id": "2026-09-25-put-the-barrier-up-in-the-car",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-25T08:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: put the barrier up in the car at 9:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-put-the-barrier-up-in-the-car",
+      "kind": "pre_5",
+      "fire_at": "2026-09-25T08:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: put the barrier up in the car at 9:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-put-the-barrier-up-in-the-car",
+      "kind": "strike_0",
+      "fire_at": "2026-09-25T09:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "put the barrier up in the car is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-put-the-barrier-up-in-the-car",
+      "kind": "strike_5",
+      "fire_at": "2026-09-25T09:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? put the barrier up in the car started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-put-the-barrier-up-in-the-car",
+      "kind": "strike_10",
+      "fire_at": "2026-09-25T09:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: put the barrier up in the car \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-25-put-the-barrier-up-in-the-car",
+      "kind": "strike_15",
+      "fire_at": "2026-09-25T09:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. put the barrier up in the car. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

@@ -162,6 +162,205 @@
     </div>
   </div>
 
+  {# ── GPS Backend panel ─────────────────────────────────── #}
+  <div x-show="imgLoaded && hasGreenPolygon()" x-cloak
+       class="bg-white border border-notion-border rounded-lg px-5 py-4 space-y-4">
+
+    <div class="flex items-center justify-between">
+      <h3 class="text-sm font-semibold text-notion-text">GPS Backend</h3>
+      <div class="flex items-center gap-2">
+        <label class="inline-flex items-center gap-1.5 text-xs text-notion-muted cursor-pointer select-none"
+               title="When on, the Generate pipeline uses real GPS elevation data instead of image arrows. Easy to A/B test.">
+          <input type="checkbox" x-model="gpsEnabled" @change="onGpsParamChange()"
+                 class="h-3.5 w-3.5 rounded border-notion-border text-notion-accent focus:ring-2 focus:ring-notion-accent/30">
+          <span class="font-medium" :class="gpsEnabled ? 'text-teal-700' : 'text-notion-muted'">Use GPS backend</span>
+        </label>
+        <button @click="openGeoRefDialog()"
+                title="Set up course geo-reference: enter the SW and NE corner lat/lngs so pixel coordinates map to real-world lat/lng."
+                class="text-notion-muted hover:text-notion-text transition-default text-sm" style="line-height:1;">⚙</button>
+      </div>
+    </div>
+
+    {# ── GPS backend body — v4.60: hidden when checkbox is off ─ #}
+    <div id="gps-backend-body"
+         x-show="gpsEnabled"
+         x-transition:enter="transition-all ease-out duration-150"
+         x-transition:enter-start="opacity-0 -translate-y-1"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition-all ease-in duration-150"
+         x-transition:leave-start="opacity-100 translate-y-0"
+         x-transition:leave-end="opacity-0 -translate-y-1"
+         class="space-y-4">
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+      {# GPS file picker #}
+      <div class="flex flex-col gap-1 sm:col-span-2">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">GPS File</label>
+        <div class="flex gap-2 items-center">
+          <select x-model="gpsFile" @change="onGpsParamChange()"
+                  class="flex-1 text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+            <option value="">-- select GPS file --</option>
+            <template x-for="f in gpsFileList" :key="f.path">
+              <option :value="f.path" x-text="f.name"></option>
+            </template>
+          </select>
+          <button @click="refreshGpsFiles()"
+                  title="Refresh GPS file list"
+                  class="text-sm px-2 py-1.5 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-muted transition-default">↺</button>
+        </div>
+        <p x-show="gpsFile" class="text-xs text-notion-muted truncate" x-text="gpsFile"></p>
+      </div>
+
+      {# vertExag slider #}
+      <div class="flex flex-col gap-1"
+           title="Vertical exaggeration — multiplies GPS altitude differences. 1.0 = real scale; 3-10 typical for printing.">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Vert exag <span class="font-mono" x-text="gpsVertExag.toFixed(1)"></span></label>
+        <input type="range" x-model.number="gpsVertExag" @input="onGpsParamChange()"
+               min="1.0" max="10.0" step="0.1"
+               class="w-full h-1.5 rounded-full appearance-none bg-gray-200 accent-notion-accent">
+        <div class="flex justify-between text-xs text-notion-muted">
+          <span>1.0</span><span>10.0</span>
+        </div>
+      </div>
+
+      {# approachM #}
+      <div class="flex flex-col gap-1"
+           title="Metres outside the green boundary to include in the GPS heightmap mask.">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Approach (m)</label>
+        <input type="number" x-model.number="gpsApproachM" @change="onGpsParamChange()"
+               min="0" max="20" step="0.5"
+               class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
+      {# gridSize dropdown #}
+      <div class="flex flex-col gap-1"
+           title="Grid resolution for the GPS heightmap. Higher = more detail, slower generation.">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Grid size</label>
+        <select x-model.number="gpsGridSize" @change="onGpsParamChange()"
+                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+          <option value="100">100 × 100</option>
+          <option value="150">150 × 150</option>
+          <option value="200">200 × 200</option>
+          <option value="300">300 × 300</option>
+        </select>
+      </div>
+
+      {# Bbox display + Snap button #}
+      <div class="flex flex-col gap-1 sm:col-span-2">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Bounding box</label>
+        <div class="flex gap-2 items-start">
+          <div class="flex-1 text-xs font-mono bg-gray-50 border border-notion-border rounded px-2 py-1.5 text-notion-muted leading-relaxed min-h-[3rem]">
+            <template x-if="gpsBbox">
+              <span x-text="'SW (' + gpsBbox.lat_min.toFixed(5) + ', ' + gpsBbox.lng_min.toFixed(5) + ') · NE (' + gpsBbox.lat_max.toFixed(5) + ', ' + gpsBbox.lng_max.toFixed(5) + ')'"></span>
+            </template>
+            <template x-if="!gpsBbox">
+              <span class="text-notion-muted">Not set — click &quot;Snap to green&quot; or drag on map</span>
+            </template>
+          </div>
+          <button @click="snapBboxToGreen()"
+                  :disabled="!hasGreenPolygon() || !courseGeoRef"
+                  :title="courseGeoRef ? 'Auto-compute bbox from green polygon + approach padding' : 'Set up geo-reference first (⚙)'"
+                  :class="(hasGreenPolygon() && courseGeoRef) ? 'bg-teal-600 hover:bg-teal-700 text-white' : 'bg-gray-100 text-gray-400 cursor-not-allowed'"
+                  class="text-xs px-3 py-1.5 rounded-md transition-default whitespace-nowrap">
+            Snap to green
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    {# Map view (course image + GPS dots + bbox overlay) #}
+    <div x-show="courseGeoRef" class="space-y-2">
+      <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Map view</label>
+      <div class="relative inline-block border border-notion-border rounded overflow-hidden" style="width:300px;height:300px;">
+        <canvas x-ref="gpsMapCanvas"
+                width="300" height="300"
+                @mousedown="gpsMapMouseDown($event)"
+                @mousemove="gpsMapMouseMove($event)"
+                @mouseup="gpsMapMouseUp($event)"
+                style="cursor:crosshair; display:block;"
+                title="Drag to select a bounding box. The course image is shown dimmed; GPS points are colored by altitude.">
+        </canvas>
+        <div x-show="gpsMapLoading" class="absolute inset-0 flex items-center justify-center bg-white/70 text-xs text-notion-muted">
+          Loading GPS points…
+        </div>
+        <div x-show="!courseGeoRef" class="absolute inset-0 flex items-center justify-center bg-white/80 text-xs text-notion-muted text-center px-4">
+          Set geo-reference first (⚙)
+        </div>
+      </div>
+      <p class="text-xs text-notion-muted">Drag to select bbox · Dots = GPS altitude (blue=low, red=high)</p>
+    </div>
+
+    {# Live preview PNG #}
+    <div x-show="gpsEnabled && gpsBbox && gpsFile" class="space-y-2">
+      <div class="flex items-center gap-2">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Heightmap preview</label>
+        <span x-show="gpsPreviewLoading" class="text-xs text-notion-muted">generating…</span>
+        <span x-show="gpsPreviewError" class="text-xs text-red-500" x-text="gpsPreviewError"></span>
+      </div>
+      <div class="border border-notion-border rounded overflow-hidden bg-gray-50" style="width:300px;min-height:60px;">
+        <img x-show="gpsPreviewDataUrl" :src="gpsPreviewDataUrl"
+             alt="GPS heightmap preview" style="width:300px;height:auto;display:block;">
+        <div x-show="!gpsPreviewDataUrl && !gpsPreviewLoading" class="text-xs text-notion-muted px-3 py-4 text-center">
+          Preview will appear here once params are set.
+        </div>
+      </div>
+      <p x-show="gpsPreviewNotes && gpsPreviewNotes.length > 0"
+         class="text-xs text-amber-600"
+         x-text="'Notes: ' + gpsPreviewNotes.join('; ')"></p>
+    </div>
+
+    </div>{# /gps-backend-body #}
+
+  </div>
+
+  {# ── Geo-ref setup dialog ──────────────────────────────── #}
+  <div x-show="showGeoRefDialog" x-cloak
+       class="fixed inset-0 flex items-center justify-center" style="z-index:9999" @keydown.escape.window="showGeoRefDialog = false">
+    <div class="absolute inset-0 bg-black/30" @click="showGeoRefDialog = false"></div>
+    <div class="relative bg-white rounded-xl shadow-xl border border-notion-border p-6 w-full max-w-sm space-y-5">
+      <h2 class="text-lg font-semibold text-notion-text">Course Geo-Reference Setup</h2>
+      <p class="text-sm text-notion-muted">
+        Enter the SW (bottom-left) and NE (top-right) corner lat/lng of the course source image.
+        Used to convert editor pixel coords ↔ real-world lat/lng.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1">SW Corner (bottom-left)</label>
+          <div class="flex gap-2">
+            <input type="number" x-model.number="georefForm.swLat" placeholder="Lat e.g. 36.990" step="0.0001"
+                   class="flex-1 text-sm border border-notion-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-notion-accent/30">
+            <input type="number" x-model.number="georefForm.swLng" placeholder="Lng e.g. -122.010" step="0.0001"
+                   class="flex-1 text-sm border border-notion-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-notion-accent/30">
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-notion-muted uppercase tracking-wide mb-1">NE Corner (top-right)</label>
+          <div class="flex gap-2">
+            <input type="number" x-model.number="georefForm.neLat" placeholder="Lat e.g. 37.010" step="0.0001"
+                   class="flex-1 text-sm border border-notion-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-notion-accent/30">
+            <input type="number" x-model.number="georefForm.neLng" placeholder="Lng e.g. -121.990" step="0.0001"
+                   class="flex-1 text-sm border border-notion-border rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-notion-accent/30">
+          </div>
+        </div>
+      </div>
+      <p class="text-xs text-notion-muted">Image size: <span x-text="imgW + ' × ' + imgH + ' px'"></span></p>
+      <div class="flex justify-end gap-2 pt-2">
+        <button @click="showGeoRefDialog = false"
+                class="text-sm px-4 py-2 rounded-md border border-notion-border bg-white hover:bg-notion-hover text-notion-text transition-default">
+          Cancel
+        </button>
+        <button @click="saveGeoRef()"
+                :disabled="!georefForm.swLat || !georefForm.swLng || !georefForm.neLat || !georefForm.neLng"
+                :class="(!georefForm.swLat || !georefForm.swLng || !georefForm.neLat || !georefForm.neLng) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-blue-600'"
+                class="text-sm px-4 py-2 rounded-md bg-notion-accent text-white transition-default">
+          Save Geo-Reference
+        </button>
+      </div>
+    </div>
+  </div>
+
   {# ── New Project dialog ────────────────────────────────── #}
   <div x-show="showNewDialog" x-cloak
        class="fixed inset-0 flex items-center justify-center" style="z-index:9999" @keydown.escape.window="showNewDialog = false">
@@ -652,6 +851,34 @@ function polygonEditor() {
     applyFringeFrameCap: true,     // clip fringe top vertices near the frame perimeter (water-hole rule); default ON preserves legacy behavior
     flagOffsetXMm: 0.0,    // mm: move flag right (+) or left (-)
     flagOffsetYMm: 0.0,    // mm: move flag up (+) or down (-)
+
+    // ── GPS backend state ─────────────────────────────────────────────────────
+    // Persisted to EGM as gpsBackend + courseGeoRef blocks.
+    gpsEnabled: false,           // gpsBackend.enabled
+    gpsFile: '',                 // gpsBackend.gpsFile (absolute path)
+    gpsBbox: null,               // {lat_min, lng_min, lat_max, lng_max} or null
+    gpsVertExag: 3.0,            // gpsBackend.vertExag
+    gpsApproachM: 8.0,           // gpsBackend.approachM
+    gpsGridSize: 200,            // gpsBackend.gridSize (single int → [n, n])
+    courseGeoRef: null,          // courseGeoRef block: {imageWidth, imageHeight, swCornerLatLng, neCornerLatLng}
+
+    // GPS map view state
+    gpsFileList: [],             // [{name, path}] from /api/gps_files
+    gpsMapLoading: false,
+    gpsPoints: [],               // [{lat, lng, alt}] loaded GPS points (for map view)
+    _gpsMapDrag: null,           // {startX, startY, curX, curY} during bbox drag
+
+    // Preview state
+    gpsPreviewDataUrl: '',
+    gpsPreviewLoading: false,
+    gpsPreviewError: '',
+    gpsPreviewNotes: [],
+    _gpsPreviewTimer: null,      // debounce timer handle
+
+    // Geo-ref dialog state
+    showGeoRefDialog: false,
+    georefForm: { swLat: null, swLng: null, neLat: null, neLng: null },
+
     selectedContour: -1,   // index into contours[]
     // contour vertex drag state
     draggingContour: false,
@@ -2072,6 +2299,22 @@ function polygonEditor() {
           y_mm: Math.round(this.teeHole.y_mm * 10) / 10,
         };
       }
+      // GPS backend block — only written when at least one GPS field has been set
+      // so legacy EGMs without GPS remain untouched (backward compat).
+      if (this.gpsEnabled || this.gpsFile || this.gpsBbox) {
+        data.gpsBackend = {
+          enabled: this.gpsEnabled,
+          gpsFile: this.gpsFile || '',
+          bbox: this.gpsBbox || null,
+          approachM: this.gpsApproachM,
+          vertExag: this.gpsVertExag,
+          gridSize: [this.gpsGridSize, this.gpsGridSize],
+        };
+      }
+      // courseGeoRef — stored once per course, survives round-trips
+      if (this.courseGeoRef) {
+        data.courseGeoRef = this.courseGeoRef;
+      }
       try {
         await fetch('/api/boundaries', {
           method: 'POST',
@@ -2229,6 +2472,16 @@ function polygonEditor() {
         // Absorb print constants from server (avoids hardcoding in JS)
         if (data.print_size_mm != null) this.printSizeMm = data.print_size_mm;
         if (data.fringe_xy_expansion_mm != null) this.fringeXyExpansionMm = data.fringe_xy_expansion_mm;
+        // GPS backend fields — absent in legacy EGMs → defaults
+        const gps = data.gpsBackend || {};
+        this.gpsEnabled  = gps.enabled === true;
+        this.gpsFile     = gps.gpsFile  || '';
+        this.gpsBbox     = gps.bbox     || null;
+        this.gpsVertExag = typeof gps.vertExag  === 'number' ? gps.vertExag  : 3.0;
+        this.gpsApproachM= typeof gps.approachM === 'number' ? gps.approachM : 8.0;
+        const gs = Array.isArray(gps.gridSize) ? gps.gridSize[0] : (gps.gridSize || 200);
+        this.gpsGridSize = [100, 150, 200, 300].includes(gs) ? gs : 200;
+        this.courseGeoRef = data.courseGeoRef || null;
         this.undoStack = [];
         this.redoStack = [];
         this.selectedVerts = [];
@@ -2255,6 +2508,8 @@ function polygonEditor() {
         }
         this._pendingRestore = data.polygons;
         this.loadImage();
+        this.refreshGpsFiles();  // populate GPS file picker for the loaded course
+        this.scheduleGpsPreview();
         this.flash('Loaded: ' + data.course + ' — Hole ' + data.hole, true);
       } catch (err) {
         console.error('loadProject failed:', err, 'filename=', proj.filename);
@@ -2288,6 +2543,18 @@ function polygonEditor() {
       this.applyFringeFrameCap = true;
       this.flagOffsetXMm = 0.0;
       this.flagOffsetYMm = 0.0;
+      // GPS backend — reset to defaults on new project
+      this.gpsEnabled   = false;
+      this.gpsFile      = '';
+      this.gpsBbox      = null;
+      this.gpsVertExag  = 3.0;
+      this.gpsApproachM = 8.0;
+      this.gpsGridSize  = 200;
+      // courseGeoRef persists if we're reusing the same course folder —
+      // but a new project dialog has a potentially different course, so clear.
+      this.courseGeoRef = null;
+      this.gpsPreviewDataUrl = '';
+      this.gpsPreviewError = '';
       this.showNewDialog = false;
       // Fetch print constants so the fringe-expansion zone is correctly sized
       try {
@@ -2311,6 +2578,7 @@ function polygonEditor() {
       };
       this._pendingDetect = true;
       this.loadImage();
+      this.refreshGpsFiles();  // populate GPS file picker for the new course
     },
 
     async findContours() {
@@ -2368,6 +2636,286 @@ function polygonEditor() {
         this.flash('Contour detection error: ' + err.message, false);
       }
     },
+
+    // ── GPS backend helpers ───────────────────────────────────────────────────
+
+    hasGreenPolygon() {
+      return this.polygons.some(p => p.type === 'green');
+    },
+
+    getGreenPolygon() {
+      return this.polygons.find(p => p.type === 'green') || null;
+    },
+
+    async refreshGpsFiles() {
+      if (!this.courseName) return;
+      try {
+        const resp = await fetch('/api/gps_files?course=' + encodeURIComponent(this.courseName));
+        const data = await resp.json();
+        // Alphabetise case-insensitively per feedback_alphabetize_dropdowns
+        this.gpsFileList = (data.files || []).sort((a, b) =>
+          a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+        );
+      } catch (e) {
+        console.error('refreshGpsFiles error:', e);
+      }
+    },
+
+    onGpsParamChange() {
+      this.autoSave();
+      this.scheduleGpsPreview();
+    },
+
+    scheduleGpsPreview() {
+      if (this._gpsPreviewTimer) clearTimeout(this._gpsPreviewTimer);
+      if (!this.gpsEnabled || !this.gpsFile || !this.gpsBbox) {
+        this.gpsPreviewDataUrl = '';
+        return;
+      }
+      this._gpsPreviewTimer = setTimeout(() => this.loadGpsPreview(), 500);
+    },
+
+    async loadGpsPreview() {
+      if (!this.gpsFile || !this.gpsBbox) return;
+      this.gpsPreviewLoading = true;
+      this.gpsPreviewError = '';
+      try {
+        const params = new URLSearchParams({
+          gps_file: this.gpsFile,
+          bbox: JSON.stringify(this.gpsBbox),
+          approach_m: String(this.gpsApproachM),
+          grid_size: String(Math.min(this.gpsGridSize, 150)),  // use smaller grid for preview speed
+        });
+        const resp = await fetch('/api/gps_heightmap_preview?' + params.toString());
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({ msg: resp.statusText }));
+          this.gpsPreviewError = body.msg || 'Preview failed';
+          return;
+        }
+        const blob = await resp.blob();
+        this.gpsPreviewDataUrl = URL.createObjectURL(blob);
+      } catch (e) {
+        this.gpsPreviewError = 'Preview error: ' + e.message;
+      } finally {
+        this.gpsPreviewLoading = false;
+      }
+    },
+
+    // Snap bbox to green polygon bounding box expanded by approachM + 5 m.
+    // Requires courseGeoRef to convert pixel → lat/lng.
+    snapBboxToGreen() {
+      const green = this.getGreenPolygon();
+      if (!green || !this.courseGeoRef) return;
+      const pts = green.points;
+      if (!pts || pts.length < 3) return;
+
+      // Convert green polygon pixel points to lat/lng
+      const georef = this.courseGeoRef;
+      const w = georef.imageWidth, h = georef.imageHeight;
+      const latSw = georef.swCornerLatLng[0], lngSw = georef.swCornerLatLng[1];
+      const latNe = georef.neCornerLatLng[0], lngNe = georef.neCornerLatLng[1];
+
+      const latlngs = pts.map(pt => {
+        const fracX = pt.x / w;
+        const fracY = pt.y / h;
+        const lng = lngSw + fracX * (lngNe - lngSw);
+        const lat = latNe - fracY * (latNe - latSw);
+        return { lat, lng };
+      });
+
+      const latMin = Math.min(...latlngs.map(p => p.lat));
+      const latMax = Math.max(...latlngs.map(p => p.lat));
+      const lngMin = Math.min(...latlngs.map(p => p.lng));
+      const lngMax = Math.max(...latlngs.map(p => p.lng));
+
+      // Convert padding from metres to degrees (approximate flat-earth)
+      const padM = this.gpsApproachM + 5;
+      // 1 degree lat ≈ 111_000 m; 1 degree lng ≈ 111_000 * cos(lat) m
+      const latMid = (latMin + latMax) / 2;
+      const padLat = padM / 111000;
+      const padLng = padM / (111000 * Math.cos(latMid * Math.PI / 180));
+
+      this.gpsBbox = {
+        lat_min: Math.round((latMin - padLat) * 1e7) / 1e7,
+        lng_min: Math.round((lngMin - padLng) * 1e7) / 1e7,
+        lat_max: Math.round((latMax + padLat) * 1e7) / 1e7,
+        lng_max: Math.round((lngMax + padLng) * 1e7) / 1e7,
+      };
+      this.onGpsParamChange();
+      this.drawGpsMap();
+    },
+
+    openGeoRefDialog() {
+      // Pre-populate form from existing courseGeoRef if present
+      if (this.courseGeoRef) {
+        this.georefForm.swLat = this.courseGeoRef.swCornerLatLng[0];
+        this.georefForm.swLng = this.courseGeoRef.swCornerLatLng[1];
+        this.georefForm.neLat = this.courseGeoRef.neCornerLatLng[0];
+        this.georefForm.neLng = this.courseGeoRef.neCornerLatLng[1];
+      } else {
+        this.georefForm = { swLat: null, swLng: null, neLat: null, neLng: null };
+      }
+      this.showGeoRefDialog = true;
+    },
+
+    saveGeoRef() {
+      const sw = [Number(this.georefForm.swLat), Number(this.georefForm.swLng)];
+      const ne = [Number(this.georefForm.neLat), Number(this.georefForm.neLng)];
+      if (!sw[0] || !sw[1] || !ne[0] || !ne[1]) return;
+      this.courseGeoRef = {
+        imageWidth: this.imgW,
+        imageHeight: this.imgH,
+        swCornerLatLng: sw,
+        neCornerLatLng: ne,
+      };
+      this.showGeoRefDialog = false;
+      this.autoSave();
+      this.drawGpsMap();
+      this.flash('Geo-reference saved', true);
+    },
+
+    // GPS map canvas: draw course image (dimmed) + GPS point cloud + bbox overlay
+    async drawGpsMap() {
+      const canvas = this.$refs.gpsMapCanvas;
+      if (!canvas || !this.courseGeoRef) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, 300, 300);
+
+      // Draw course image dimmed
+      if (this.img && this.imgLoaded) {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.drawImage(this.img, 0, 0, 300, 300);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = '#e5e7eb';
+        ctx.fillRect(0, 0, 300, 300);
+      }
+
+      const georef = this.courseGeoRef;
+      const w = georef.imageWidth, h = georef.imageHeight;
+      const latSw = georef.swCornerLatLng[0], lngSw = georef.swCornerLatLng[1];
+      const latNe = georef.neCornerLatLng[0], lngNe = georef.neCornerLatLng[1];
+
+      // lat/lng → map pixel (300×300 canvas)
+      const toMapPx = (lat, lng) => {
+        const fracX = (lng - lngSw) / (lngNe - lngSw);
+        const fracY = (latNe - lat) / (latNe - latSw);
+        return { x: fracX * 300, y: fracY * 300 };
+      };
+
+      // Draw GPS points if we have them
+      if (this.gpsPoints && this.gpsPoints.length > 0) {
+        const alts = this.gpsPoints.map(p => p.alt);
+        const altMin = Math.min(...alts), altMax = Math.max(...alts);
+        const altRange = altMax - altMin || 1;
+        const toColor = (alt) => {
+          const t = (alt - altMin) / altRange;
+          // Blue → Green → Red
+          const r = Math.round(255 * Math.min(1, t * 2));
+          const g = Math.round(255 * Math.min(1, 1 - Math.abs(t - 0.5) * 2));
+          const b = Math.round(255 * Math.max(0, 1 - t * 2));
+          return `rgb(${r},${g},${b})`;
+        };
+        for (const pt of this.gpsPoints) {
+          const { x, y } = toMapPx(pt.lat, pt.lng);
+          ctx.fillStyle = toColor(pt.alt);
+          ctx.beginPath();
+          ctx.arc(x, y, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Draw bbox overlay
+      if (this.gpsBbox) {
+        const sw2 = toMapPx(this.gpsBbox.lat_min, this.gpsBbox.lng_min);
+        const ne2 = toMapPx(this.gpsBbox.lat_max, this.gpsBbox.lng_max);
+        const rx = ne2.x, ry = ne2.y;
+        const rw = sw2.x - ne2.x, rh = sw2.y - ne2.y;
+        ctx.save();
+        ctx.fillStyle = 'rgba(59,130,246,0.12)';
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.strokeStyle = 'rgba(59,130,246,0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(rx, ry, rw, rh);
+        ctx.restore();
+      }
+
+      // Draw active drag selection
+      if (this._gpsMapDrag && this._gpsMapDrag.active) {
+        const d = this._gpsMapDrag;
+        const rx = Math.min(d.startX, d.curX);
+        const ry = Math.min(d.startY, d.curY);
+        const rw = Math.abs(d.curX - d.startX);
+        const rh = Math.abs(d.curY - d.startY);
+        ctx.save();
+        ctx.fillStyle = 'rgba(245,158,11,0.15)';
+        ctx.fillRect(rx, ry, rw, rh);
+        ctx.strokeStyle = '#F59E0B';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(rx, ry, rw, rh);
+        ctx.restore();
+      }
+    },
+
+    gpsMapMouseDown(e) {
+      if (!this.courseGeoRef) return;
+      const rect = e.target.getBoundingClientRect();
+      this._gpsMapDrag = {
+        active: true,
+        startX: e.clientX - rect.left,
+        startY: e.clientY - rect.top,
+        curX:   e.clientX - rect.left,
+        curY:   e.clientY - rect.top,
+      };
+    },
+
+    gpsMapMouseMove(e) {
+      if (!this._gpsMapDrag || !this._gpsMapDrag.active) return;
+      const rect = e.target.getBoundingClientRect();
+      this._gpsMapDrag.curX = e.clientX - rect.left;
+      this._gpsMapDrag.curY = e.clientY - rect.top;
+      this.drawGpsMap();
+    },
+
+    gpsMapMouseUp(e) {
+      if (!this._gpsMapDrag || !this._gpsMapDrag.active) return;
+      const d = this._gpsMapDrag;
+      d.active = false;
+      const georef = this.courseGeoRef;
+      if (!georef) return;
+      const latSw = georef.swCornerLatLng[0], lngSw = georef.swCornerLatLng[1];
+      const latNe = georef.neCornerLatLng[0], lngNe = georef.neCornerLatLng[1];
+
+      // Map drag rect → lat/lng (canvas is 300×300)
+      const toLatLng = (cx, cy) => {
+        const fracX = cx / 300;
+        const fracY = cy / 300;
+        return {
+          lat: latNe - fracY * (latNe - latSw),
+          lng: lngSw + fracX * (lngNe - lngSw),
+        };
+      };
+      const ptA = toLatLng(d.startX, d.startY);
+      const ptB = toLatLng(d.curX,   d.curY);
+      const minDragPx = 5;
+      if (Math.abs(d.curX - d.startX) < minDragPx || Math.abs(d.curY - d.startY) < minDragPx) {
+        this._gpsMapDrag = null;
+        return;
+      }
+      this.gpsBbox = {
+        lat_min: Math.round(Math.min(ptA.lat, ptB.lat) * 1e7) / 1e7,
+        lng_min: Math.round(Math.min(ptA.lng, ptB.lng) * 1e7) / 1e7,
+        lat_max: Math.round(Math.max(ptA.lat, ptB.lat) * 1e7) / 1e7,
+        lng_max: Math.round(Math.max(ptA.lng, ptB.lng) * 1e7) / 1e7,
+      };
+      this._gpsMapDrag = null;
+      this.onGpsParamChange();
+      this.drawGpsMap();
+    },
+
+    // ── End GPS backend helpers ───────────────────────────────────────────────
 
     async generateSTL() {
       if (!this.courseName.trim() || !this.holeName.trim()) {

@@ -7,6 +7,8 @@ db/workspace.db-wal
 MovieScanner/db/scanner.db
 MovieScanner/db/scanner.db-shm
 MovieScanner/db/scanner.db-wal
+MovieScanner/db/scanner.db.pre_restore_*
+MovieScanner/db/backups/
 MovieScanner/data/*.tsv.gz
 
 # Python

@@ -1,0 +1,68 @@
+{
+  "course": "Stanford",
+  "hole": "8",
+  "image": "Stanford (Hole 8).png",
+  "imageCourse": "Stanford",
+  "imageSize": {
+    "width": 945,
+    "height": 1500
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "elevationRange": 16,
+  "greenScale": 1.0,
+  "fringeEdgeHeight": 9,
+  "baseThicknessMm": 2.0,
+  "includeBoundaryRegion": false,
+  "applyFringeFrameCap": true,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 243.3,
+          "y": 443.3
+        },
+        {
+          "x": 243.3,
+          "y": 980.0
+        },
+        {
+          "x": 278.6,
+          "y": 1056.7
+        },
+        {
+          "x": 419.6,
+          "y": 1133.3
+        },
+        {
+          "x": 490.1,
+          "y": 1133.3
+        },
+        {
+          "x": 701.7,
+          "y": 826.7
+        },
+        {
+          "x": 490.1,
+          "y": 366.7
+        },
+        {
+          "x": 454.9,
+          "y": 366.7
+        }
+      ]
+    }
+  ],
+  "elevationSpikes": [],
+  "tee_hole": {
+    "x_mm": 0,
+    "y_mm": 0
+  }
+}

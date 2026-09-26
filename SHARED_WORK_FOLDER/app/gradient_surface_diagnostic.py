@@ -1,3 +1,9 @@
+# v0.06 — 2026-09-26 Topo — fix #608: replace sinusoidal jitter with sparse
+#         sand-chunk scatter.  Remove SAND_JITTER_AMPLITUDE_MM.  Add Gaussian
+#         mound bumps (SAND_CHUNK_HEIGHT_MM=0.6, SAND_CHUNK_SIGMA_MM=1.5,
+#         SAND_CHUNK_DENSITY_PER_100_MM2=0.3, SAND_CHUNK_MAX=20, SAND_CHUNK_MIN=3).
+#         Bumps applied after rake pass; reproducible per-trap hash seed.
+#         APP_VERSION bumped to v4.65.
 # v0.05 — 2026-09-26 Topo — fix #606: four-part trap tweak.
 #         Item 1: rake direction = PCA major axis per trap (SVD on exterior ring
 #         vertices; cosine wave driven by minor-axis projection).
@@ -4845,11 +4851,16 @@ PRINT_TOLERANCE_MM: float = 0.03125  # inset each piece for easier fit
 # request: trap now sits 4 mm below the fringe rim instead of 2 mm.
 TRAP_FRINGE_BOUNDARY_BAND_MM: float = 6.0  # XY band width around trap perimeter to sample fringe Z
 TRAP_FRINGE_OFFSET_MM:        float = -4.0  # mm offset applied to fringe boundary max → trap height
-# Task #606 (Topo, 2026-09-26): low-amplitude spatially-smooth noise added on
-# top of the rake cosine.  Amplitude well below rake ridge height (0.35 mm)
-# so ridges remain dominant; spatially smooth so adjacent vertices see similar
-# displacement (no sandpaper look).  Per-trap seeded for reproducibility.
-SAND_JITTER_AMPLITUDE_MM: float = 0.08  # peak jitter amplitude in mm (half of peak-to-peak)
+# Task #608 (Topo, 2026-09-26): discrete Gaussian mound "chunks" scattered
+# across the trap top after the rake pass.  Replaces the sinusoidal jitter
+# (SAND_JITTER_AMPLITUDE_MM, removed) which was imperceptible at 0.08 mm next
+# to 0.35 mm rake ridges.  Chunks are visible discrete mounds (~0.6 mm peak),
+# placed at reproducible random positions inside the trap polygon.
+SAND_CHUNK_HEIGHT_MM:           float = 0.6   # Gaussian mound peak height in mm
+SAND_CHUNK_SIGMA_MM:            float = 1.5   # Gaussian sigma in mm (footprint ~3 mm at 2σ)
+SAND_CHUNK_DENSITY_PER_100_MM2: float = 0.3   # chunks per 100 mm² of trap area
+SAND_CHUNK_MAX:                 int   = 20    # cap: no more than this many chunks per trap
+SAND_CHUNK_MIN:                 int   = 3     # floor: even tiny traps get this many chunks
 
 # ---------------------------------------------------------------------------
 # Water hazard ripple texture — sinusoidal "wind chop" displacement
@@ -5221,6 +5232,92 @@ def _compute_trap_height_from_fringe(
         # Guard: never produce a slab thinner than 1 mm regardless of offset.
         trap_height = 1.0
     return trap_height
+
+
+def _scatter_sand_chunks(
+    trap_poly: "ShapelyPolygon",
+    trap_index: int = 0,
+    height_mm: "float | None" = None,
+    sigma_mm: "float | None" = None,
+    density: "float | None" = None,
+    max_chunks: "int | None" = None,
+    min_chunks: "int | None" = None,
+) -> list:
+    """
+    Return a list of ``(cx, cy, h, sigma)`` tuples describing Gaussian mound
+    bumps to scatter across ``trap_poly``.
+
+    Task #608 rule
+    --------------
+    count = clamp(round(area / 100 * density), min_chunks, max_chunks)
+
+    Each bump is placed at a uniform-random point strictly inside the polygon
+    (rejection sampling).  h and sigma are jittered ±30% and ±20% respectively
+    around the defaults so bumps look organic.
+
+    Seed
+    ----
+    Derived from ``(round(centroid.x, 1), round(centroid.y, 1), trap_index)``
+    — same pattern as the retired jitter seed — so the same EGM + trap always
+    produces identical chunks.
+
+    Parameters
+    ----------
+    trap_poly  : Shapely polygon of the trap footprint (mm coords).
+    trap_index : integer used to vary the seed between traps.
+    height_mm  : nominal Gaussian peak height in mm (None → SAND_CHUNK_HEIGHT_MM).
+    sigma_mm   : nominal Gaussian sigma in mm (None → SAND_CHUNK_SIGMA_MM).
+    density    : chunks per 100 mm² (None → SAND_CHUNK_DENSITY_PER_100_MM2).
+    max_chunks : upper cap on chunk count (None → SAND_CHUNK_MAX).
+    min_chunks : lower floor on chunk count (None → SAND_CHUNK_MIN).
+
+    Returns
+    -------
+    List of (cx, cy, h, sigma) tuples (one per chunk).
+    """
+    from shapely.geometry import Point as _ShapelyPoint
+
+    # Resolve defaults at call time so monkey-patching the module constants
+    # (for testing) is respected.
+    if height_mm  is None: height_mm  = SAND_CHUNK_HEIGHT_MM
+    if sigma_mm   is None: sigma_mm   = SAND_CHUNK_SIGMA_MM
+    if density    is None: density    = SAND_CHUNK_DENSITY_PER_100_MM2
+    if max_chunks is None: max_chunks = SAND_CHUNK_MAX
+    if min_chunks is None: min_chunks = SAND_CHUNK_MIN
+
+    area = float(trap_poly.area)
+    raw_count = round(area / 100.0 * density)
+    n_chunks = int(max(min_chunks, min(max_chunks, raw_count)))
+
+    # Reproducible seed from centroid + trap_index.
+    cx_c = round(float(trap_poly.centroid.x), 1)
+    cy_c = round(float(trap_poly.centroid.y), 1)
+    seed_val = int(abs(cx_c * 1000.0) * 137 + abs(cy_c * 1000.0) * 31
+                   + trap_index * 997) % (2 ** 31)
+    rng = np.random.default_rng(seed_val)
+
+    # Bounding box for candidate generation.
+    minx, miny, maxx, maxy = trap_poly.bounds
+    bx, by = maxx - minx, maxy - miny
+
+    chunks = []
+    max_attempts = n_chunks * 200  # rejection-sampling budget
+    attempts = 0
+    while len(chunks) < n_chunks and attempts < max_attempts:
+        attempts += 1
+        px = minx + float(rng.uniform(0.0, bx))
+        py = miny + float(rng.uniform(0.0, by))
+        if not trap_poly.contains(_ShapelyPoint(px, py)):
+            continue
+        h_i   = height_mm * float(rng.uniform(0.7, 1.3))
+        sig_i = sigma_mm  * float(rng.uniform(0.8, 1.2))
+        chunks.append((px, py, h_i, sig_i))
+
+    if len(chunks) < n_chunks:
+        print(f"    _scatter_sand_chunks: only placed {len(chunks)}/{n_chunks} chunks "
+              f"after {max_attempts} rejection-sampling attempts (trap area={area:.0f} mm²)")
+
+    return chunks
 
 
 def export_trap_stls(
@@ -6154,11 +6251,13 @@ def apply_sand_texture(
       minor axis projection drives the cosine; major axis projection is constant
       within each ridge.
 
-    * **Jitter noise** (amplitude = SAND_JITTER_AMPLITUDE_MM, ~0.08 mm).
-      A low-frequency sinusoidal sum with two random phases is added on top of
-      the cosine ridges.  The phases are seeded from a hash of the trap polygon's
-      centroid (rounded to 0.1 mm) so the same EGM always generates the same
-      noise pattern (reproducible), but different traps differ.
+    * **Sand chunks** (Task #608 — replaces sinusoidal jitter from Task #606).
+      After the rake pass, :func:`_scatter_sand_chunks` places a sparse set of
+      Gaussian mound bumps on the top surface.  Each bump is
+      ``h * exp(-((x-cx)²+(y-cy)²) / (2σ²))`` with h≈0.6 mm, σ≈1.5 mm.
+      Count is proportional to trap area (density 0.3 per 100 mm², floor 3,
+      cap 20).  Centres and heights are reproducible: seeded from centroid +
+      trap_index hash.
 
     Algorithm
     ---------
@@ -6167,12 +6266,12 @@ def apply_sand_texture(
        inside the polygon.
     3. Compute PCA major axis from exterior ring vertices.
     4. Project grid/ring points onto minor axis → sinusoidal displacement dz.
-       Add per-trap-seeded low-frequency jitter displacement dz_jitter.
-       Z = z_max + dz + dz_jitter.
+       Z = z_max + dz.
     5. Delaunay-triangulate the grid points; discard triangles whose centroid
        falls outside the polygon.
     6. Reassemble: new grid top + original wall/base faces; merge boundary
        vertices with trimesh process=True to restore watertightness.
+    7. Apply sand-chunk Gaussian bumps to top-surface vertices (additive).
 
     Parameters
     ----------
@@ -6180,8 +6279,8 @@ def apply_sand_texture(
     amplitude    : peak-to-trough height of rake ridges in mm (default 0.35 mm).
     grain_spacing: centre-to-centre distance between rake-line peaks in mm
                    (default 1.5 mm).
-    trap_index   : integer used to seed the per-trap jitter RNG (different
-                   values produce different noise patterns on otherwise identical
+    trap_index   : integer used to seed the per-trap chunk RNG (different
+                   values produce different chunk patterns on otherwise identical
                    trap shapes).
 
     Returns the mesh modified in place (also returns it for convenience).
@@ -6397,48 +6496,21 @@ def apply_sand_texture(
     # s = (xy - centroid) · minor_axis  → scalar position across trap
     # dz_rake = amplitude * 0.5 * (1 + cos(2π * s / grain_spacing))
     #
-    # Jitter (Task #606, Item 2):
-    # A sum of two low-frequency sinusoids at random phases, seeded from
-    # a hash of (trap centroid rounded to 0.1 mm).  The two waves have
-    # different wavelengths (3× and 5× grain_spacing) and orientations
-    # (major and minor axes) so the interference pattern is spatially
-    # smooth (no point-noise look) and non-periodic within a typical trap.
-    # Amplitude is capped at SAND_JITTER_AMPLITUDE_MM per wave.
+    # Task #608: sinusoidal jitter removed; discrete Gaussian chunk bumps are
+    # applied AFTER mesh reassembly (step 7) instead.
 
     def _proj_minor(xy_arr: np.ndarray) -> np.ndarray:
         """Project 2-D XY points onto the minor axis (relative to centroid)."""
         return (xy_arr - _ring_c) @ minor_axis
-
-    def _proj_major(xy_arr: np.ndarray) -> np.ndarray:
-        """Project 2-D XY points onto the major axis (relative to centroid)."""
-        return (xy_arr - _ring_c) @ major_axis
 
     def _rake_dz(xy_arr: np.ndarray) -> np.ndarray:
         """Cosine rake displacement keyed on minor-axis projection."""
         s = _proj_minor(xy_arr)
         return amplitude * 0.5 * (1.0 + np.cos(2.0 * math.pi * s / grain_spacing))
 
-    # Per-trap jitter seed: hash of polygon centroid rounded to 0.1 mm.
-    _cx, _cy = shapely_poly.centroid.x, shapely_poly.centroid.y
-    _seed_val = int(abs(round(_cx, 1) * 1000.0) * 137 + abs(round(_cy, 1) * 1000.0) * 31
-                    + trap_index * 997) % (2 ** 31)
-    _rng = np.random.default_rng(_seed_val)
-    _phi1, _phi2 = float(_rng.uniform(0.0, 2.0 * math.pi)), float(_rng.uniform(0.0, 2.0 * math.pi))
-    _jitter_wave1_wl = grain_spacing * 5.0   # long-wave component along minor axis
-    _jitter_wave2_wl = grain_spacing * 3.0   # medium-wave component along major axis
-
-    def _jitter_dz(xy_arr: np.ndarray) -> np.ndarray:
-        """Low-frequency sinusoidal jitter displacement (spatially smooth)."""
-        s_minor = _proj_minor(xy_arr)
-        s_major = _proj_major(xy_arr)
-        wave1 = SAND_JITTER_AMPLITUDE_MM * np.sin(2.0 * math.pi * s_minor / _jitter_wave1_wl + _phi1)
-        wave2 = SAND_JITTER_AMPLITUDE_MM * np.sin(2.0 * math.pi * s_major / _jitter_wave2_wl + _phi2)
-        return (wave1 + wave2) * 0.5  # average to keep combined amplitude within ±SAND_JITTER_AMPLITUDE_MM
-
     # Interior grid points.
     dz_rake = _rake_dz(grid_xy_in)
-    dz_jit  = _jitter_dz(grid_xy_in)
-    dz      = dz_rake + dz_jit
+    dz      = dz_rake
     grid_z  = z_max + dz                               # (M,)
 
     # Boundary ring points: include in Delaunay so the triangulation
@@ -6447,7 +6519,7 @@ def apply_sand_texture(
     # vertex is represented (multi-loop walker output).
     all_ring_idx = [int(v) for lp in all_loops for v in lp]
     ring_xy_arr  = all_verts[all_ring_idx, :2]                                 # (R, 2)
-    ring_z       = z_max + _rake_dz(ring_xy_arr) + _jitter_dz(ring_xy_arr)    # (R,)
+    ring_z       = z_max + _rake_dz(ring_xy_arr)                               # (R,)
 
     # Combined point set for Delaunay: boundary ring first, then interior.
     n_ring   = len(ring_xy_arr)
@@ -6460,8 +6532,8 @@ def apply_sand_texture(
     )) + 1
     print(f"    Sand texture: rake lines, major_axis_angle={_rake_angle_deg:.1f}°, "
           f"spacing={grain_spacing:.2f} mm, "
-          f"amplitude={amplitude:.3f} mm, jitter={SAND_JITTER_AMPLITUDE_MM:.3f} mm, "
-          f"~{n_lines} lines, seed={_seed_val}, "
+          f"amplitude={amplitude:.3f} mm, "
+          f"~{n_lines} lines, "
           f"dz range [{dz.min():.3f}, {dz.max():.3f}] mm on {n_grid} grid verts "
           f"+ {n_ring} boundary ring verts")
 
@@ -6531,6 +6603,33 @@ def apply_sand_texture(
     print(f"    Sand texture: reassembled mesh — "
           f"{len(new_mesh.vertices)} verts, {len(new_mesh.faces)} faces, "
           f"watertight={new_mesh.is_watertight}")
+
+    # ------------------------------------------------------------------
+    # 7. Sand-chunk scatter pass (Task #608)
+    # ------------------------------------------------------------------
+    # Apply Gaussian mound bumps on top of the rake-textured top surface.
+    # Each bump: dz = h * exp(-((x-cx)² + (y-cy)²) / (2σ²))
+    # Applied AFTER rake (and after the trap-height-lock adjustment that
+    # happens outside this function) so chunks sit on top of everything.
+    # Boundary-height cap is NOT applied here (BOUNDARY_HEIGHT_CAP_ENABLED
+    # is False per task #606; chunks are allowed to poke above the cap).
+
+    chunks = _scatter_sand_chunks(shapely_poly, trap_index=trap_index)
+    if chunks:
+        top_mask_new = new_mesh.vertices[:, 2] > (z_max - amplitude - 0.5)
+        top_indices  = np.where(top_mask_new)[0]
+        top_xy       = new_mesh.vertices[top_indices, :2]
+
+        # Accumulate Gaussian contributions from all bumps.
+        dz_chunks = np.zeros(len(top_indices), dtype=np.float64)
+        for cx_b, cy_b, h_b, sig_b in chunks:
+            dx = top_xy[:, 0] - cx_b
+            dy = top_xy[:, 1] - cy_b
+            dz_chunks += h_b * np.exp(-(dx ** 2 + dy ** 2) / (2.0 * sig_b ** 2))
+
+        new_mesh.vertices[top_indices, 2] += dz_chunks
+        print(f"    Sand texture: {len(chunks)} chunk bumps applied, "
+              f"max bump dz={dz_chunks.max():.3f} mm on {len(top_indices)} top verts")
 
     # Copy rebuilt geometry back into the caller's mesh object.
     mesh.vertices = new_mesh.vertices

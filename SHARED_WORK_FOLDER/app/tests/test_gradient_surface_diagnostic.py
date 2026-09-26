@@ -973,19 +973,22 @@ class TestRakeMajorAxis:
 
 
 # ===========================================================================
-# F.  Jitter noise on rake lines  (Task #606, Item 2)
+# F.  Texture variation on rake lines  (Task #606 → updated Task #608)
 # ===========================================================================
 
 class TestRakeJitter:
     """
-    apply_sand_texture must add small spatially-smooth reproducible noise
-    on top of the cosine rake ridges.
+    apply_sand_texture must produce reproducible per-trap top-surface variation
+    above the cosine rake baseline.
 
-    RED before fix: no jitter code; same-trap calls are already identical
-                    (no RNG at all) but amplitude check fails (zero jitter).
-    GREEN after fix: SAND_JITTER_AMPLITUDE_MM constant exists; same trap
-                     produces identical Z across runs; different traps differ;
-                     peak-to-peak jitter is within [ε, 2*amplitude+ε].
+    Task #606 introduced sinusoidal jitter (SAND_JITTER_AMPLITUDE_MM).
+    Task #608 replaced it with discrete Gaussian chunk bumps.  These tests
+    verify the structural properties that hold for both approaches: same trap +
+    same index → identical Z; different trap_index → different Z.
+
+    Tests that specifically referenced SAND_JITTER_AMPLITUDE_MM are updated
+    to reference the new chunk constants, or replaced with chunk-based checks
+    (see class TestSandChunkScatter below for the full chunk test suite).
     """
 
     @staticmethod
@@ -994,82 +997,54 @@ class TestRakeJitter:
         top_mask = mesh.vertices[:, 2] > 1e-6
         return np.sort(mesh.vertices[top_mask, 2])
 
-    def test_jitter_amplitude_constant_exists(self):
+    def test_jitter_constant_absent_after_608(self):
         """
-        SAND_JITTER_AMPLITUDE_MM must be defined as a module-level constant
-        (> 0 and ≤ 0.15 mm — meaningful but sub-rake amplitude).
+        Task #608: SAND_JITTER_AMPLITUDE_MM must NOT be defined.
+        Sinusoidal jitter was replaced by chunk scatter.
 
-        RED before fix: constant does not exist.
-        GREEN after fix: SAND_JITTER_AMPLITUDE_MM is defined.
-        """
-        gsd = _load_gsd()
-        assert hasattr(gsd, "SAND_JITTER_AMPLITUDE_MM"), (
-            "SAND_JITTER_AMPLITUDE_MM is not defined in gradient_surface_diagnostic.py.  "
-            "Add `SAND_JITTER_AMPLITUDE_MM: float = 0.08` to the constants section."
-        )
-        val = float(gsd.SAND_JITTER_AMPLITUDE_MM)
-        assert 0.0 < val <= 0.15, (
-            f"SAND_JITTER_AMPLITUDE_MM = {val}; expected > 0 and ≤ 0.15 mm."
-        )
-
-    def test_jitter_amplitude_nonzero_on_top_surface(self):
-        """
-        After two successive apply_sand_texture calls on an identical slab
-        (same geometry, same trap_index), the extra jitter component must
-        contribute amplitude > 0 to the Z variation *beyond* the pure cosine*.
-
-        Approach: run once; identify the pure cosine baseline at each vertex
-        by subtracting the expected cosine value; the residual must have
-        peak-to-peak > 0 (confirming noise was added), and the residual
-        peak-to-peak must be ≤ 2 * SAND_JITTER_AMPLITUDE_MM + 0.01 mm.
-
-        *Note*: since the cosine is keyed on projection onto the major axis
-        and jitter on the same seed, we approximate the residual by comparing
-        two slabs whose cosines are identical (same geometry) but checking
-        that Z variation EXCEEDS the pure cosine range from the amplitude
-        constant.  The jitter raises the Z range above the cosine amplitude.
-
-        Simpler proxy used here:
-          - Compute Z range of top surface after apply_sand_texture.
-          - Rake amplitude (default 0.35 mm) produces a range of ~0.35 mm
-            from the cosine alone.
-          - With jitter of ≤ 0.15 mm the range should be > 0.35 mm.
-        We assert range > SAND_JITTER_AMPLITUDE_MM to confirm jitter adds
-        measurable variation beyond the cosine floor.
-
-        RED before fix: no jitter → Z range is exactly the cosine range,
-                        and the 'noise residual' is zero.
-        GREEN after fix: Z range > SAND_JITTER_AMPLITUDE_MM, confirming
-                         noise is present.
+        RED (task #606 code): constant is still present.
+        GREEN (task #608 code): constant is gone.
         """
         gsd = _load_gsd()
-        if not hasattr(gsd, "SAND_JITTER_AMPLITUDE_MM"):
-            pytest.skip("SAND_JITTER_AMPLITUDE_MM not defined yet.")
+        assert not hasattr(gsd, "SAND_JITTER_AMPLITUDE_MM"), (
+            "SAND_JITTER_AMPLITUDE_MM is still defined.  "
+            "Task #608 removed sinusoidal jitter in favour of chunk scatter.  "
+            "Delete SAND_JITTER_AMPLITUDE_MM from the constants section."
+        )
 
-        mesh = _build_slab(side_mm=20.0, height_mm=5.0)
-        gsd.apply_sand_texture(mesh, trap_index=0)
+    def test_chunk_scatter_present_on_top_surface(self):
+        """
+        Task #608: apply_sand_texture must produce Z variation above the pure
+        rake cosine, contributed by the chunk scatter pass.
 
-        top_z = mesh.vertices[mesh.vertices[:, 2] > 1e-6, 2]
-        z_range = float(top_z.max() - top_z.min())
+        We confirm the function body references _scatter_sand_chunks (static
+        code check) and that apply_sand_texture produces Z max > z_max +
+        rake_amplitude (chunks add on top of the cosine peak).
 
-        # The rake cosine contributes ~amplitude (0.35 mm default).
-        # Jitter contributes up to 2*SAND_JITTER_AMPLITUDE_MM.
-        # Total range with jitter must be > pure cosine alone.
-        # We check that z_range > 0 (already covered by earlier tests)
-        # AND that the source code contains a jitter/noise displacement.
+        GREEN after fix: _scatter_sand_chunks called; Z max > z_max + amplitude.
+        """
+        gsd = _load_gsd()
         source = GSD_PATH.read_text(encoding="utf-8")
         fn_start = source.find("def apply_sand_texture(")
         fn_end = source.find("\ndef ", fn_start + 1)
         fn_body = source[fn_start:fn_end if fn_end != -1 else len(source)]
 
-        has_jitter = (
-            "SAND_JITTER_AMPLITUDE_MM" in fn_body
-            or "jitter" in fn_body.lower()
-            or "noise" in fn_body.lower()
+        assert "_scatter_sand_chunks" in fn_body, (
+            "apply_sand_texture does not call _scatter_sand_chunks.  "
+            "Chunk scatter pass is missing (task #608)."
         )
-        assert has_jitter, (
-            "apply_sand_texture does not reference SAND_JITTER_AMPLITUDE_MM / "
-            "jitter / noise.  Jitter displacement has not been implemented."
+
+        # The cosine peak is z_max + amplitude (when amplitude=0.35).
+        # Chunks push some vertices above that: max Z > z_max + amplitude.
+        mesh = _build_slab(side_mm=20.0, height_mm=5.0)
+        z_max_before = float(mesh.vertices[:, 2].max())
+        gsd.apply_sand_texture(mesh, trap_index=0)
+        top_z = mesh.vertices[mesh.vertices[:, 2] > 1e-6, 2]
+        # With default amplitude=0.35 mm and chunks up to 0.6*1.3 mm,
+        # max Z should be above z_max_before + amplitude (= 5.35 mm).
+        assert top_z.max() > z_max_before + 0.35, (
+            f"Top Z max = {top_z.max():.4f} mm, expected > {z_max_before + 0.35:.4f} mm.  "
+            "Chunk bumps are not raising vertices above the rake peak."
         )
 
     def test_jitter_is_reproducible_same_trap(self):
@@ -1077,11 +1052,9 @@ class TestRakeJitter:
         Two apply_sand_texture calls on identical slabs with the same
         trap_index must produce identical top-surface Z vectors.
 
-        RED before fix: no jitter → trivially identical (passes vacuously).
-                        This test is primarily a guard that jitter is seeded,
-                        not a random-on-every-call.  It will stay green after
-                        the fix only if seeding is implemented correctly.
-        GREEN after fix: seeded RNG → identical Z on both calls.
+        This holds for chunk scatter (seeded RNG) just as it did for jitter.
+
+        GREEN: seeded chunk RNG → identical Z on both calls.
         """
         gsd = _load_gsd()
         mesh_a = _build_slab(side_mm=20.0, height_mm=5.0)
@@ -1100,20 +1073,19 @@ class TestRakeJitter:
         max_diff = float(np.max(np.abs(za - zb)))
         assert max_diff < 1e-6, (
             f"Top-surface Z differs between identical runs (max diff = {max_diff:.6f} mm).  "
-            "The jitter RNG is not seeded correctly — must produce identical "
-            "results for the same trap geometry."
+            "The chunk RNG is not seeded correctly — must produce identical "
+            "results for the same trap geometry and trap_index."
         )
 
     def test_jitter_differs_between_traps(self):
         """
         Two slabs with different trap_index values must produce different
-        noise patterns (different Z after subtract-cosine residual).
+        top-surface Z arrays.
 
-        We compare the full top-Z arrays sorted; they must differ by more
-        than 1e-6 mm at some vertex.
+        Chunk scatter uses per-trap seeding (same as the retired jitter seed
+        pattern), so different trap_index values → different chunk positions →
+        different Z maxima.
 
-        RED before fix: no jitter → Z arrays are identical for different
-                        trap_index → test FAILS.
         GREEN after fix: per-trap seeding → different arrays.
         """
         gsd = _load_gsd()
@@ -1134,55 +1106,42 @@ class TestRakeJitter:
         assert max_diff > 1e-6, (
             f"Top-surface Z is identical for trap_index=0 and trap_index=7 "
             f"(max diff = {max_diff:.9f} mm).  "
-            "Per-trap jitter seeding is not implemented — different traps must "
+            "Per-trap chunk seeding is not implemented — different traps must "
             "produce different noise patterns."
         )
 
-    def test_jitter_within_amplitude_bound(self):
+    def test_chunk_z_range_bounded(self):
         """
-        The peak-to-peak jitter must be bounded by 2 * SAND_JITTER_AMPLITUDE_MM.
+        Task #608: with default constants (amplitude=0.35 mm rake, chunk
+        height up to 0.6*1.3*K mm), the top-surface Z range must be bounded.
+        Upper bound: rake range (amplitude) + chunk max height * K_overlap
+        where K_overlap=3 (up to 3 chunks can overlap).
+        Lower bound: at least rake amplitude * 0.5 (rake is still visible).
 
-        Approach: run apply_sand_texture on two identical rectangular slabs with
-        the SAME trap_index but with the RNG seeded to inject maximum jitter.
-        For a given point (x,y) the Z displacement is:
-            dz_total = dz_rake(s_minor) + dz_jitter(s_minor, s_major)
-        where dz_jitter = (wave1 + wave2) / 2, each wave at amplitude A_jitter.
-        Therefore |dz_jitter| ≤ A_jitter and peak-to-peak jitter ≤ 2 * A_jitter.
-
-        Simpler observable proxy: the Z range of the top surface must be ≤
-        rake_amplitude + 2 * SAND_JITTER_AMPLITUDE_MM + small_epsilon.
-
-        This test does NOT try to reconstruct the cosine baseline (too fragile
-        due to PCA centroid differences between mesh boundary and polygon corners).
-        Instead it just bounds the maximum possible total displacement.
-
-        RED before fix: no jitter constant → test fails on SAND_JITTER_AMPLITUDE_MM
-                        existence check first.
-        GREEN after fix: total range bounded correctly.
+        GREEN after fix: total Z range within expected bounds.
         """
         gsd = _load_gsd()
-        if not hasattr(gsd, "SAND_JITTER_AMPLITUDE_MM"):
-            pytest.skip("SAND_JITTER_AMPLITUDE_MM not defined yet.")
-
-        amplitude_jitter = float(gsd.SAND_JITTER_AMPLITUDE_MM)
-        rake_amplitude = 1.0  # default apply_sand_texture amplitude kwarg
-        # Max cosine range: amplitude * 0.5 * 2 = amplitude (0→1 cosine * amplitude)
-        max_rake_range = rake_amplitude * 1.0
-        # Max jitter range: 2 * amplitude_jitter (peak-to-trough of jitter wave)
-        max_jitter_range = amplitude_jitter * 2.0
-
         mesh = _build_slab(side_mm=20.0, height_mm=5.0)
+        # Use default amplitude (0.35 mm).
         gsd.apply_sand_texture(mesh, trap_index=4)
 
         top_z = mesh.vertices[mesh.vertices[:, 2] > 1e-6, 2]
         z_range = float(top_z.max() - top_z.min())
 
-        max_allowed_range = max_rake_range + max_jitter_range + 0.05  # 0.05 mm epsilon
-        assert z_range <= max_allowed_range, (
-            f"Top-surface Z range = {z_range:.4f} mm exceeds maximum allowed "
-            f"{max_allowed_range:.3f} mm "
-            f"(rake_amplitude={max_rake_range:.3f} + 2*jitter={max_jitter_range:.3f} + 0.05).  "
-            "Jitter amplitude is out of bounds."
+        rake_amplitude = 0.35  # default
+        h = gsd.SAND_CHUNK_HEIGHT_MM
+        # Max: rake range + 3 overlapping chunks at max height
+        max_allowed = rake_amplitude + h * 1.3 * 3 + 0.1
+        # Min: at least rake visible (half-amplitude)
+        min_expected = rake_amplitude * 0.5
+
+        assert z_range >= min_expected, (
+            f"Z range = {z_range:.4f} mm < {min_expected:.4f} mm.  "
+            "Rake texture appears to be missing."
+        )
+        assert z_range <= max_allowed, (
+            f"Z range = {z_range:.4f} mm > {max_allowed:.4f} mm upper bound.  "
+            "Chunk heights appear out of range."
         )
 
 
@@ -1404,4 +1363,302 @@ class TestTrapFringeOffsetUpdated:
             f"expected {expected:.3f} mm (fringe_boundary_max=11.0 "
             f"+ TRAP_FRINGE_OFFSET_MM={gsd.TRAP_FRINGE_OFFSET_MM}).  "
             "TRAP_FRINGE_OFFSET_MM was not updated to -4.0."
+        )
+
+
+# ===========================================================================
+# I.  Sand-chunk scatter pass  (Task #608)
+# ===========================================================================
+
+class TestSandChunkScatter:
+    """
+    apply_sand_texture must scatter discrete Gaussian mound 'chunks' across
+    the trap top surface, replacing the old sinusoidal jitter.
+
+    RED before fix:
+      - SAND_JITTER_AMPLITUDE_MM still exists (will be removed).
+      - SAND_CHUNK_HEIGHT_MM, SAND_CHUNK_SIGMA_MM, SAND_CHUNK_DENSITY_PER_100_MM2,
+        SAND_CHUNK_MAX, SAND_CHUNK_MIN constants do not exist.
+      - _scatter_sand_chunks helper does not exist.
+      - No chunk bumps applied → Z above rake baseline is zero.
+    GREEN after fix:
+      - Jitter constants/code removed; chunk constants added.
+      - Same trap + same trap_index → identical chunk positions & heights.
+      - Count law satisfied (floor=3, cap=20, density=0.3 per 100 mm²).
+      - Every chunk centre strictly inside the trap polygon.
+      - Chunk pass is additive: Z with chunks ≥ Z without chunks everywhere.
+      - Peak Z increment from chunks bounded above.
+    """
+
+    # -----------------------------------------------------------------------
+    # Helper: build a rectangular Shapely polygon of given area
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _rect_poly(area_mm2: float, aspect: float = 2.0):
+        """Return a rectangle Shapely polygon with the given area and aspect ratio."""
+        w = math.sqrt(area_mm2 / aspect)
+        h = area_mm2 / w
+        return ShapelyPolygon([(0, 0), (w, 0), (w, h), (0, h)])
+
+    @staticmethod
+    def _slab_for_poly(poly, height_mm: float = 5.0):
+        from generate_stl_3mf import _build_slab_from_shapely
+        return _build_slab_from_shapely(poly, height_mm)
+
+    # -----------------------------------------------------------------------
+    # I-1  Constants exist and have correct defaults
+    # -----------------------------------------------------------------------
+
+    def test_chunk_constants_exist(self):
+        """
+        SAND_CHUNK_HEIGHT_MM, SAND_CHUNK_SIGMA_MM,
+        SAND_CHUNK_DENSITY_PER_100_MM2, SAND_CHUNK_MAX, SAND_CHUNK_MIN
+        must all be defined.
+
+        RED before fix: none of these constants exist.
+        GREEN after fix: all five constants present with correct defaults.
+        """
+        gsd = _load_gsd()
+        for name, expected, tol in [
+            ("SAND_CHUNK_HEIGHT_MM",          0.6,  0.01),
+            ("SAND_CHUNK_SIGMA_MM",           1.5,  0.01),
+            ("SAND_CHUNK_DENSITY_PER_100_MM2", 0.3, 0.001),
+            ("SAND_CHUNK_MAX",                20,   0),
+            ("SAND_CHUNK_MIN",                3,    0),
+        ]:
+            assert hasattr(gsd, name), (
+                f"{name} is not defined in gradient_surface_diagnostic.py."
+            )
+            val = float(getattr(gsd, name))
+            if tol == 0:
+                assert int(val) == int(expected), (
+                    f"{name} = {val}, expected {expected}."
+                )
+            else:
+                assert abs(val - expected) <= tol, (
+                    f"{name} = {val:.4f}, expected {expected}."
+                )
+
+    def test_jitter_constant_removed(self):
+        """
+        SAND_JITTER_AMPLITUDE_MM must NOT be defined after task #608.
+
+        RED (currently green — jitter still exists): the constant is present.
+        GREEN after fix: the constant is gone.
+        """
+        gsd = _load_gsd()
+        assert not hasattr(gsd, "SAND_JITTER_AMPLITUDE_MM"), (
+            "SAND_JITTER_AMPLITUDE_MM is still defined.  "
+            "Remove the sinusoidal jitter constant and code (task #608)."
+        )
+
+    # -----------------------------------------------------------------------
+    # I-2  Count-vs-area law
+    # -----------------------------------------------------------------------
+
+    def test_chunk_count_law(self):
+        """
+        _scatter_sand_chunks must return the correct count for three areas:
+          - 500 mm²  → raw = round(500/100 * 0.3) = 2 → clamped to SAND_CHUNK_MIN = 3
+          - 3000 mm² → raw = round(3000/100 * 0.3) = 9 → 9 (within [3,20])
+          - 50000 mm²→ raw = round(50000/100 * 0.3) = 150 → clamped to SAND_CHUNK_MAX = 20
+
+        RED before fix: helper does not exist.
+        GREEN after fix: count matches for all three cases.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "_scatter_sand_chunks"):
+            pytest.fail(
+                "_scatter_sand_chunks does not exist.  "
+                "Add this helper to encapsulate the chunk scatter logic."
+            )
+
+        cases = [
+            (500,   gsd.SAND_CHUNK_MIN),     # floor
+            (3000,  9),                       # within range
+            (50000, gsd.SAND_CHUNK_MAX),      # cap
+        ]
+        for area_mm2, expected_count in cases:
+            poly = self._rect_poly(area_mm2)
+            chunks = gsd._scatter_sand_chunks(poly, trap_index=0)
+            n = len(chunks)
+            assert n == expected_count, (
+                f"Area={area_mm2} mm²: got {n} chunks, expected {expected_count}.  "
+                f"(density={gsd.SAND_CHUNK_DENSITY_PER_100_MM2}/100mm², "
+                f"min={gsd.SAND_CHUNK_MIN}, max={gsd.SAND_CHUNK_MAX})"
+            )
+
+    # -----------------------------------------------------------------------
+    # I-3  Reproducibility
+    # -----------------------------------------------------------------------
+
+    def test_chunk_reproducibility(self):
+        """
+        Same trap polygon + same trap_index → identical chunk centres and
+        peak heights across two independent calls.
+
+        RED before fix: helper doesn't exist.
+        GREEN after fix: deterministic via seeded RNG.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "_scatter_sand_chunks"):
+            pytest.fail("_scatter_sand_chunks does not exist.")
+
+        poly = self._rect_poly(2000)
+        chunks_a = gsd._scatter_sand_chunks(poly, trap_index=5)
+        chunks_b = gsd._scatter_sand_chunks(poly, trap_index=5)
+
+        assert len(chunks_a) == len(chunks_b), (
+            f"Chunk count differs between runs: {len(chunks_a)} vs {len(chunks_b)}."
+        )
+        for k, (a, b) in enumerate(zip(chunks_a, chunks_b)):
+            cx_a, cy_a, h_a, sig_a = a
+            cx_b, cy_b, h_b, sig_b = b
+            assert abs(cx_a - cx_b) < 1e-9 and abs(cy_a - cy_b) < 1e-9, (
+                f"Chunk {k} centre differs: ({cx_a:.6f},{cy_a:.6f}) vs "
+                f"({cx_b:.6f},{cy_b:.6f}).  RNG is not seeded reproducibly."
+            )
+            assert abs(h_a - h_b) < 1e-9, (
+                f"Chunk {k} height differs: {h_a:.6f} vs {h_b:.6f}."
+            )
+
+    # -----------------------------------------------------------------------
+    # I-4  Peak height bounds
+    # -----------------------------------------------------------------------
+
+    def test_chunk_peak_height_bounds(self):
+        """
+        Peak Z increment from chunks on any vertex must be within:
+          lower = SAND_CHUNK_HEIGHT_MM * 0.7  (at least one chunk > 0)
+          upper = SAND_CHUNK_HEIGHT_MM * 1.3 * K  where K=3 (overlap allowance)
+
+        We call apply_sand_texture and compare Z values of a textured mesh
+        against a rake-only mesh (without chunks) to isolate the chunk delta.
+
+        RED before fix: no chunks → delta is zero everywhere.
+        GREEN after fix: max delta > lower and ≤ upper.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "SAND_CHUNK_HEIGHT_MM"):
+            pytest.skip("SAND_CHUNK_HEIGHT_MM not defined yet.")
+
+        # Build two identical slabs; apply texture to one.
+        poly = self._rect_poly(3000)   # 9 chunks expected
+        mesh_with = self._slab_for_poly(poly, height_mm=5.0)
+        mesh_rake_only = self._slab_for_poly(poly, height_mm=5.0)
+
+        # Temporarily remove chunk pass to get rake-only Z.
+        # We monkey-patch SAND_CHUNK_MIN/MAX to zero to suppress chunks.
+        orig_min = gsd.SAND_CHUNK_MIN
+        orig_max = gsd.SAND_CHUNK_MAX
+        orig_density = gsd.SAND_CHUNK_DENSITY_PER_100_MM2
+        gsd.SAND_CHUNK_MIN = 0
+        gsd.SAND_CHUNK_MAX = 0
+        gsd.SAND_CHUNK_DENSITY_PER_100_MM2 = 0.0
+        try:
+            gsd.apply_sand_texture(mesh_rake_only, trap_index=0)
+        finally:
+            gsd.SAND_CHUNK_MIN = orig_min
+            gsd.SAND_CHUNK_MAX = orig_max
+            gsd.SAND_CHUNK_DENSITY_PER_100_MM2 = orig_density
+
+        gsd.apply_sand_texture(mesh_with, trap_index=0)
+
+        top_with  = mesh_with.vertices[mesh_with.vertices[:, 2] > 1e-6, 2]
+        top_rake  = mesh_rake_only.vertices[mesh_rake_only.vertices[:, 2] > 1e-6, 2]
+
+        max_delta = float(top_with.max() - top_rake.max())
+        h = gsd.SAND_CHUNK_HEIGHT_MM
+        lower = h * 0.7
+        upper = h * 1.3 * 3  # K=3 bump-overlap allowance
+
+        assert max_delta >= lower, (
+            f"Max chunk Z increment = {max_delta:.4f} mm < lower bound {lower:.4f} mm.  "
+            "Chunks are not producing visible mounds."
+        )
+        assert max_delta <= upper, (
+            f"Max chunk Z increment = {max_delta:.4f} mm > upper bound {upper:.4f} mm.  "
+            "Chunk heights are out of range."
+        )
+
+    # -----------------------------------------------------------------------
+    # I-5  Placement inside polygon
+    # -----------------------------------------------------------------------
+
+    def test_chunk_centres_inside_polygon(self):
+        """
+        Every chunk centre returned by _scatter_sand_chunks must be strictly
+        inside the trap polygon (shapely contains).
+
+        RED before fix: helper doesn't exist.
+        GREEN after fix: all centres pass shapely.contains.
+        """
+        from shapely.geometry import Point as ShapelyPoint
+        gsd = _load_gsd()
+        if not hasattr(gsd, "_scatter_sand_chunks"):
+            pytest.fail("_scatter_sand_chunks does not exist.")
+
+        poly = self._rect_poly(5000)
+        chunks = gsd._scatter_sand_chunks(poly, trap_index=2)
+        assert len(chunks) > 0, "No chunks returned — cannot test placement."
+
+        for k, (cx, cy, h, sig) in enumerate(chunks):
+            pt = ShapelyPoint(cx, cy)
+            assert poly.contains(pt), (
+                f"Chunk {k} centre ({cx:.3f}, {cy:.3f}) is outside the trap polygon.  "
+                "Rejection sampling is not working correctly."
+            )
+
+    # -----------------------------------------------------------------------
+    # I-6  Chunks additive to rake
+    # -----------------------------------------------------------------------
+
+    def test_chunks_additive_to_rake(self):
+        """
+        Z values with chunks must be >= Z values without chunks everywhere
+        (chunks only add positive Gaussian bumps, never subtract).
+
+        We compare sorted top-Z arrays from two identical slabs.
+
+        RED before fix: no chunks → both arrays identical, delta = 0.
+                        This test is designed to FAIL red (0 delta = not additive
+                        in a visible way), but strictly chunks being additive
+                        means with_chunks >= without_chunks pointwise.
+                        Actually the test below confirms chunks are present
+                        (max of with_chunks > max of without_chunks), which
+                        only passes after the implementation.
+        GREEN after fix: max(with) > max(without) by at least SAND_CHUNK_HEIGHT_MM * 0.7.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "SAND_CHUNK_HEIGHT_MM"):
+            pytest.skip("SAND_CHUNK_HEIGHT_MM not defined yet.")
+
+        poly = self._rect_poly(3000)
+        mesh_with = self._slab_for_poly(poly, height_mm=5.0)
+        mesh_without = self._slab_for_poly(poly, height_mm=5.0)
+
+        orig_min = gsd.SAND_CHUNK_MIN
+        orig_max = gsd.SAND_CHUNK_MAX
+        orig_density = gsd.SAND_CHUNK_DENSITY_PER_100_MM2
+        gsd.SAND_CHUNK_MIN = 0
+        gsd.SAND_CHUNK_MAX = 0
+        gsd.SAND_CHUNK_DENSITY_PER_100_MM2 = 0.0
+        try:
+            gsd.apply_sand_texture(mesh_without, trap_index=1)
+        finally:
+            gsd.SAND_CHUNK_MIN = orig_min
+            gsd.SAND_CHUNK_MAX = orig_max
+            gsd.SAND_CHUNK_DENSITY_PER_100_MM2 = orig_density
+
+        gsd.apply_sand_texture(mesh_with, trap_index=1)
+
+        top_with    = mesh_with.vertices[mesh_with.vertices[:, 2] > 1e-6, 2]
+        top_without = mesh_without.vertices[mesh_without.vertices[:, 2] > 1e-6, 2]
+
+        delta = float(top_with.max() - top_without.max())
+        assert delta >= gsd.SAND_CHUNK_HEIGHT_MM * 0.7, (
+            f"max(with_chunks)={top_with.max():.4f} vs max(without)={top_without.max():.4f}; "
+            f"delta={delta:.4f} mm < {gsd.SAND_CHUNK_HEIGHT_MM * 0.7:.4f} mm.  "
+            "Chunks are not being applied additively on top of the rake."
         )

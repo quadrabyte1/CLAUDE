@@ -1,3 +1,7 @@
+# v0.03 — 2026-09-26 Topo — fix #600: remove post-texture flatten from
+#         export_trap_stls (was wiping rake-line Z variation); set
+#         WATER_RIPPLE_ENABLED=False and remove post-ripple flatten from
+#         export_water_meshes (ripple was displacing water slab ~0.28 mm low).
 # v0.02 — 2026-09-09 Topo — added apply_grass_texture_v2 (cone/pyramid + Poisson
 #         + amplitude jitter + XY shear); GRASS_ALGORITHM switch on fringe;
 #         FRINGE_GRASS_MIN_SPACING_MM floor to keep Poisson counts sane.
@@ -4828,7 +4832,15 @@ PRINT_TOLERANCE_MM: float = 0.03125  # inset each piece for easier fit
 # height — displacement is **downward only** so peaks never poke above the
 # surrounding fringe terrain (which would create overhangs and make the
 # water slab visually float above its socket).
-WATER_RIPPLE_ENABLED: bool = True   # master toggle for water ripple texture
+WATER_RIPPLE_ENABLED: bool = False  # Disabled (fix #600, 2026-09-26): water must be
+                                    # a smooth flat slab.  The ripple displaced the
+                                    # top surface downward by up to ~0.28 mm and the
+                                    # post-ripple flatten then set the slab height to
+                                    # that minimum rather than the intended fringe-
+                                    # sampled height, causing the water mesh to sit
+                                    # visibly below its fringe socket.  The toggle is
+                                    # left in place so the ripple can be re-enabled
+                                    # if the height-error is resolved separately.
 WATER_RIPPLE_A1: float = 0.20       # primary wave amplitude, mm
                                     #   (was 0.25 default; bumped down a touch
                                     #   for medium-blue filament — still visible
@@ -5229,19 +5241,15 @@ def export_trap_stls(
             # finished textured surface as one block).
             apply_sand_texture(mesh, trap_index=i)
 
-            # Per-object flatten (Topo, 2026-09-11): after all texture/build
-            # steps, collapse every TOP-SURFACE vertex on this trap to the
-            # top-surface min-Z so the top face is completely flat by
-            # construction. Base (z<=1e-6) is left alone so wall/base topology
-            # stays intact. Supersedes the prior "interior trap vertices keep
-            # natural relief" behavior (see _apply_lift_and_cap comment). XY is
-            # unchanged, so fringe/seam geometry is unaffected. Downstream
-            # BOUNDARY_HEIGHT_CAP_MM guardrail in _apply_lift_and_cap is now a
-            # no-op for typical (< 9 mm) trap heights but is left in place.
-            _top_mask = mesh.vertices[:, 2] > 1e-6
-            if _top_mask.any():
-                _top_min_z = float(mesh.vertices[_top_mask, 2].min())
-                mesh.vertices[_top_mask, 2] = _top_min_z
+            # NOTE (Topo, 2026-09-26 — fix #600): the post-texture flatten that
+            # previously lived here was erroneously wiping the sinusoidal
+            # rake-line Z variation that apply_sand_texture just built.
+            # apply_sand_texture rebuilds the entire top surface as a regular
+            # Delaunay grid with the cosine-wave displacement already baked in;
+            # collapsing all top verts to min-Z afterwards destroyed the texture.
+            # The flatten is removed; the trap slab height is set correctly by
+            # _build_slab_from_shapely and the rake amplitude is small (≤0.35 mm)
+            # relative to the slab height (~9 mm), so no height-guardrail is needed.
 
             # Water-hole rule (Topo, 2026-05-05): lift this trap and apply the
             # per-vertex edge-band cap inside _apply_lift_and_cap. The cap only
@@ -5403,18 +5411,16 @@ def export_water_meshes(
                     control_points_px=water_poly.get("points", []),
                 )
 
-            # Per-object flatten (Topo, 2026-09-11): after ripple/texture steps,
-            # collapse every TOP-SURFACE vertex on this water polygon to the
-            # top-surface min-Z so the top face is completely flat. Base
-            # (z<=1e-6) is left alone so wall/base topology stays intact. The
-            # downstream 2 mm WATER_HOLE_LIFT_MM rule (applied to green/fringe
-            # elsewhere) still lifts water-hole pieces via max(current_Z,
-            # lift_mm); this flatten only removes per-vertex Z variation on the
-            # top face of this water slab.
-            _top_mask = mesh.vertices[:, 2] > 1e-6
-            if _top_mask.any():
-                _top_min_z = float(mesh.vertices[_top_mask, 2].min())
-                mesh.vertices[_top_mask, 2] = _top_min_z
+            # NOTE (Topo, 2026-09-26 — fix #600): post-ripple flatten removed.
+            # The ripple was disabled (WATER_RIPPLE_ENABLED = False) because it
+            # displaced the top surface downward and the flatten then set the
+            # slab height to the ripple minimum rather than the fringe-sampled
+            # height — causing the water mesh to sit ~0.28 mm too low.  With the
+            # ripple off, _build_slab_from_shapely produces a perfectly flat slab
+            # at the correct height; no post-processing flatten is needed.
+            # If WATER_RIPPLE_ENABLED is re-enabled in the future, a height-
+            # preserving approach (e.g. clamp dz upward so the top stays at
+            # water_height) should be used instead of post-hoc flattening.
 
             bb = mesh.bounds
             print(f"  Water {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "

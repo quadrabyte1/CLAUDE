@@ -1,3 +1,22 @@
+# v0.05 — 2026-09-26 Topo — fix #606: four-part trap tweak.
+#         Item 1: rake direction = PCA major axis per trap (SVD on exterior ring
+#         vertices; cosine wave driven by minor-axis projection).
+#         Item 2: spatially-smooth per-trap-seeded jitter on top of rake cosine
+#         (SAND_JITTER_AMPLITUDE_MM=0.08 mm; two-wave sum keyed on centroid hash).
+#         Item 3: BOUNDARY_HEIGHT_CAP_ENABLED=False suspends frame-edge Z cap
+#         (lift still applied; frame outer wall provides vertical cutoff); note
+#         that the frame is a puzzle-base slab — no Boolean clip exists, so
+#         poke-through above 9 mm is possible; left to Thomas's discretion.
+#         Item 4: TRAP_FRINGE_OFFSET_MM -2.0 → -4.0 (trap 4 mm below fringe).
+#         APP_VERSION bumped to v4.64.
+# v0.04 — 2026-09-26 Topo — fix #604: two-part trap geometry fix.
+#         Part 1: trap frame-edge cap now mirrors fringe cap rule — applied
+#         unconditionally (not only on water holes), gated by applyFringeFrameCap
+#         (1 mm hard band + 5 mm taper to BOUNDARY_HEIGHT_CAP_MM=9 mm).
+#         Part 2: trap height = adjoining-fringe-boundary max Z − 2 mm via new
+#         _compute_trap_height_from_fringe helper (TRAP_FRINGE_OFFSET_MM=-2.0).
+#         New constants: TRAP_FRINGE_BOUNDARY_BAND_MM=6.0, TRAP_FRINGE_OFFSET_MM=-2.0.
+#         export_trap_stls gains apply_fringe_frame_cap kwarg; pipeline passes it.
 # v0.03 — 2026-09-26 Topo — fix #600: remove post-texture flatten from
 #         export_trap_stls (was wiping rake-line Z variation); set
 #         WATER_RIPPLE_ENABLED=False and remove post-ripple flatten from
@@ -1252,6 +1271,12 @@ WATER_HOLE_LIFT_MM:      float = 2.0     # base-slab thickness inserted under li
 BOUNDARY_HEIGHT_CAP_MM:  float = 9.0     # absolute Z ceiling for boundary-touching pieces
 BOUNDARY_HEIGHT_CAP_MODE: str  = "hard"  # one of: "hard", "compress"
 BOUNDARY_TOUCH_TOL_MM:   float = 0.5     # XY tolerance for "vertex touches frame edge"
+# Task #606 (Topo, 2026-09-26): Thomas suspended the frame-edge height cap.
+# When False (default now), _apply_lift_and_cap still applies the water-hole
+# lift but skips the cap step regardless of the cap_mm argument.  The frame's
+# outer wall provides a vertical cutoff for any mesh that exceeds 9 mm near
+# the edge.  Flip to True to restore the previous tapered-cap behaviour.
+BOUNDARY_HEIGHT_CAP_ENABLED: bool = False
 # Edge-band cap (Topo, 2026-05-05): in "hard" mode, the 9 mm cap applies only
 # to top-surface vertices within BOUNDARY_CAP_BAND_MM (XY distance) of the
 # plaque frame perimeter. Interior vertices keep their natural relief, even if
@@ -4811,8 +4836,20 @@ def save_contour_debug_image(
 # Step 10: Export sand trap STLs
 # ---------------------------------------------------------------------------
 
-TRAP_THICKNESS_MM: float = 10.0     # flat slab thickness for traps
+TRAP_THICKNESS_MM: float = 10.0     # flat slab thickness for traps (fallback when no fringe)
 PRINT_TOLERANCE_MM: float = 0.03125  # inset each piece for easier fit
+# Task #604 (Topo, 2026-09-26): trap top height = adjoining fringe max Z
+# within TRAP_FRINGE_BOUNDARY_BAND_MM of the trap perimeter, offset by
+# TRAP_FRINGE_OFFSET_MM.
+# Task #606 (Topo, 2026-09-26): offset changed -2.0 → -4.0 mm per Thomas's
+# request: trap now sits 4 mm below the fringe rim instead of 2 mm.
+TRAP_FRINGE_BOUNDARY_BAND_MM: float = 6.0  # XY band width around trap perimeter to sample fringe Z
+TRAP_FRINGE_OFFSET_MM:        float = -4.0  # mm offset applied to fringe boundary max → trap height
+# Task #606 (Topo, 2026-09-26): low-amplitude spatially-smooth noise added on
+# top of the rake cosine.  Amplitude well below rake ridge height (0.35 mm)
+# so ridges remain dominant; spatially smooth so adjacent vertices see similar
+# displacement (no sandpaper look).  Per-trap seeded for reproducibility.
+SAND_JITTER_AMPLITUDE_MM: float = 0.08  # peak jitter amplitude in mm (half of peak-to-peak)
 
 # ---------------------------------------------------------------------------
 # Water hazard ripple texture — sinusoidal "wind chop" displacement
@@ -4993,7 +5030,11 @@ def _apply_lift_and_cap(
     max_clip = 0.0
     band_verts = 0
     uncapped_above_cap = 0
-    if cap_mm is not None:
+    # Task #606: BOUNDARY_HEIGHT_CAP_ENABLED=False suspends the cap step.
+    # The lift above still applies (water-hole raise); only the height ceiling
+    # is bypassed.  Callers that pass cap_mm=None are already a no-op; this
+    # gate makes cap_mm values irrelevant when the toggle is off.
+    if cap_mm is not None and BOUNDARY_HEIGHT_CAP_ENABLED:
         z_top = verts[top_mask, 2]
         if cap_mode == "hard":
             # Per-vertex edge-band cap (Topo, 2026-05-05, tapered 2026-07-11).
@@ -5084,6 +5125,104 @@ def _apply_lift_and_cap(
     }
 
 
+def _compute_trap_height_from_fringe(
+    trap_poly_mm: "ShapelyPolygon",
+    fringe_mesh: "trimesh.Trimesh | None",
+    boundary_band_mm: float = TRAP_FRINGE_BOUNDARY_BAND_MM,
+    offset_mm: float = TRAP_FRINGE_OFFSET_MM,
+) -> float:
+    """
+    Return the target top-surface height for a trap slab (mm).
+
+    Task #604 rule: find the maximum Z of fringe-mesh top-surface vertices
+    within ``boundary_band_mm`` of the trap polygon's exterior ring, then
+    add ``offset_mm`` (= -2.0 → 2 mm below the fringe rim).
+
+    "Adjoining fringe" is defined as fringe vertices within
+    TRAP_FRINGE_BOUNDARY_BAND_MM of the trap exterior.  This correctly
+    captures the fringe surface that immediately borders the trap without
+    pulling in far-interior fringe cells or the opposite-side fringe.
+
+    Sequencing note: ``fringe_mesh`` must be the FLAT (pre-texture,
+    pre-lift) fringe so the height comparison is in the same coordinate
+    frame as the un-lifted trap slab.  The water-hole lift is applied to
+    both fringe and trap uniformly AFTER this function has sized the slab.
+
+    Fallback: when ``fringe_mesh`` is None (no fringe available), returns
+    ``TRAP_THICKNESS_MM`` (existing fixed-height behaviour).
+
+    Parameters
+    ----------
+    trap_poly_mm : ShapelyPolygon
+        Trap footprint in world mm coords (post-inset).
+    fringe_mesh : trimesh.Trimesh or None
+        Flat fringe mesh in world mm coords.  Top-surface verts have z > 0.
+    boundary_band_mm : float
+        XY distance from trap exterior within which fringe verts are
+        considered "adjoining".
+    offset_mm : float
+        Height delta applied to fringe boundary max.  Negative means trap
+        top sits below the fringe rim (default -2.0 mm).
+
+    Returns
+    -------
+    float : trap slab height in mm (>= 0).
+    """
+    from scipy.spatial import cKDTree as _cKDTree
+
+    if fringe_mesh is None:
+        return float(TRAP_THICKNESS_MM)
+
+    all_verts = fringe_mesh.vertices
+    top_mask = all_verts[:, 2] > 0.0
+    fringe_verts_top = all_verts[top_mask]
+    if len(fringe_verts_top) == 0:
+        return float(TRAP_THICKNESS_MM)
+
+    # Build a KD-tree over fringe top-surface XY positions.
+    fringe_kd = _cKDTree(fringe_verts_top[:, :2])
+
+    # Sample points along the trap exterior ring (and a slightly expanded
+    # ring) to capture the fringe vertices immediately bordering the trap.
+    # We densify the exterior ring so spacing is ≤ 1 mm.
+    exterior_coords = np.asarray(trap_poly_mm.exterior.coords, dtype=np.float64)
+    n_ext = len(exterior_coords)
+    ring_pts = []
+    for j in range(n_ext - 1):
+        p0 = exterior_coords[j]
+        p1 = exterior_coords[(j + 1) % (n_ext - 1)]
+        seg_len = float(np.linalg.norm(p1 - p0))
+        n_interp = max(2, int(np.ceil(seg_len / 1.0)))
+        for t in np.linspace(0.0, 1.0, n_interp, endpoint=False):
+            ring_pts.append(p0 + t * (p1 - p0))
+    if not ring_pts:
+        return float(TRAP_THICKNESS_MM)
+
+    ring_pts = np.array(ring_pts, dtype=np.float64)  # (M, 2)
+
+    # For each ring sample, query all fringe verts within boundary_band_mm.
+    # We collect indices of fringe verts within the band radius.
+    nearby_indices = fringe_kd.query_ball_point(ring_pts, r=boundary_band_mm)
+    # Flatten and deduplicate
+    flat_indices = set()
+    for idxs in nearby_indices:
+        flat_indices.update(idxs)
+
+    if not flat_indices:
+        # Boundary band produced no hits — fall back to nearest-neighbour per
+        # ring point (handles very sparse fringe meshes).
+        _, nn_idxs = fringe_kd.query(ring_pts)
+        flat_indices = set(nn_idxs.tolist())
+
+    boundary_z = fringe_verts_top[np.array(sorted(flat_indices), dtype=int), 2]
+    fringe_boundary_max = float(boundary_z.max())
+    trap_height = fringe_boundary_max + offset_mm
+    if trap_height < 1.0:
+        # Guard: never produce a slab thinner than 1 mm regardless of offset.
+        trap_height = 1.0
+    return trap_height
+
+
 def export_trap_stls(
     egm_data: dict,
     green_boundary_px: np.ndarray,
@@ -5092,6 +5231,7 @@ def export_trap_stls(
     stl_dir: str | None = None,
     write_stls: bool = True,
     pipe_circle: "ShapelyPolygon | None" = None,
+    apply_fringe_frame_cap: bool = True,
 ) -> list:
     """
     For every polygon of type 'trap' in egm_data, build a flat inset slab.
@@ -5108,10 +5248,29 @@ def export_trap_stls(
 
     Uses Catmull-Rom interpolation (matching the editor), applies the same
     px→mm transform as the green, insets by PRINT_TOLERANCE_MM, and extrudes
-    to a height derived from the fringe mesh at the trap centroid (falls back
-    to TRAP_THICKNESS_MM if fringe_mesh is unavailable).
+    to a height derived from the fringe boundary (falls back to TRAP_THICKNESS_MM
+    if fringe_mesh is unavailable).
+
+    Task #604 changes
+    -----------------
+    * Trap height: now computed by _compute_trap_height_from_fringe, which
+      samples fringe Z within TRAP_FRINGE_BOUNDARY_BAND_MM of the trap
+      perimeter and subtracts TRAP_FRINGE_OFFSET_MM (2 mm), placing the trap
+      top 2 mm below the adjoining fringe rim.
+
+    * Frame-edge cap: ``_apply_lift_and_cap`` is now called unconditionally
+      (not only on water holes), gated by ``apply_fringe_frame_cap``.  When
+      True, top-surface vertices within BOUNDARY_CAP_BAND_MM of the plaque
+      frame are clipped to BOUNDARY_HEIGHT_CAP_MM with a BOUNDARY_CAP_TAPER_MM
+      taper — exactly matching fringe behaviour.  When False, no cap is applied
+      (mirrors ``applyFringeFrameCap=False`` on fringe).
+
+    Parameters
+    ----------
+    apply_fringe_frame_cap : bool
+        Mirror of the EGM-level applyFringeFrameCap flag.  Default True.
+        When False, the boundary-band cap is skipped for traps (same as fringe).
     """
-    from scipy.spatial import cKDTree as _cKDTree
     from shapely.geometry import Point as ShapelyPoint
 
     if write_stls:
@@ -5131,26 +5290,20 @@ def export_trap_stls(
         return []
 
     # Water-containing-hole rule (Topo 2026-05-01): if the EGM contains any
-    # water polygon, every trap is lifted by WATER_HOLE_LIFT_MM and any trap
-    # whose footprint touches the fringe rectangle perimeter is capped at
-    # BOUNDARY_HEIGHT_CAP_MM total height.
+    # water polygon, every trap is lifted by WATER_HOLE_LIFT_MM.
     _hole_water = WATER_HOLE_LIFT_ENABLED and _hole_has_water(egm_data)
     if _hole_water:
-        print(f"  Water-hole rule active: lift={WATER_HOLE_LIFT_MM} mm, "
-              f"boundary cap={BOUNDARY_HEIGHT_CAP_MM} mm "
-              f"(mode={BOUNDARY_HEIGHT_CAP_MODE})")
+        print(f"  Water-hole rule active: lift={WATER_HOLE_LIFT_MM} mm")
 
-    # Pre-build fringe KD-tree for fast Z lookups (top-surface vertices only, Z > 0)
-    fringe_kd = None
-    fringe_verts_top = None
-    if fringe_mesh is not None:
-        all_verts = fringe_mesh.vertices          # (N, 3) in mm
-        top_mask = all_verts[:, 2] > 0.0
-        fringe_verts_top = all_verts[top_mask]
-        if len(fringe_verts_top) > 0:
-            fringe_kd = _cKDTree(fringe_verts_top[:, :2])   # query in XY only
-        else:
-            print("  WARNING: fringe mesh has no top-surface vertices (Z>0); trap heights will fall back to fixed.")
+    # Task #604: frame-edge cap is now applied unconditionally (not only on
+    # water holes), mirroring fringe behaviour and gated by apply_fringe_frame_cap.
+    _trap_cap_mm = BOUNDARY_HEIGHT_CAP_MM if apply_fringe_frame_cap else None
+    if apply_fringe_frame_cap:
+        print(f"  Trap frame cap: {BOUNDARY_HEIGHT_CAP_MM} mm "
+              f"(band={BOUNDARY_CAP_BAND_MM} mm, taper={BOUNDARY_CAP_TAPER_MM} mm, "
+              f"mode={BOUNDARY_HEIGHT_CAP_MODE})")
+    else:
+        print("  Trap frame cap: DISABLED (apply_fringe_frame_cap=False)")
 
     results: list = []
     for i, trap_poly in enumerate(trap_polygons, start=1):
@@ -5191,45 +5344,18 @@ def export_trap_stls(
                 print(f"  Trap {i}: inset produced empty polygon — skipping.")
                 continue
 
-            # Determine trap slab height from fringe mesh across the trap footprint.
-            # Using the centroid alone fails for long/thin traps (like Trap 2) that span
-            # a steep fringe gradient — the centroid can land on a high point while the
-            # trap edges extend into lower fringe areas, causing the slab to float above
-            # the surface. Instead, sample fringe Z at multiple points within the trap
-            # and use the MINIMUM so the slab never pokes above the fringe.
-            if fringe_kd is not None:
-                # Sample on a regular grid over the trap bounding box, keep interior pts
-                minx, miny, maxx, maxy = shapely_inset.bounds
-                n_sample = 12  # grid density per axis → up to 144 candidate points
-                xs_s = np.linspace(minx, maxx, n_sample)
-                ys_s = np.linspace(miny, maxy, n_sample)
-                sample_pts = []
-                for sx in xs_s:
-                    for sy in ys_s:
-                        if shapely_inset.contains(ShapelyPoint(sx, sy)):
-                            sample_pts.append([sx, sy])
-
-                # Always include the centroid as a fallback
-                cx, cy = shapely_inset.centroid.x, shapely_inset.centroid.y
-                if not sample_pts:
-                    sample_pts = [[cx, cy]]
-
-                sample_pts = np.array(sample_pts)
-                _, idxs = fringe_kd.query(sample_pts)
-                sampled_z = fringe_verts_top[idxs, 2]
-                # Task 742 (Topo, 2026-09-05): changed .min() → .max() so the trap
-                # slab height matches the TOP of the fringe over the trap footprint,
-                # not the low-Z frame-edge cells the KD lookup picks up nearby.
-                # This produces consistent ~9-10mm trap heights matching the fringe
-                # cap band instead of wildly inconsistent 2.85 → 10.0 mm values.
-                trap_height = float(sampled_z.max())
-                print(f"  Trap {i}: fringe Z MAX over {len(sample_pts)} samples = {trap_height:.2f} mm "
-                      f"(min was {float(sampled_z.min()):.2f} mm, "
-                      f"centroid Z = {fringe_verts_top[fringe_kd.query([[cx, cy]])[1][0], 2]:.2f} mm, "
-                      f"was fixed {TRAP_THICKNESS_MM} mm)")
+            # Task #604 (Topo, 2026-09-26): trap height = adjoining fringe max Z
+            # − 2 mm.  "Adjoining fringe" = fringe top-surface vertices within
+            # TRAP_FRINGE_BOUNDARY_BAND_MM of the trap exterior ring.  This
+            # replaces the prior interior-sampling + .max() approach which picked
+            # up fringe Z over the entire trap footprint (unrelated to the rim
+            # height visible around the trap edge).
+            trap_height = _compute_trap_height_from_fringe(shapely_inset, fringe_mesh)
+            if fringe_mesh is not None:
+                print(f"  Trap {i}: height from fringe boundary = {trap_height:.2f} mm "
+                      f"(fringe_boundary_max + {TRAP_FRINGE_OFFSET_MM:.1f} mm offset)")
             else:
-                trap_height = TRAP_THICKNESS_MM
-                print(f"  Trap {i}: no fringe mesh — using fixed height {trap_height} mm")
+                print(f"  Trap {i}: no fringe mesh — using fixed height {trap_height:.2f} mm")
 
             # Build flat slab mesh
             from generate_stl_3mf import _build_slab_from_shapely
@@ -5251,19 +5377,21 @@ def export_trap_stls(
             # _build_slab_from_shapely and the rake amplitude is small (≤0.35 mm)
             # relative to the slab height (~9 mm), so no height-guardrail is needed.
 
-            # Water-hole rule (Topo, 2026-05-05): lift this trap and apply the
-            # per-vertex edge-band cap inside _apply_lift_and_cap. The cap only
-            # affects vertices within BOUNDARY_CAP_BAND_MM of the plaque frame
-            # perimeter; interior traps (no vertex in the band) are a no-op for
-            # the cap, so we pass the cap unconditionally.
-            if _hole_water:
-                touches = _polygon_touches_frame_boundary(shapely_inset)
-                _apply_lift_and_cap(
-                    mesh,
-                    lift_mm=WATER_HOLE_LIFT_MM,
-                    cap_mm=BOUNDARY_HEIGHT_CAP_MM,
-                    label=f"trap_{i}{' (boundary)' if touches else ''}",
-                )
+            # Task #604 (Topo, 2026-09-26): frame-edge cap is applied
+            # UNCONDITIONALLY (not only on water holes), matching fringe behaviour.
+            # _apply_lift_and_cap with cap_mm=None is a no-op for the cap logic
+            # but still applies the water-hole lift when _hole_water is True.
+            # Per-vertex: only verts within BOUNDARY_CAP_BAND_MM of the frame are
+            # clipped, so interior-only traps are unaffected by the cap.
+            touches = _polygon_touches_frame_boundary(shapely_inset)
+            _apply_lift_and_cap(
+                mesh,
+                lift_mm=WATER_HOLE_LIFT_MM if _hole_water else 0.0,
+                cap_mm=_trap_cap_mm,
+                label=(f"trap_{i}"
+                       + (" (boundary)" if touches else "")
+                       + (" cap=disabled" if _trap_cap_mm is None else "")),
+            )
 
             bb = mesh.bounds
             print(f"  Trap {i}: {len(mesh.vertices)} verts, {len(mesh.faces)} faces, "
@@ -6011,19 +6139,39 @@ def apply_sand_texture(
 
     The top surface is REBUILT as a regular rectangular grid rather than
     subdividing the original irregular triangle mesh.  A regular grid guarantees
-    that vertices are evenly spaced in X, so the cosine wave is sampled cleanly
-    and produces perfectly parallel rake lines with no herringbone artifacts.
+    that vertices are evenly spaced along the minor axis, so the cosine wave is
+    sampled cleanly and produces perfectly parallel rake lines with no herringbone
+    artifacts.
+
+    Task #606 changes
+    -----------------
+    * **Rake direction = trap major axis** (PCA-derived per trap).  The cosine
+      wave varies along the *minor* axis (across the trap's short dimension) so
+      ridges run parallel to the *major* axis (along the trap's long dimension).
+      This is the "raked across the narrow direction" look.
+
+      Implementation: SVD on exterior-ring vertices gives the PCA axes.  The
+      minor axis projection drives the cosine; major axis projection is constant
+      within each ridge.
+
+    * **Jitter noise** (amplitude = SAND_JITTER_AMPLITUDE_MM, ~0.08 mm).
+      A low-frequency sinusoidal sum with two random phases is added on top of
+      the cosine ridges.  The phases are seeded from a hash of the trap polygon's
+      centroid (rounded to 0.1 mm) so the same EGM always generates the same
+      noise pattern (reproducible), but different traps differ.
 
     Algorithm
     ---------
     1. Extract the original top-face boundary as a Shapely polygon.
     2. Generate a regular (x, y) grid over the bounding box; keep only points
        inside the polygon.
-    3. Compute Z = z_max + amplitude * 0.5 * (1 + cos(2π * x / grain_spacing))
-       for each grid point (rake lines parallel to Y, ridges vary with X).
-    4. Delaunay-triangulate the grid points; discard triangles whose centroid
+    3. Compute PCA major axis from exterior ring vertices.
+    4. Project grid/ring points onto minor axis → sinusoidal displacement dz.
+       Add per-trap-seeded low-frequency jitter displacement dz_jitter.
+       Z = z_max + dz + dz_jitter.
+    5. Delaunay-triangulate the grid points; discard triangles whose centroid
        falls outside the polygon.
-    5. Reassemble: new grid top + original wall/base faces; merge boundary
+    6. Reassemble: new grid top + original wall/base faces; merge boundary
        vertices with trimesh process=True to restore watertightness.
 
     Parameters
@@ -6032,9 +6180,9 @@ def apply_sand_texture(
     amplitude    : peak-to-trough height of rake ridges in mm (default 0.35 mm).
     grain_spacing: centre-to-centre distance between rake-line peaks in mm
                    (default 1.5 mm).
-    trap_index   : integer used to select a unique rake direction per trap
-                   (angle = trap_index * 60°). Reserved for future use; rake
-                   direction is currently fixed at 0°.
+    trap_index   : integer used to seed the per-trap jitter RNG (different
+                   values produce different noise patterns on otherwise identical
+                   trap shapes).
 
     Returns the mesh modified in place (also returns it for convenience).
     """
@@ -6149,6 +6297,28 @@ def apply_sand_texture(
               f"({', '.join(str(len(lp)) for lp in hole_loops)} verts)")
 
     # ------------------------------------------------------------------
+    # 2b. PCA major/minor axis from outer ring  (Task #606, Item 1)
+    #
+    # Rake ridges must be parallel to the trap's LONG axis.  We derive the
+    # principal axes via SVD on the centered outer-ring vertices:
+    #   pts  = ring_xy coords (drop the closing duplicate)
+    #   c    = centroid
+    #   U, S, Vt = svd(pts - c, full_matrices=False)
+    #   major_axis = Vt[0]   (right singular vector for largest singular value)
+    #   minor_axis = Vt[1]
+    #
+    # Ridges are constant-Z contours → constant projection onto minor_axis.
+    # The cosine wave is parameterised by s = dot(xy - c, minor_axis).
+    # ------------------------------------------------------------------
+    _ring_pts = ring_xy[:-1] if len(ring_xy) > 1 else ring_xy  # drop closing dup
+    _ring_c   = _ring_pts.mean(axis=0)
+    _, _S_vals, _Vt = np.linalg.svd(_ring_pts - _ring_c, full_matrices=False)
+    major_axis = _Vt[0]  # unit vector along trap long axis
+    minor_axis = _Vt[1]  # unit vector perpendicular (drives cosine wave)
+    # Compute angle from +X for display.
+    _rake_angle_deg = float(np.degrees(np.arctan2(major_axis[1], major_axis[0])) % 180.0)
+
+    # ------------------------------------------------------------------
     # 3. Build a regular grid over the bounding box; filter inside polygon
     # ------------------------------------------------------------------
     grid_step = grain_spacing * 0.2                   # ~0.3 mm → ~5 pts per period
@@ -6216,24 +6386,68 @@ def apply_sand_texture(
         print(f"    Sand texture: after step increase → {n_grid} grid points")
 
     # ------------------------------------------------------------------
-    # 4. Compute Z for every grid point (sinusoidal rake profile)
+    # 4. Compute Z for every grid point (major-axis rake + jitter)
     # ------------------------------------------------------------------
-    # Sine displacement helper — same formula applied consistently to all
-    # points so interior grid vertices and boundary ring vertices match.
-    def sine_dz(x_arr):
-        return amplitude * 0.5 * (1.0 + np.cos(2.0 * math.pi * x_arr / grain_spacing))
+    # Task #606 — Rake axis = PCA major axis (computed in step 2b).
+    #
+    # The cosine wave is driven by each point's projection onto minor_axis
+    # (perpendicular to the long direction).  Ridges are iso-contours of
+    # the minor-axis projection, i.e. they run parallel to major_axis.
+    #
+    # s = (xy - centroid) · minor_axis  → scalar position across trap
+    # dz_rake = amplitude * 0.5 * (1 + cos(2π * s / grain_spacing))
+    #
+    # Jitter (Task #606, Item 2):
+    # A sum of two low-frequency sinusoids at random phases, seeded from
+    # a hash of (trap centroid rounded to 0.1 mm).  The two waves have
+    # different wavelengths (3× and 5× grain_spacing) and orientations
+    # (major and minor axes) so the interference pattern is spatially
+    # smooth (no point-noise look) and non-periodic within a typical trap.
+    # Amplitude is capped at SAND_JITTER_AMPLITUDE_MM per wave.
+
+    def _proj_minor(xy_arr: np.ndarray) -> np.ndarray:
+        """Project 2-D XY points onto the minor axis (relative to centroid)."""
+        return (xy_arr - _ring_c) @ minor_axis
+
+    def _proj_major(xy_arr: np.ndarray) -> np.ndarray:
+        """Project 2-D XY points onto the major axis (relative to centroid)."""
+        return (xy_arr - _ring_c) @ major_axis
+
+    def _rake_dz(xy_arr: np.ndarray) -> np.ndarray:
+        """Cosine rake displacement keyed on minor-axis projection."""
+        s = _proj_minor(xy_arr)
+        return amplitude * 0.5 * (1.0 + np.cos(2.0 * math.pi * s / grain_spacing))
+
+    # Per-trap jitter seed: hash of polygon centroid rounded to 0.1 mm.
+    _cx, _cy = shapely_poly.centroid.x, shapely_poly.centroid.y
+    _seed_val = int(abs(round(_cx, 1) * 1000.0) * 137 + abs(round(_cy, 1) * 1000.0) * 31
+                    + trap_index * 997) % (2 ** 31)
+    _rng = np.random.default_rng(_seed_val)
+    _phi1, _phi2 = float(_rng.uniform(0.0, 2.0 * math.pi)), float(_rng.uniform(0.0, 2.0 * math.pi))
+    _jitter_wave1_wl = grain_spacing * 5.0   # long-wave component along minor axis
+    _jitter_wave2_wl = grain_spacing * 3.0   # medium-wave component along major axis
+
+    def _jitter_dz(xy_arr: np.ndarray) -> np.ndarray:
+        """Low-frequency sinusoidal jitter displacement (spatially smooth)."""
+        s_minor = _proj_minor(xy_arr)
+        s_major = _proj_major(xy_arr)
+        wave1 = SAND_JITTER_AMPLITUDE_MM * np.sin(2.0 * math.pi * s_minor / _jitter_wave1_wl + _phi1)
+        wave2 = SAND_JITTER_AMPLITUDE_MM * np.sin(2.0 * math.pi * s_major / _jitter_wave2_wl + _phi2)
+        return (wave1 + wave2) * 0.5  # average to keep combined amplitude within ±SAND_JITTER_AMPLITUDE_MM
 
     # Interior grid points.
-    dz     = sine_dz(grid_xy_in[:, 0])
-    grid_z = z_max + dz                               # (M,)
+    dz_rake = _rake_dz(grid_xy_in)
+    dz_jit  = _jitter_dz(grid_xy_in)
+    dz      = dz_rake + dz_jit
+    grid_z  = z_max + dz                               # (M,)
 
     # Boundary ring points: include in Delaunay so the triangulation
     # reaches the polygon edge exactly, sharing XY with the wall rim.
     # Concatenate outer ring + every interior hole ring so EVERY boundary
     # vertex is represented (multi-loop walker output).
     all_ring_idx = [int(v) for lp in all_loops for v in lp]
-    ring_xy_arr = all_verts[all_ring_idx, :2]         # (R, 2)
-    ring_z      = z_max + sine_dz(ring_xy_arr[:, 0]) # (R,)
+    ring_xy_arr  = all_verts[all_ring_idx, :2]                                 # (R, 2)
+    ring_z       = z_max + _rake_dz(ring_xy_arr) + _jitter_dz(ring_xy_arr)    # (R,)
 
     # Combined point set for Delaunay: boundary ring first, then interior.
     n_ring   = len(ring_xy_arr)
@@ -6241,9 +6455,13 @@ def apply_sand_texture(
     all_z    = np.concatenate([ring_z, grid_z])       # (R+M,)
     grid_pts = np.column_stack([all_xy, all_z])       # (R+M, 3)
 
-    n_lines = int(math.ceil((x_max - x_min) / grain_spacing)) + 1
-    print(f"    Sand texture: rake lines, angle=0°, spacing={grain_spacing:.2f} mm, "
-          f"amplitude={amplitude:.3f} mm, ~{n_lines} lines, "
+    n_lines = int(math.ceil(
+        np.ptp((grid_xy_in - _ring_c) @ minor_axis) / grain_spacing
+    )) + 1
+    print(f"    Sand texture: rake lines, major_axis_angle={_rake_angle_deg:.1f}°, "
+          f"spacing={grain_spacing:.2f} mm, "
+          f"amplitude={amplitude:.3f} mm, jitter={SAND_JITTER_AMPLITUDE_MM:.3f} mm, "
+          f"~{n_lines} lines, seed={_seed_val}, "
           f"dz range [{dz.min():.3f}, {dz.max():.3f}] mm on {n_grid} grid verts "
           f"+ {n_ring} boundary ring verts")
 
@@ -8033,11 +8251,14 @@ def run_pipeline(
             print("\n[7d] Tee-hole: no 'tee_hole' key in EGM — skipping.")
 
     # ── 8. Build sand trap meshes (in-memory) ───────────────────────────────
+    # Pass apply_fringe_frame_cap so the trap boundary-band cap mirrors the
+    # fringe cap controlled by the same EGM flag (task #604).
     print("\n[8] Building sand trap meshes…")
     trap_meshes = export_trap_stls(_egm_data, green_boundary_px, slug,
                                    fringe_mesh=fringe_mesh_flat,
                                    pipe_circle=pipe_circle,
-                                   write_stls=False)
+                                   write_stls=False,
+                                   apply_fringe_frame_cap=apply_fringe_frame_cap)
     if not trap_meshes:
         print("  (no traps built)")
 

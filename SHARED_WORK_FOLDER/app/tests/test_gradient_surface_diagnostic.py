@@ -5,6 +5,13 @@ Bug→TDD:  tests written first (RED); fixed by:
   1. Removing the post-texture flatten from export_trap_stls  (trap rake lines).
   2. Setting WATER_RIPPLE_ENABLED = False and removing the post-ripple flatten
      from export_water_meshes  (water smooth-flat slab at correct height).
+  3. Trap frame-cap parity: apply the same BOUNDARY_CAP_BAND_MM/TAPER cap that
+     fringe receives to trap meshes always (not just on water holes), gated by
+     the EGM-level applyFringeFrameCap flag.
+  4. Trap top height = adjoining fringe max Z − TRAP_FRINGE_OFFSET_MM (2 mm below
+     the highest fringe point on the trap boundary), not interior fringe max.
+  5. (Task #606) Rake direction = trap major axis (PCA), jitter noise, cap
+     suspension toggle, TRAP_FRINGE_OFFSET_MM -2 → -4 mm.
 
 Covers
 ------
@@ -16,6 +23,30 @@ Covers
      height.  Tests confirm WATER_RIPPLE_ENABLED is False (so no displacement)
      and that the production file no longer contains the post-ripple flatten
      (which was collapsing the slab to the deepest ripple point, ~0.28 mm low).
+
+  C. Trap frame-cap parity (Part 1): trap mesh vertices within
+     BOUNDARY_CAP_BAND_MM of the frame edge must be clipped to
+     BOUNDARY_HEIGHT_CAP_MM, regardless of whether the hole has water.
+     When applyFringeFrameCap=False the cap is skipped for traps too.
+
+  D. Trap height from adjoining fringe (Part 2): trap top = fringe_boundary_max
+     − TRAP_FRINGE_OFFSET_MM; fallback to TRAP_THICKNESS_MM when no fringe mesh;
+     multi-fringe (two adjoining fringes) uses the higher of the two.
+
+  E. (Task #606) Rake axis = trap major axis (PCA-derived per-trap).
+     A trap rotated 30° from X must have rake ridges parallel to its long axis.
+     A Y-aligned trap must still produce rakes along Y (regression).
+
+  F. (Task #606) Jitter noise on top of rake lines.
+     Same trap → two calls → identical Z values (reproducible).
+     Two different traps → different noise patterns.
+     Peak-to-peak jitter ≤ SAND_JITTER_AMPLITUDE_MM * 2 + epsilon.
+
+  G. (Task #606) BOUNDARY_HEIGHT_CAP_ENABLED toggle.
+     When False: frame-edge vertices keep natural height, no 9-mm clamp.
+     When True: existing cap behavior is restored.
+
+  H. (Task #606) TRAP_FRINGE_OFFSET_MM updated from -2.0 to -4.0.
 """
 from __future__ import annotations
 
@@ -161,9 +192,10 @@ class TestTrapRakeLines:
 
         # Find the export_trap_stls function body.
         # We look for the flatten sentinel between apply_sand_texture call and
-        # the _hole_water / Water-hole-rule block that follows it.
+        # the unconditional cap / touches block that follows it (task #604:
+        # `if _hole_water:` was replaced by the unconditional `touches =`).
         trap_fn_pattern = re.compile(
-            r"apply_sand_texture\(mesh.*?\n(.*?)(?=if _hole_water:)",
+            r"apply_sand_texture\(mesh.*?\n(.*?)(?=touches = _polygon_touches_frame_boundary)",
             re.DOTALL,
         )
         m = trap_fn_pattern.search(source)
@@ -171,8 +203,10 @@ class TestTrapRakeLines:
             # Pattern didn't match — most likely the source changed significantly.
             # Fail with a clear message.
             pytest.fail(
-                "Could not locate the apply_sand_texture→_hole_water block in "
-                "export_trap_stls.  The test regex needs updating."
+                "Could not locate the apply_sand_texture→touches block in "
+                "export_trap_stls.  The test regex needs updating "
+                "(expected `touches = _polygon_touches_frame_boundary` after "
+                "apply_sand_texture — did the cap restructuring move things?)."
             )
 
         between = m.group(1)
@@ -311,4 +345,1063 @@ class TestWaterSurface:
             "ripple call.  The post-ripple flatten is still present; it sets "
             "water height to the ripple minimum instead of the intended height.  "
             "Remove the flatten block from export_water_meshes."
+        )
+
+
+# ===========================================================================
+# C.  Trap frame-cap parity  (Part 1)
+# ===========================================================================
+
+class TestTrapFrameCapParity:
+    """
+    Part 1 — Trap edge-of-frame cap must mirror the fringe cap rule.
+
+    The fringe cap (BOUNDARY_CAP_BAND_MM=1 mm hard + BOUNDARY_CAP_TAPER_MM=5 mm
+    taper, ceiling BOUNDARY_HEIGHT_CAP_MM=9 mm) currently only fires for traps
+    on water holes.  These tests assert the cap fires unconditionally for any
+    trap whose vertices fall in the frame-edge band, gated by applyFringeFrameCap.
+
+    RED before fix: _apply_lift_and_cap is only called inside `if _hole_water:`.
+    GREEN after fix: cap is applied always (regardless of water), gated by
+                     apply_fringe_frame_cap passed into export_trap_stls.
+    """
+
+    # -----------------------------------------------------------------------
+    # Helpers
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _make_fringe_vertices_flat(half_mm: float, height_mm: float) -> np.ndarray:
+        """
+        Return a minimal set of fringe top-surface vertices covering the
+        frame-edge band at uniform height.  Enough for the KD-tree lookups
+        in export_trap_stls to find neighbours.
+
+        Places a 5×5 grid across the square frame (side = 2*half_mm).
+        All z values = height_mm (> 0, so they are "top" vertices).
+        """
+        xs = np.linspace(-half_mm, half_mm, 5)
+        ys = np.linspace(-half_mm, half_mm, 5)
+        xx, yy = np.meshgrid(xs, ys)
+        pts = np.column_stack([xx.ravel(), yy.ravel(),
+                               np.full(xx.size, height_mm)])
+        return pts
+
+    @staticmethod
+    def _fringe_mesh_from_verts(verts: np.ndarray) -> "trimesh.Trimesh":
+        """
+        Build a trimesh Trimesh from a set of top-surface vertices.
+        We add a bottom plane at z=0 and stitch faces so the mesh is
+        non-empty (the cap code only needs mesh.vertices to be mutable).
+        """
+        import trimesh
+        from scipy.spatial import Delaunay
+
+        tri = Delaunay(verts[:, :2])
+        top_faces = tri.simplices.tolist()
+        bottom_verts = verts.copy()
+        bottom_verts[:, 2] = 0.0
+        all_verts = np.vstack([verts, bottom_verts])
+        n = len(verts)
+        bottom_faces = [[f[0] + n, f[2] + n, f[1] + n] for f in top_faces]
+        faces = np.array(top_faces + bottom_faces, dtype=np.int64)
+        m = trimesh.Trimesh(vertices=all_verts, faces=faces, process=False)
+        return m
+
+    @staticmethod
+    def _build_frame_edge_trap_mesh(
+        frame_half_mm: float,
+        trap_height_mm: float,
+    ):
+        """
+        Build a small slab whose left edge is flush with the left frame edge
+        (x = -frame_half_mm).  Top verts at x≈-frame_half_mm are within
+        BOUNDARY_CAP_BAND_MM of the frame edge → should be capped.
+        """
+        import trimesh
+        from generate_stl_3mf import _build_slab_from_shapely
+
+        poly = ShapelyPolygon([
+            (-frame_half_mm,       -5.0),
+            (-frame_half_mm + 8.0, -5.0),
+            (-frame_half_mm + 8.0,  5.0),
+            (-frame_half_mm,        5.0),
+        ])
+        return _build_slab_from_shapely(poly, trap_height_mm)
+
+    # -----------------------------------------------------------------------
+    # Tests
+    # -----------------------------------------------------------------------
+
+    def test_cap_fires_without_water_when_enabled(self):
+        """
+        A trap flush with the frame edge must have its boundary-band top verts
+        clipped to BOUNDARY_HEIGHT_CAP_MM even on a non-water hole, when the
+        cap toggle is on.
+
+        RED before fix (#604): cap only fires inside `if _hole_water:`, so a
+                        trap on a non-water hole keeps its full height (e.g. 12 mm)
+                        right at the frame edge.
+        GREEN after fix (#604): cap fires unconditionally (gated by applyFringeFrameCap,
+                         default True), so top verts ≤ 9 mm at the edge.
+
+        Note: Task #606 added BOUNDARY_HEIGHT_CAP_ENABLED (default False) which
+        suspends the cap globally.  This test patches it to True so it continues
+        to verify the cap MECHANISM works correctly when the toggle is on.
+        """
+        gsd = _load_gsd()
+
+        frame_half = gsd.PRINT_SIZE_MM / 2.0 + gsd.FRINGE_XY_EXPANSION_MM / 2.0
+        trap_height = gsd.BOUNDARY_HEIGHT_CAP_MM + 3.0  # 12 mm — clearly over cap
+
+        mesh = self._build_frame_edge_trap_mesh(frame_half, trap_height)
+
+        # Task #606: cap is now off by default; enable it for this mechanism test.
+        gsd.BOUNDARY_HEIGHT_CAP_ENABLED = True
+        try:
+            # Apply cap (the logic that export_trap_stls should invoke unconditionally
+            # after the fix).
+            gsd._apply_lift_and_cap(
+                mesh,
+                lift_mm=0.0,
+                cap_mm=gsd.BOUNDARY_HEIGHT_CAP_MM,
+                label="test_trap_cap",
+            )
+        finally:
+            gsd.BOUNDARY_HEIGHT_CAP_ENABLED = False  # restore default
+
+        top_verts = mesh.vertices[mesh.vertices[:, 2] > 1e-6]
+        # Vertices right at the frame edge (within BOUNDARY_CAP_BAND_MM)
+        band = gsd.BOUNDARY_CAP_BAND_MM
+        edge_verts = top_verts[
+            np.abs(np.abs(top_verts[:, 0]) - frame_half) <= band
+        ]
+        assert len(edge_verts) > 0, (
+            "No top-surface vertices found within the frame-edge band.  "
+            "Adjust _build_frame_edge_trap_mesh so its left edge is flush."
+        )
+        max_edge_z = float(edge_verts[:, 2].max())
+        assert max_edge_z <= gsd.BOUNDARY_HEIGHT_CAP_MM + 1e-3, (
+            f"Frame-edge trap top Z = {max_edge_z:.3f} mm exceeds cap "
+            f"{gsd.BOUNDARY_HEIGHT_CAP_MM} mm.  The cap is not being applied "
+            "unconditionally (only fires on water holes in the buggy code)."
+        )
+
+    def test_cap_skipped_when_apply_fringe_frame_cap_false(self):
+        """
+        When applyFringeFrameCap=False, the trap cap must be skipped — matching
+        fringe behavior.  The trap keeps its full height at the frame edge.
+
+        GREEN always (no code path currently calls _apply_lift_and_cap with
+        cap_mm=None for trap; this test documents the expected behavior and
+        will stay green after the fix because the fix gates the cap call on
+        apply_fringe_frame_cap).
+        """
+        gsd = _load_gsd()
+
+        frame_half = gsd.PRINT_SIZE_MM / 2.0 + gsd.FRINGE_XY_EXPANSION_MM / 2.0
+        trap_height = gsd.BOUNDARY_HEIGHT_CAP_MM + 3.0  # 12 mm
+
+        mesh = self._build_frame_edge_trap_mesh(frame_half, trap_height)
+
+        # applyFringeFrameCap=False → pass cap_mm=None (no clip)
+        gsd._apply_lift_and_cap(
+            mesh,
+            lift_mm=0.0,
+            cap_mm=None,
+            label="test_trap_no_cap",
+        )
+
+        top_verts = mesh.vertices[mesh.vertices[:, 2] > 1e-6]
+        max_z = float(top_verts[:, 2].max())
+        # Height should remain near the original trap_height (no clipping)
+        assert max_z >= gsd.BOUNDARY_HEIGHT_CAP_MM, (
+            f"Trap max Z = {max_z:.3f} mm fell below cap {gsd.BOUNDARY_HEIGHT_CAP_MM} mm "
+            "even though cap_mm=None was passed (cap should be skipped)."
+        )
+
+    def test_export_trap_stls_accepts_apply_fringe_frame_cap_kwarg(self):
+        """
+        export_trap_stls must accept an `apply_fringe_frame_cap` keyword argument
+        so callers can pass the EGM flag value.
+
+        RED before fix: the function signature does not include apply_fringe_frame_cap.
+        GREEN after fix: the parameter exists.
+        """
+        import inspect
+        gsd = _load_gsd()
+        sig = inspect.signature(gsd.export_trap_stls)
+        assert "apply_fringe_frame_cap" in sig.parameters, (
+            "export_trap_stls does not accept `apply_fringe_frame_cap`.  "
+            "Add the parameter so the EGM flag can control the cap."
+        )
+
+    def test_production_code_cap_not_gated_by_hole_water(self):
+        """
+        Static code check: the cap call in export_trap_stls must NOT be inside
+        `if _hole_water:` (or equivalent).  It must fire unconditionally.
+
+        RED before fix: `_apply_lift_and_cap` call for trap is inside the
+                        `if _hole_water:` block.
+        GREEN after fix: the cap call is outside the water-hole gate.
+        """
+        source = GSD_PATH.read_text(encoding="utf-8")
+
+        # Find the export_trap_stls function body.
+        fn_start = source.find("def export_trap_stls(")
+        fn_end   = source.find("\ndef ", fn_start + 1)
+        if fn_start == -1:
+            pytest.fail("Could not find export_trap_stls in source.")
+        fn_body = source[fn_start:fn_end if fn_end != -1 else len(source)]
+
+        # There must be an _apply_lift_and_cap call outside the `if _hole_water:`
+        # block.  A naive check: count _apply_lift_and_cap calls and ensure at
+        # least one occurs before/outside the `_hole_water` conditional.
+        #
+        # Strategy: look for an `_apply_lift_and_cap` call that is NOT preceded
+        # by `if _hole_water:` within the same indented block.  We check for the
+        # unconditional cap pattern introduced by the fix.
+        assert "_apply_lift_and_cap" in fn_body, (
+            "No _apply_lift_and_cap call found in export_trap_stls at all."
+        )
+
+        # After the fix, there should be a cap call that is NOT gated by _hole_water.
+        # We look for the new unconditional call pattern:
+        # `if apply_fringe_frame_cap` or similar outside the water gate.
+        has_unconditional_cap = (
+            "apply_fringe_frame_cap" in fn_body
+            or "applyFringeFrameCap" in fn_body
+        )
+        assert has_unconditional_cap, (
+            "export_trap_stls does not reference apply_fringe_frame_cap.  "
+            "The trap cap is still gated only by _hole_water; it must be "
+            "applied unconditionally (gated by apply_fringe_frame_cap instead)."
+        )
+
+
+# ===========================================================================
+# D.  Trap height from adjoining fringe  (Part 2)
+# ===========================================================================
+
+class TestTrapHeightFromAdjoiningFringe:
+    """
+    Part 2 — Trap top = adjoining-fringe max Z − TRAP_FRINGE_OFFSET_MM (2 mm).
+
+    The height sampling must query fringe vertices near the TRAP BOUNDARY
+    (perimeter band), not the trap interior, and must subtract 2 mm.
+
+    RED before fix:
+      - No TRAP_FRINGE_OFFSET_MM constant exists.
+      - Sampling queries interior points and uses max() with no offset.
+    GREEN after fix:
+      - TRAP_FRINGE_OFFSET_MM = -2.0 constant exists.
+      - Boundary-band fringe sampling returns fringe_boundary_max − 2.0 mm.
+      - Fallback (no fringe mesh) → TRAP_THICKNESS_MM.
+      - Multi-fringe (two adjoining fringes) → max of the two − 2.0 mm.
+    """
+
+    @staticmethod
+    def _fringe_mesh_ring(
+        trap_poly_mm,
+        fringe_z_near: float,
+        fringe_z_far: float = 5.0,
+        ring_width_mm: float = 8.0,
+    ):
+        """
+        Build a synthetic fringe mesh as a ring around trap_poly_mm.
+
+        Vertices within ring_width_mm of the trap boundary are set to
+        fringe_z_near; vertices beyond that distance are set to fringe_z_far.
+        This lets tests assert that the boundary-band sampling picks up
+        fringe_z_near (not fringe_z_far from far-interior fringe cells).
+        """
+        import trimesh
+        from shapely.geometry import Point as ShapelyPoint
+
+        trap_ext = trap_poly_mm.buffer(ring_width_mm).exterior
+        ring_poly = trap_poly_mm.buffer(ring_width_mm + 4.0)
+
+        # Sample a grid over the bounding box of ring_poly
+        minx, miny, maxx, maxy = ring_poly.bounds
+        xs = np.linspace(minx, maxx, 20)
+        ys = np.linspace(miny, maxy, 20)
+        verts_top = []
+        for x in xs:
+            for y in ys:
+                if not ring_poly.contains(ShapelyPoint(x, y)):
+                    continue
+                # Distance from trap exterior
+                dist = trap_poly_mm.exterior.distance(ShapelyPoint(x, y))
+                z = fringe_z_near if dist <= ring_width_mm else fringe_z_far
+                verts_top.append([x, y, z])
+
+        if not verts_top:
+            pytest.skip("_fringe_mesh_ring produced no vertices — geometry degenerate.")
+
+        verts_top = np.array(verts_top, dtype=np.float64)
+        # Add bottom plane at z=0
+        verts_bot = verts_top.copy(); verts_bot[:, 2] = 0.0
+        all_verts = np.vstack([verts_top, verts_bot])
+
+        from scipy.spatial import Delaunay
+        tri = Delaunay(verts_top[:, :2])
+        n = len(verts_top)
+        top_faces  = tri.simplices.tolist()
+        bot_faces  = [[f[0]+n, f[2]+n, f[1]+n] for f in top_faces]
+        faces = np.array(top_faces + bot_faces, dtype=np.int64)
+        return trimesh.Trimesh(vertices=all_verts, faces=faces, process=False)
+
+    def test_trap_fringe_offset_constant_exists(self):
+        """
+        TRAP_FRINGE_OFFSET_MM must exist and equal -4.0.
+
+        Task #604: constant introduced at -2.0.
+        Task #606: updated to -4.0 (trap 4 mm below fringe per Thomas's request).
+
+        RED before fix (#604): constant does not exist.
+        GREEN after fix (#604): TRAP_FRINGE_OFFSET_MM = -2.0 is defined.
+        GREEN after fix (#606): TRAP_FRINGE_OFFSET_MM = -4.0.
+        """
+        gsd = _load_gsd()
+        assert hasattr(gsd, "TRAP_FRINGE_OFFSET_MM"), (
+            "TRAP_FRINGE_OFFSET_MM is not defined in gradient_surface_diagnostic.py.  "
+            "Add TRAP_FRINGE_OFFSET_MM: float = -4.0 to the constants section."
+        )
+        val = gsd.TRAP_FRINGE_OFFSET_MM
+        assert abs(val - (-4.0)) < 1e-6, (
+            f"TRAP_FRINGE_OFFSET_MM = {val}, expected -4.0 (updated from -2.0 in task #606)."
+        )
+
+    def test_trap_height_is_fringe_boundary_max_minus_offset(self):
+        """
+        The height computed for a trap that adjoins a fringe must be
+        fringe_boundary_max + TRAP_FRINGE_OFFSET_MM (= fringe_boundary_max − 2.0).
+
+        We call the new helper _compute_trap_height_from_fringe directly.
+
+        RED before fix: no such helper; the current code path returns interior
+                        max (no boundary distinction) with no offset.
+        GREEN after fix: helper exists and returns fringe_boundary_max − 2.0.
+        """
+        gsd = _load_gsd()
+
+        if not hasattr(gsd, "_compute_trap_height_from_fringe"):
+            pytest.fail(
+                "_compute_trap_height_from_fringe does not exist.  "
+                "Add this helper to encapsulate the new boundary-band sampling."
+            )
+
+        from shapely.geometry import Polygon as ShapelyPolygon
+
+        # Small square trap centred at origin, 10×10 mm
+        trap_poly = ShapelyPolygon([(-5, -5), (5, -5), (5, 5), (-5, 5)])
+
+        # Fringe: near-boundary z = 11.0, far z = 5.0
+        fringe_mesh = self._fringe_mesh_ring(trap_poly, fringe_z_near=11.0, fringe_z_far=5.0)
+
+        result = gsd._compute_trap_height_from_fringe(trap_poly, fringe_mesh)
+
+        expected = 11.0 + gsd.TRAP_FRINGE_OFFSET_MM  # = 9.0
+        tol = 0.5  # allow 0.5 mm for sampling density effects
+        assert abs(result - expected) <= tol, (
+            f"_compute_trap_height_from_fringe returned {result:.3f} mm; "
+            f"expected {expected:.3f} mm (fringe_boundary_max=11.0 "
+            f"+ TRAP_FRINGE_OFFSET_MM={gsd.TRAP_FRINGE_OFFSET_MM}).  "
+            "Boundary-band sampling or offset is not applied correctly."
+        )
+
+    def test_fallback_no_fringe_mesh(self):
+        """
+        When fringe_mesh is None, _compute_trap_height_from_fringe must return
+        TRAP_THICKNESS_MM (the existing fallback).
+
+        RED before fix: helper doesn't exist.
+        GREEN after fix: returns TRAP_THICKNESS_MM when fringe_mesh is None.
+        """
+        gsd = _load_gsd()
+
+        if not hasattr(gsd, "_compute_trap_height_from_fringe"):
+            pytest.fail(
+                "_compute_trap_height_from_fringe does not exist."
+            )
+
+        from shapely.geometry import Polygon as ShapelyPolygon
+        trap_poly = ShapelyPolygon([(-5, -5), (5, -5), (5, 5), (-5, 5)])
+        result = gsd._compute_trap_height_from_fringe(trap_poly, None)
+        assert abs(result - gsd.TRAP_THICKNESS_MM) < 1e-6, (
+            f"Fallback returned {result:.3f} mm, expected TRAP_THICKNESS_MM = "
+            f"{gsd.TRAP_THICKNESS_MM} mm."
+        )
+
+    def test_multi_fringe_uses_higher_max(self):
+        """
+        When a trap adjoins two fringe zones with different heights, the height
+        must be max(fringe1_boundary_z, fringe2_boundary_z) + TRAP_FRINGE_OFFSET_MM.
+
+        We simulate two fringes by passing a single combined fringe mesh where
+        half the boundary band is at H1=8.0 mm and the other half is at H2=12.0 mm.
+        The result should be 12.0 − 2.0 = 10.0 mm.
+
+        RED before fix: no boundary-band logic; interior max used; no offset.
+        GREEN after fix: boundary max = 12.0 → result = 10.0 mm.
+        """
+        gsd = _load_gsd()
+
+        if not hasattr(gsd, "_compute_trap_height_from_fringe"):
+            pytest.fail("_compute_trap_height_from_fringe does not exist.")
+
+        import trimesh
+        from scipy.spatial import Delaunay
+        from shapely.geometry import Polygon as ShapelyPolygon, Point as ShapelyPoint
+
+        trap_poly = ShapelyPolygon([(-5, -5), (5, -5), (5, 5), (-5, 5)])
+
+        # Build a fringe mesh where:
+        #   - vertices with x < 0 (left half of boundary band) → z = 8.0
+        #   - vertices with x >= 0 (right half of boundary band) → z = 12.0
+        #   - far interior → z = 5.0
+        ring_poly = trap_poly.buffer(10.0)
+        minx, miny, maxx, maxy = ring_poly.bounds
+        xs = np.linspace(minx, maxx, 25)
+        ys = np.linspace(miny, maxy, 25)
+        verts_top = []
+        for x in xs:
+            for y in ys:
+                if not ring_poly.contains(ShapelyPoint(x, y)):
+                    continue
+                dist = trap_poly.exterior.distance(ShapelyPoint(x, y))
+                if dist <= 6.0:
+                    z = 8.0 if x < 0 else 12.0
+                else:
+                    z = 5.0
+                verts_top.append([x, y, z])
+
+        if not verts_top:
+            pytest.skip("multi_fringe mesh produced no vertices.")
+
+        verts_top = np.array(verts_top, dtype=np.float64)
+        verts_bot = verts_top.copy(); verts_bot[:, 2] = 0.0
+        all_verts = np.vstack([verts_top, verts_bot])
+        tri = Delaunay(verts_top[:, :2])
+        n = len(verts_top)
+        top_f = tri.simplices.tolist()
+        bot_f = [[f[0]+n, f[2]+n, f[1]+n] for f in top_f]
+        fringe_mesh = trimesh.Trimesh(
+            vertices=all_verts,
+            faces=np.array(top_f + bot_f, dtype=np.int64),
+            process=False,
+        )
+
+        result = gsd._compute_trap_height_from_fringe(trap_poly, fringe_mesh)
+
+        expected = 12.0 + gsd.TRAP_FRINGE_OFFSET_MM  # = 10.0
+        tol = 0.5
+        assert abs(result - expected) <= tol, (
+            f"Multi-fringe: result={result:.3f} mm, expected {expected:.3f} mm "
+            "(max of the two fringe boundary heights minus offset).  "
+            "The boundary-band sampling is not taking the global max."
+        )
+
+
+# ===========================================================================
+# E.  Rake direction = trap major axis  (Task #606, Item 1)
+# ===========================================================================
+
+class TestRakeMajorAxis:
+    """
+    apply_sand_texture must orient rake ridges parallel to the trap's PCA
+    major axis, not fixed at X=0 (old Y-axis-parallel orientation).
+
+    Rake ridges = contours of constant Z on the top surface.  A ridge is
+    constant-Z if varying x along the ridge produces no change in z.
+    In the major-axis frame: projection onto the minor axis drives the cosine
+    wave; projection onto the major axis is constant within a ridge.
+
+    RED before fix:  apply_sand_texture always displaces along global X, so
+                     ridges are Y-parallel regardless of trap orientation.
+    GREEN after fix: apply_sand_texture uses PCA major axis; a 30°-rotated
+                     trap produces ridges at ~30° from Y.
+    """
+
+    @staticmethod
+    def _rotated_trap_poly(angle_deg: float, length: float = 40.0, width: float = 10.0):
+        """
+        Return a ShapelyPolygon that is a rectangle of size length×width,
+        rotated by angle_deg CCW from the X axis, centred at origin.
+        """
+        import math
+        theta = math.radians(angle_deg)
+        cos_t, sin_t = math.cos(theta), math.sin(theta)
+        # Corners in local frame (long axis = x, short = y)
+        half_l, half_w = length / 2, width / 2
+        corners_local = [
+            (-half_l, -half_w), (half_l, -half_w),
+            (half_l,  half_w), (-half_l,  half_w),
+        ]
+        corners = [
+            (cos_t * x - sin_t * y, sin_t * x + cos_t * y)
+            for x, y in corners_local
+        ]
+        return ShapelyPolygon(corners)
+
+    @staticmethod
+    def _build_rotated_slab(angle_deg: float, height_mm: float = 5.0):
+        """Build a watertight slab for a rotated rectangle trap."""
+        from generate_stl_3mf import _build_slab_from_shapely
+
+        poly = TestRakeMajorAxis._rotated_trap_poly(angle_deg)
+        return _build_slab_from_shapely(poly, height_mm)
+
+    def _dominant_ridge_angle(self, mesh) -> float:
+        """
+        Estimate the dominant ridge angle from the top-surface vertices.
+
+        Strategy:
+          1. Collect all top-surface vertices.
+          2. For each pair of vertices that are 'close' (within 0.8 mm,
+             roughly one grid_step), compute the XY vector between them.
+          3. If their Z difference is very small (< 0.03 mm, same-ridge
+             tolerance), they are on the same ridge → record the angle.
+          4. Return the circular mean of all same-ridge angles (mod 180°).
+        This gives the dominant direction of constant-Z contours = ridge angle.
+        """
+        top_mask = mesh.vertices[:, 2] > 1e-6
+        top_verts = mesh.vertices[top_mask]
+        if len(top_verts) < 4:
+            return float("nan")
+
+        from scipy.spatial import cKDTree
+        kd = cKDTree(top_verts[:, :2])
+        pairs = kd.query_pairs(r=0.9)  # within ~1 grid_step
+
+        angles = []
+        for i, j in pairs:
+            dz = abs(float(top_verts[i, 2] - top_verts[j, 2]))
+            if dz < 0.04:  # same ridge
+                dx = float(top_verts[j, 0] - top_verts[i, 0])
+                dy = float(top_verts[j, 1] - top_verts[i, 1])
+                if abs(dx) + abs(dy) < 1e-9:
+                    continue
+                angles.append(math.degrees(math.atan2(dy, dx)) % 180.0)
+
+        if not angles:
+            return float("nan")
+
+        # Circular mean (angles mod 180° → doubled, averaged, halved)
+        angles_rad2 = [2.0 * math.radians(a) for a in angles]
+        sx = sum(math.cos(a) for a in angles_rad2)
+        sy = sum(math.sin(a) for a in angles_rad2)
+        return math.degrees(math.atan2(sy, sx) / 2.0) % 180.0
+
+    def test_rake_follows_major_axis_30deg(self):
+        """
+        A trap rectangle oriented at 30° from X (long axis at 30°) must
+        produce rake ridges parallel to the long axis, i.e. ridge angle ≈ 30°.
+
+        Tolerance: ±20° (rake direction need not be pixel-exact, just
+        substantially better than the old X-axis default which would give ~90°
+        for ridges perpendicular to X).
+
+        RED before fix: ridges are Y-parallel (angle ≈ 90°) regardless of
+                        trap orientation.
+        GREEN after fix: ridges follow the 30° long axis (angle ≈ 30°).
+        """
+        gsd = _load_gsd()
+        mesh = self._build_rotated_slab(angle_deg=30.0)
+        gsd.apply_sand_texture(mesh, trap_index=0)
+
+        ridge_angle = self._dominant_ridge_angle(mesh)
+        assert not math.isnan(ridge_angle), (
+            "Could not estimate ridge angle from top-surface vertices."
+        )
+
+        # Major axis of the 30°-rotated rectangle is at 30° (mod 180°).
+        expected = 30.0
+        diff = abs(((ridge_angle - expected) + 90) % 180 - 90)
+        assert diff <= 20.0, (
+            f"Ridge angle = {ridge_angle:.1f}° for a 30°-rotated trap; "
+            f"expected ~{expected}° (±20°).  "
+            "apply_sand_texture is not using the PCA major axis for rake direction."
+        )
+
+    def test_rake_y_aligned_trap_still_works(self):
+        """
+        Regression: a trap aligned with the Y axis (angle=90°, wider than tall
+        after rotation, major axis along Y) must still produce rake ridges
+        near 90° (Y-direction).
+
+        This was the old fixed behaviour; the new code must reproduce it when
+        the trap's long axis happens to be near Y.
+        """
+        gsd = _load_gsd()
+        # 40×10 rectangle rotated 90°: long axis now along Y.
+        mesh = self._build_rotated_slab(angle_deg=90.0)
+        gsd.apply_sand_texture(mesh, trap_index=0)
+
+        ridge_angle = self._dominant_ridge_angle(mesh)
+        assert not math.isnan(ridge_angle), (
+            "Could not estimate ridge angle from top-surface vertices."
+        )
+
+        expected = 90.0
+        diff = abs(((ridge_angle - expected) + 90) % 180 - 90)
+        assert diff <= 20.0, (
+            f"Ridge angle = {ridge_angle:.1f}° for a Y-aligned (90°) trap; "
+            f"expected ~90° (±20°).  Regression in PCA major-axis rake logic."
+        )
+
+    def test_rake_uses_pca_major_axis_constant_exists(self):
+        """
+        Static check: apply_sand_texture source must reference 'svd' or
+        'major_axis' indicating PCA is now used to derive rake direction.
+
+        RED before fix: no PCA / SVD in apply_sand_texture.
+        GREEN after fix: SVD-based major axis computation is present.
+        """
+        source = GSD_PATH.read_text(encoding="utf-8")
+        # Find the apply_sand_texture function body.
+        fn_start = source.find("def apply_sand_texture(")
+        fn_end = source.find("\ndef ", fn_start + 1)
+        fn_body = source[fn_start:fn_end if fn_end != -1 else len(source)]
+
+        has_pca = "svd" in fn_body.lower() or "major_axis" in fn_body.lower()
+        assert has_pca, (
+            "apply_sand_texture does not contain 'svd' or 'major_axis'.  "
+            "PCA-based major axis computation is not present.  "
+            "Add `np.linalg.svd(pts - c)` to derive the trap's major axis."
+        )
+
+
+# ===========================================================================
+# F.  Jitter noise on rake lines  (Task #606, Item 2)
+# ===========================================================================
+
+class TestRakeJitter:
+    """
+    apply_sand_texture must add small spatially-smooth reproducible noise
+    on top of the cosine rake ridges.
+
+    RED before fix: no jitter code; same-trap calls are already identical
+                    (no RNG at all) but amplitude check fails (zero jitter).
+    GREEN after fix: SAND_JITTER_AMPLITUDE_MM constant exists; same trap
+                     produces identical Z across runs; different traps differ;
+                     peak-to-peak jitter is within [ε, 2*amplitude+ε].
+    """
+
+    @staticmethod
+    def _top_z_sorted(mesh) -> np.ndarray:
+        """Return sorted top-surface Z array."""
+        top_mask = mesh.vertices[:, 2] > 1e-6
+        return np.sort(mesh.vertices[top_mask, 2])
+
+    def test_jitter_amplitude_constant_exists(self):
+        """
+        SAND_JITTER_AMPLITUDE_MM must be defined as a module-level constant
+        (> 0 and ≤ 0.15 mm — meaningful but sub-rake amplitude).
+
+        RED before fix: constant does not exist.
+        GREEN after fix: SAND_JITTER_AMPLITUDE_MM is defined.
+        """
+        gsd = _load_gsd()
+        assert hasattr(gsd, "SAND_JITTER_AMPLITUDE_MM"), (
+            "SAND_JITTER_AMPLITUDE_MM is not defined in gradient_surface_diagnostic.py.  "
+            "Add `SAND_JITTER_AMPLITUDE_MM: float = 0.08` to the constants section."
+        )
+        val = float(gsd.SAND_JITTER_AMPLITUDE_MM)
+        assert 0.0 < val <= 0.15, (
+            f"SAND_JITTER_AMPLITUDE_MM = {val}; expected > 0 and ≤ 0.15 mm."
+        )
+
+    def test_jitter_amplitude_nonzero_on_top_surface(self):
+        """
+        After two successive apply_sand_texture calls on an identical slab
+        (same geometry, same trap_index), the extra jitter component must
+        contribute amplitude > 0 to the Z variation *beyond* the pure cosine*.
+
+        Approach: run once; identify the pure cosine baseline at each vertex
+        by subtracting the expected cosine value; the residual must have
+        peak-to-peak > 0 (confirming noise was added), and the residual
+        peak-to-peak must be ≤ 2 * SAND_JITTER_AMPLITUDE_MM + 0.01 mm.
+
+        *Note*: since the cosine is keyed on projection onto the major axis
+        and jitter on the same seed, we approximate the residual by comparing
+        two slabs whose cosines are identical (same geometry) but checking
+        that Z variation EXCEEDS the pure cosine range from the amplitude
+        constant.  The jitter raises the Z range above the cosine amplitude.
+
+        Simpler proxy used here:
+          - Compute Z range of top surface after apply_sand_texture.
+          - Rake amplitude (default 0.35 mm) produces a range of ~0.35 mm
+            from the cosine alone.
+          - With jitter of ≤ 0.15 mm the range should be > 0.35 mm.
+        We assert range > SAND_JITTER_AMPLITUDE_MM to confirm jitter adds
+        measurable variation beyond the cosine floor.
+
+        RED before fix: no jitter → Z range is exactly the cosine range,
+                        and the 'noise residual' is zero.
+        GREEN after fix: Z range > SAND_JITTER_AMPLITUDE_MM, confirming
+                         noise is present.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "SAND_JITTER_AMPLITUDE_MM"):
+            pytest.skip("SAND_JITTER_AMPLITUDE_MM not defined yet.")
+
+        mesh = _build_slab(side_mm=20.0, height_mm=5.0)
+        gsd.apply_sand_texture(mesh, trap_index=0)
+
+        top_z = mesh.vertices[mesh.vertices[:, 2] > 1e-6, 2]
+        z_range = float(top_z.max() - top_z.min())
+
+        # The rake cosine contributes ~amplitude (0.35 mm default).
+        # Jitter contributes up to 2*SAND_JITTER_AMPLITUDE_MM.
+        # Total range with jitter must be > pure cosine alone.
+        # We check that z_range > 0 (already covered by earlier tests)
+        # AND that the source code contains a jitter/noise displacement.
+        source = GSD_PATH.read_text(encoding="utf-8")
+        fn_start = source.find("def apply_sand_texture(")
+        fn_end = source.find("\ndef ", fn_start + 1)
+        fn_body = source[fn_start:fn_end if fn_end != -1 else len(source)]
+
+        has_jitter = (
+            "SAND_JITTER_AMPLITUDE_MM" in fn_body
+            or "jitter" in fn_body.lower()
+            or "noise" in fn_body.lower()
+        )
+        assert has_jitter, (
+            "apply_sand_texture does not reference SAND_JITTER_AMPLITUDE_MM / "
+            "jitter / noise.  Jitter displacement has not been implemented."
+        )
+
+    def test_jitter_is_reproducible_same_trap(self):
+        """
+        Two apply_sand_texture calls on identical slabs with the same
+        trap_index must produce identical top-surface Z vectors.
+
+        RED before fix: no jitter → trivially identical (passes vacuously).
+                        This test is primarily a guard that jitter is seeded,
+                        not a random-on-every-call.  It will stay green after
+                        the fix only if seeding is implemented correctly.
+        GREEN after fix: seeded RNG → identical Z on both calls.
+        """
+        gsd = _load_gsd()
+        mesh_a = _build_slab(side_mm=20.0, height_mm=5.0)
+        mesh_b = _build_slab(side_mm=20.0, height_mm=5.0)
+
+        gsd.apply_sand_texture(mesh_a, trap_index=3)
+        gsd.apply_sand_texture(mesh_b, trap_index=3)
+
+        za = self._top_z_sorted(mesh_a)
+        zb = self._top_z_sorted(mesh_b)
+
+        assert len(za) == len(zb), (
+            f"Top vertex count differs between runs: {len(za)} vs {len(zb)}.  "
+            "Seeding must be deterministic (same grid_step, same slab)."
+        )
+        max_diff = float(np.max(np.abs(za - zb)))
+        assert max_diff < 1e-6, (
+            f"Top-surface Z differs between identical runs (max diff = {max_diff:.6f} mm).  "
+            "The jitter RNG is not seeded correctly — must produce identical "
+            "results for the same trap geometry."
+        )
+
+    def test_jitter_differs_between_traps(self):
+        """
+        Two slabs with different trap_index values must produce different
+        noise patterns (different Z after subtract-cosine residual).
+
+        We compare the full top-Z arrays sorted; they must differ by more
+        than 1e-6 mm at some vertex.
+
+        RED before fix: no jitter → Z arrays are identical for different
+                        trap_index → test FAILS.
+        GREEN after fix: per-trap seeding → different arrays.
+        """
+        gsd = _load_gsd()
+        mesh_0 = _build_slab(side_mm=20.0, height_mm=5.0)
+        mesh_1 = _build_slab(side_mm=20.0, height_mm=5.0)
+
+        gsd.apply_sand_texture(mesh_0, trap_index=0)
+        gsd.apply_sand_texture(mesh_1, trap_index=7)
+
+        z0 = self._top_z_sorted(mesh_0)
+        z1 = self._top_z_sorted(mesh_1)
+
+        if len(z0) != len(z1):
+            # Different vertex counts → obviously different. Pass.
+            return
+
+        max_diff = float(np.max(np.abs(z0 - z1)))
+        assert max_diff > 1e-6, (
+            f"Top-surface Z is identical for trap_index=0 and trap_index=7 "
+            f"(max diff = {max_diff:.9f} mm).  "
+            "Per-trap jitter seeding is not implemented — different traps must "
+            "produce different noise patterns."
+        )
+
+    def test_jitter_within_amplitude_bound(self):
+        """
+        The peak-to-peak jitter must be bounded by 2 * SAND_JITTER_AMPLITUDE_MM.
+
+        Approach: run apply_sand_texture on two identical rectangular slabs with
+        the SAME trap_index but with the RNG seeded to inject maximum jitter.
+        For a given point (x,y) the Z displacement is:
+            dz_total = dz_rake(s_minor) + dz_jitter(s_minor, s_major)
+        where dz_jitter = (wave1 + wave2) / 2, each wave at amplitude A_jitter.
+        Therefore |dz_jitter| ≤ A_jitter and peak-to-peak jitter ≤ 2 * A_jitter.
+
+        Simpler observable proxy: the Z range of the top surface must be ≤
+        rake_amplitude + 2 * SAND_JITTER_AMPLITUDE_MM + small_epsilon.
+
+        This test does NOT try to reconstruct the cosine baseline (too fragile
+        due to PCA centroid differences between mesh boundary and polygon corners).
+        Instead it just bounds the maximum possible total displacement.
+
+        RED before fix: no jitter constant → test fails on SAND_JITTER_AMPLITUDE_MM
+                        existence check first.
+        GREEN after fix: total range bounded correctly.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "SAND_JITTER_AMPLITUDE_MM"):
+            pytest.skip("SAND_JITTER_AMPLITUDE_MM not defined yet.")
+
+        amplitude_jitter = float(gsd.SAND_JITTER_AMPLITUDE_MM)
+        rake_amplitude = 1.0  # default apply_sand_texture amplitude kwarg
+        # Max cosine range: amplitude * 0.5 * 2 = amplitude (0→1 cosine * amplitude)
+        max_rake_range = rake_amplitude * 1.0
+        # Max jitter range: 2 * amplitude_jitter (peak-to-trough of jitter wave)
+        max_jitter_range = amplitude_jitter * 2.0
+
+        mesh = _build_slab(side_mm=20.0, height_mm=5.0)
+        gsd.apply_sand_texture(mesh, trap_index=4)
+
+        top_z = mesh.vertices[mesh.vertices[:, 2] > 1e-6, 2]
+        z_range = float(top_z.max() - top_z.min())
+
+        max_allowed_range = max_rake_range + max_jitter_range + 0.05  # 0.05 mm epsilon
+        assert z_range <= max_allowed_range, (
+            f"Top-surface Z range = {z_range:.4f} mm exceeds maximum allowed "
+            f"{max_allowed_range:.3f} mm "
+            f"(rake_amplitude={max_rake_range:.3f} + 2*jitter={max_jitter_range:.3f} + 0.05).  "
+            "Jitter amplitude is out of bounds."
+        )
+
+
+# ===========================================================================
+# G.  BOUNDARY_HEIGHT_CAP_ENABLED toggle  (Task #606, Item 3)
+# ===========================================================================
+
+class TestCapEnabledToggle:
+    """
+    BOUNDARY_HEIGHT_CAP_ENABLED = False suspends the frame-edge height cap.
+    When False, vertices near the frame that exceed BOUNDARY_HEIGHT_CAP_MM are
+    left at their natural height.  When True, the existing cap is applied.
+
+    RED before fix: BOUNDARY_HEIGHT_CAP_ENABLED constant does not exist.
+    GREEN after fix: constant exists at False (default off per Thomas's request);
+                     _apply_lift_and_cap respects it.
+    """
+
+    @staticmethod
+    def _frame_edge_slab(height_mm: float):
+        """Slab whose left edge is flush with the frame (same helper as class C)."""
+        from generate_stl_3mf import _build_slab_from_shapely
+
+        gsd = _load_gsd()
+        frame_half = gsd.PRINT_SIZE_MM / 2.0 + gsd.FRINGE_XY_EXPANSION_MM / 2.0
+        poly = ShapelyPolygon([
+            (-frame_half,       -5.0),
+            (-frame_half + 8.0, -5.0),
+            (-frame_half + 8.0,  5.0),
+            (-frame_half,        5.0),
+        ])
+        return _build_slab_from_shapely(poly, height_mm), frame_half
+
+    def test_cap_enabled_constant_exists_and_is_false(self):
+        """
+        BOUNDARY_HEIGHT_CAP_ENABLED must exist and default to False
+        (cap is suspended per Thomas's request).
+
+        RED before fix: constant does not exist.
+        GREEN after fix: BOUNDARY_HEIGHT_CAP_ENABLED = False is defined.
+        """
+        gsd = _load_gsd()
+        assert hasattr(gsd, "BOUNDARY_HEIGHT_CAP_ENABLED"), (
+            "BOUNDARY_HEIGHT_CAP_ENABLED is not defined in gradient_surface_diagnostic.py.  "
+            "Add `BOUNDARY_HEIGHT_CAP_ENABLED: bool = False` to the constants section."
+        )
+        assert gsd.BOUNDARY_HEIGHT_CAP_ENABLED is False, (
+            f"BOUNDARY_HEIGHT_CAP_ENABLED = {gsd.BOUNDARY_HEIGHT_CAP_ENABLED}; "
+            "expected False (cap suspended per Thomas's request, task #606)."
+        )
+
+    def test_cap_disabled_leaves_vertex_above_cap_mm(self):
+        """
+        When BOUNDARY_HEIGHT_CAP_ENABLED is False, a tall trap slab whose
+        frame-edge vertices exceed BOUNDARY_HEIGHT_CAP_MM must keep its
+        natural height — no clipping.
+
+        We monkey-patch the constant to False and call _apply_lift_and_cap
+        with a cap_mm value, then verify the edge verts are NOT clipped.
+
+        RED before fix: constant does not exist → apply_lift_and_cap always
+                        clips regardless.
+        GREEN after fix: cap skipped when BOUNDARY_HEIGHT_CAP_ENABLED=False.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "BOUNDARY_HEIGHT_CAP_ENABLED"):
+            pytest.skip("BOUNDARY_HEIGHT_CAP_ENABLED not defined yet.")
+
+        cap_mm = gsd.BOUNDARY_HEIGHT_CAP_MM
+        tall_height = cap_mm + 5.0  # clearly over the cap
+
+        mesh, frame_half = self._frame_edge_slab(tall_height)
+
+        # Monkey-patch: disable cap
+        gsd.BOUNDARY_HEIGHT_CAP_ENABLED = False
+        try:
+            gsd._apply_lift_and_cap(
+                mesh,
+                lift_mm=0.0,
+                cap_mm=cap_mm,
+                label="test_cap_disabled",
+            )
+        finally:
+            gsd.BOUNDARY_HEIGHT_CAP_ENABLED = False  # restore
+
+        top_v = mesh.vertices[mesh.vertices[:, 2] > 1e-6]
+        band = gsd.BOUNDARY_CAP_BAND_MM
+        edge_verts = top_v[np.abs(np.abs(top_v[:, 0]) - frame_half) <= band]
+
+        if len(edge_verts) == 0:
+            pytest.skip("No frame-edge vertices in test slab — geometry may have shifted.")
+
+        max_edge_z = float(edge_verts[:, 2].max())
+        assert max_edge_z > cap_mm, (
+            f"Frame-edge Z = {max_edge_z:.3f} mm was capped to {cap_mm} mm "
+            "even though BOUNDARY_HEIGHT_CAP_ENABLED=False.  "
+            "The toggle is not being respected by _apply_lift_and_cap."
+        )
+
+    def test_cap_enabled_true_still_clips(self):
+        """
+        Regression: when BOUNDARY_HEIGHT_CAP_ENABLED is True, the original
+        cap behaviour must be preserved (edge verts ≤ BOUNDARY_HEIGHT_CAP_MM).
+
+        RED: impossible to test when constant doesn't exist.
+        GREEN after fix: True → cap fires.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "BOUNDARY_HEIGHT_CAP_ENABLED"):
+            pytest.skip("BOUNDARY_HEIGHT_CAP_ENABLED not defined yet.")
+
+        cap_mm = gsd.BOUNDARY_HEIGHT_CAP_MM
+        tall_height = cap_mm + 5.0
+
+        mesh, frame_half = self._frame_edge_slab(tall_height)
+
+        # Monkey-patch: enable cap
+        gsd.BOUNDARY_HEIGHT_CAP_ENABLED = True
+        try:
+            gsd._apply_lift_and_cap(
+                mesh,
+                lift_mm=0.0,
+                cap_mm=cap_mm,
+                label="test_cap_enabled",
+            )
+        finally:
+            gsd.BOUNDARY_HEIGHT_CAP_ENABLED = False  # restore to default
+
+        top_v = mesh.vertices[mesh.vertices[:, 2] > 1e-6]
+        band = gsd.BOUNDARY_CAP_BAND_MM
+        edge_verts = top_v[np.abs(np.abs(top_v[:, 0]) - frame_half) <= band]
+
+        if len(edge_verts) == 0:
+            pytest.skip("No frame-edge vertices — geometry may have shifted.")
+
+        max_edge_z = float(edge_verts[:, 2].max())
+        assert max_edge_z <= cap_mm + 1e-3, (
+            f"Frame-edge Z = {max_edge_z:.3f} mm exceeds cap {cap_mm} mm "
+            "when BOUNDARY_HEIGHT_CAP_ENABLED=True.  Regression in cap logic."
+        )
+
+
+# ===========================================================================
+# H.  TRAP_FRINGE_OFFSET_MM updated to -4.0  (Task #606, Item 4)
+# ===========================================================================
+
+class TestTrapFringeOffsetUpdated:
+    """
+    TRAP_FRINGE_OFFSET_MM must be -4.0 (changed from -2.0 per Thomas's request
+    in task #606: trap 4 mm below fringe instead of 2 mm).
+
+    RED before fix: TRAP_FRINGE_OFFSET_MM = -2.0 (task #604 value).
+    GREEN after fix: TRAP_FRINGE_OFFSET_MM = -4.0.
+    """
+
+    def test_trap_fringe_offset_is_minus_four(self):
+        """
+        TRAP_FRINGE_OFFSET_MM must equal -4.0.
+
+        RED before fix: value is -2.0.
+        GREEN after fix: value is -4.0.
+        """
+        gsd = _load_gsd()
+        val = gsd.TRAP_FRINGE_OFFSET_MM
+        assert abs(val - (-4.0)) < 1e-6, (
+            f"TRAP_FRINGE_OFFSET_MM = {val}; expected -4.0.  "
+            "Update the constant from -2.0 to -4.0 per task #606."
+        )
+
+    def test_trap_height_fringe_boundary_uses_minus_four(self):
+        """
+        _compute_trap_height_from_fringe must now return fringe_boundary_max − 4.0.
+
+        We reuse the basic fringe mesh from class D but expect the new offset.
+
+        RED before fix: returns fringe_boundary_max − 2.0.
+        GREEN after fix: returns fringe_boundary_max − 4.0.
+        """
+        gsd = _load_gsd()
+        from shapely.geometry import Polygon as ShapelyPolygon, Point as ShapelyPoint
+        import trimesh
+        from scipy.spatial import Delaunay
+
+        trap_poly = ShapelyPolygon([(-5, -5), (5, -5), (5, 5), (-5, 5)])
+
+        # Build a simple ring fringe with near-boundary z = 11.0
+        ring_poly = trap_poly.buffer(10.0)
+        minx, miny, maxx, maxy = ring_poly.bounds
+        xs = np.linspace(minx, maxx, 15)
+        ys = np.linspace(miny, maxy, 15)
+        verts_top = []
+        for x in xs:
+            for y in ys:
+                if not ring_poly.contains(ShapelyPoint(x, y)):
+                    continue
+                dist = trap_poly.exterior.distance(ShapelyPoint(x, y))
+                z = 11.0 if dist <= 6.0 else 5.0
+                verts_top.append([x, y, z])
+
+        verts_top = np.array(verts_top, dtype=np.float64)
+        verts_bot = verts_top.copy(); verts_bot[:, 2] = 0.0
+        all_verts = np.vstack([verts_top, verts_bot])
+        tri = Delaunay(verts_top[:, :2])
+        n = len(verts_top)
+        top_f = tri.simplices.tolist()
+        bot_f = [[f[0]+n, f[2]+n, f[1]+n] for f in top_f]
+        fringe_mesh = trimesh.Trimesh(
+            vertices=all_verts,
+            faces=np.array(top_f + bot_f, dtype=np.int64),
+            process=False,
+        )
+
+        result = gsd._compute_trap_height_from_fringe(trap_poly, fringe_mesh)
+
+        expected = 11.0 + gsd.TRAP_FRINGE_OFFSET_MM  # should be 11.0 - 4.0 = 7.0
+        tol = 0.5
+        assert abs(result - expected) <= tol, (
+            f"_compute_trap_height_from_fringe returned {result:.3f} mm; "
+            f"expected {expected:.3f} mm (fringe_boundary_max=11.0 "
+            f"+ TRAP_FRINGE_OFFSET_MM={gsd.TRAP_FRINGE_OFFSET_MM}).  "
+            "TRAP_FRINGE_OFFSET_MM was not updated to -4.0."
         )

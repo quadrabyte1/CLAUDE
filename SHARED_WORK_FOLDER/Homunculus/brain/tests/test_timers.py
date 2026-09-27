@@ -686,3 +686,91 @@ def test_stop_all_fires_individual_notifications(tmp_path: Path):
     assert len(timer_sidecars) == 2, (
         f"Expected 2 notification sidecars, got {len(timer_sidecars)}: {timer_sidecars}"
     )
+
+
+# ===========================================================================
+# v2.3.0 TDD — delete_timer (hard delete of project timer file)
+# ===========================================================================
+
+
+def test_delete_removes_timer_file(tmp_path: Path):
+    """delete_timer('gym') removes vault/timers/gym.json from disk."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+    manager.stop(project="gym", captured_at=_now(1800), tz=TZ)
+
+    timer_path = tmp_path / "timers" / "gym.json"
+    assert timer_path.exists(), "Precondition: timer file must exist before delete"
+
+    manager.delete_timer(project="gym")
+
+    assert not timer_path.exists(), "Timer file must be removed by delete_timer()"
+
+
+def test_delete_after_deletion_not_in_totals(tmp_path: Path):
+    """After delete_timer('golf'), 'golf' no longer appears in get_totals()."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="golf", captured_at=_now(0), tz=TZ)
+    manager.stop(project="golf", captured_at=_now(1800), tz=TZ)
+    manager.start(project="deck", captured_at=_now(3600), tz=TZ)
+    manager.stop(project="deck", captured_at=_now(5400), tz=TZ)
+
+    manager.delete_timer(project="golf")
+
+    totals = manager.get_totals()
+    slugs = [t.slug for t in totals]
+    assert "golf" not in slugs, f"'golf' should be gone; got {slugs}"
+    assert "deck" in slugs, "unrelated timer 'deck' must still be present"
+
+
+def test_delete_nonexistent_is_noop(tmp_path: Path):
+    """delete_timer() on an unknown project name does not raise — no-op."""
+    manager = _make_manager(tmp_path)
+    # Must not raise
+    manager.delete_timer(project="nonexistent")
+
+
+def test_delete_case_insensitive(tmp_path: Path):
+    """delete_timer('Golf') deletes vault/timers/golf.json (slug normalization)."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="golf", captured_at=_now(0), tz=TZ)
+    manager.stop(project="golf", captured_at=_now(1800), tz=TZ)
+
+    timer_path = tmp_path / "timers" / "golf.json"
+    assert timer_path.exists()
+
+    manager.delete_timer(project="Golf")  # different case
+
+    assert not timer_path.exists(), "delete_timer must be case-insensitive via slug"
+
+
+def test_delete_stops_running_timer_first(tmp_path: Path):
+    """delete_timer() on a running timer stops it silently, then deletes the file."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="gym", captured_at=_now(0), tz=TZ)
+
+    # Should not raise NoRunningTimer — must stop then delete
+    manager.delete_timer(project="gym")
+
+    timer_path = tmp_path / "timers" / "gym.json"
+    assert not timer_path.exists(), "File must be removed even when timer was running"
+
+
+def test_delete_multiple_projects_leaves_others_intact(tmp_path: Path):
+    """Deleting 'golf' and 'homunculus' leaves other timers untouched."""
+    manager = _make_manager(tmp_path)
+    manager.start(project="golf", captured_at=_now(0), tz=TZ)
+    manager.stop(project="golf", captured_at=_now(1800), tz=TZ)
+    manager.start(project="homunculus", captured_at=_now(3600), tz=TZ)
+    manager.stop(project="homunculus", captured_at=_now(5400), tz=TZ)
+    manager.start(project="other", captured_at=_now(7200), tz=TZ)
+    manager.stop(project="other", captured_at=_now(9000), tz=TZ)
+
+    manager.delete_timer(project="golf")
+    manager.delete_timer(project="homunculus")
+
+    totals = manager.get_totals()
+    slugs = [t.slug for t in totals]
+    assert "golf" not in slugs
+    assert "homunculus" not in slugs
+    assert "other" in slugs, "unrelated timer must survive"

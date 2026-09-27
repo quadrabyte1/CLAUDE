@@ -48,6 +48,8 @@ from .schemas import (
     TimerStopAllResponse,
     TimerResetRequest,
     TimerResetResponse,
+    TimerDeleteRequest,
+    TimerDeleteResponse,
     RunningTimer,
     ProjectTotal,
 )
@@ -336,6 +338,20 @@ def create_app() -> FastAPI:
             "cleared_session_count": result.cleared_session_count,
             "clarifying_question": result.clarifying_question,
         })
+
+    @app.post("/timer/delete")
+    async def timer_delete(req: TimerDeleteRequest) -> JSONResponse:
+        """Hard-delete a project's timer file.
+
+        Stops the timer silently first if it is currently running (no
+        notification sidecar, audit log preserved). Returns deleted=True when
+        a file was removed, deleted=False when no file existed (idempotent).
+        No confirmation token required — the browser confirm() dialog handles
+        that on the dashboard.
+        """
+        manager = timer_module.TimerManager(config.vault_path)
+        deleted = manager.delete_timer(req.project)
+        return JSONResponse(content={"deleted": deleted})
 
     @app.get("/timers/running")
     async def timers_running() -> list[dict]:

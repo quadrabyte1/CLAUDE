@@ -380,3 +380,24 @@ class TimerResetResponse(BaseModel):
     cleared_seconds: int = 0
     cleared_session_count: int = 0
     clarifying_question: Optional[str] = None
+
+
+# --- v2.4.0: timer delete schema ---------------------------------------------
+
+
+class TimerDeleteRequest(BaseModel):
+    """Request body for POST /timer/delete.
+
+    Dashboard buttons POST this to hard-delete a project's timer file.
+    No confirmation token required — the browser confirm() dialog handles that.
+    """
+    project: str = Field(min_length=1)
+
+
+class TimerDeleteResponse(BaseModel):
+    """Response for POST /timer/delete.
+
+    ``deleted=True`` when the file was removed; ``deleted=False`` when no file
+    existed (idempotent no-op — still 200).
+    """
+    deleted: bool

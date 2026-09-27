@@ -24,7 +24,7 @@ from typing import Any, Optional
 # Constants
 # ---------------------------------------------------------------------------
 
-DASHBOARD_VERSION = "v0.5"
+DASHBOARD_VERSION = "v0.6"
 
 _VERB_ICONS: dict[str, str] = {
     "schedule": "📅",
@@ -268,7 +268,7 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   /*
-   * Dashboard v0.5 — light theme
+   * Dashboard v0.6 — light theme
    *
    * Layout model:
    *   body         flex-column, height:100vh, overflow:hidden
@@ -468,6 +468,48 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     letter-spacing: 0.03em;
     flex-shrink: 0;
   }
+
+  /* v0.6 — per-row timer action buttons */
+  .timer-actions {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+
+  .tbtn {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    line-height: 1.4;
+    transition: opacity 0.1s;
+  }
+  .tbtn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .tbtn-start {
+    background: #dcfce7;
+    color: #15803d;
+    border-color: #86efac;
+  }
+  .tbtn-start:not(:disabled):hover { background: #bbf7d0; }
+  .tbtn-stop {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fcd34d;
+  }
+  .tbtn-stop:not(:disabled):hover { background: #fde68a; }
+  .tbtn-delete {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fca5a5;
+  }
+  .tbtn-delete:not(:disabled):hover { background: #fecaca; }
 
   .timers-empty {
     padding: 8px 12px;
@@ -898,6 +940,40 @@ function fmtTotal(totalSec) {
   return h + "h " + m + "m";
 }
 
+// v0.6 — per-row timer action buttons
+// POST to endpoint, then refresh both panels.
+async function timerAction(endpoint, project) {
+  try {
+    const body = { project };
+    // /timer/start and /timer/stop require a captured_at; use server now by
+    // sending current client time. /timer/delete doesn't need it.
+    if (endpoint === "/timer/start" || endpoint === "/timer/stop") {
+      body.captured_at = new Date().toISOString();
+    }
+    await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (e) {
+    // Non-fatal — refresh will show current state
+  }
+  // Refresh both timer panels so state reflects the change
+  fetchTimers();
+}
+
+function timerBtns(project, isRunning) {
+  const slug = project; // display-safe label only for the confirm dialog
+  return `<span class="timer-actions">
+    <button class="tbtn tbtn-start" ${isRunning ? "disabled" : ""}
+      onclick="timerAction('/timer/start','${esc(project)}')">Start</button>
+    <button class="tbtn tbtn-stop" ${!isRunning ? "disabled" : ""}
+      onclick="timerAction('/timer/stop','${esc(project)}')">Stop</button>
+    <button class="tbtn tbtn-delete"
+      onclick="if(confirm('Delete timer \\'${esc(project)}\\'? This cannot be undone.')){timerAction('/timer/delete','${esc(project)}');}">Delete</button>
+  </span>`;
+}
+
 function renderRunning(items) {
   const el = document.getElementById("timers-running-body");
   if (!items || items.length === 0) {
@@ -918,6 +994,7 @@ function renderRunning(items) {
       <span class="timer-project">${esc(r.project)}</span>
       <span class="timer-running-badge">RUNNING</span>
       <span class="timer-elapsed" id="elapsed-${esc(r.slug)}">${fmtElapsed(elapsed)}</span>
+      ${timerBtns(r.project, true)}
     </div>`;
   }
   el.innerHTML = html;
@@ -939,6 +1016,7 @@ function renderTotals(items) {
       ${runBadge}
       <span class="timer-total">${fmtTotal(t.total_seconds)}</span>
       <span class="timer-touched">${relativeTime(t.last_touched_at)}</span>
+      ${timerBtns(t.project, t.is_running)}
     </div>`;
   }
   el.innerHTML = html;

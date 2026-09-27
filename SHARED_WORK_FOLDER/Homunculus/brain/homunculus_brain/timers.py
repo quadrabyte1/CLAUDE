@@ -504,6 +504,55 @@ class TimerManager:
 
     # --- Private helpers --------------------------------------------------
 
+    def delete_timer(self, project: str) -> bool:
+        """Hard-delete the timer file for *project*.
+
+        Steps:
+        1. Resolve slug (same article-strip + slugify as all other methods).
+        2. If the timer is currently running, stop it silently first so the
+           activity log retains a timer_stop audit row. No notification sidecar.
+        3. Unlink vault/timers/<slug>.json.
+        4. Write a timer_delete activity log row.
+
+        Returns True if a file was deleted, False if no file existed (no-op).
+        Case-insensitive: "Golf" and "golf" both resolve to slug "golf".
+        """
+        from datetime import datetime, timezone as _tz
+
+        slug = _project_slug(project)
+        data = self._load(slug)
+
+        if data is None:
+            log.info("timer: delete_timer('%s') — no file found; no-op", slug)
+            return False
+
+        canonical = data["project"]
+        now = datetime.now(_tz.utc)
+
+        # If currently running, silent-stop first (audit trail without notification).
+        if data.get("running") is not None:
+            self._silent_stop(data, captured_at=now, tz=_tz.utc)
+
+        # Hard delete the file.
+        path = self._timer_path(slug)
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass  # Already gone — idempotent.
+
+        activity_log.log(
+            self._vault,
+            "timer_delete",
+            at=now,
+            details={
+                "project": canonical,
+                "slug": slug,
+            },
+        )
+
+        log.info("timer: deleted project '%s' (slug=%s)", canonical, slug)
+        return True
+
     def _silent_stop(self, data: dict, *, captured_at: datetime, tz: ZoneInfo) -> None:
         """Stop a running timer without firing a notification.
 

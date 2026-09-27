@@ -1,0 +1,210 @@
+{
+  "course": "Stanford",
+  "hole": "8, 5396, A",
+  "image": "Stanford (hole 8, 5396).png",
+  "imageCourse": "Stanford",
+  "imageSize": {
+    "width": 815,
+    "height": 1227
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 0.05,
+  "greenStyle": "terraced",
+  "elevationRange": 14.5,
+  "greenScale": 1.0065,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "applyFringeFrameCap": true,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 463,
+          "y": 0
+        },
+        {
+          "x": 169,
+          "y": 147
+        },
+        {
+          "x": 72,
+          "y": 449
+        },
+        {
+          "x": 143,
+          "y": 771
+        },
+        {
+          "x": 358,
+          "y": 955
+        },
+        {
+          "x": 612,
+          "y": 809
+        },
+        {
+          "x": 763,
+          "y": 531
+        },
+        {
+          "x": 713,
+          "y": 205
+        }
+      ]
+    },
+    {
+      "name": "Water 1",
+      "type": "water",
+      "closed": true,
+      "points": [
+        {
+          "x": 437,
+          "y": 817
+        },
+        {
+          "x": 392,
+          "y": 824
+        },
+        {
+          "x": 345,
+          "y": 836
+        },
+        {
+          "x": 293,
+          "y": 841
+        },
+        {
+          "x": 249,
+          "y": 850
+        },
+        {
+          "x": 208,
+          "y": 864
+        },
+        {
+          "x": 240,
+          "y": 904
+        },
+        {
+          "x": 281,
+          "y": 932
+        },
+        {
+          "x": 327,
+          "y": 949
+        },
+        {
+          "x": 376,
+          "y": 951
+        },
+        {
+          "x": 423,
+          "y": 939
+        },
+        {
+          "x": 465,
+          "y": 918
+        },
+        {
+          "x": 508,
+          "y": 893
+        },
+        {
+          "x": 548,
+          "y": 861
+        },
+        {
+          "x": 521,
+          "y": 848
+        },
+        {
+          "x": 469,
+          "y": 851
+        }
+      ]
+    },
+    {
+      "name": "Water 2",
+      "type": "water",
+      "closed": true,
+      "points": [
+        {
+          "x": 731,
+          "y": 547
+        },
+        {
+          "x": 723,
+          "y": 554
+        },
+        {
+          "x": 716,
+          "y": 564
+        },
+        {
+          "x": 711,
+          "y": 574
+        },
+        {
+          "x": 705,
+          "y": 583
+        },
+        {
+          "x": 702,
+          "y": 594
+        },
+        {
+          "x": 703,
+          "y": 606
+        },
+        {
+          "x": 701,
+          "y": 617
+        },
+        {
+          "x": 707,
+          "y": 626
+        },
+        {
+          "x": 716,
+          "y": 618
+        },
+        {
+          "x": 721,
+          "y": 608
+        },
+        {
+          "x": 724,
+          "y": 597
+        },
+        {
+          "x": 729,
+          "y": 587
+        },
+        {
+          "x": 732,
+          "y": 576
+        },
+        {
+          "x": 735,
+          "y": 565
+        },
+        {
+          "x": 738,
+          "y": 554
+        }
+      ]
+    }
+  ],
+  "elevationSpikes": [],
+  "tee_hole": {
+    "x_mm": 30,
+    "y_mm": 30
+  }
+}

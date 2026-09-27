@@ -1,7 +1,10 @@
 {
   "project": "Golf Timer",
   "slug": "golf-timer",
-  "running": null,
+  "running": {
+    "started_at": "2026-09-27T20:37:08.627137+00:00",
+    "record_id": "fa556e14-67b8-4b06-9247-d5626d3c3522"
+  },
   "sessions": [
     {
       "started_at": "2026-09-26T17:34:05.062909+00:00",
@@ -11,5 +14,5 @@
     }
   ],
   "total_seconds": 2370,
-  "last_touched_at": "2026-09-26T18:13:35.865810+00:00"
+  "last_touched_at": "2026-09-27T20:37:08.627137+00:00"
 }

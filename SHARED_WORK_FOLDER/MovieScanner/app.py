@@ -33,7 +33,15 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.23"
+APP_VERSION = "V3.24"
+# V3.24 — Plot filter: any match whose OMDb plot can't be fetched (HTTP error,
+#          timeout, Response=False, Plot="N/A", missing Plot key) is excluded
+#          from the matches list entirely — silently, as if it never matched.
+#          Only titles with a real non-empty plot string are shown.
+#          Fail-open: if no OMDb API key is configured, all titles pass through
+#          unchanged (preserves pre-V3.24 behaviour for key-less installs).
+#          Fetched plots are cached in title_metadata so re-scans are free.
+#
 # V3.23 — Config export/import + auto-snapshot on every config save + startup
 # integrity check. Three layers of protection against config data-loss:
 #   Layer 1: auto-snapshot of scanner.db → db/backups/ on every /config POST

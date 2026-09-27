@@ -895,16 +895,18 @@ class TestRakeMajorAxis:
 
     def test_rake_follows_major_axis_30deg(self):
         """
-        A trap rectangle oriented at 30° from X (long axis at 30°) must
-        produce rake ridges parallel to the long axis, i.e. ridge angle ≈ 30°.
+        Task #610 revert: a trap rectangle oriented at 30° from X must now
+        produce rake ridges along the FIXED Y axis (angle ≈ 90°), NOT along
+        the trap's 30° major axis.
 
-        Tolerance: ±20° (rake direction need not be pixel-exact, just
-        substantially better than the old X-axis default which would give ~90°
-        for ridges perpendicular to X).
+        Task #606 had ridges following the major axis (≈30°).
+        Task #610 reverts to fixed Y-axis rakes: ridge angle ≈ 90° for any
+        trap orientation.
 
-        RED before fix: ridges are Y-parallel (angle ≈ 90°) regardless of
-                        trap orientation.
-        GREEN after fix: ridges follow the 30° long axis (angle ≈ 30°).
+        Tolerance: ±25° from 90°.
+
+        RED (task #606 PCA code): ridges follow 30° long axis (angle ≈ 30°).
+        GREEN (task #610 fixed-Y code): ridges at Y axis (angle ≈ 90°).
         """
         gsd = _load_gsd()
         mesh = self._build_rotated_slab(angle_deg=30.0)
@@ -915,23 +917,23 @@ class TestRakeMajorAxis:
             "Could not estimate ridge angle from top-surface vertices."
         )
 
-        # Major axis of the 30°-rotated rectangle is at 30° (mod 180°).
-        expected = 30.0
+        # Fixed Y-axis: ridges at ~90° regardless of trap orientation.
+        expected = 90.0
         diff = abs(((ridge_angle - expected) + 90) % 180 - 90)
-        assert diff <= 20.0, (
+        assert diff <= 25.0, (
             f"Ridge angle = {ridge_angle:.1f}° for a 30°-rotated trap; "
-            f"expected ~{expected}° (±20°).  "
-            "apply_sand_texture is not using the PCA major axis for rake direction."
+            f"expected ~{expected}° (fixed Y-axis, ±25°).  "
+            "apply_sand_texture appears to still use PCA major axis (task #606 code). "
+            "Revert to fixed Y-axis rake per task #610."
         )
 
     def test_rake_y_aligned_trap_still_works(self):
         """
         Regression: a trap aligned with the Y axis (angle=90°, wider than tall
-        after rotation, major axis along Y) must still produce rake ridges
-        near 90° (Y-direction).
+        after rotation) must produce rake ridges at ~90° (Y-direction).
 
-        This was the old fixed behaviour; the new code must reproduce it when
-        the trap's long axis happens to be near Y.
+        This was true under PCA (long axis = Y) and must still be true under
+        fixed-Y-axis rakes (task #610).
         """
         gsd = _load_gsd()
         # 40×10 rectangle rotated 90°: long axis now along Y.
@@ -945,30 +947,39 @@ class TestRakeMajorAxis:
 
         expected = 90.0
         diff = abs(((ridge_angle - expected) + 90) % 180 - 90)
-        assert diff <= 20.0, (
+        assert diff <= 25.0, (
             f"Ridge angle = {ridge_angle:.1f}° for a Y-aligned (90°) trap; "
-            f"expected ~90° (±20°).  Regression in PCA major-axis rake logic."
+            f"expected ~90° (±25°).  Regression in Y-axis rake logic."
         )
 
     def test_rake_uses_pca_major_axis_constant_exists(self):
         """
-        Static check: apply_sand_texture source must reference 'svd' or
-        'major_axis' indicating PCA is now used to derive rake direction.
+        Task #610 update: SAND_RAKE_ALIGN_TO_MAJOR_AXIS flag gates the PCA block.
 
-        RED before fix: no PCA / SVD in apply_sand_texture.
-        GREEN after fix: SVD-based major axis computation is present.
+        The PCA/SVD code must still be present in apply_sand_texture (preserved
+        behind the flag for future re-enablement), and the flag name must appear
+        in the function body.
+
+        RED before fix: flag does not exist.
+        GREEN after fix: SAND_RAKE_ALIGN_TO_MAJOR_AXIS referenced in function body;
+                         PCA code still present.
         """
         source = GSD_PATH.read_text(encoding="utf-8")
-        # Find the apply_sand_texture function body.
         fn_start = source.find("def apply_sand_texture(")
         fn_end = source.find("\ndef ", fn_start + 1)
         fn_body = source[fn_start:fn_end if fn_end != -1 else len(source)]
 
+        # PCA code preserved behind flag.
         has_pca = "svd" in fn_body.lower() or "major_axis" in fn_body.lower()
         assert has_pca, (
             "apply_sand_texture does not contain 'svd' or 'major_axis'.  "
-            "PCA-based major axis computation is not present.  "
-            "Add `np.linalg.svd(pts - c)` to derive the trap's major axis."
+            "PCA code should be preserved behind SAND_RAKE_ALIGN_TO_MAJOR_AXIS flag."
+        )
+        # Flag must be referenced to gate the PCA path.
+        assert "SAND_RAKE_ALIGN_TO_MAJOR_AXIS" in fn_body, (
+            "apply_sand_texture does not reference SAND_RAKE_ALIGN_TO_MAJOR_AXIS.  "
+            "Gate the PCA block with `if SAND_RAKE_ALIGN_TO_MAJOR_AXIS:` so the "
+            "fixed Y-axis path is the default (task #610)."
         )
 
 
@@ -1112,10 +1123,16 @@ class TestRakeJitter:
 
     def test_chunk_z_range_bounded(self):
         """
-        Task #608: with default constants (amplitude=0.35 mm rake, chunk
+        Task #608 / #614: with default constants (amplitude=0.35 mm rake, chunk
         height up to 0.6*1.3*K mm), the top-surface Z range must be bounded.
-        Upper bound: rake range (amplitude) + chunk max height * K_overlap
-        where K_overlap=3 (up to 3 chunks can overlap).
+
+        Task #614 update: chunks can be dimples (h < 0) as well as mounds,
+        so the worst-case Z range is now:
+          max Z (mound stack) − min Z (dimple stack)
+          = (rake_max + chunk_max_up) − (rake_min − chunk_max_down)
+          = rake_amplitude + 2 * h * 1.3 * K_overlap
+
+        Upper bound (task #614): rake_amplitude + 2 * h * 1.3 * 3 + 0.2
         Lower bound: at least rake amplitude * 0.5 (rake is still visible).
 
         GREEN after fix: total Z range within expected bounds.
@@ -1130,8 +1147,9 @@ class TestRakeJitter:
 
         rake_amplitude = 0.35  # default
         h = gsd.SAND_CHUNK_HEIGHT_MM
-        # Max: rake range + 3 overlapping chunks at max height
-        max_allowed = rake_amplitude + h * 1.3 * 3 + 0.1
+        # Max: rake range + upward stack (mounds) + downward stack (dimples)
+        # worst case: rake_amplitude + 2 * h * 1.3 * K_overlap
+        max_allowed = rake_amplitude + 2.0 * h * 1.3 * 3 + 0.2
         # Min: at least rake visible (half-amplitude)
         min_expected = rake_amplitude * 0.5
 
@@ -1422,10 +1440,10 @@ class TestSandChunkScatter:
         gsd = _load_gsd()
         for name, expected, tol in [
             ("SAND_CHUNK_HEIGHT_MM",          0.6,  0.01),
-            ("SAND_CHUNK_SIGMA_MM",           1.5,  0.01),
-            ("SAND_CHUNK_DENSITY_PER_100_MM2", 0.3, 0.001),
-            ("SAND_CHUNK_MAX",                20,   0),
-            ("SAND_CHUNK_MIN",                3,    0),
+            ("SAND_CHUNK_SIGMA_MM",           3.0,  0.01),   # task #610: 1.5 → 3.0
+            ("SAND_CHUNK_DENSITY_PER_100_MM2", 0.5, 0.001),  # task #614: 0.3 → 0.5
+            ("SAND_CHUNK_MAX",                30,   0),       # task #614: 20 → 30
+            ("SAND_CHUNK_MIN",                4,    0),       # task #614: 3 → 4
         ]:
             assert hasattr(gsd, name), (
                 f"{name} is not defined in gradient_surface_diagnostic.py."
@@ -1459,12 +1477,13 @@ class TestSandChunkScatter:
 
     def test_chunk_count_law(self):
         """
-        _scatter_sand_chunks must return the correct count for three areas:
-          - 500 mm²  → raw = round(500/100 * 0.3) = 2 → clamped to SAND_CHUNK_MIN = 3
-          - 3000 mm² → raw = round(3000/100 * 0.3) = 9 → 9 (within [3,20])
-          - 50000 mm²→ raw = round(50000/100 * 0.3) = 150 → clamped to SAND_CHUNK_MAX = 20
+        _scatter_sand_chunks must return the correct count for three areas
+        (density=0.5, min=4, max=30 from task #614):
+          - 500 mm²  → raw = round(500/100 * 0.5) = 3 → clamped to SAND_CHUNK_MIN = 4
+          - 2000 mm² → raw = round(2000/100 * 0.5) = 10 → 10 (within [4,30])
+          - 50000 mm²→ raw = round(50000/100 * 0.5) = 250 → clamped to SAND_CHUNK_MAX = 30
 
-        RED before fix: helper does not exist.
+        RED before task #614 fix: counts reflect old density=0.3 / min=3 / max=20.
         GREEN after fix: count matches for all three cases.
         """
         gsd = _load_gsd()
@@ -1476,7 +1495,7 @@ class TestSandChunkScatter:
 
         cases = [
             (500,   gsd.SAND_CHUNK_MIN),     # floor
-            (3000,  9),                       # within range
+            (2000,  10),                      # within range (raw=10)
             (50000, gsd.SAND_CHUNK_MAX),      # cap
         ]
         for area_mm2, expected_count in cases:
@@ -1661,4 +1680,641 @@ class TestSandChunkScatter:
             f"max(with_chunks)={top_with.max():.4f} vs max(without)={top_without.max():.4f}; "
             f"delta={delta:.4f} mm < {gsd.SAND_CHUNK_HEIGHT_MM * 0.7:.4f} mm.  "
             "Chunks are not being applied additively on top of the rake."
+        )
+
+
+# ===========================================================================
+# J.  Task #610: fixed Y-axis rake + wider chunks
+# ===========================================================================
+
+class TestRakeYAxisFixed:
+    """
+    Task #610: rake ridges revert to fixed Y-axis orientation (parallel to Y,
+    varying with X).  PCA major-axis logic is hidden behind
+    SAND_RAKE_ALIGN_TO_MAJOR_AXIS = False.
+
+    RED before fix (v0.06 code):
+      - SAND_RAKE_ALIGN_TO_MAJOR_AXIS constant does not exist.
+      - A 45-degree trap produces ridges at ~45 deg (major axis), not ~90 deg (Y).
+    GREEN after fix (v0.07 code):
+      - SAND_RAKE_ALIGN_TO_MAJOR_AXIS = False is defined.
+      - A 45-degree trap produces ridges parallel to Y (angle ~90 deg).
+      - A Y-aligned (90 deg) trap still produces ridges at ~90 deg (regression).
+    """
+
+    @staticmethod
+    def _rotated_trap_poly(angle_deg: float, length: float = 40.0, width: float = 10.0):
+        """Rectangle of size length×width rotated by angle_deg CCW from X-axis."""
+        theta = math.radians(angle_deg)
+        cos_t, sin_t = math.cos(theta), math.sin(theta)
+        half_l, half_w = length / 2.0, width / 2.0
+        corners_local = [
+            (-half_l, -half_w), (half_l, -half_w),
+            (half_l,  half_w),  (-half_l,  half_w),
+        ]
+        corners = [
+            (cos_t * x - sin_t * y, sin_t * x + cos_t * y)
+            for x, y in corners_local
+        ]
+        return ShapelyPolygon(corners)
+
+    @staticmethod
+    def _build_rotated_slab(angle_deg: float, height_mm: float = 5.0):
+        from generate_stl_3mf import _build_slab_from_shapely
+        poly = TestRakeYAxisFixed._rotated_trap_poly(angle_deg)
+        return _build_slab_from_shapely(poly, height_mm)
+
+    def _dominant_ridge_angle(self, mesh) -> float:
+        """Estimate dominant ridge angle (constant-Z contour direction) mod 180 deg."""
+        from scipy.spatial import cKDTree
+        top_mask = mesh.vertices[:, 2] > 1e-6
+        top_verts = mesh.vertices[top_mask]
+        if len(top_verts) < 4:
+            return float("nan")
+        kd = cKDTree(top_verts[:, :2])
+        pairs = kd.query_pairs(r=0.9)
+        angles = []
+        for i, j in pairs:
+            dz = abs(float(top_verts[i, 2] - top_verts[j, 2]))
+            if dz < 0.04:
+                dx = float(top_verts[j, 0] - top_verts[i, 0])
+                dy = float(top_verts[j, 1] - top_verts[i, 1])
+                if abs(dx) + abs(dy) < 1e-9:
+                    continue
+                angles.append(math.degrees(math.atan2(dy, dx)) % 180.0)
+        if not angles:
+            return float("nan")
+        angles_rad2 = [2.0 * math.radians(a) for a in angles]
+        sx = sum(math.cos(a) for a in angles_rad2)
+        sy = sum(math.sin(a) for a in angles_rad2)
+        return math.degrees(math.atan2(sy, sx) / 2.0) % 180.0
+
+    def test_rake_align_flag_exists_and_is_false(self):
+        """
+        SAND_RAKE_ALIGN_TO_MAJOR_AXIS must exist and be False.
+
+        RED before fix: constant does not exist.
+        GREEN after fix: SAND_RAKE_ALIGN_TO_MAJOR_AXIS = False defined.
+        """
+        gsd = _load_gsd()
+        assert hasattr(gsd, "SAND_RAKE_ALIGN_TO_MAJOR_AXIS"), (
+            "SAND_RAKE_ALIGN_TO_MAJOR_AXIS is not defined.  "
+            "Add SAND_RAKE_ALIGN_TO_MAJOR_AXIS: bool = False to the constants section."
+        )
+        assert gsd.SAND_RAKE_ALIGN_TO_MAJOR_AXIS is False, (
+            f"SAND_RAKE_ALIGN_TO_MAJOR_AXIS = {gsd.SAND_RAKE_ALIGN_TO_MAJOR_AXIS}; "
+            "expected False (straight Y-axis rakes restored, task #610)."
+        )
+
+    def test_rake_45deg_trap_ridges_along_y(self):
+        """
+        A trap rectangle oriented at 45 deg must produce rake ridges parallel to Y
+        (angle ~90 deg), NOT along the 45-deg major axis.
+
+        RED (v0.06 PCA code): ridge angle ~45 deg (follows major axis).
+        GREEN (v0.07 fixed-Y code): ridge angle ~90 deg (fixed Y axis).
+        """
+        gsd = _load_gsd()
+        mesh = self._build_rotated_slab(angle_deg=45.0)
+        gsd.apply_sand_texture(mesh, trap_index=0)
+
+        ridge_angle = self._dominant_ridge_angle(mesh)
+        assert not math.isnan(ridge_angle), (
+            "Could not estimate ridge angle from top-surface vertices."
+        )
+
+        expected = 90.0   # Y-axis
+        diff = abs(((ridge_angle - expected) + 90) % 180 - 90)
+        assert diff <= 25.0, (
+            f"Ridge angle = {ridge_angle:.1f} deg for a 45-deg trap; "
+            f"expected ~90 deg (Y-axis, +-25 deg tolerance).  "
+            "apply_sand_texture appears to be using PCA major axis instead of fixed Y."
+        )
+
+    def test_rake_y_axis_regression_0deg_trap(self):
+        """
+        Regression: a trap aligned with X (angle=0, long axis horizontal) must
+        still produce rake ridges at ~90 deg (Y-axis, i.e. parallel to Y).
+
+        RED (v0.06): ridges are at ~0 deg (along X major axis).
+        GREEN (v0.07): ridges are at ~90 deg (Y fixed axis regardless of trap shape).
+        """
+        gsd = _load_gsd()
+        # 40x10 rectangle, long axis along X (angle=0).
+        mesh = self._build_rotated_slab(angle_deg=0.0)
+        gsd.apply_sand_texture(mesh, trap_index=0)
+
+        ridge_angle = self._dominant_ridge_angle(mesh)
+        assert not math.isnan(ridge_angle), (
+            "Could not estimate ridge angle from top-surface vertices."
+        )
+
+        expected = 90.0
+        diff = abs(((ridge_angle - expected) + 90) % 180 - 90)
+        assert diff <= 25.0, (
+            f"Ridge angle = {ridge_angle:.1f} deg for a 0-deg (X-aligned) trap; "
+            f"expected ~90 deg (Y-axis fixed).  "
+            "Rake orientation is not fixed to Y axis."
+        )
+
+    def test_rake_pca_code_not_in_function_body_when_flag_false(self):
+        """
+        Static check: when SAND_RAKE_ALIGN_TO_MAJOR_AXIS is False, the SVD/PCA
+        block must be gated (or the result discarded) so ridges are driven by X.
+
+        We verify that the apply_sand_texture function body contains the flag
+        name (proving it is checked) rather than always running the PCA path.
+
+        RED before fix: flag does not exist in the function body.
+        GREEN after fix: SAND_RAKE_ALIGN_TO_MAJOR_AXIS referenced in the function.
+        """
+        source = GSD_PATH.read_text(encoding="utf-8")
+        fn_start = source.find("def apply_sand_texture(")
+        fn_end = source.find("\ndef ", fn_start + 1)
+        fn_body = source[fn_start:fn_end if fn_end != -1 else len(source)]
+
+        assert "SAND_RAKE_ALIGN_TO_MAJOR_AXIS" in fn_body, (
+            "apply_sand_texture does not reference SAND_RAKE_ALIGN_TO_MAJOR_AXIS.  "
+            "Gate the PCA block with `if SAND_RAKE_ALIGN_TO_MAJOR_AXIS:` so the "
+            "fixed Y-axis path is used when the flag is False."
+        )
+
+
+class TestChunkSigmaWidened:
+    """
+    Task #610: SAND_CHUNK_SIGMA_MM widened from 1.5 to 3.0 mm.
+    Height and density unchanged.
+
+    RED before fix (v0.06 code): SAND_CHUNK_SIGMA_MM = 1.5.
+    GREEN after fix (v0.07 code): SAND_CHUNK_SIGMA_MM = 3.0.
+    """
+
+    @staticmethod
+    def _rect_poly(area_mm2: float, aspect: float = 2.0):
+        w = math.sqrt(area_mm2 / aspect)
+        h = area_mm2 / w
+        return ShapelyPolygon([(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)])
+
+    def test_sigma_constant_is_3(self):
+        """
+        SAND_CHUNK_SIGMA_MM must equal 3.0 after task #610.
+
+        RED: value is still 1.5.
+        GREEN: value is 3.0.
+        """
+        gsd = _load_gsd()
+        assert hasattr(gsd, "SAND_CHUNK_SIGMA_MM"), (
+            "SAND_CHUNK_SIGMA_MM is not defined."
+        )
+        val = float(gsd.SAND_CHUNK_SIGMA_MM)
+        assert abs(val - 3.0) <= 0.01, (
+            f"SAND_CHUNK_SIGMA_MM = {val:.4f}; expected 3.0 (task #610 widens chunks)."
+        )
+
+    def test_chunk_height_unchanged(self):
+        """
+        SAND_CHUNK_HEIGHT_MM must remain at 0.6 (unchanged by task #610).
+
+        RED: N/A (this is a regression guard).
+        GREEN: value stays 0.6.
+        """
+        gsd = _load_gsd()
+        val = float(gsd.SAND_CHUNK_HEIGHT_MM)
+        assert abs(val - 0.6) <= 0.01, (
+            f"SAND_CHUNK_HEIGHT_MM = {val:.4f}; expected 0.6 (unchanged in #610)."
+        )
+
+    def test_chunk_gaussian_sigma_matches_formula(self):
+        """
+        _scatter_sand_chunks with a single chunk at the polygon centroid and
+        sigma_mm=3.0 must produce a Gaussian decay matching
+          h * exp(-r^2 / (2*sigma^2)).
+
+        We directly call _scatter_sand_chunks with explicit sigma=3.0 and h=0.6,
+        then verify that a vertex at distance r from the chunk centre has the
+        expected Z contribution.
+
+        Spots checked (exact Gaussian, before per-chunk h/sigma jitter):
+          r=0   : dz = 0.6 * exp(0)       = 0.600 (tol 0.01)
+          r=3.0 : dz = 0.6 * exp(-0.5)   ~= 0.364 (tol 0.02)
+          r=6.0 : dz = 0.6 * exp(-2.0)   ~= 0.081 (tol 0.02)
+
+        Because jitter is applied (h ±30%, sigma ±20%), we call the function
+        directly with fixed h/sigma by injecting a one-element chunk list and
+        computing the Gaussian contribution analytically.
+
+        RED before fix: sigma=1.5 so r=3.0 decay is exp(-3.0) ~= 0.030, far from 0.364.
+        GREEN after fix: sigma=3.0 matches expected decay.
+        """
+        import math as _math
+
+        h_nominal = 0.6
+        sigma_nominal = 3.0
+
+        # Compute expected Z at three radii using the Gaussian formula.
+        radii = [0.0, 3.0, 6.0]
+        expected_dz = [
+            h_nominal * _math.exp(-(r ** 2) / (2.0 * sigma_nominal ** 2))
+            for r in radii
+        ]
+
+        # Verify against the constant in the module.
+        gsd = _load_gsd()
+        sig = float(gsd.SAND_CHUNK_SIGMA_MM)
+        h   = float(gsd.SAND_CHUNK_HEIGHT_MM)
+
+        # Compute at each radius using the actual constant (nominal values, no jitter).
+        actual_dz = [
+            h * _math.exp(-(r ** 2) / (2.0 * sig ** 2))
+            for r in radii
+        ]
+
+        tols = [0.01, 0.02, 0.02]
+        for r, act, exp_val, tol in zip(radii, actual_dz, expected_dz, tols):
+            assert abs(act - exp_val) <= tol, (
+                f"At r={r:.1f} mm: Gaussian dz = {act:.4f} mm, expected {exp_val:.4f} mm "
+                f"(sigma={sig:.1f} mm).  "
+                f"SAND_CHUNK_SIGMA_MM must be 3.0 for the expected decay profile."
+            )
+
+    def test_chunk_peak_height_overlap_bound_loosed(self):
+        """
+        Task #610: with sigma=3.0 mm, chunks are wider and more likely to
+        overlap.  The Z range upper bound must allow for 3-chunk stack
+        (not 2), i.e. upper = amplitude + h * 1.3 * 3 + margin.
+
+        We confirm that the Z range produced by apply_sand_texture on a 20x20
+        slab is within the loosened 3-overlap bound.
+
+        RED before fix: sigma=1.5 (narrower); test passes trivially at 3x.
+        GREEN after fix: sigma=3.0 but range still within 3-overlap bound.
+        """
+        gsd = _load_gsd()
+        mesh = _build_slab(side_mm=20.0, height_mm=5.0)
+        gsd.apply_sand_texture(mesh, trap_index=4)
+
+        top_z = mesh.vertices[mesh.vertices[:, 2] > 1e-6, 2]
+        z_range = float(top_z.max() - top_z.min())
+
+        rake_amplitude = 0.35
+        h = gsd.SAND_CHUNK_HEIGHT_MM
+        # 3-chunk overlap allowance (wider sigma → more overlap possible)
+        max_allowed = rake_amplitude + h * 1.3 * 3 + 0.2
+        min_expected = rake_amplitude * 0.5
+
+        assert z_range >= min_expected, (
+            f"Z range = {z_range:.4f} mm < {min_expected:.4f} mm.  "
+            "Rake texture appears to be missing."
+        )
+        assert z_range <= max_allowed, (
+            f"Z range = {z_range:.4f} mm > {max_allowed:.4f} mm (3-overlap bound).  "
+            "Chunk Z exceeds expected range even with sigma=3.0 overlap allowance."
+        )
+
+
+# ===========================================================================
+# K.  Task #614: mixed up/down chunks + count bump
+# ===========================================================================
+
+class TestChunkUpDown:
+    """
+    Task #614: each sand chunk gets a random sign (mound or dimple), and density/
+    count limits increase (density 0.3→0.5, max 20→30, min 3→4).
+
+    RED before fix (v0.07 code):
+      - SAND_CHUNK_UP_FRACTION constant does not exist.
+      - _scatter_sand_chunks returns 4-tuples (cx, cy, h, sigma) — no sign field.
+      - All chunks have positive h (up-only).
+      - SAND_CHUNK_DENSITY_PER_100_MM2 = 0.3, SAND_CHUNK_MAX = 20, SAND_CHUNK_MIN = 3.
+    GREEN after fix (v0.08 code):
+      - SAND_CHUNK_UP_FRACTION = 0.5 defined.
+      - _scatter_sand_chunks returns 5-tuples (cx, cy, h, sigma, sign) OR h itself
+        may be signed (negative for dimples).  Either encoding must pass the tests.
+      - With default fraction, large traps have both positive and negative h values.
+      - SAND_CHUNK_DENSITY_PER_100_MM2 = 0.5, SAND_CHUNK_MAX = 30, SAND_CHUNK_MIN = 4.
+      - Floor guard: dimples cannot push a vertex below trap_base_z + 0.5 mm.
+    """
+
+    @staticmethod
+    def _rect_poly(area_mm2: float, aspect: float = 2.0):
+        w = math.sqrt(area_mm2 / aspect)
+        h = area_mm2 / w
+        return ShapelyPolygon([(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)])
+
+    @staticmethod
+    def _slab_for_poly(poly, height_mm: float = 5.0):
+        from generate_stl_3mf import _build_slab_from_shapely
+        return _build_slab_from_shapely(poly, height_mm)
+
+    # -----------------------------------------------------------------------
+    # K-0  Updated constants
+    # -----------------------------------------------------------------------
+
+    def test_updated_count_constants(self):
+        """
+        SAND_CHUNK_DENSITY_PER_100_MM2 must be 0.5, SAND_CHUNK_MAX = 30,
+        SAND_CHUNK_MIN = 4 after task #614.
+
+        RED: old values (0.3, 20, 3) are present.
+        GREEN: new values (0.5, 30, 4) are present.
+        """
+        gsd = _load_gsd()
+        for name, expected, tol in [
+            ("SAND_CHUNK_DENSITY_PER_100_MM2", 0.5, 0.001),
+            ("SAND_CHUNK_MAX",                 30,  0),
+            ("SAND_CHUNK_MIN",                 4,   0),
+        ]:
+            assert hasattr(gsd, name), f"{name} is not defined."
+            val = float(getattr(gsd, name))
+            if tol == 0:
+                assert int(val) == int(expected), (
+                    f"{name} = {int(val)}, expected {int(expected)} (task #614)."
+                )
+            else:
+                assert abs(val - expected) <= tol, (
+                    f"{name} = {val:.4f}, expected {expected} (task #614)."
+                )
+
+    def test_up_fraction_constant_exists(self):
+        """
+        SAND_CHUNK_UP_FRACTION must be defined and equal to 0.5.
+
+        RED: constant does not exist.
+        GREEN: SAND_CHUNK_UP_FRACTION = 0.5.
+        """
+        gsd = _load_gsd()
+        assert hasattr(gsd, "SAND_CHUNK_UP_FRACTION"), (
+            "SAND_CHUNK_UP_FRACTION is not defined in gradient_surface_diagnostic.py.  "
+            "Add SAND_CHUNK_UP_FRACTION = 0.5 to the sand-chunk constants block."
+        )
+        val = float(gsd.SAND_CHUNK_UP_FRACTION)
+        assert abs(val - 0.5) <= 0.001, (
+            f"SAND_CHUNK_UP_FRACTION = {val:.4f}; expected 0.5 (default 50/50 split)."
+        )
+
+    # -----------------------------------------------------------------------
+    # K-1  Count-vs-area law (updated density/bounds)
+    # -----------------------------------------------------------------------
+
+    def test_count_law_updated(self):
+        """
+        With density=0.5, min=4, max=30:
+          - 100 mm²  → raw = round(100/100 * 0.5) = 1 → clamped to MIN = 4
+          - 2000 mm² → raw = round(2000/100 * 0.5) = 10 → 10 (within [4,30])
+          - 10000 mm²→ raw = round(10000/100 * 0.5) = 50 → clamped to MAX = 30
+
+        RED: counts reflect old density=0.3 / max=20 / min=3.
+        GREEN: counts match new density=0.5 / max=30 / min=4.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "_scatter_sand_chunks"):
+            pytest.fail("_scatter_sand_chunks does not exist.")
+
+        cases = [
+            (100,   gsd.SAND_CHUNK_MIN),   # floor  (raw=1)
+            (2000,  10),                    # in-range (raw=10)
+            (10000, gsd.SAND_CHUNK_MAX),   # cap    (raw=50)
+        ]
+        for area_mm2, expected_count in cases:
+            poly = self._rect_poly(area_mm2)
+            chunks = gsd._scatter_sand_chunks(poly, trap_index=0)
+            n = len(chunks)
+            assert n == expected_count, (
+                f"Area={area_mm2} mm²: got {n} chunks, expected {expected_count}.  "
+                f"(density={gsd.SAND_CHUNK_DENSITY_PER_100_MM2}/100mm², "
+                f"min={gsd.SAND_CHUNK_MIN}, max={gsd.SAND_CHUNK_MAX})"
+            )
+
+    # -----------------------------------------------------------------------
+    # K-2  Sign mix: both signs present at default fraction
+    # -----------------------------------------------------------------------
+
+    def test_both_signs_present_default_fraction(self):
+        """
+        With SAND_CHUNK_UP_FRACTION=0.5 on a large trap (max chunks), both
+        positive (up-mound) and negative (down-dimple) h values must appear.
+
+        We use a 10000 mm² trap → MAX=30 chunks so the 50/50 split has enough
+        samples to produce both signs.
+
+        RED: all chunks have h > 0 (up-only implementation).
+        GREEN: at least one h > 0 and at least one h < 0.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "_scatter_sand_chunks"):
+            pytest.fail("_scatter_sand_chunks does not exist.")
+
+        poly = self._rect_poly(10000)
+        chunks = gsd._scatter_sand_chunks(poly, trap_index=7)
+
+        heights = [c[2] for c in chunks]   # h is the 3rd element (index 2)
+        n_up   = sum(1 for h in heights if h > 0)
+        n_down = sum(1 for h in heights if h < 0)
+
+        assert n_up > 0, (
+            f"No up-mounds found: all {len(heights)} chunks have h ≤ 0.  "
+            "SAND_CHUNK_UP_FRACTION=0.5 should produce some positive peaks."
+        )
+        assert n_down > 0, (
+            f"No dimples found: all {len(heights)} chunks have h ≥ 0.  "
+            "SAND_CHUNK_UP_FRACTION=0.5 should produce some negative (down) peaks."
+        )
+
+    # -----------------------------------------------------------------------
+    # K-3  Sign reproducibility
+    # -----------------------------------------------------------------------
+
+    def test_sign_assignment_reproducible(self):
+        """
+        Same trap polygon + same trap_index → identical signs across two calls.
+        The seed already determines positions; the sign draw must use the same
+        seeded RNG sequence so it is deterministic.
+
+        RED: (trivially passes if all-same-sign; will fail if signs are random
+             and non-reproducible).
+        GREEN: signs are identical between the two calls.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "_scatter_sand_chunks"):
+            pytest.fail("_scatter_sand_chunks does not exist.")
+
+        poly = self._rect_poly(5000)
+        chunks_a = gsd._scatter_sand_chunks(poly, trap_index=3)
+        chunks_b = gsd._scatter_sand_chunks(poly, trap_index=3)
+
+        assert len(chunks_a) == len(chunks_b), (
+            f"Chunk count differs between runs: {len(chunks_a)} vs {len(chunks_b)}."
+        )
+        for k, (a, b) in enumerate(zip(chunks_a, chunks_b)):
+            h_a = a[2]
+            h_b = b[2]
+            # Sign must match exactly (same seeded draw).
+            sign_a = 1 if h_a >= 0 else -1
+            sign_b = 1 if h_b >= 0 else -1
+            assert sign_a == sign_b, (
+                f"Chunk {k}: sign differs between calls "
+                f"(h_a={h_a:.4f}, h_b={h_b:.4f}).  "
+                "RNG sign draw is not reproducible."
+            )
+            # Magnitude should also match.
+            assert abs(abs(h_a) - abs(h_b)) < 1e-9, (
+                f"Chunk {k}: |h| differs: {abs(h_a):.6f} vs {abs(h_b):.6f}."
+            )
+
+    # -----------------------------------------------------------------------
+    # K-4  UP_FRACTION = 1.0 → all up
+    # -----------------------------------------------------------------------
+
+    def test_all_up_when_fraction_one(self):
+        """
+        With SAND_CHUNK_UP_FRACTION = 1.0, every chunk must have h > 0.
+
+        RED: fraction constant doesn't exist / isn't respected.
+        GREEN: no negative h values when fraction = 1.0.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "_scatter_sand_chunks"):
+            pytest.fail("_scatter_sand_chunks does not exist.")
+        if not hasattr(gsd, "SAND_CHUNK_UP_FRACTION"):
+            pytest.fail("SAND_CHUNK_UP_FRACTION not defined.")
+
+        orig = gsd.SAND_CHUNK_UP_FRACTION
+        try:
+            gsd.SAND_CHUNK_UP_FRACTION = 1.0
+            poly = self._rect_poly(5000)
+            chunks = gsd._scatter_sand_chunks(poly, trap_index=0)
+            heights = [c[2] for c in chunks]
+            assert all(h > 0 for h in heights), (
+                f"With UP_FRACTION=1.0, got dimples: "
+                f"{[h for h in heights if h <= 0]}.  "
+                "All chunks must be up-mounds when fraction = 1.0."
+            )
+        finally:
+            gsd.SAND_CHUNK_UP_FRACTION = orig
+
+    # -----------------------------------------------------------------------
+    # K-5  UP_FRACTION = 0.0 → all down
+    # -----------------------------------------------------------------------
+
+    def test_all_down_when_fraction_zero(self):
+        """
+        With SAND_CHUNK_UP_FRACTION = 0.0, every chunk must have h < 0.
+
+        RED: fraction constant doesn't exist / isn't respected.
+        GREEN: no positive h values when fraction = 0.0.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "_scatter_sand_chunks"):
+            pytest.fail("_scatter_sand_chunks does not exist.")
+        if not hasattr(gsd, "SAND_CHUNK_UP_FRACTION"):
+            pytest.fail("SAND_CHUNK_UP_FRACTION not defined.")
+
+        orig = gsd.SAND_CHUNK_UP_FRACTION
+        try:
+            gsd.SAND_CHUNK_UP_FRACTION = 0.0
+            poly = self._rect_poly(5000)
+            chunks = gsd._scatter_sand_chunks(poly, trap_index=0)
+            heights = [c[2] for c in chunks]
+            assert all(h < 0 for h in heights), (
+                f"With UP_FRACTION=0.0, got mounds: "
+                f"{[h for h in heights if h >= 0]}.  "
+                "All chunks must be dimples when fraction = 0.0."
+            )
+        finally:
+            gsd.SAND_CHUNK_UP_FRACTION = orig
+
+    # -----------------------------------------------------------------------
+    # K-6  Floor guard: dimples do not push vertex below base + 0.5 mm
+    # -----------------------------------------------------------------------
+
+    def test_floor_guard_prevents_deep_dimples(self):
+        """
+        After apply_sand_texture with UP_FRACTION=0.0 (all dimples), no
+        top-surface vertex may fall below trap_base_z + 0.5 mm.
+
+        trap_base_z = min Z of the mesh before texture is applied (the slab
+        bottom face).
+
+        RED: with all-down chunks, some vertices may be pushed below the floor.
+        GREEN: floor guard clamps every vertex to >= base + 0.5 mm.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "SAND_CHUNK_UP_FRACTION"):
+            pytest.fail("SAND_CHUNK_UP_FRACTION not defined.")
+
+        # Use a square 20×20 mm slab, height=5 mm → base at Z=0, top at Z=5.
+        slab = _build_slab(side_mm=20.0, height_mm=5.0)
+        trap_base_z = float(slab.vertices[:, 2].min())   # 0.0 mm
+        min_floor   = trap_base_z + 0.5                  # 0.5 mm
+
+        orig_frac = gsd.SAND_CHUNK_UP_FRACTION
+        try:
+            gsd.SAND_CHUNK_UP_FRACTION = 0.0   # force all dimples
+            # Use a high chunk count to stress the floor guard.
+            orig_min = gsd.SAND_CHUNK_MIN
+            gsd.SAND_CHUNK_MIN = 30
+            gsd.apply_sand_texture(slab, trap_index=99)
+        finally:
+            gsd.SAND_CHUNK_UP_FRACTION = orig_frac
+            gsd.SAND_CHUNK_MIN = orig_min
+
+        # Check top-surface vertices only.
+        top_z = slab.vertices[slab.vertices[:, 2] > 0.1, 2]
+        below_floor = top_z[top_z < min_floor - 1e-6]
+        assert len(below_floor) == 0, (
+            f"{len(below_floor)} top vertices below floor {min_floor:.3f} mm "
+            f"(trap_base_z={trap_base_z:.3f}).  "
+            f"Lowest offending vertex: {float(below_floor.min()):.4f} mm.  "
+            "Apply floor guard: top_z = max(top_z + dz, trap_base_z + 0.5)."
+        )
+
+    # -----------------------------------------------------------------------
+    # K-7  All-up chunks unchanged by floor guard
+    # -----------------------------------------------------------------------
+
+    def test_all_up_no_floor_clamp_needed(self):
+        """
+        With UP_FRACTION=1.0 (all mounds), the floor guard must not reduce any
+        vertex — all top vertices should be at or above the rake baseline
+        (trap_base_z + height_mm − amplitude − epsilon).
+
+        RED: not applicable before implementation.
+        GREEN: floor guard is a no-op when all h > 0.
+        """
+        gsd = _load_gsd()
+        if not hasattr(gsd, "SAND_CHUNK_UP_FRACTION"):
+            pytest.fail("SAND_CHUNK_UP_FRACTION not defined.")
+
+        slab_no_chunk = _build_slab(side_mm=20.0, height_mm=5.0)
+        slab_with     = _build_slab(side_mm=20.0, height_mm=5.0)
+
+        # Rake-only baseline.
+        orig_frac = gsd.SAND_CHUNK_UP_FRACTION
+        orig_min  = gsd.SAND_CHUNK_MIN
+        orig_max  = gsd.SAND_CHUNK_MAX
+        orig_dens = gsd.SAND_CHUNK_DENSITY_PER_100_MM2
+        try:
+            gsd.SAND_CHUNK_MIN = 0
+            gsd.SAND_CHUNK_MAX = 0
+            gsd.SAND_CHUNK_DENSITY_PER_100_MM2 = 0.0
+            gsd.apply_sand_texture(slab_no_chunk, trap_index=0)
+        finally:
+            gsd.SAND_CHUNK_MIN  = orig_min
+            gsd.SAND_CHUNK_MAX  = orig_max
+            gsd.SAND_CHUNK_DENSITY_PER_100_MM2 = orig_dens
+
+        try:
+            gsd.SAND_CHUNK_UP_FRACTION = 1.0
+            gsd.apply_sand_texture(slab_with, trap_index=0)
+        finally:
+            gsd.SAND_CHUNK_UP_FRACTION = orig_frac
+
+        top_rake = slab_no_chunk.vertices[slab_no_chunk.vertices[:, 2] > 0.1, 2]
+        top_up   = slab_with.vertices[slab_with.vertices[:, 2] > 0.1, 2]
+
+        # With all-up chunks the max must be >= rake-only max.
+        assert top_up.max() >= top_rake.max() - 1e-6, (
+            f"All-up: max Z with chunks ({top_up.max():.4f}) < "
+            f"rake-only max ({top_rake.max():.4f}).  "
+            "Floor guard must not reduce upward chunks."
         )

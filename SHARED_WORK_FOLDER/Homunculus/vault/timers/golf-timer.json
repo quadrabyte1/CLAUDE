@@ -1,11 +1,15 @@
 {
   "project": "Golf Timer",
   "slug": "golf-timer",
-  "running": {
-    "started_at": "2026-09-26T17:34:05.062909+00:00",
-    "record_id": "84490191-282a-48ed-8dbd-e73f839d296f"
-  },
-  "sessions": [],
-  "total_seconds": 0,
-  "last_touched_at": "2026-09-26T17:34:05.062909+00:00"
+  "running": null,
+  "sessions": [
+    {
+      "started_at": "2026-09-26T17:34:05.062909+00:00",
+      "ended_at": "2026-09-26T18:13:35.865810+00:00",
+      "duration_seconds": 2370,
+      "record_id": "697c3045-0882-4db6-8da5-83f0dc92c844"
+    }
+  ],
+  "total_seconds": 2370,
+  "last_touched_at": "2026-09-26T18:13:35.865810+00:00"
 }

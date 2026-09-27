@@ -2424,9 +2424,73 @@ function polygonEditor() {
       }
     },
 
+    // Clear all per-project state immediately — called at the top of loadProject()
+    // so that a failed load always leaves the editor blank, never stale.
+    clearEditorState() {
+      // Image
+      this.selectedImage      = '';
+      this.selectedImageUrl   = '';
+      this.selectedImageCourse = '';
+      this.img                = null;
+      this.imgLoaded          = false;
+      this.imgW               = 0;
+      this.imgH               = 0;
+      // Identity
+      this.courseName         = '';
+      this.holeName           = '';
+      // Polygons / contours / spikes
+      this.polygons           = [];
+      this.contours           = [];
+      this.elevationSpikes    = [];
+      this.selectedPoly       = 0;
+      this.selectedVerts      = [];
+      this._pendingRestore    = null;
+      // Undo / redo
+      this.undoStack          = [];
+      this.redoStack          = [];
+      // Per-hole settings — reset to defaults
+      this.contourStep        = 0.5;
+      this.grassAmplitude     = 0.5;
+      this.grassSpacing       = 0.05;
+      this.greenStyle         = 'terraced';
+      this.elevationRange     = 14.5;
+      this.greenScale         = 1.0065;
+      this.fringeEdgeHeight   = 10.0;
+      this.baseThicknessMm    = 1.5;
+      this.includeBoundaryRegion = false;
+      this.applyFringeFrameCap   = true;
+      this.flagOffsetXMm      = 0.0;
+      this.flagOffsetYMm      = 0.0;
+      // Tee-hole
+      this.teeHole            = null;
+      // GPS backend
+      this.gpsEnabled         = false;
+      this.gpsFile            = '';
+      this.gpsBbox            = null;
+      this.gpsVertExag        = 3.0;
+      this.gpsApproachM       = 8.0;
+      this.gpsGridSize        = 200;
+      this.courseGeoRef       = null;
+      // GPS preview
+      this.gpsPreviewDataUrl  = '';
+      this.gpsPreviewError    = '';
+      this.gpsPreviewNotes    = [];
+      // Unsaved-changes guard
+      this._pendingAutoSave   = false;
+      // Clear the canvas so no stale image is visible while the fetch is in flight
+      const canvas = this.$refs && this.$refs.canvas;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    },
+
     async loadProject(proj) {
       this.selectedOpenProject = proj;
       this.showOpenDialog = false;
+      // Clear all stale state BEFORE the fetch so that if the load fails
+      // the user sees a blank editor, not the previous project's data.
+      this.clearEditorState();
       try {
         console.log('loadProject: fetching', proj.filename);
         const resp = await fetch('/api/boundaries/load?filename=' + encodeURIComponent(proj.filename));

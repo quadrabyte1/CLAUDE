@@ -1,3 +1,15 @@
+# v0.08 — 2026-09-27 Topo — fix #614: mixed up/down sand chunks + count bump.
+#         SAND_CHUNK_UP_FRACTION=0.5 (50/50 up/down by default).  Sign is drawn
+#         from the seeded RNG so pattern is reproducible per trap.  Floor guard
+#         prevents dimples pushing top vertices below trap_base_z + 0.5 mm.
+#         Count bump: density 0.3→0.5, max 20→30, min 3→4.
+#         APP_VERSION bumped to v4.67.
+# v0.07 — 2026-09-26 Topo — fix #610: two-part trap tweak.
+#         Item 1: rake direction reverted to fixed Y-axis (PCA major-axis logic
+#         from task #606 preserved behind SAND_RAKE_ALIGN_TO_MAJOR_AXIS=False).
+#         Item 2: SAND_CHUNK_SIGMA_MM widened 1.5→3.0 mm (~4× footprint area);
+#         count and height unchanged.  Overlap upper bound updated to 3-chunk.
+#         APP_VERSION bumped to v4.66.
 # v0.06 — 2026-09-26 Topo — fix #608: replace sinusoidal jitter with sparse
 #         sand-chunk scatter.  Remove SAND_JITTER_AMPLITUDE_MM.  Add Gaussian
 #         mound bumps (SAND_CHUNK_HEIGHT_MM=0.6, SAND_CHUNK_SIGMA_MM=1.5,
@@ -4856,11 +4868,24 @@ TRAP_FRINGE_OFFSET_MM:        float = -4.0  # mm offset applied to fringe bounda
 # (SAND_JITTER_AMPLITUDE_MM, removed) which was imperceptible at 0.08 mm next
 # to 0.35 mm rake ridges.  Chunks are visible discrete mounds (~0.6 mm peak),
 # placed at reproducible random positions inside the trap polygon.
+# Task #610 (Topo, 2026-09-26): sigma widened 1.5 → 3.0 mm (same count/height,
+# ~4× footprint area).
+# Task #614 (Topo, 2026-09-27): mixed up/down chunks (50/50 by default) + more
+# chunks overall (density 0.3→0.5, max 20→30, min 3→4).  Each chunk's sign is
+# determined by seeded RNG so the same trap always gets the same pattern.
+# Floor guard prevents dimples from pushing any top vertex below
+# trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM.
 SAND_CHUNK_HEIGHT_MM:           float = 0.6   # Gaussian mound peak height in mm
-SAND_CHUNK_SIGMA_MM:            float = 1.5   # Gaussian sigma in mm (footprint ~3 mm at 2σ)
-SAND_CHUNK_DENSITY_PER_100_MM2: float = 0.3   # chunks per 100 mm² of trap area
-SAND_CHUNK_MAX:                 int   = 20    # cap: no more than this many chunks per trap
-SAND_CHUNK_MIN:                 int   = 3     # floor: even tiny traps get this many chunks
+SAND_CHUNK_SIGMA_MM:            float = 3.0   # Gaussian sigma in mm (footprint ~6 mm at 2σ); task #610: 1.5→3.0
+SAND_CHUNK_DENSITY_PER_100_MM2: float = 0.5   # chunks per 100 mm² of trap area; task #614: 0.3→0.5
+SAND_CHUNK_MAX:                 int   = 30    # cap: no more than this many chunks per trap; task #614: 20→30
+SAND_CHUNK_MIN:                 int   = 4     # floor: even tiny traps get this many chunks; task #614: 3→4
+SAND_CHUNK_UP_FRACTION:         float = 0.5   # task #614: fraction of chunks that are up-mounds (1.0=all up, 0.0=all dimples)
+SAND_CHUNK_FLOOR_THICKNESS_MM:  float = 0.5   # task #614: floor guard — dimples may not push top below trap_base_z + this value
+# Task #610 (Topo, 2026-09-26): rake direction reverted to fixed Y-axis.  When
+# False (default), rake ridges run parallel to Y for every trap regardless of
+# shape.  Set True to re-enable PCA major-axis orientation from task #606.
+SAND_RAKE_ALIGN_TO_MAJOR_AXIS:  bool  = False  # False = fixed Y-axis; True = PCA major axis
 
 # ---------------------------------------------------------------------------
 # Water hazard ripple texture — sinusoidal "wind chop" displacement
@@ -5244,16 +5269,24 @@ def _scatter_sand_chunks(
     min_chunks: "int | None" = None,
 ) -> list:
     """
-    Return a list of ``(cx, cy, h, sigma)`` tuples describing Gaussian mound
-    bumps to scatter across ``trap_poly``.
+    Return a list of ``(cx, cy, h, sigma)`` tuples describing Gaussian bump
+    displacements to scatter across ``trap_poly``.  ``h`` is signed: positive
+    values are up-mounds, negative values are down-dimples (task #614).
 
     Task #608 rule
     --------------
     count = clamp(round(area / 100 * density), min_chunks, max_chunks)
 
     Each bump is placed at a uniform-random point strictly inside the polygon
-    (rejection sampling).  h and sigma are jittered ±30% and ±20% respectively
-    around the defaults so bumps look organic.
+    (rejection sampling).  h magnitude and sigma are jittered ±30% and ±20%
+    respectively around the defaults so bumps look organic.
+
+    Task #614 sign rule
+    -------------------
+    After sampling position/magnitude, each chunk draws a sign from the seeded
+    RNG: ``sign = +1`` with probability ``SAND_CHUNK_UP_FRACTION``, else ``-1``.
+    The sign is applied to ``h`` so the returned value is already signed.  The
+    same seed guarantees the same up/down pattern for any given trap + trap_index.
 
     Seed
     ----
@@ -5265,7 +5298,7 @@ def _scatter_sand_chunks(
     ----------
     trap_poly  : Shapely polygon of the trap footprint (mm coords).
     trap_index : integer used to vary the seed between traps.
-    height_mm  : nominal Gaussian peak height in mm (None → SAND_CHUNK_HEIGHT_MM).
+    height_mm  : nominal Gaussian peak height magnitude in mm (None → SAND_CHUNK_HEIGHT_MM).
     sigma_mm   : nominal Gaussian sigma in mm (None → SAND_CHUNK_SIGMA_MM).
     density    : chunks per 100 mm² (None → SAND_CHUNK_DENSITY_PER_100_MM2).
     max_chunks : upper cap on chunk count (None → SAND_CHUNK_MAX).
@@ -5273,7 +5306,7 @@ def _scatter_sand_chunks(
 
     Returns
     -------
-    List of (cx, cy, h, sigma) tuples (one per chunk).
+    List of (cx, cy, h, sigma) tuples (one per chunk).  h is signed.
     """
     from shapely.geometry import Point as _ShapelyPoint
 
@@ -5284,6 +5317,7 @@ def _scatter_sand_chunks(
     if density    is None: density    = SAND_CHUNK_DENSITY_PER_100_MM2
     if max_chunks is None: max_chunks = SAND_CHUNK_MAX
     if min_chunks is None: min_chunks = SAND_CHUNK_MIN
+    up_fraction = SAND_CHUNK_UP_FRACTION   # read at call time for monkey-patchability
 
     area = float(trap_poly.area)
     raw_count = round(area / 100.0 * density)
@@ -5309,9 +5343,11 @@ def _scatter_sand_chunks(
         py = miny + float(rng.uniform(0.0, by))
         if not trap_poly.contains(_ShapelyPoint(px, py)):
             continue
-        h_i   = height_mm * float(rng.uniform(0.7, 1.3))
+        h_mag = height_mm * float(rng.uniform(0.7, 1.3))
         sig_i = sigma_mm  * float(rng.uniform(0.8, 1.2))
-        chunks.append((px, py, h_i, sig_i))
+        # Task #614: assign sign — up-mound (+1) or dimple (−1).
+        sign  = 1.0 if float(rng.random()) < up_fraction else -1.0
+        chunks.append((px, py, h_mag * sign, sig_i))
 
     if len(chunks) < n_chunks:
         print(f"    _scatter_sand_chunks: only placed {len(chunks)}/{n_chunks} chunks "
@@ -6259,13 +6295,22 @@ def apply_sand_texture(
       cap 20).  Centres and heights are reproducible: seeded from centroid +
       trap_index hash.
 
+    Task #610 changes
+    -----------------
+    * **Rake direction reverted to fixed Y-axis** (SAND_RAKE_ALIGN_TO_MAJOR_AXIS
+      = False).  Ridges run parallel to Y for every trap regardless of shape.
+      The PCA path is preserved behind the flag for future re-enablement.
+
+    * **Chunk sigma widened**: SAND_CHUNK_SIGMA_MM 1.5 → 3.0 mm (~4× footprint
+      area).  Count and height unchanged.
+
     Algorithm
     ---------
     1. Extract the original top-face boundary as a Shapely polygon.
     2. Generate a regular (x, y) grid over the bounding box; keep only points
        inside the polygon.
-    3. Compute PCA major axis from exterior ring vertices.
-    4. Project grid/ring points onto minor axis → sinusoidal displacement dz.
+    3. Determine rake axis: fixed Y (default) or PCA major axis (flag).
+    4. Project grid/ring points onto minor axis → cosine displacement dz.
        Z = z_max + dz.
     5. Delaunay-triangulate the grid points; discard triangles whose centroid
        falls outside the polygon.
@@ -6396,26 +6441,41 @@ def apply_sand_texture(
               f"({', '.join(str(len(lp)) for lp in hole_loops)} verts)")
 
     # ------------------------------------------------------------------
-    # 2b. PCA major/minor axis from outer ring  (Task #606, Item 1)
+    # 2b. Rake axis — fixed Y or PCA major axis
     #
-    # Rake ridges must be parallel to the trap's LONG axis.  We derive the
-    # principal axes via SVD on the centered outer-ring vertices:
-    #   pts  = ring_xy coords (drop the closing duplicate)
-    #   c    = centroid
-    #   U, S, Vt = svd(pts - c, full_matrices=False)
-    #   major_axis = Vt[0]   (right singular vector for largest singular value)
-    #   minor_axis = Vt[1]
+    # Task #610 reverts the rake direction to fixed Y-axis (ridges parallel
+    # to Y, cosine wave keyed on X), which Thomas prefers over the per-trap
+    # PCA alignment added in task #606.  The PCA code is preserved behind
+    # SAND_RAKE_ALIGN_TO_MAJOR_AXIS so it can be re-enabled by flipping the
+    # constant to True without editing this function.
     #
-    # Ridges are constant-Z contours → constant projection onto minor_axis.
-    # The cosine wave is parameterised by s = dot(xy - c, minor_axis).
+    # Fixed-Y path (SAND_RAKE_ALIGN_TO_MAJOR_AXIS = False):
+    #   major_axis = (0, 1)  — Y direction (ridge runs along Y)
+    #   minor_axis = (1, 0)  — X direction (cosine wave varies with X)
+    #   _ring_c    = origin  (centroid offset not needed for global X key)
+    #
+    # PCA path (SAND_RAKE_ALIGN_TO_MAJOR_AXIS = True, task #606 behaviour):
+    #   SVD on centered outer-ring vertices; major_axis = first right singular
+    #   vector; minor_axis perpendicular.  Ridges run along major axis.
     # ------------------------------------------------------------------
     _ring_pts = ring_xy[:-1] if len(ring_xy) > 1 else ring_xy  # drop closing dup
     _ring_c   = _ring_pts.mean(axis=0)
-    _, _S_vals, _Vt = np.linalg.svd(_ring_pts - _ring_c, full_matrices=False)
-    major_axis = _Vt[0]  # unit vector along trap long axis
-    minor_axis = _Vt[1]  # unit vector perpendicular (drives cosine wave)
-    # Compute angle from +X for display.
-    _rake_angle_deg = float(np.degrees(np.arctan2(major_axis[1], major_axis[0])) % 180.0)
+
+    if SAND_RAKE_ALIGN_TO_MAJOR_AXIS:
+        # PCA path — preserved from task #606 for future use.
+        _, _S_vals, _Vt = np.linalg.svd(_ring_pts - _ring_c, full_matrices=False)
+        major_axis = _Vt[0]  # unit vector along trap long axis
+        minor_axis = _Vt[1]  # unit vector perpendicular (drives cosine wave)
+        # cosine wave s = (xy - centroid) · minor_axis
+        _proj_offset = _ring_c   # subtract centroid before projecting
+        _rake_angle_deg = float(np.degrees(np.arctan2(major_axis[1], major_axis[0])) % 180.0)
+    else:
+        # Fixed-Y path (task #610 default): ridges parallel to Y, wave on X.
+        major_axis = np.array([0.0, 1.0])  # ridge direction = Y
+        minor_axis = np.array([1.0, 0.0])  # wave direction  = X
+        # cosine wave s = xy[:, 0]  (global X, no centroid subtraction needed)
+        _proj_offset = np.zeros(2)          # no centroid subtraction
+        _rake_angle_deg = 90.0              # ridges are Y-parallel
 
     # ------------------------------------------------------------------
     # 3. Build a regular grid over the bounding box; filter inside polygon
@@ -6485,23 +6545,24 @@ def apply_sand_texture(
         print(f"    Sand texture: after step increase → {n_grid} grid points")
 
     # ------------------------------------------------------------------
-    # 4. Compute Z for every grid point (major-axis rake + jitter)
+    # 4. Compute Z for every grid point
     # ------------------------------------------------------------------
-    # Task #606 — Rake axis = PCA major axis (computed in step 2b).
+    # The cosine wave is driven by each point's projection onto minor_axis.
+    # Ridges are iso-contours (constant projection onto minor_axis), so they
+    # run parallel to major_axis.
     #
-    # The cosine wave is driven by each point's projection onto minor_axis
-    # (perpendicular to the long direction).  Ridges are iso-contours of
-    # the minor-axis projection, i.e. they run parallel to major_axis.
-    #
-    # s = (xy - centroid) · minor_axis  → scalar position across trap
+    # s = (xy - _proj_offset) · minor_axis  → scalar position across trap
     # dz_rake = amplitude * 0.5 * (1 + cos(2π * s / grain_spacing))
+    #
+    # _proj_offset is the centroid for the PCA path (task #606), or zero
+    # for the fixed-Y path (task #610) so global X is used directly.
     #
     # Task #608: sinusoidal jitter removed; discrete Gaussian chunk bumps are
     # applied AFTER mesh reassembly (step 7) instead.
 
     def _proj_minor(xy_arr: np.ndarray) -> np.ndarray:
-        """Project 2-D XY points onto the minor axis (relative to centroid)."""
-        return (xy_arr - _ring_c) @ minor_axis
+        """Project 2-D XY points onto the minor axis (relative to _proj_offset)."""
+        return (xy_arr - _proj_offset) @ minor_axis
 
     def _rake_dz(xy_arr: np.ndarray) -> np.ndarray:
         """Cosine rake displacement keyed on minor-axis projection."""
@@ -6528,9 +6589,10 @@ def apply_sand_texture(
     grid_pts = np.column_stack([all_xy, all_z])       # (R+M, 3)
 
     n_lines = int(math.ceil(
-        np.ptp((grid_xy_in - _ring_c) @ minor_axis) / grain_spacing
+        np.ptp((grid_xy_in - _proj_offset) @ minor_axis) / grain_spacing
     )) + 1
     print(f"    Sand texture: rake lines, major_axis_angle={_rake_angle_deg:.1f}°, "
+          f"pca_aligned={SAND_RAKE_ALIGN_TO_MAJOR_AXIS}, "
           f"spacing={grain_spacing:.2f} mm, "
           f"amplitude={amplitude:.3f} mm, "
           f"~{n_lines} lines, "
@@ -6605,14 +6667,22 @@ def apply_sand_texture(
           f"watertight={new_mesh.is_watertight}")
 
     # ------------------------------------------------------------------
-    # 7. Sand-chunk scatter pass (Task #608)
+    # 7. Sand-chunk scatter pass (Tasks #608, #614)
     # ------------------------------------------------------------------
-    # Apply Gaussian mound bumps on top of the rake-textured top surface.
+    # Apply Gaussian bump displacements on top of the rake-textured top surface.
     # Each bump: dz = h * exp(-((x-cx)² + (y-cy)²) / (2σ²))
+    # h is signed: positive → up-mound, negative → down-dimple (task #614).
     # Applied AFTER rake (and after the trap-height-lock adjustment that
     # happens outside this function) so chunks sit on top of everything.
     # Boundary-height cap is NOT applied here (BOUNDARY_HEIGHT_CAP_ENABLED
     # is False per task #606; chunks are allowed to poke above the cap).
+    #
+    # Floor guard (task #614): after summing, clamp so that
+    #   top_z + chunk_delta >= trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM
+    # This prevents dimples from punching through the trap slab.
+
+    trap_base_z = float(new_mesh.vertices[:, 2].min())   # slab bottom face Z
+    floor_z     = trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM
 
     chunks = _scatter_sand_chunks(shapely_poly, trap_index=trap_index)
     if chunks:
@@ -6620,16 +6690,24 @@ def apply_sand_texture(
         top_indices  = np.where(top_mask_new)[0]
         top_xy       = new_mesh.vertices[top_indices, :2]
 
-        # Accumulate Gaussian contributions from all bumps.
+        # Accumulate signed Gaussian contributions from all bumps.
         dz_chunks = np.zeros(len(top_indices), dtype=np.float64)
         for cx_b, cy_b, h_b, sig_b in chunks:
             dx = top_xy[:, 0] - cx_b
             dy = top_xy[:, 1] - cy_b
             dz_chunks += h_b * np.exp(-(dx ** 2 + dy ** 2) / (2.0 * sig_b ** 2))
 
-        new_mesh.vertices[top_indices, 2] += dz_chunks
-        print(f"    Sand texture: {len(chunks)} chunk bumps applied, "
-              f"max bump dz={dz_chunks.max():.3f} mm on {len(top_indices)} top verts")
+        # Apply displacement then enforce floor guard.
+        new_z = new_mesh.vertices[top_indices, 2] + dz_chunks
+        new_z = np.maximum(new_z, floor_z)   # floor guard: no vertex below base + 0.5 mm
+        new_mesh.vertices[top_indices, 2] = new_z
+
+        n_up   = sum(1 for _, _, h, _ in chunks if h > 0)
+        n_down = sum(1 for _, _, h, _ in chunks if h < 0)
+        dz_range = f"[{dz_chunks.min():.3f}, {dz_chunks.max():.3f}]"
+        print(f"    Sand texture: {len(chunks)} chunk bumps applied "
+              f"({n_up} up / {n_down} down), dz range {dz_range} mm "
+              f"on {len(top_indices)} top verts")
 
     # Copy rebuilt geometry back into the caller's mesh object.
     mesh.vertices = new_mesh.vertices
@@ -7614,18 +7692,48 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     cfg_lines.append('')
     cfg_xml = "\n".join(cfg_lines)
 
+    # --- 3b. Build Metadata/project_settings.config ---
+    # Bambu Studio fires "invalid config, load geometry data only" when
+    # model_settings.config is present but project_settings.config is absent.
+    # We write a minimal but structurally valid JSON blob that Bambu Studio
+    # can parse without error.  The A1 profile is a safe generic default that
+    # ships with every Bambu Studio installation.  Thomas can reassign the
+    # printer/filament/process in the slicer UI after loading — this blob
+    # merely prevents the warning dialog from appearing.
+    import json as _json
+    n_filaments = max(len(mapping), 1)
+    _BAMBU_PRINTER_ID     = "Bambu Lab A1 0.4 nozzle"
+    _BAMBU_PRINTER_MODEL  = "Bambu Lab A1"
+    _BAMBU_PRINT_PROFILE  = "0.20mm Standard @BBL A1"
+    _BAMBU_FILAMENT_ID    = "Generic PLA @BBL A1"
+    project_settings = {
+        "version": "02.05.03.61",
+        "is_custom_defined_filament": "0",
+        "printer_model": _BAMBU_PRINTER_MODEL,
+        "printer_variant": "0.4",
+        "printer_settings_id": _BAMBU_PRINTER_ID,
+        "print_settings_id": _BAMBU_PRINT_PROFILE,
+        "default_print_profile": _BAMBU_PRINT_PROFILE,
+        "filament_settings_id": [_BAMBU_FILAMENT_ID] * n_filaments,
+        "default_filament_profile": [_BAMBU_FILAMENT_ID],
+        "nozzle_diameter": ["0.4"],
+    }
+    project_settings_json = _json.dumps(project_settings, indent=4)
+
     # --- 4. Rewrite zip with the new Metadata/model_settings.config ---
     # zipfile cannot edit in place; copy entries to a sibling temp file then
     # atomically replace the original.
     tmp_path = path_3mf + ".tmp"
+    _SKIP_FILES = {"Metadata/model_settings.config", "Metadata/project_settings.config"}
     with zipfile.ZipFile(path_3mf, "r") as zin, \
          zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
-            if item.filename == "Metadata/model_settings.config":
-                # Skip — we'll write a fresh one below.
+            if item.filename in _SKIP_FILES:
+                # Skip — we'll write fresh copies below.
                 continue
             zout.writestr(item, zin.read(item.filename))
         zout.writestr("Metadata/model_settings.config", cfg_xml)
+        zout.writestr("Metadata/project_settings.config", project_settings_json)
 
     shutil.move(tmp_path, path_3mf)
 

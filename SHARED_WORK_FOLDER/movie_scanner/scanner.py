@@ -550,6 +550,91 @@ class Scanner:
 
         return kept, scraped, dropped
 
+    # ── Plot filter (V3.24) ────────────────────────────────────────────────
+    #
+    # Isolated in its own helper (mirrors _apply_parental_guide_filter) so
+    # the feature can be removed or toggled cleanly.  Every "can't be
+    # fetched" case is already handled by OMDbClient._fetch_from_api():
+    #
+    #   • HTTP error / timeout        → error set, plot=None
+    #   • OMDb Response=False         → error set, plot=None
+    #   • OMDb Plot field is "N/A"    → _clean() normalises it to None
+    #   • Missing Plot key            → dict.get() returns None
+    #   • Network exception           → error set, plot=None
+    #
+    # So the filter rule is simply: if plot is None → drop the title.
+
+    def _apply_plot_filter(
+        self,
+        db_path: str,
+        match_rows: list[tuple],
+        on_progress: "Callable[[str], None]",
+    ) -> "tuple[list[tuple], int]":
+        """Filter *match_rows* by whether an OMDb plot can be fetched.
+
+        For each candidate match, calls ``OMDbClient.fetch()`` (which uses
+        the ``title_metadata`` SQLite cache so prior hits are free).  Any
+        title whose ``plot`` field is ``None`` — regardless of reason — is
+        excluded.
+
+        Parameters
+        ----------
+        db_path:
+            Path to the scanner.db — used to read the OMDb API key and to
+            pass to OMDbClient so its cache writes land in the right place.
+        match_rows:
+            The list of (tconst, ...) tuples produced by the match phase.
+        on_progress:
+            Progress callback.
+
+        Returns
+        -------
+        (kept_rows, dropped_count)
+
+        Fail-open behaviour
+        -------------------
+        If the OMDb API key is not configured, the filter is skipped and all
+        rows are returned unchanged.  This preserves the pre-V3.24 experience
+        for users who haven't set an API key, and matches the existing
+        country-filter precedent (also fails open on missing key).
+        """
+        # Read the API key from the DB directly (the Scanner may have been
+        # constructed before the key was added, or with an explicit ScanConfig
+        # that doesn't carry the key).
+        import sqlite3 as _sqlite3
+        conn = _sqlite3.connect(db_path)
+        conn.row_factory = _sqlite3.Row
+        row = conn.execute(
+            "SELECT value FROM config WHERE key='omdb_api_key'"
+        ).fetchone()
+        conn.close()
+
+        if not row or not row["value"]:
+            on_progress("plot_filter: no OMDb API key configured — skipping (all titles kept)")
+            return match_rows, 0
+
+        omdb_client = OMDbClient(api_key=row["value"], db_path=db_path)
+        kept: list[tuple] = []
+        dropped = 0
+
+        for i, match_row in enumerate(match_rows, start=1):
+            tconst = match_row[0]
+            meta = omdb_client.fetch(tconst)
+            if meta.get("plot"):
+                kept.append(match_row)
+            else:
+                dropped += 1
+                if dropped % 10 == 0 or dropped == 1:
+                    on_progress(
+                        f"plot_filter: {dropped} title(s) dropped so far "
+                        f"(no OMDb plot) — {i}/{len(match_rows)} checked"
+                    )
+
+        on_progress(
+            f"plot_filter: {len(kept)} titles kept, {dropped} excluded (no OMDb plot)"
+        )
+        return kept, dropped
+
     # ── Public API ─────────────────────────────────────────────────────────
 
     def scan(
@@ -903,6 +988,32 @@ class Scanner:
             )
 
             self._check_cancel("cancelled after parental_guide filter")
+
+            # 3c. Plot filter (V3.24) — exclude titles whose OMDb plot can't
+            # be fetched.  Runs after parental-guide so only titles that
+            # survived all prior filters pay the OMDb cost.  The
+            # ``title_metadata`` cache means repeat scans are essentially free
+            # for previously-checked titles.
+            #
+            # Realign the seasons index after the filter (same pattern as PG
+            # above) so the parallel list stays in sync.
+            phase("plot_filter", "checking OMDb plots…")
+            seasons_by_tconst_pre_plot: dict[str, list] = {
+                row[0]: seasons
+                for row, seasons in zip(match_rows, match_seasons_by_idx)
+            }
+            match_rows, plot_dropped = self._apply_plot_filter(
+                db_path     = self._db_path,
+                match_rows  = match_rows,
+                on_progress = on_progress,
+            )
+            match_seasons_by_idx = [seasons_by_tconst_pre_plot[r[0]] for r in match_rows]
+            assert len(match_seasons_by_idx) == len(match_rows), (
+                f"season index desync after plot_filter: "
+                f"{len(match_seasons_by_idx)} vs {len(match_rows)}"
+            )
+
+            self._check_cancel("cancelled after plot_filter")
 
             # 4. Persist
             phase("saving new titles")

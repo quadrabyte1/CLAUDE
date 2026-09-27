@@ -1,0 +1,13 @@
+{
+  "event_id": "timer.golf-timer.697c3045-0882-4db6-8da5-83f0dc92c844",
+  "schedule": [
+    {
+      "event_id": "timer.golf-timer.697c3045-0882-4db6-8da5-83f0dc92c844",
+      "kind": "timer_stop",
+      "fire_at": "2026-09-26T18:13:35.865810+00:00",
+      "tz": "UTC",
+      "body": "Golf Timer session: 39 minutes 30 seconds. Total: 39 minutes 30 seconds (all-time).",
+      "status": "pending"
+    }
+  ]
+}

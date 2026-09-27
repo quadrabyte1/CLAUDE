@@ -7692,33 +7692,15 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     cfg_lines.append('')
     cfg_xml = "\n".join(cfg_lines)
 
-    # --- 3b. Build Metadata/project_settings.config ---
-    # Bambu Studio fires "invalid config, load geometry data only" when
-    # model_settings.config is present but project_settings.config is absent.
-    # We write a minimal but structurally valid JSON blob that Bambu Studio
-    # can parse without error.  The A1 profile is a safe generic default that
-    # ships with every Bambu Studio installation.  Thomas can reassign the
-    # printer/filament/process in the slicer UI after loading — this blob
-    # merely prevents the warning dialog from appearing.
-    import json as _json
-    n_filaments = max(len(mapping), 1)
-    _BAMBU_PRINTER_ID     = "Bambu Lab A1 0.4 nozzle"
-    _BAMBU_PRINTER_MODEL  = "Bambu Lab A1"
-    _BAMBU_PRINT_PROFILE  = "0.20mm Standard @BBL A1"
-    _BAMBU_FILAMENT_ID    = "Generic PLA @BBL A1"
-    project_settings = {
-        "version": "02.05.03.61",
-        "is_custom_defined_filament": "0",
-        "printer_model": _BAMBU_PRINTER_MODEL,
-        "printer_variant": "0.4",
-        "printer_settings_id": _BAMBU_PRINTER_ID,
-        "print_settings_id": _BAMBU_PRINT_PROFILE,
-        "default_print_profile": _BAMBU_PRINT_PROFILE,
-        "filament_settings_id": [_BAMBU_FILAMENT_ID] * n_filaments,
-        "default_filament_profile": [_BAMBU_FILAMENT_ID],
-        "nozzle_diameter": ["0.4"],
-    }
-    project_settings_json = _json.dumps(project_settings, indent=4)
+    # --- 3b. project_settings.config intentionally omitted (task-626 revert) ---
+    # Task 612 injected a minimal 10-key project_settings stub to silence the
+    # "invalid config, load geometry data only" warning.  That stub caused a
+    # *worse* regression: Bambu Studio's parser expects ~498 keys and aborts
+    # entirely on a truncated blob — no geometry loaded at all.
+    #
+    # The safe state is to omit project_settings.config.  Bambu Studio will show
+    # its warning dialog but geometry loads correctly.  Writing a complete,
+    # version-matched project_settings blob is tracked as future work.
 
     # --- 4. Rewrite zip with the new Metadata/model_settings.config ---
     # zipfile cannot edit in place; copy entries to a sibling temp file then
@@ -7729,11 +7711,13 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
          zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
         for item in zin.infolist():
             if item.filename in _SKIP_FILES:
-                # Skip — we'll write fresh copies below.
+                # Skip model_settings.config (replaced below).
+                # Also skip any stale project_settings.config from a prior
+                # task-612 run so it doesn't persist into the reverted file.
                 continue
             zout.writestr(item, zin.read(item.filename))
         zout.writestr("Metadata/model_settings.config", cfg_xml)
-        zout.writestr("Metadata/project_settings.config", project_settings_json)
+        # project_settings.config is deliberately NOT written here.
 
     shutil.move(tmp_path, path_3mf)
 

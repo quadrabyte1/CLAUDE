@@ -1,42 +1,41 @@
 """
-test_bambu_config_injection.py — TDD tests for Bambu project_settings.config
-injection in _inject_bambu_extruder_metadata().
+test_bambu_config_injection.py — TDD regression tests for the Bambu 3MF
+project_settings.config injection behaviour in _inject_bambu_extruder_metadata().
 
-Bug:
-  generate_stl_3mf / gradient_surface_diagnostic emit 3MFs via trimesh.Scene.export
-  followed by _inject_bambu_extruder_metadata().  The latter writes
-  Metadata/model_settings.config but never writes
-  Metadata/project_settings.config.  When Bambu Studio opens such a file it
-  displays:
-      "The 3mf file has invalid config, load geometry data only"
-  and falls back to default printer/filament/process settings.
+== Regression history ==
 
-Root cause:
-  Bambu Studio expects project_settings.config to be present whenever
-  model_settings.config is present.  A file with model_settings.config but no
-  project_settings.config triggers the warning unconditionally.
+Task 612 (v4.67):
+  Added injection of a minimal Metadata/project_settings.config stub (10 keys) to
+  silence Bambu Studio's "invalid config, load geometry data only" warning.
 
-Fix:
-  _inject_bambu_extruder_metadata() must also write a minimal but valid
-  Metadata/project_settings.config JSON blob so Bambu Studio can parse it
-  without error.  The blob must include at minimum:
-    - "version"             (non-empty string)
-    - "printer_model"       (non-empty string)
-    - "printer_settings_id" (non-empty string)
-    - "print_settings_id"   (non-empty string)
-    - "filament_settings_id" (list with at least one non-empty string)
+Task 626 (v4.72) — THIS REVERT:
+  The 10-key stub caused a worse regression: Bambu Studio raised a hard error and
+  loaded NO geometry at all, instead of the previous warning-but-loads behaviour.
+  Root cause: Bambu Studio's project_settings parser expects ~498 keys; encountering
+  a truncated blob it aborts outright rather than falling back gracefully.  Writing
+  a complete blob is a separate, larger task.  The safe fix is to REMOVE the stub
+  injection entirely so the pre-task-612 state is restored:
+    • No project_settings.config in the output 3MF.
+    • Bambu Studio shows the "invalid config" warning dialog but geometry loads.
+    • model_settings.config (extruder assignments) is still present.
 
-Tests run RED before the fix, GREEN after.
+== Current desired contract ==
+
+  _inject_bambu_extruder_metadata() MUST:
+    1. Write Metadata/model_settings.config.
+    2. NOT write Metadata/project_settings.config (reverted).
+    3. Produce a well-formed ZIP (zipfile.testzip() → None).
+    4. Be idempotent (calling twice gives exactly one model_settings.config).
+
+Tests run RED with the task-612 code still in place (project_settings IS present).
+Tests run GREEN after the task-626 revert removes the injection.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import io
-import json
-import os
 import sys
-import tempfile
 import zipfile
 from pathlib import Path
 
@@ -66,10 +65,8 @@ def _load_gsd_module():
 def _make_minimal_trimesh_3mf(names: list[str]) -> bytes:
     """
     Produce the smallest valid trimesh-style 3MF: one object per name,
-    with model_settings.config written by _inject_bambu_extruder_metadata()
-    before the test calls it again (so the zip starts without it).
+    suitable for passing to _inject_bambu_extruder_metadata().
     """
-    # Minimal 3D model with N objects (same tiny box each)
     objects_xml = ""
     for i, name in enumerate(names, start=1):
         objects_xml += f"""
@@ -124,7 +121,7 @@ def _make_minimal_trimesh_3mf(names: list[str]) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# Fixture
 # ---------------------------------------------------------------------------
 
 
@@ -138,148 +135,92 @@ def gsd():
 
 
 # ---------------------------------------------------------------------------
-# Test A — project_settings.config is PRESENT after injection
+# Test R1 — project_settings.config must NOT be present after injection
+#
+# RED with task-612 code (file IS present).
+# GREEN after task-626 revert (file is absent — safe fallback to Bambu warning).
 # ---------------------------------------------------------------------------
 
-def test_project_settings_config_present_after_injection(gsd, tmp_path):
+def test_project_settings_config_absent_after_injection(gsd, tmp_path):
     """
-    RED until fix: _inject_bambu_extruder_metadata does not write
-    project_settings.config — it will be absent.
-    GREEN after fix: the file is present.
+    After the task-626 revert, _inject_bambu_extruder_metadata must NOT write
+    Metadata/project_settings.config.
+
+    Rationale: a minimal 10-key stub caused Bambu Studio to abort loading
+    entirely (hard error, no geometry) instead of the previous warning-but-loads
+    state.  Omitting the file restores the pre-task-612 behaviour: Bambu shows
+    the 'invalid config' warning dialog but still loads geometry.  A complete
+    ~498-key project_settings blob is a future task.
     """
     names = ["green", "fringe", "trap"]
     raw = _make_minimal_trimesh_3mf(names)
-    dest = tmp_path / "test_output.3mf"
+    dest = tmp_path / "test_no_project_settings.3mf"
     dest.write_bytes(raw)
 
     gsd._inject_bambu_extruder_metadata(str(dest), names)
 
     with zipfile.ZipFile(str(dest)) as z:
-        assert "Metadata/project_settings.config" in z.namelist(), (
-            "project_settings.config must be present after _inject_bambu_extruder_metadata; "
-            "Bambu Studio raises 'invalid config' without it."
+        assert "Metadata/project_settings.config" not in z.namelist(), (
+            "project_settings.config must NOT be injected after the task-626 revert. "
+            "A minimal stub causes Bambu Studio to abort loading entirely. "
+            "Omit the file so Bambu shows its warning but still loads geometry."
         )
 
 
 # ---------------------------------------------------------------------------
-# Test B — project_settings.config is valid JSON with required keys
+# Test R2 — model_settings.config IS present (extruder assignments retained)
 # ---------------------------------------------------------------------------
 
-_REQUIRED_PROJECT_KEYS = {
-    "version",
-    "printer_model",
-    "printer_settings_id",
-    "print_settings_id",
-    "filament_settings_id",
-}
-
-
-def test_project_settings_has_required_keys(gsd, tmp_path):
+def test_model_settings_config_present_after_injection(gsd, tmp_path):
     """
-    project_settings.config must contain all keys Bambu Studio checks first.
-    """
-    names = ["green", "fringe"]
-    raw = _make_minimal_trimesh_3mf(names)
-    dest = tmp_path / "test_keys.3mf"
-    dest.write_bytes(raw)
-
-    gsd._inject_bambu_extruder_metadata(str(dest), names)
-
-    with zipfile.ZipFile(str(dest)) as z:
-        data = json.loads(z.read("Metadata/project_settings.config"))
-
-    for key in _REQUIRED_PROJECT_KEYS:
-        assert key in data, f"Required key '{key}' missing from project_settings.config"
-
-
-# ---------------------------------------------------------------------------
-# Test C — required fields are non-empty / non-null
-# ---------------------------------------------------------------------------
-
-def test_project_settings_values_non_empty(gsd, tmp_path):
-    """
-    Every required string field must be non-empty; filament_settings_id must
-    be a list with at least one non-empty entry.
-    """
-    names = ["green"]
-    raw = _make_minimal_trimesh_3mf(names)
-    dest = tmp_path / "test_values.3mf"
-    dest.write_bytes(raw)
-
-    gsd._inject_bambu_extruder_metadata(str(dest), names)
-
-    with zipfile.ZipFile(str(dest)) as z:
-        data = json.loads(z.read("Metadata/project_settings.config"))
-
-    for key in ("version", "printer_model", "printer_settings_id", "print_settings_id"):
-        val = data.get(key, "")
-        assert isinstance(val, str) and val.strip(), (
-            f"project_settings['{key}'] must be a non-empty string, got {val!r}"
-        )
-
-    fid = data.get("filament_settings_id", [])
-    assert isinstance(fid, list) and len(fid) >= 1, (
-        f"filament_settings_id must be a non-empty list, got {fid!r}"
-    )
-    assert fid[0].strip(), (
-        f"filament_settings_id[0] must be a non-empty string, got {fid[0]!r}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Test D — project_settings.config uses Bambu schemas (not Qidi)
-# ---------------------------------------------------------------------------
-
-def test_project_settings_uses_bambu_schema(gsd, tmp_path):
-    """
-    The injected project_settings.config must target a Bambu Lab printer
-    profile, not a Qidi profile.  Bambu Studio will not recognise Qidi IDs.
-    """
-    names = ["green", "fringe"]
-    raw = _make_minimal_trimesh_3mf(names)
-    dest = tmp_path / "test_schema.3mf"
-    dest.write_bytes(raw)
-
-    gsd._inject_bambu_extruder_metadata(str(dest), names)
-
-    with zipfile.ZipFile(str(dest)) as z:
-        data = json.loads(z.read("Metadata/project_settings.config"))
-
-    printer_id = data.get("printer_settings_id", "")
-    assert "Bambu" in printer_id or "BBL" in printer_id, (
-        f"printer_settings_id should reference a Bambu Lab profile, got {printer_id!r}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Test E — model_settings.config is STILL present (regression guard)
-# ---------------------------------------------------------------------------
-
-def test_model_settings_config_still_present(gsd, tmp_path):
-    """
-    Injecting project_settings.config must not remove model_settings.config.
+    model_settings.config (extruder assignments) must still be written after
+    the revert — that was the original intent of the function and must not
+    regress.
     """
     names = ["green", "fringe", "trap"]
     raw = _make_minimal_trimesh_3mf(names)
-    dest = tmp_path / "test_regression.3mf"
+    dest = tmp_path / "test_model_settings.3mf"
     dest.write_bytes(raw)
 
     gsd._inject_bambu_extruder_metadata(str(dest), names)
 
     with zipfile.ZipFile(str(dest)) as z:
         assert "Metadata/model_settings.config" in z.namelist(), (
-            "model_settings.config must still be present after fix"
+            "model_settings.config must be present after injection; "
+            "this is the core purpose of _inject_bambu_extruder_metadata."
         )
 
 
 # ---------------------------------------------------------------------------
-# Test F — idempotent: calling twice does not corrupt the file
+# Test R3 — resulting ZIP is well-formed (testzip returns None)
+# ---------------------------------------------------------------------------
+
+def test_output_zip_is_wellformed(gsd, tmp_path):
+    """
+    The 3MF produced by _inject_bambu_extruder_metadata must be a valid ZIP
+    archive — zipfile.ZipFile.testzip() returns None on success.
+    """
+    names = ["green", "fringe"]
+    raw = _make_minimal_trimesh_3mf(names)
+    dest = tmp_path / "test_zipvalid.3mf"
+    dest.write_bytes(raw)
+
+    gsd._inject_bambu_extruder_metadata(str(dest), names)
+
+    result = zipfile.ZipFile(str(dest)).testzip()
+    assert result is None, (
+        f"3MF archive is corrupt after injection: testzip() reported bad entry {result!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test R4 — idempotent: calling twice produces exactly one model_settings.config
 # ---------------------------------------------------------------------------
 
 def test_injection_is_idempotent(gsd, tmp_path):
     """
     Calling _inject_bambu_extruder_metadata twice on the same file must not
-    corrupt it or duplicate config entries.
+    corrupt it or duplicate model_settings.config entries.
     """
     names = ["green", "fringe"]
     raw = _make_minimal_trimesh_3mf(names)
@@ -291,8 +232,12 @@ def test_injection_is_idempotent(gsd, tmp_path):
 
     with zipfile.ZipFile(str(dest)) as z:
         filenames = z.namelist()
-        ps_count = filenames.count("Metadata/project_settings.config")
         ms_count = filenames.count("Metadata/model_settings.config")
+        ps_count = filenames.count("Metadata/project_settings.config")
 
-    assert ps_count == 1, f"project_settings.config should appear exactly once, got {ps_count}"
-    assert ms_count == 1, f"model_settings.config should appear exactly once, got {ms_count}"
+    assert ms_count == 1, (
+        f"model_settings.config should appear exactly once after two calls, got {ms_count}"
+    )
+    assert ps_count == 0, (
+        f"project_settings.config should not appear after the task-626 revert, got {ps_count}"
+    )

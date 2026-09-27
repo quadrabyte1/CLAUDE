@@ -51,6 +51,89 @@ from .schema import apply_schema
 # How often (in basics rows) to emit a progress message during ingest.
 _PROGRESS_EVERY = 100_000
 
+# ── V3.25: Theatrical-window constants and helpers ─────────────────────────
+
+# Days after theatrical release with no DVD date before we assume streaming
+# exists somewhere. After this window, a title with no DVD info is no longer
+# treated as "only in theaters" — too much time has passed for us to be sure.
+# 180 days ≈ 6 months, covering the typical ~90-day theatrical window plus
+# a comfortable buffer for delayed home-video announcements.
+THEATRICAL_WINDOW_DAYS: int = 180
+
+# OMDb date formats we accept. OMDb returns dates like "01 Jan 2026".
+_OMDB_DATE_FMTS = ("%d %b %Y",)
+
+
+def parse_omdb_date(date_str: str) -> date:
+    """Parse an OMDb date string (e.g. "01 Jan 2026") into a :class:`date`.
+
+    Raises :class:`ValueError` if the string cannot be parsed in any of the
+    known OMDb date formats.
+    """
+    for fmt in _OMDB_DATE_FMTS:
+        try:
+            return datetime.datetime.strptime(date_str.strip(), fmt).date()
+        except ValueError:
+            continue
+    raise ValueError(f"Cannot parse OMDb date: {date_str!r}")
+
+
+def is_only_in_theaters(omdb_response: dict, today: date) -> bool:
+    """Return True when the best available evidence suggests a title is still
+    only in theaters (i.e. has not yet reached home video / streaming).
+
+    Decision tree
+    -------------
+    1. Series (``Type == "series"``) are never in theaters → False.
+    2. If ``DVD`` is a valid date string:
+       - Past or today → already on home video → False.
+       - Future date   → not yet on home video → True.
+    3. ``DVD`` absent or "N/A", fall back to theatrical-release heuristic:
+       - ``Released`` is a valid date within THEATRICAL_WINDOW_DAYS → True.
+       - ``Released`` is a valid date older than THEATRICAL_WINDOW_DAYS → False.
+    4. No usable date signal at all → False (don't over-filter unknowns).
+
+    Parameters
+    ----------
+    omdb_response:
+        The dict returned by :meth:`OMDbClient.fetch` (or any dict with
+        ``DVD``, ``Released``, and ``Type`` keys matching OMDb field names).
+        Uses raw OMDb field names (capital D/R/T) so it can be called with
+        both the raw API response and the ``fetch()`` cache dict (which stores
+        ``dvd``/``released`` in lowercase; callers should normalise first).
+    today:
+        Reference date — injectable for deterministic unit tests.
+    """
+    # Series are never in theaters.
+    title_type = (omdb_response.get("Type") or omdb_response.get("type") or "").lower()
+    if title_type == "series":
+        return False
+
+    # --- DVD signal ---
+    dvd_str = omdb_response.get("DVD") or omdb_response.get("dvd") or "N/A"
+    if dvd_str and dvd_str != "N/A":
+        try:
+            dvd_date = parse_omdb_date(dvd_str)
+            return dvd_date > today   # future DVD → still in theaters
+        except ValueError:
+            pass   # malformed → fall through to Released heuristic
+
+    # --- Released heuristic (no usable DVD date) ---
+    released_str = (
+        omdb_response.get("Released") or omdb_response.get("released") or "N/A"
+    )
+    if released_str and released_str != "N/A":
+        try:
+            released_date = parse_omdb_date(released_str)
+            days_since = (today - released_date).days
+            if 0 <= days_since <= THEATRICAL_WINDOW_DAYS:
+                return True
+        except ValueError:
+            pass   # malformed → fall through to default
+
+    # Unknown / old title → assume streaming exists, don't over-filter.
+    return False
+
 
 class ScanCancelled(Exception):
     """Raised inside :meth:`Scanner.scan` when the cancel event fires.
@@ -635,6 +718,93 @@ class Scanner:
         )
         return kept, dropped
 
+    # ── V3.25: Theatrical-window filter ────────────────────────────────────
+
+    def _apply_theaters_filter(
+        self,
+        db_path: str,
+        match_rows: list,
+        only_in_theaters_allowed: bool,
+        on_progress: "Callable[[str], None]",
+    ) -> "tuple[list, int]":
+        """Filter *match_rows* based on the "Only In Theaters" user preference.
+
+        Parameters
+        ----------
+        db_path:
+            Path to scanner.db — used to read the OMDb API key and to pass to
+            OMDbClient so its cache writes land in the right place.
+        match_rows:
+            The list of (tconst, ...) tuples coming out of _apply_plot_filter.
+        only_in_theaters_allowed:
+            True  → pass everything through (checkbox is checked).
+            False → exclude titles whose OMDb data indicates they are still
+                    only in theaters (checkbox is unchecked).
+        on_progress:
+            Progress callback.
+
+        Returns
+        -------
+        (kept_rows, dropped_count)
+
+        Fail-open behaviour
+        -------------------
+        * If ``only_in_theaters_allowed`` is True → all rows are kept (no API calls).
+        * If the OMDb API key is not configured → all rows are kept (no filtering).
+        * If a title's OMDb fetch fails or returns no DVD/Released data →
+          the title is kept (unknown status → don't over-filter).
+        """
+        if only_in_theaters_allowed:
+            on_progress("theaters_filter: checkbox checked — all titles permitted")
+            return match_rows, 0
+
+        import sqlite3 as _sqlite3
+        conn = _sqlite3.connect(db_path)
+        conn.row_factory = _sqlite3.Row
+        row = conn.execute(
+            "SELECT value FROM config WHERE key='omdb_api_key'"
+        ).fetchone()
+        conn.close()
+
+        if not row or not row["value"]:
+            on_progress(
+                "theaters_filter: no OMDb API key configured — skipping (all titles kept)"
+            )
+            return match_rows, 0
+
+        omdb_client = OMDbClient(api_key=row["value"], db_path=db_path)
+        kept: list = []
+        dropped = 0
+        today = date.today()
+
+        for match_row in match_rows:
+            tconst = match_row[0]
+            meta = omdb_client.fetch(tconst)
+
+            if meta.get("error"):
+                # OMDb fetch failed — fail open, include the title.
+                kept.append(match_row)
+                continue
+
+            # Build the lookup dict for is_only_in_theaters using lowercase keys
+            # from the cached fetch() result, normalised to the expected field names.
+            omdb_lookup = {
+                "DVD":      meta.get("dvd") or "N/A",
+                "Released": meta.get("released") or "N/A",
+                "Type":     meta.get("type") or "movie",
+            }
+
+            if is_only_in_theaters(omdb_lookup, today):
+                dropped += 1
+            else:
+                kept.append(match_row)
+
+        on_progress(
+            f"theaters_filter: {len(kept)} titles kept, "
+            f"{dropped} excluded (only in theaters)"
+        )
+        return kept, dropped
+
     # ── Public API ─────────────────────────────────────────────────────────
 
     def scan(
@@ -1014,6 +1184,46 @@ class Scanner:
             )
 
             self._check_cancel("cancelled after plot_filter")
+
+            # 3d. Theaters filter (V3.25) — exclude titles that are still only
+            # in theaters when the "Only In Theaters" checkbox is unchecked.
+            # Runs after plot_filter so only titles that survived all prior
+            # filters pay the OMDb cost. The title_metadata cache means
+            # previously-checked titles are free on rescan.
+            #
+            # Reads only_in_theaters from the config table at scan time so the
+            # UI checkbox always takes effect on the current run, even when
+            # ScanConfig was constructed before the setting changed.
+            #
+            # Realign the seasons index after the filter (same pattern as PG +
+            # plot_filter above) so the parallel list stays in sync.
+            phase("theaters_filter", "checking theatrical release status…")
+            _ot_row = conn.execute(
+                "SELECT value FROM config WHERE key='only_in_theaters'"
+            ).fetchone()
+            _only_in_theaters_allowed: bool = (
+                str(_ot_row["value"]).strip() in ("1", "true", "yes", "on")
+                if _ot_row else False
+            )
+            seasons_by_tconst_pre_theaters: dict[str, list] = {
+                row[0]: seasons
+                for row, seasons in zip(match_rows, match_seasons_by_idx)
+            }
+            match_rows, theaters_dropped = self._apply_theaters_filter(
+                db_path                  = self._db_path,
+                match_rows               = match_rows,
+                only_in_theaters_allowed = _only_in_theaters_allowed,
+                on_progress              = on_progress,
+            )
+            match_seasons_by_idx = [
+                seasons_by_tconst_pre_theaters[r[0]] for r in match_rows
+            ]
+            assert len(match_seasons_by_idx) == len(match_rows), (
+                f"season index desync after theaters_filter: "
+                f"{len(match_seasons_by_idx)} vs {len(match_rows)}"
+            )
+
+            self._check_cancel("cancelled after theaters_filter")
 
             # 4. Persist
             phase("saving new titles")

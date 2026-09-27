@@ -1,0 +1,155 @@
+{
+  "course": "Stanford",
+  "hole": "8, 5396",
+  "image": "Stanford (hole 8, 5396).png",
+  "imageCourse": "Stanford",
+  "imageSize": {
+    "width": 815,
+    "height": 1227
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 0.05,
+  "greenStyle": "terraced",
+  "elevationRange": 14.5,
+  "greenScale": 1.0065,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "applyFringeFrameCap": true,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 483,
+          "y": 30
+        },
+        {
+          "x": 273,
+          "y": 85
+        },
+        {
+          "x": 130,
+          "y": 200
+        },
+        {
+          "x": 66,
+          "y": 391
+        },
+        {
+          "x": 148,
+          "y": 741
+        },
+        {
+          "x": 216,
+          "y": 880
+        },
+        {
+          "x": 344,
+          "y": 955
+        },
+        {
+          "x": 525,
+          "y": 883
+        },
+        {
+          "x": 731,
+          "y": 582
+        },
+        {
+          "x": 675,
+          "y": 120
+        }
+      ]
+    },
+    {
+      "name": "Water 1",
+      "type": "water",
+      "closed": true,
+      "points": [
+        {
+          "x": 110,
+          "y": 855
+        },
+        {
+          "x": 60,
+          "y": 861
+        },
+        {
+          "x": 41,
+          "y": 823
+        },
+        {
+          "x": 83,
+          "y": 759
+        },
+        {
+          "x": 1,
+          "y": 634
+        },
+        {
+          "x": -77,
+          "y": 770
+        },
+        {
+          "x": -94,
+          "y": 996
+        },
+        {
+          "x": -45,
+          "y": 1150
+        },
+        {
+          "x": 2,
+          "y": 1199
+        },
+        {
+          "x": 43,
+          "y": 1198
+        },
+        {
+          "x": 105,
+          "y": 1195
+        },
+        {
+          "x": 177,
+          "y": 1167
+        },
+        {
+          "x": 204,
+          "y": 1112
+        },
+        {
+          "x": 270,
+          "y": 1062
+        },
+        {
+          "x": 267,
+          "y": 995
+        },
+        {
+          "x": 214,
+          "y": 978
+        },
+        {
+          "x": 189,
+          "y": 947
+        },
+        {
+          "x": 160,
+          "y": 916
+        }
+      ]
+    }
+  ],
+  "elevationSpikes": [],
+  "tee_hole": {
+    "x_mm": 30,
+    "y_mm": 30
+  }
+}

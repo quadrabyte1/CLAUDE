@@ -429,6 +429,18 @@
         </p>
       </div>
 
+      <!-- V3.25 — "Only In Theaters" filter checkbox.
+           Unchecked (default): titles still only in theaters are suppressed.
+           Checked: all titles including in-theaters-only are permitted.
+           Detection uses OMDb DVD + Released fields with a 180-day heuristic. -->
+      <label class="inline-flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+        <input type="checkbox" name="only_in_theaters" value="1"
+               {% if (config.only_in_theaters or '0') == '1' %}checked{% endif %}
+               class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+               title="When unchecked (default), titles still only in theaters (no DVD/streaming date yet) are excluded from matches. Check to allow them.">
+        <span>Only In Theaters</span>
+      </label>
+
       <!-- Content-severity filters (V3.12) — collapsible.
            COMPLIANCE EXCEPTION: this section drives the imdb.com parental-guide
            scraper. Personal-use only. See movie_scanner/parental_guide.py.

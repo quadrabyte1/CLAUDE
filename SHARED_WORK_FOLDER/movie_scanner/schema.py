@@ -95,7 +95,11 @@ INSERT OR IGNORE INTO config (key, value) VALUES
     -- V3.14 — master switch for the parental-guide phase. Default '0' means
     -- the scanner SKIPS all parental-guide work (no scrape, no ceilings).
     -- Flip to '1' via the "Apply filters" checkbox to activate the ceilings.
-    ('parental_apply',    '0');
+    ('parental_apply',    '0'),
+    -- V3.25 — "Only In Theaters" filter. Default '0' = unchecked = suppress
+    -- titles that are still only in theaters (no home-video / streaming yet).
+    -- Set to '1' to allow in-theaters-only titles into the matches list.
+    ('only_in_theaters',  '0');
 
 -- Cached OMDb metadata for individual titles. One row per tconst; shared
 -- across all matches/runs. Populated on-demand when the user hovers a title.
@@ -110,6 +114,8 @@ CREATE TABLE IF NOT EXISTS title_metadata (
     metascore   TEXT,     -- e.g. "63/100"
     country     TEXT,     -- OMDb Country field, e.g. "India, USA"
     language    TEXT,     -- OMDb Language field, e.g. "Kannada, English"
+    dvd         TEXT,     -- V3.25: OMDb DVD field, home-video release date or "N/A"
+    type        TEXT,     -- V3.25: OMDb Type field: "movie" / "series" / "episode"
     raw_json    TEXT,     -- full response for future extraction
     fetched_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     error       TEXT      -- if the fetch failed, why (e.g. "Movie not found!")
@@ -221,7 +227,7 @@ def apply_schema(conn: sqlite3.Connection) -> None:
         )
     """)
 
-    # Live migration: add country + language to existing title_metadata tables.
+    # Live migration: add country + language + dvd + type to existing title_metadata tables.
     try:
         cur = conn.execute("PRAGMA table_info(title_metadata)")
         tm_cols = [r[1] for r in cur.fetchall()]
@@ -229,6 +235,11 @@ def apply_schema(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE title_metadata ADD COLUMN country TEXT")
         if "language" not in tm_cols:
             conn.execute("ALTER TABLE title_metadata ADD COLUMN language TEXT")
+        # V3.25 — theatrical-window filter fields.
+        if "dvd" not in tm_cols:
+            conn.execute("ALTER TABLE title_metadata ADD COLUMN dvd TEXT")
+        if "type" not in tm_cols:
+            conn.execute("ALTER TABLE title_metadata ADD COLUMN type TEXT")
     except sqlite3.OperationalError:
         pass  # table doesn't exist yet — CREATE TABLE IF NOT EXISTS above handles it
 
@@ -336,6 +347,9 @@ def apply_schema(conn: sqlite3.Connection) -> None:
         # V3.14 — master switch, off by default on existing DBs so the
         # parental-guide phase remains opt-in.
         ("parental_apply",         "0"),
+        # V3.25 — "Only In Theaters" filter, off by default (suppress in-theaters
+        # titles) so existing DBs don't suddenly show unwatchable titles.
+        ("only_in_theaters",       "0"),
     ):
         conn.execute(
             "INSERT OR IGNORE INTO config (key, value) VALUES (?, ?)",

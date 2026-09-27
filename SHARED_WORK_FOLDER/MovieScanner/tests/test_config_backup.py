@@ -560,11 +560,11 @@ class TestIntegrityCheck:
 
 class TestRegression:
 
-    def test_app_version_is_v3_24(self, tmp_path):
-        """T25 — APP_VERSION must be V3.24 (version bump from V3.23 → V3.24 plot filter)."""
+    def test_app_version_is_v3_25(self, tmp_path):
+        """T25 — APP_VERSION must be V3.25 (version bump from V3.23 → V3.24 → V3.25)."""
         ms_app, client, db_path = _make_app(tmp_path)
-        assert ms_app.APP_VERSION == "V3.24", (
-            f"Expected V3.24, got {ms_app.APP_VERSION!r}"
+        assert ms_app.APP_VERSION == "V3.25", (
+            f"Expected V3.25, got {ms_app.APP_VERSION!r}"
         )
 
     def test_index_renders(self, tmp_path):

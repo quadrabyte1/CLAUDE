@@ -486,9 +486,9 @@ class TestIndexPlotFilter:
 
 class TestRegressionV324:
 
-    def test_app_version_is_v3_24(self, tmp_path):
-        """Case 9 — APP_VERSION must be V3.24 (version bump from V3.23)."""
+    def test_app_version_is_v3_25(self, tmp_path):
+        """Case 9 — APP_VERSION must be V3.25 (bumped from V3.24 → V3.25 theaters filter)."""
         ms_app, client, db_path = _make_app(tmp_path)
-        assert ms_app.APP_VERSION == "V3.24", (
-            f"Expected V3.24, got {ms_app.APP_VERSION!r}"
+        assert ms_app.APP_VERSION == "V3.25", (
+            f"Expected V3.25, got {ms_app.APP_VERSION!r}"
         )

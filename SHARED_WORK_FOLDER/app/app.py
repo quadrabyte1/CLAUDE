@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.69"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.72"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks with id strictly greater than the
@@ -1141,6 +1141,30 @@ def load_boundaries():
         data["fringe_xy_expansion_mm"] = FRINGE_XY_EXPANSION_MM
     except ImportError as _imp_err:
         print(f"[load_boundaries] WARN: could not import print constants from generate_stl_3mf: {_imp_err!r}")
+
+    # Load-time healing: if the EGM has imageSize recorded, clamp any off-frame
+    # polygon points to the image boundary and report the count to the client.
+    # The client shows a toast when count > 0 and marks the project dirty so
+    # the fix is persisted on the next save.
+    off_frame_count = 0
+    img_size = data.get("imageSize")
+    if img_size and isinstance(img_size, dict):
+        iw = img_size.get("width")
+        ih = img_size.get("height")
+        if iw and ih:
+            for poly in data.get("polygons", []):
+                pts = poly.get("points", [])
+                clamped_pts, n = _clamp_polygon_points(pts, iw, ih)
+                if n:
+                    print(
+                        f"[load_boundaries] Healed {n} off-frame point(s) in "
+                        f"'{poly.get('name', poly.get('type', '?'))}' "
+                        f"from {filename}"
+                    )
+                poly["points"] = clamped_pts
+                off_frame_count += n
+    data["off_frame_count"] = off_frame_count
+
     return jsonify(data)
 
 
@@ -1153,6 +1177,57 @@ def print_constants():
         "print_size_mm": PRINT_SIZE_MM,
         "fringe_xy_expansion_mm": FRINGE_XY_EXPANSION_MM,
     })
+
+
+# ── Point-clamping helpers ────────────────────────────────────────────────────
+
+def _clamp_point_to_image(x: float, y: float, w: int, h: int) -> tuple:
+    """Clamp a single (x, y) coordinate to the image frame [0, w] x [0, h].
+
+    Returns (float, float).  Points already inside are returned unchanged.
+    Prefer snap-to-edge over reject so polygon topology is preserved.
+    """
+    return (max(0.0, min(float(w), float(x))),
+            max(0.0, min(float(h), float(y))))
+
+
+def _clamp_polygon_points(points: list, w: int, h: int) -> tuple:
+    """Clamp every point in *points* to [0, w] x [0, h] and deduplicate
+    consecutive identical points that arise when two adjacent vertices both
+    snap to the same corner.
+
+    Parameters
+    ----------
+    points : list of {"x": ..., "y": ...}
+    w, h   : image width and height
+
+    Returns
+    -------
+    (clamped_points, clamp_count) — clamped_points is the cleaned list,
+    clamp_count is the number of original points that needed clamping
+    (not counting deduplication removals).
+    """
+    clamp_count = 0
+    clamped = []
+    for pt in points:
+        cx, cy = _clamp_point_to_image(pt["x"], pt["y"], w, h)
+        if cx != float(pt["x"]) or cy != float(pt["y"]):
+            clamp_count += 1
+            print(
+                f"[boundary_clamp] Point ({pt['x']}, {pt['y']}) clamped to "
+                f"({cx}, {cy}) for image {w}x{h}"
+            )
+        clamped.append({"x": cx, "y": cy})
+
+    # Deduplicate consecutive identical points (can arise when two adjacent
+    # vertices both snap to the same corner of the image frame).
+    deduped = []
+    for pt in clamped:
+        if deduped and deduped[-1]["x"] == pt["x"] and deduped[-1]["y"] == pt["y"]:
+            continue  # skip consecutive duplicate
+        deduped.append(pt)
+
+    return deduped, clamp_count
 
 
 @app.route("/api/detect_boundaries", methods=["POST"])
@@ -1516,6 +1591,21 @@ def detect_boundaries():
 
     # Contour detection disabled — using arrow-gradient Poisson surface instead
     # polygons.extend(contour_lines)
+
+    # Clamp all generated points to the image frame before returning.
+    # CV contours can occasionally produce points 1–2 px outside the image
+    # boundary due to GaussianBlur padding or rounding; clamping here prevents
+    # those points from ending up off-screen in the editor where they can't be
+    # grabbed.  Consecutive duplicates that arise from multiple corners all
+    # snapping to the same edge are deduplicated by _clamp_polygon_points.
+    total_clamped = 0
+    for poly in polygons:
+        clamped_pts, n = _clamp_polygon_points(poly["points"], w, h)
+        poly["points"] = clamped_pts
+        total_clamped += n
+    if total_clamped:
+        print(f"[detect_boundaries] Clamped {total_clamped} point(s) to image frame "
+              f"({w}x{h})")
 
     return jsonify({
         "status": "ok",

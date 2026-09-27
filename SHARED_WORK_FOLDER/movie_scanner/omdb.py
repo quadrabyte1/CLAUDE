@@ -41,7 +41,8 @@ _OMDB_BASE = "http://www.omdbapi.com/"
 
 # Dict keys returned by fetch() — all values are str | None.
 _FIELDS = ("plot", "released", "runtime", "director",
-           "rt_score", "imdb_rating", "metascore", "country", "language", "error")
+           "rt_score", "imdb_rating", "metascore", "country", "language",
+           "dvd", "type", "error")
 
 
 class OMDbClient:
@@ -106,13 +107,21 @@ class OMDbClient:
         """Return the cached row as a plain dict, or None if not found."""
         row = conn.execute(
             "SELECT plot, released, runtime, director, "
-            "rt_score, imdb_rating, metascore, country, language, error "
+            "rt_score, imdb_rating, metascore, country, language, "
+            "dvd, type, error "
             "FROM title_metadata WHERE tconst=?",
             (tconst,),
         ).fetchone()
         if row is None:
             return None
-        return {k: row[k] for k in _FIELDS}
+        # Build dict from available columns; gracefully handle DBs that pre-date
+        # the dvd/type columns (they won't be in the row's keys).
+        row_keys = row.keys()
+        result = {k: row[k] for k in _FIELDS if k in row_keys}
+        for k in _FIELDS:
+            if k not in result:
+                result[k] = None
+        return result
 
     def _fetch_from_api(self, tconst: str) -> dict:
         """Hit the OMDb API and return a normalised dict.
@@ -173,6 +182,14 @@ class OMDbClient:
             "metascore":   _clean(metascore),
             "country":     _clean(data.get("Country")),
             "language":    _clean(data.get("Language")),
+            # V3.25 — theatrical-window filter fields.
+            # DVD: home-video release date (raw OMDb string, e.g. "15 Mar 2026").
+            # Kept raw (not cleaned) so is_only_in_theaters can inspect "N/A"
+            # vs a real date string vs a truly absent field.
+            "dvd":         data.get("DVD"),
+            # Type: "movie" / "series" / "episode" from OMDb. Distinguishes
+            # series (which are never "in theaters") from movies.
+            "type":        _clean(data.get("Type")),
             "error":       None,
         }
 
@@ -181,7 +198,8 @@ class OMDbClient:
         return {
             "plot": None, "released": None, "runtime": None,
             "director": None, "rt_score": None, "imdb_rating": None,
-            "metascore": None, "country": None, "language": None, "error": reason,
+            "metascore": None, "country": None, "language": None,
+            "dvd": None, "type": None, "error": reason,
         }
 
     @staticmethod
@@ -194,8 +212,9 @@ class OMDbClient:
             """
             INSERT INTO title_metadata
                 (tconst, plot, released, runtime, director,
-                 rt_score, imdb_rating, metascore, country, language, error)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 rt_score, imdb_rating, metascore, country, language,
+                 dvd, type, error)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(tconst) DO UPDATE SET
                 plot        = excluded.plot,
                 released    = excluded.released,
@@ -206,6 +225,8 @@ class OMDbClient:
                 metascore   = excluded.metascore,
                 country     = excluded.country,
                 language    = excluded.language,
+                dvd         = excluded.dvd,
+                type        = excluded.type,
                 error       = excluded.error,
                 fetched_at  = strftime('%Y-%m-%dT%H:%M:%SZ','now')
             """,
@@ -220,6 +241,8 @@ class OMDbClient:
                 data.get("metascore"),
                 data.get("country"),
                 data.get("language"),
+                data.get("dvd"),
+                data.get("type"),
                 data.get("error"),
             ),
         )

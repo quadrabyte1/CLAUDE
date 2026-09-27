@@ -8,7 +8,7 @@ Since there is no JS runtime in the Python test suite, tests use:
   2. JS code-shape guards (regex over the inline JS) to confirm the toggle
      binding and init call are present.
 
-Test numbers continue from Phase 2 (T1-T15 used).  This file: T16-T20.
+Test numbers continue from Phase 2 (T1-T15 used).  This file: T16-T19.
 """
 import os
 import re
@@ -204,19 +204,3 @@ class TestGpsEnabledPersistence:
             "projects and page-loads start with the panel collapsed."
         )
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# T20: APP_VERSION is v4.60
-# ──────────────────────────────────────────────────────────────────────────────
-
-class TestAppVersionBump:
-
-    def test_app_version_is_v4_60(self):
-        """T20: APP_VERSION in app.py is v4.60."""
-        here = os.path.dirname(__file__)
-        app_py = os.path.join(here, "..", "app.py")
-        with open(app_py, encoding="utf-8") as f:
-            src = f.read()
-        assert 'APP_VERSION = "v4.60"' in src, (
-            'app.py APP_VERSION must be "v4.60" — bump it from v4.59.'
-        )

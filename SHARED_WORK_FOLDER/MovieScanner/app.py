@@ -33,7 +33,14 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.24"
+APP_VERSION = "V3.25"
+# V3.25 — "Only In Theaters" filter checkbox. When unchecked (default), titles
+#          that are still only in theaters (no home-video/streaming yet) are
+#          excluded from the matches list. When checked, all titles including
+#          in-theaters-only ones are permitted. Detection uses OMDb DVD and
+#          Released fields with a 180-day theatrical window heuristic.
+#          New OMDb fields cached: dvd, type.
+#
 # V3.24 — Plot filter: any match whose OMDb plot can't be fetched (HTTP error,
 #          timeout, Response=False, Plot="N/A", missing Plot key) is excluded
 #          from the matches list entirely — silently, as if it never matched.
@@ -427,6 +434,11 @@ def _save_config_from_form():
     # from form payload) → '0' → scanner skips the whole phase.
     parental_apply = "1" if request.form.get("parental_apply") else "0"
 
+    # V3.25 — "Only In Theaters" filter. Unchecked (missing from form payload)
+    # → '0' → in-theaters-only titles are suppressed (default safe behaviour).
+    # Checked → '1' → all titles including in-theaters-only are permitted.
+    only_in_theaters = "1" if request.form.get("only_in_theaters") else "0"
+
     db = _conn()
     for k, v in [
         ("min_rating",        str(min_rating)),
@@ -443,6 +455,7 @@ def _save_config_from_form():
         ("max_frightening",   max_frightening),
         ("exclude_unknown_parental", exclude_unknown_parental),
         ("parental_apply",    parental_apply),
+        ("only_in_theaters",  only_in_theaters),
     ]:
         db.execute(
             "INSERT INTO config (key, value) VALUES (?, ?) "

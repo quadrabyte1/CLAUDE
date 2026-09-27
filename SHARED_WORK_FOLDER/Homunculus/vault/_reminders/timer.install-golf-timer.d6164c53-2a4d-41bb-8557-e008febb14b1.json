@@ -1,0 +1,13 @@
+{
+  "event_id": "timer.install-golf-timer.d6164c53-2a4d-41bb-8557-e008febb14b1",
+  "schedule": [
+    {
+      "event_id": "timer.install-golf-timer.d6164c53-2a4d-41bb-8557-e008febb14b1",
+      "kind": "timer_stop",
+      "fire_at": "2026-09-27T22:33:13.481000+00:00",
+      "tz": "UTC",
+      "body": "Install, Golf Timer? session: 3 minutes 56 seconds. Total: 3 minutes 56 seconds (all-time).",
+      "status": "pending"
+    }
+  ]
+}

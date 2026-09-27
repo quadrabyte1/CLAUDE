@@ -29,7 +29,8 @@ import logging
 import time
 from datetime import datetime, timedelta, timezone
 
-from .applescript import AppleScriptError, fire_notification
+from .applescript import AppleScriptError, fire_notification_with_fallback
+from .bundle import BundleError
 from .config import Config
 from .herman_client import HermanClient, ReminderRow
 from .state import FiredState
@@ -151,24 +152,25 @@ def run_poll_cycle(
             row.fire_at.isoformat(),
         )
         try:
-            fire_notification(
+            method = fire_notification_with_fallback(
                 body=row.body,
                 subtitle=row.subtitle,
             )
+            log.debug("Notification method used: %s", method)
         except NotImplementedError:
             # Linux / non-Darwin platform — log and mark fired to avoid
             # infinite retry on a platform that can't fire notifications.
             log.warning(
-                "Platform does not support osascript notifications; "
+                "Platform does not support notifications; "
                 "marking %s as fired to prevent retry",
                 row.identifier,
             )
             state.mark_fired(row.identifier)
             counts["fired"] += 1
             continue
-        except AppleScriptError as exc:
+        except (AppleScriptError, BundleError) as exc:
             log.error(
-                "osascript failed for %s: %s — will retry next cycle",
+                "Notification delivery failed for %s: %s — will retry next cycle",
                 row.identifier,
                 exc,
             )

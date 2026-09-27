@@ -24,7 +24,7 @@ from typing import Any, Optional
 # Constants
 # ---------------------------------------------------------------------------
 
-DASHBOARD_VERSION = "v0.6"
+DASHBOARD_VERSION = "v0.7"
 
 _VERB_ICONS: dict[str, str] = {
     "schedule": "📅",
@@ -970,7 +970,7 @@ function timerBtns(project, isRunning) {
     <button class="tbtn tbtn-stop" ${!isRunning ? "disabled" : ""}
       onclick="timerAction('/timer/stop','${esc(project)}')">Stop</button>
     <button class="tbtn tbtn-delete"
-      onclick="if(confirm('Delete timer \\'${esc(project)}\\'? This cannot be undone.')){timerAction('/timer/delete','${esc(project)}');}">Delete</button>
+      onclick="if(confirm('Delete timer &quot;${esc(project)}&quot;? This cannot be undone.')){timerAction('/timer/delete','${esc(project)}');}">Delete</button>
   </span>`;
 }
 

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist — Homunculus Notifier.app bundle metadata
+  v0.3.0 — com.homunculus.notifier
+
+  This plist is copied into the .app bundle at:
+    Contents/Info.plist
+
+  The CFBundleIdentifier com.homunculus.notifier is what macOS uses to
+  attribute notifications to "Homunculus Notifier" in the Notifications
+  tray instead of "Script Editor".
+
+  NSUserNotificationAlertStyle is advisory; the user can override it in
+  System Settings → Notifications → Homunculus Notifier.
+  "alert" makes the notification persist until dismissed (best for reminders).
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.homunculus.notifier</string>
+
+    <key>CFBundleName</key>
+    <string>Homunculus Notifier</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>Homunculus Notifier</string>
+
+    <key>CFBundleExecutable</key>
+    <string>notifier</string>
+
+    <key>CFBundleVersion</key>
+    <string>3</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>0.3.0</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleSignature</key>
+    <string>????</string>
+
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+
+    <!-- Alert style for reminder notifications. "alert" = persistent banner. -->
+    <key>NSUserNotificationAlertStyle</key>
+    <string>alert</string>
+
+    <!-- Privacy: this app fires notifications only; it reads no user data. -->
+    <key>NSUserNotificationUsageDescription</key>
+    <string>Homunculus uses notifications to surface your scheduled reminders and morning summaries.</string>
+</dict>
+</plist>

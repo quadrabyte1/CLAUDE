@@ -19,12 +19,13 @@ Test coverage:
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -36,6 +37,26 @@ from golf_intel_ocr import (
     _is_valid_marker,
     _deduplicate,
 )
+
+# ---------------------------------------------------------------------------
+# Shared font for synthetic images
+# ---------------------------------------------------------------------------
+# EasyOCR needs at least ~15px tall text to recognise reliably.
+# We prefer a bundled system font; fall back to PIL's built-in default.
+_FONT_CANDIDATES = [
+    "/System/Library/Fonts/Helvetica.ttc",
+    "/System/Library/Fonts/Arial.ttf",
+    "/Library/Fonts/Arial.ttf",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+]
+_SYNTH_FONT: ImageFont.FreeTypeFont | None = None
+for _fp in _FONT_CANDIDATES:
+    if os.path.exists(_fp):
+        try:
+            _SYNTH_FONT = ImageFont.truetype(_fp, 22)
+        except Exception:
+            pass
+        break
 
 # ---------------------------------------------------------------------------
 # Real image paths
@@ -53,21 +74,30 @@ _STANFORD_H8 = _REPO_ROOT / "ItWentIn/GolfCourses/Stanford/Images/Stanford (hole
 def _make_synthetic_image(
     tmp_path: Path,
     labels: list[tuple[int, int, str]],
-    bg_color: tuple = (100, 150, 80),   # dark greenish background
-    text_color: tuple = (10, 10, 30),   # near-black text (as GI markers)
+    bg_color: tuple = (100, 150, 80),      # saturated greenish background
+    text_color: tuple = (240, 255, 200),   # near-white, slightly tinted (passes sat > 35)
     img_size: tuple = (400, 400),
 ) -> Path:
     """
-    Render label strings at (x, y) positions with near-black text on a
+    Render label strings at (x, y) positions with a tinted-white text on a
     coloured background, matching the GI heat-map marker appearance.
+
+    Text colour (240, 255, 200) is chosen so that:
+      - grayscale brightness ≈ 244 > 195 (_WHITE_THRESHOLD)
+      - HSV saturation ≈ 55 > 35 (_SAT_THRESHOLD)
+    Both conditions are required by _build_white_on_colored_mask.
+
+    A 22-pt system font is used when available (PIL's built-in font is
+    only ~7 px tall, too small for EasyOCR to reliably recognise).
     """
     img = Image.new("RGB", img_size, color=bg_color)
     draw = ImageDraw.Draw(img)
+    font = _SYNTH_FONT  # None → PIL built-in default
     for x, y, text in labels:
-        # Draw a thin white outline behind the text (as GI renders it)
+        # Dark outline (4-directional) so marker has a crisp edge
         for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            draw.text((x + dx, y + dy), text, fill=(255, 255, 255))
-        draw.text((x, y), text, fill=text_color)
+            draw.text((x + dx, y + dy), text, fill=(10, 10, 10), font=font)
+        draw.text((x, y), text, fill=text_color, font=font)
     p = tmp_path / "synthetic.png"
     img.save(str(p))
     return p

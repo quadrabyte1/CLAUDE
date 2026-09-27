@@ -287,13 +287,14 @@ def test_timer_delete_no_confirm_required_server_side(tmp_path: Path, monkeypatc
 
 
 def test_dashboard_version_is_v06(tmp_path: Path, monkeypatch):
-    """Dashboard DASHBOARD_VERSION must be v0.6 after this feature ships."""
+    """Dashboard DASHBOARD_VERSION must be at least v0.6 after this feature ships."""
     from homunculus_brain.dashboard import DASHBOARD_VERSION, DASHBOARD_HTML
-    assert DASHBOARD_VERSION == "v0.6", (
-        f"Expected DASHBOARD_VERSION='v0.6', got {DASHBOARD_VERSION!r}. "
+    # Version has since advanced to v0.7; check that v0.6 or higher is present.
+    assert DASHBOARD_VERSION >= "v0.6", (
+        f"Expected DASHBOARD_VERSION >= 'v0.6', got {DASHBOARD_VERSION!r}. "
         "Bump it in dashboard.py as part of this feature."
     )
-    assert "v0.6" in DASHBOARD_HTML, "v0.6 must be baked into DASHBOARD_HTML"
+    assert DASHBOARD_VERSION in DASHBOARD_HTML, f"{DASHBOARD_VERSION} must be baked into DASHBOARD_HTML"
 
 
 # ---------------------------------------------------------------------------
@@ -302,9 +303,11 @@ def test_dashboard_version_is_v06(tmp_path: Path, monkeypatch):
 
 
 def test_herman_version_is_240():
-    """Herman VERSION must be 2.4.0 after this feature ships."""
+    """Herman VERSION must be at least 2.4.0 after this feature ships."""
     from homunculus_brain import VERSION
-    assert VERSION == "2.4.0", (
-        f"Expected VERSION='2.4.0', got {VERSION!r}. "
+    # Version has since advanced to 2.4.2; check that 2.4.x or higher is present.
+    major, minor, *patch = VERSION.split(".")
+    assert (int(major), int(minor)) >= (2, 4), (
+        f"Expected VERSION >= '2.4.0', got {VERSION!r}. "
         "Bump it in homunculus_brain/__init__.py."
     )

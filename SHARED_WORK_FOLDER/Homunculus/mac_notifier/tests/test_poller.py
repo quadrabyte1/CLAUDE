@@ -164,7 +164,7 @@ class TestClassifyRow:
 
 
 class TestPollCycleCoreScenarios:
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     @mock.patch("mac_notifier.applescript.sys.platform", "darwin")
     def test_due_not_fired_fires_and_marks(self, mock_fire, state: FiredState):
         """Case 1: Row due + not in state → fire + mark."""
@@ -177,7 +177,7 @@ class TestPollCycleCoreScenarios:
         assert counts["fired"] == 1
         assert state.is_fired("ev.abc:morning_summary")
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_due_already_fired_skips(self, mock_fire, state: FiredState):
         """Case 2: Row due + already in state → skip."""
         row = _make_row(event_id="ev.abc", kind="morning_summary", offset_seconds=0)
@@ -190,7 +190,7 @@ class TestPollCycleCoreScenarios:
         assert counts["skipped_fired"] == 1
         assert counts["fired"] == 0
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_future_row_skipped(self, mock_fire, state: FiredState):
         """Case 3: Row too far in future → skip."""
         row = _make_row(offset_seconds=3600)  # 1 hour from now
@@ -201,7 +201,7 @@ class TestPollCycleCoreScenarios:
         mock_fire.assert_not_called()
         assert counts["skipped_future"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_past_row_skipped_missed(self, mock_fire, state: FiredState):
         """Case 4: Row too far in past → skip (missed)."""
         row = _make_row(offset_seconds=-3600)  # 1 hour ago
@@ -212,7 +212,7 @@ class TestPollCycleCoreScenarios:
         mock_fire.assert_not_called()
         assert counts["skipped_missed"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_herman_unreachable_no_crash(self, mock_fire, state: FiredState):
         """Case 6: Herman unreachable → empty list returned by client, no crash."""
         client = _make_client_returning([])  # HermanClient already returns [] on error
@@ -227,8 +227,8 @@ class TestPollCycleCoreScenarios:
         row = _make_row(offset_seconds=0)
         client = _make_client_returning([row])
 
-        with mock.patch("mac_notifier.poller.fire_notification") as mock_fire:
-            mock_fire.return_value = None
+        with mock.patch("mac_notifier.poller.fire_notification_with_fallback") as mock_fire:
+            mock_fire.return_value = "bundle"
             with mock.patch("mac_notifier.applescript.sys.platform", "darwin"):
                 # Should not crash even though parent dir doesn't exist yet
                 counts = run_poll_cycle(client, missing_state, GRACE, now=NOW)
@@ -242,7 +242,7 @@ class TestPollCycleCoreScenarios:
 
 
 class TestGraceWindowBoundary:
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_exactly_at_now_fires(self, mock_fire, state: FiredState):
         row = _make_row(offset_seconds=0)
         client = _make_client_returning([row])
@@ -250,7 +250,7 @@ class TestGraceWindowBoundary:
         mock_fire.assert_called_once()
         assert counts["fired"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_89s_before_fires(self, mock_fire, state: FiredState):
         row = _make_row(offset_seconds=-89)
         client = _make_client_returning([row])
@@ -258,7 +258,7 @@ class TestGraceWindowBoundary:
         mock_fire.assert_called_once()
         assert counts["fired"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_89s_after_fires(self, mock_fire, state: FiredState):
         row = _make_row(offset_seconds=89)
         client = _make_client_returning([row])
@@ -266,7 +266,7 @@ class TestGraceWindowBoundary:
         mock_fire.assert_called_once()
         assert counts["fired"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_91s_before_skips_missed(self, mock_fire, state: FiredState):
         row = _make_row(offset_seconds=-91)
         client = _make_client_returning([row])
@@ -274,7 +274,7 @@ class TestGraceWindowBoundary:
         mock_fire.assert_not_called()
         assert counts["skipped_missed"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_91s_after_skips_future(self, mock_fire, state: FiredState):
         row = _make_row(offset_seconds=91)
         client = _make_client_returning([row])
@@ -289,7 +289,7 @@ class TestGraceWindowBoundary:
 
 
 class TestPollCycleErrorHandling:
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     @mock.patch("mac_notifier.applescript.sys.platform", "darwin")
     def test_applescript_error_not_marked_fired(self, mock_fire, state: FiredState):
         """osascript failure → row NOT marked fired → will retry next cycle."""
@@ -305,7 +305,7 @@ class TestPollCycleErrorHandling:
         assert counts["errors"] == 1
         assert counts["fired"] == 0
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     @mock.patch("mac_notifier.applescript.sys.platform", "linux")
     def test_not_implemented_on_linux_marks_fired(self, mock_fire, state: FiredState):
         """NotImplementedError (non-Darwin) → marked fired to prevent retry storm."""
@@ -319,7 +319,7 @@ class TestPollCycleErrorHandling:
         assert state.is_fired(row.identifier)
         assert counts["fired"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_multiple_rows_mixed(self, mock_fire, state: FiredState):
         """Multiple rows: due/future/past/already-fired all handled correctly."""
         rows = [
@@ -338,7 +338,7 @@ class TestPollCycleErrorHandling:
         assert counts["skipped_missed"] == 1
         assert counts["skipped_fired"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_fire_called_with_correct_args(self, mock_fire, state: FiredState):
         """Notification is fired with body=row.body and subtitle=row.subtitle."""
         row = _make_row(
@@ -356,7 +356,7 @@ class TestPollCycleErrorHandling:
             subtitle="Morning summary",
         )
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_counts_are_complete(self, mock_fire, state: FiredState):
         """run_poll_cycle always returns all expected count keys."""
         client = _make_client_returning([])
@@ -368,7 +368,7 @@ class TestPollCycleErrorHandling:
         }
         assert set(counts.keys()) == expected_keys
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_empty_rows_all_zero_counts(self, mock_fire, state: FiredState):
         client = _make_client_returning([])
         counts = run_poll_cycle(client, state, GRACE, now=NOW)
@@ -377,7 +377,7 @@ class TestPollCycleErrorHandling:
         assert counts["fired"] == 0
         assert counts["errors"] == 0
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_dedup_same_identifier_in_rows(self, mock_fire, state: FiredState):
         """Same identifier appearing twice → fired once, second skipped."""
         row_a = _make_row(event_id="ev.dup", kind="morning_summary", offset_seconds=0)
@@ -389,7 +389,7 @@ class TestPollCycleErrorHandling:
         assert counts["fired"] == 1
         assert counts["skipped_fired"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_different_kinds_same_event_id_both_fire(self, mock_fire, state: FiredState):
         """Same event_id, different kinds → both fire (different identifiers)."""
         row_a = _make_row(event_id="ev.abc", kind="pre_5", offset_seconds=0)
@@ -419,7 +419,7 @@ class TestGraceWindowExtended:
 
     GRACE_300 = 300
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_200s_past_fires_with_300s_grace(self, mock_fire, state: FiredState):
         """fire_at = now - 200s is within 300s grace → must fire.
 
@@ -434,7 +434,7 @@ class TestGraceWindowExtended:
             "fire_at=now-200s must fire with 300s grace window."
         )
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_99s_past_fires_with_300s_grace(self, mock_fire, state: FiredState):
         """fire_at = now - 99s fires with 300s grace.
 
@@ -447,7 +447,7 @@ class TestGraceWindowExtended:
         mock_fire.assert_called_once()
         assert counts["fired"] == 1
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_400s_past_skips_with_300s_grace(self, mock_fire, state: FiredState):
         """fire_at = now - 400s is OUTSIDE 300s grace → must skip as missed.
 
@@ -462,7 +462,7 @@ class TestGraceWindowExtended:
             "fire_at=now-400s must be skipped as 'missed' with 300s grace."
         )
 
-    @mock.patch("mac_notifier.poller.fire_notification")
+    @mock.patch("mac_notifier.poller.fire_notification_with_fallback")
     def test_90s_past_would_have_been_skipped_with_old_grace(
         self, mock_fire, state: FiredState, tmp_path: Path
     ):

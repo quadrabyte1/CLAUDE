@@ -710,9 +710,9 @@ def test_dashboard_data_after_stop_all_shows_stop_rows(tmp_path: Path, monkeypat
 def test_dashboard_version_badge_v03(tmp_path: Path, monkeypatch):
     """Dashboard HTML contains the current version badge.
 
-    Originally checked for v0.3; updated to track the current version (v0.6).
+    Originally checked for v0.3; updated to track the current version (v0.7).
     The test remains here as the canonical "version is baked into HTML" guard.
     """
     from homunculus_brain.dashboard import DASHBOARD_HTML, DASHBOARD_VERSION
-    assert DASHBOARD_VERSION == "v0.6", f"Expected v0.6, got {DASHBOARD_VERSION!r}"
+    assert DASHBOARD_VERSION == "v0.7", f"Expected v0.7, got {DASHBOARD_VERSION!r}"
     assert DASHBOARD_VERSION in DASHBOARD_HTML

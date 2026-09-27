@@ -344,19 +344,19 @@ def _get_html(tmp_path: Path, monkeypatch) -> str:
 
 
 def test_v04_version_badge(tmp_path: Path, monkeypatch):
-    """DASHBOARD_VERSION == 'v0.6' and appears in the served HTML.
+    """DASHBOARD_VERSION == 'v0.7' and appears in the served HTML.
 
     Note: this test was originally named v04 but tracks the current version.
-    We update the assertion to the current version (v0.6) as the badge bumps.
+    We update the assertion to the current version (v0.7) as the badge bumps.
     """
     import re
     from homunculus_brain import dashboard as dash
 
-    assert dash.DASHBOARD_VERSION == "v0.6", (
-        f"Expected v0.6, got {dash.DASHBOARD_VERSION!r}"
+    assert dash.DASHBOARD_VERSION == "v0.7", (
+        f"Expected v0.7, got {dash.DASHBOARD_VERSION!r}"
     )
     html = _get_html(tmp_path, monkeypatch)
-    assert "v0.6" in html, "v0.6 badge not found in HTML"
+    assert "v0.7" in html, "v0.7 badge not found in HTML"
 
 
 def test_v04_sticky_header(tmp_path: Path, monkeypatch):
@@ -508,14 +508,14 @@ def _write_clarify_activity(vault: Path, *, at: str, question: str, record_id: s
 
 
 def test_v05_version_badge(tmp_path: Path, monkeypatch):
-    """DASHBOARD_VERSION == 'v0.6' and appears in the served HTML."""
+    """DASHBOARD_VERSION == 'v0.7' and appears in the served HTML."""
     from homunculus_brain import dashboard as dash
 
-    assert dash.DASHBOARD_VERSION == "v0.6", (
-        f"Expected v0.6, got {dash.DASHBOARD_VERSION!r}"
+    assert dash.DASHBOARD_VERSION == "v0.7", (
+        f"Expected v0.7, got {dash.DASHBOARD_VERSION!r}"
     )
     html = _get_html(tmp_path, monkeypatch)
-    assert "v0.6" in html, "v0.6 badge not found in HTML"
+    assert "v0.7" in html, "v0.7 badge not found in HTML"
 
 
 def test_v05_shape_row_clarifying_question(tmp_path: Path, monkeypatch):

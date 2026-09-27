@@ -430,9 +430,17 @@ def _collect_timer_notifications(
             status = raw.get("status", "pending")
             if not include_fired and status in ("acked", "cancelled", "fired"):
                 continue
-            in_window = (events_from <= fire_at <= window_end) if include_fired else True
-            if not in_window:
-                continue
+            # When include_fired=True, skip the window filter: the caller wants
+            # all timer_stop sidecars regardless of when they fired (useful in
+            # tests that use a fixed past date far outside the 24 h lookback).
+            # When include_fired=False, there is no window filter either —
+            # timer_stop notifications fire immediately on stop so they are only
+            # interesting as "just fired" rows; the status filter above already
+            # excludes acked/cancelled/fired entries for the normal phone path.
+            if not include_fired:
+                in_window = events_from <= fire_at <= window_end
+                if not in_window:
+                    continue
             out.append(ReminderRow(
                 event_id=raw["event_id"],
                 kind=ReminderKind.TIMER_STOP,

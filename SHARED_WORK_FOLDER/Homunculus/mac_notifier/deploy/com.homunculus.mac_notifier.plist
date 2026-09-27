@@ -7,10 +7,14 @@
     <string>com.homunculus.mac_notifier</string>
 
     <!--
-    mac_notifier v0.2.0 — launchd agent for Herman Mac notifications.
+    mac_notifier v0.3.0 — launchd agent for Herman Mac notifications.
 
-    No special Automation/Privacy permissions needed for `display notification`
-    (unlike Calendar/Notes bridges). Just load and go.
+    v0.3.0: Notifications now branded as "Homunculus Notifier" (not "Script Editor").
+    Run deploy/install_bundle.sh first to build and install the .app bundle.
+
+    Notification permission: the first notification from the bundle will prompt
+    the user via System Settings → Notifications → Homunculus Notifier.
+    After granting, all subsequent notifications appear correctly labelled.
 
     To load:
         launchctl load ~/Library/LaunchAgents/com.homunculus.mac_notifier.plist
@@ -24,12 +28,6 @@
     To watch logs:
         tail -f /tmp/mac_notifier.log
         tail -f /tmp/mac_notifier_err.log
-
-    Known caveat (v0.1):
-        Notifications appear branded as "Script Editor" rather than "Homunculus".
-        This is a macOS limitation for osascript-based notifications run outside
-        a bundled app. The mechanism works — notifications fire and sound.
-        See v0.2 roadmap in README.md for the fix (terminal-notifier or .app bundle).
     -->
 
     <key>ProgramArguments</key>

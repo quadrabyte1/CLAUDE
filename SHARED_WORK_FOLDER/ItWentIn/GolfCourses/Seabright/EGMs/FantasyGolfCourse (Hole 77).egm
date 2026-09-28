@@ -1,0 +1,192 @@
+{
+  "course": "FantasyGolfCourse",
+  "hole": "77",
+  "image": "FantasyGolfCourse (5).png",
+  "imageCourse": "FantasyGolfCourse",
+  "imageSize": {
+    "width": 1179,
+    "height": 1418
+  },
+  "contourStep": 10,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "elevationRange": 14.5,
+  "greenScale": 1.5,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 353,
+          "y": 235
+        },
+        {
+          "x": 234,
+          "y": 563
+        },
+        {
+          "x": 202,
+          "y": 1057
+        },
+        {
+          "x": 546,
+          "y": 1346
+        },
+        {
+          "x": 874,
+          "y": 1268
+        },
+        {
+          "x": 829,
+          "y": 768
+        },
+        {
+          "x": 644,
+          "y": 473
+        },
+        {
+          "x": 540,
+          "y": 534
+        }
+      ]
+    },
+    {
+      "name": "Trap 1",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 627,
+          "y": 130
+        },
+        {
+          "x": 611,
+          "y": 279
+        },
+        {
+          "x": 783,
+          "y": 353
+        },
+        {
+          "x": 902,
+          "y": 446
+        },
+        {
+          "x": 1006,
+          "y": 550
+        },
+        {
+          "x": 926,
+          "y": 713
+        },
+        {
+          "x": 983,
+          "y": 844
+        },
+        {
+          "x": 986,
+          "y": 965
+        },
+        {
+          "x": 1003,
+          "y": 1126
+        },
+        {
+          "x": 989,
+          "y": 1215
+        },
+        {
+          "x": 967,
+          "y": 1346
+        },
+        {
+          "x": 945,
+          "y": 1419
+        },
+        {
+          "x": 1189,
+          "y": 1409
+        },
+        {
+          "x": 1178,
+          "y": 1012
+        },
+        {
+          "x": 1178,
+          "y": 748
+        },
+        {
+          "x": 1178,
+          "y": 483
+        },
+        {
+          "x": 1103,
+          "y": 257
+        },
+        {
+          "x": 862,
+          "y": 200
+        }
+      ]
+    },
+    {
+      "name": "Trap 2",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 52,
+          "y": 623
+        },
+        {
+          "x": -30,
+          "y": 731
+        },
+        {
+          "x": -38,
+          "y": 1333
+        },
+        {
+          "x": 152,
+          "y": 1417
+        },
+        {
+          "x": 370,
+          "y": 1414
+        },
+        {
+          "x": 291,
+          "y": 1350
+        },
+        {
+          "x": 182,
+          "y": 1245
+        },
+        {
+          "x": 124,
+          "y": 1144
+        },
+        {
+          "x": 95,
+          "y": 1023
+        },
+        {
+          "x": 100,
+          "y": 888
+        },
+        {
+          "x": 139,
+          "y": 702
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "course": "FantasyGolfCourse",
+  "hole": "5",
+  "image": "FantasyGolfCourse (5).png",
+  "imageCourse": "FantasyGolfCourse",
+  "imageSize": {
+    "width": 1179,
+    "height": 1418
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 2.4,
+  "greenStyle": "terraced",
+  "elevationRange": 16,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 429,
+          "y": 315
+        },
+        {
+          "x": 122,
+          "y": 581
+        },
+        {
+          "x": 130,
+          "y": 823
+        },
+        {
+          "x": 678,
+          "y": 1202
+        },
+        {
+          "x": 959,
+          "y": 944
+        },
+        {
+          "x": 871,
+          "y": 671
+        },
+        {
+          "x": 794,
+          "y": 484
+        }
+      ]
+    },
+    {
+      "name": "Trap 1",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 991,
+          "y": 226
+        },
+        {
+          "x": 784,
+          "y": 275
+        },
+        {
+          "x": 889,
+          "y": 428
+        },
+        {
+          "x": 1035,
+          "y": 575
+        },
+        {
+          "x": 1003,
+          "y": 685
+        },
+        {
+          "x": 1097,
+          "y": 988
+        },
+        {
+          "x": 1009,
+          "y": 1125
+        },
+        {
+          "x": 1117,
+          "y": 1141
+        },
+        {
+          "x": 1178,
+          "y": 1012
+        },
+        {
+          "x": 1178,
+          "y": 748
+        },
+        {
+          "x": 1178,
+          "y": 483
+        },
+        {
+          "x": 1103,
+          "y": 257
+        }
+      ]
+    },
+    {
+      "name": "Trap 2",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 0,
+          "y": 908
+        },
+        {
+          "x": 0,
+          "y": 1073
+        },
+        {
+          "x": 0,
+          "y": 1238
+        },
+        {
+          "x": 6,
+          "y": 1389
+        },
+        {
+          "x": 224,
+          "y": 1386
+        },
+        {
+          "x": 293,
+          "y": 1354
+        },
+        {
+          "x": 222,
+          "y": 1240
+        },
+        {
+          "x": 147,
+          "y": 1128
+        },
+        {
+          "x": 137,
+          "y": 984
+        },
+        {
+          "x": 100,
+          "y": 888
+        }
+      ]
+    },
+    {
+      "name": "Water 1",
+      "type": "water",
+      "closed": true,
+      "points": [
+        {
+          "x": 138,
+          "y": 2
+        },
+        {
+          "x": 771,
+          "y": 28
+        },
+        {
+          "x": 961,
+          "y": 125
+        },
+        {
+          "x": 746,
+          "y": 249
+        },
+        {
+          "x": 413,
+          "y": 273
+        },
+        {
+          "x": 142,
+          "y": 415
+        },
+        {
+          "x": 75,
+          "y": 388
+        },
+        {
+          "x": 47,
+          "y": 321
+        },
+        {
+          "x": 139,
+          "y": 173
+        }
+      ]
+    }
+  ]
+}

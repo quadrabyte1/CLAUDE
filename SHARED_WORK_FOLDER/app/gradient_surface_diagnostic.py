@@ -1,3 +1,12 @@
+# v0.09 — 2026-09-28 Topo — curved trap surface tracks fringe topology.
+#         NEW rule: trap_Z(x,y) = fringe_Z(x,y) - 4mm at every boundary point;
+#         interior interpolated via scipy.interpolate.griddata (cubic + linear
+#         fallback).  Added _compute_trap_surface_from_fringe helper.
+#         apply_sand_texture gains base_z_map=(xy,z) kwarg; rake and chunks
+#         applied additive on curved base.  Floor guard now per-vertex on
+#         curved surface (local_base_z + 0.5mm).  Fallback to flat
+#         TRAP_THICKNESS_MM when no adjoining fringe within the 6mm band.
+#         APP_VERSION bumped to v4.80.
 # v0.08 — 2026-09-27 Topo — fix #614: mixed up/down sand chunks + count bump.
 #         SAND_CHUNK_UP_FRACTION=0.5 (50/50 up/down by default).  Sign is drawn
 #         from the seeded RNG so pattern is reproducible per trap.  Floor guard
@@ -5259,6 +5268,144 @@ def _compute_trap_height_from_fringe(
     return trap_height
 
 
+def _compute_trap_surface_from_fringe(
+    trap_poly_mm: "ShapelyPolygon",
+    fringe_mesh: "trimesh.Trimesh | None",
+    query_xy: "np.ndarray",
+    boundary_band_mm: float = TRAP_FRINGE_BOUNDARY_BAND_MM,
+    offset_mm: float = TRAP_FRINGE_OFFSET_MM,
+) -> "np.ndarray":
+    """
+    Return per-point trap surface Z values (mm) for an arbitrary set of XY
+    query points, producing a *curved* trap surface that tracks the fringe
+    topology rather than a single flat slab height.
+
+    Task rule (2026-09-28):
+        trap_Z(x, y) = fringe_Z(x, y) − 4 mm  at every boundary ring point.
+        Interior points are interpolated with scipy griddata (cubic, with
+        linear-fill fallback) from the boundary constraint values.
+
+    Algorithm
+    ---------
+    1. Densify the trap exterior ring (≤ 1 mm spacing).
+    2. For each ring sample, query all fringe top-surface vertices within
+       ``boundary_band_mm``.  The **maximum** fringe Z among those candidates
+       plus ``offset_mm`` (= -4 mm) is the boundary trap Z at that ring point.
+       Multiple adjoining fringes are handled automatically because we take
+       the max across ALL fringe verts within the band at each ring sample.
+    3. Fill interior query points via ``scipy.interpolate.griddata`` cubic,
+       falling back to linear when cubic produces NaNs (common near convex-
+       hull boundary).
+    4. Any remaining NaN (query point outside the convex hull of the boundary
+       ring) is filled with the mean of all boundary Z values — a safe
+       neutral fallback.
+
+    Fallback
+    --------
+    If ``fringe_mesh`` is None, or no fringe vertices exist within
+    ``boundary_band_mm`` of any ring sample, every query point returns
+    ``TRAP_THICKNESS_MM`` (same flat-slab behaviour as before).
+
+    Parameters
+    ----------
+    trap_poly_mm : ShapelyPolygon
+        Trap footprint in world mm coords (post-inset).
+    fringe_mesh : trimesh.Trimesh or None
+        Flat (pre-texture, pre-lift) fringe mesh in world mm coords.
+        Top-surface verts have z > 0.
+    query_xy : np.ndarray, shape (N, 2)
+        XY positions at which to evaluate the trap surface Z.
+    boundary_band_mm : float
+        XY distance from trap exterior within which fringe verts are sampled.
+    offset_mm : float
+        Signed depth offset applied at each boundary ring point.
+
+    Returns
+    -------
+    np.ndarray, shape (N,)
+        Trap surface Z in mm at each query point.
+    """
+    from scipy.spatial import cKDTree as _cKDTree
+    from scipy.interpolate import griddata as _griddata
+
+    query_xy = np.asarray(query_xy, dtype=np.float64)
+    n_query  = len(query_xy)
+    fallback = float(TRAP_THICKNESS_MM)
+
+    # --- Fallback path 1: no fringe mesh ---
+    if fringe_mesh is None:
+        return np.full(n_query, fallback, dtype=np.float64)
+
+    all_verts = fringe_mesh.vertices
+    top_mask  = all_verts[:, 2] > 0.0
+    fringe_top = all_verts[top_mask]
+
+    if len(fringe_top) == 0:
+        return np.full(n_query, fallback, dtype=np.float64)
+
+    fringe_kd = _cKDTree(fringe_top[:, :2])
+
+    # --- Step 1: densify trap exterior ring ---
+    exterior_coords = np.asarray(trap_poly_mm.exterior.coords, dtype=np.float64)
+    n_ext = len(exterior_coords)
+    ring_pts = []
+    for j in range(n_ext - 1):
+        p0 = exterior_coords[j]
+        p1 = exterior_coords[(j + 1) % (n_ext - 1)]
+        seg_len = float(np.linalg.norm(p1 - p0))
+        n_interp = max(2, int(np.ceil(seg_len / 1.0)))
+        for t in np.linspace(0.0, 1.0, n_interp, endpoint=False):
+            ring_pts.append(p0 + t * (p1 - p0))
+    if not ring_pts:
+        return np.full(n_query, fallback, dtype=np.float64)
+
+    ring_pts = np.array(ring_pts, dtype=np.float64)  # (M, 2)
+
+    # --- Step 2: per ring-sample, find max fringe Z within the band ---
+    nearby_indices = fringe_kd.query_ball_point(ring_pts, r=boundary_band_mm)
+
+    ring_z_boundary = np.full(len(ring_pts), np.nan, dtype=np.float64)
+    for k, idxs in enumerate(nearby_indices):
+        if idxs:
+            ring_z_boundary[k] = float(fringe_top[np.array(idxs, dtype=int), 2].max())
+
+    # --- Fallback path 2: no boundary fringe within band ---
+    valid_mask = np.isfinite(ring_z_boundary)
+    if not valid_mask.any():
+        return np.full(n_query, fallback, dtype=np.float64)
+
+    # For ring samples with no nearby fringe, fill from nearest valid sample.
+    if not valid_mask.all():
+        valid_idx = np.where(valid_mask)[0]
+        invalid_idx = np.where(~valid_mask)[0]
+        kd_ring = _cKDTree(ring_pts[valid_idx])
+        _, nn = kd_ring.query(ring_pts[invalid_idx])
+        ring_z_boundary[invalid_idx] = ring_z_boundary[valid_idx[nn]]
+
+    # Apply offset: trap is 4 mm below fringe boundary Z at each ring sample.
+    ring_z_trap = ring_z_boundary + offset_mm
+    # Guard: no sample below 1 mm.
+    ring_z_trap = np.maximum(ring_z_trap, 1.0)
+
+    # --- Step 3: interpolate interior points from boundary constraints ---
+    # Boundary ring points are the "known" values; query_xy are unknowns.
+    # We combine ring samples + query points for griddata interpolation.
+    # Try cubic first; fill NaN with linear; fill remaining NaN with mean.
+    mean_boundary_z = float(ring_z_trap.mean())
+
+    z_out = _griddata(ring_pts, ring_z_trap, query_xy, method="cubic")
+
+    # NaN from cubic outside convex hull → fill with linear.
+    nan_mask = ~np.isfinite(z_out)
+    if nan_mask.any():
+        z_linear = _griddata(ring_pts, ring_z_trap, query_xy[nan_mask], method="linear")
+        still_nan = ~np.isfinite(z_linear)
+        z_linear[still_nan] = mean_boundary_z
+        z_out[nan_mask] = z_linear
+
+    return z_out
+
+
 def _scatter_sand_chunks(
     trap_poly: "ShapelyPolygon",
     trap_index: int = 0,
@@ -5479,26 +5626,62 @@ def export_trap_stls(
 
             # Task #604 (Topo, 2026-09-26): trap height = adjoining fringe max Z
             # − 2 mm.  "Adjoining fringe" = fringe top-surface vertices within
-            # TRAP_FRINGE_BOUNDARY_BAND_MM of the trap exterior ring.  This
-            # replaces the prior interior-sampling + .max() approach which picked
-            # up fringe Z over the entire trap footprint (unrelated to the rim
-            # height visible around the trap edge).
-            trap_height = _compute_trap_height_from_fringe(shapely_inset, fringe_mesh)
-            if fringe_mesh is not None:
-                print(f"  Trap {i}: height from fringe boundary = {trap_height:.2f} mm "
-                      f"(fringe_boundary_max + {TRAP_FRINGE_OFFSET_MM:.1f} mm offset)")
-            else:
-                print(f"  Trap {i}: no fringe mesh — using fixed height {trap_height:.2f} mm")
-
-            # Build flat slab mesh
+            # Task (2026-09-28): curved trap surface tracks fringe topology.
+            # NEW rule: trap_Z(x,y) = fringe_Z(x,y) - 4mm at every boundary
+            # point; interior interpolated via griddata cubic.  We compute a
+            # dense interior grid of base-Z values, then pass it into
+            # apply_sand_texture as base_z_map so rake + chunks are applied
+            # on top of the per-point curved base.
+            #
+            # Slab height = max of the curved surface (to ensure walls are tall
+            # enough everywhere).  The curved top is sculpted in apply_sand_texture.
+            #
+            # Fallback: if _compute_trap_surface_from_fringe returns all-flat
+            # (no adjoining fringe), we still get a correct flat slab at
+            # TRAP_THICKNESS_MM via the old scalar path.
             from generate_stl_3mf import _build_slab_from_shapely
+
+            # Build the interior grid for base-Z sampling.
+            _gstep = 0.225   # matches apply_sand_texture default grain_spacing*0.2
+            _minx_t, _miny_t, _maxx_t, _maxy_t = shapely_inset.bounds
+            _gxs = np.arange(_minx_t, _maxx_t + _gstep, _gstep)
+            _gys = np.arange(_miny_t, _maxy_t + _gstep, _gstep)
+            _gx, _gy = np.meshgrid(_gxs, _gys)
+            _grid_xy = np.column_stack([_gx.ravel(), _gy.ravel()])
+
+            _base_z_vals = _compute_trap_surface_from_fringe(
+                shapely_inset, fringe_mesh, _grid_xy
+            )
+            _trap_height_curved = float(_base_z_vals.max())
+            _is_fallback = (fringe_mesh is None or
+                            abs(_trap_height_curved - TRAP_THICKNESS_MM) < 0.05)
+
+            if not _is_fallback:
+                print(f"  Trap {i}: curved surface, base Z range "
+                      f"[{_base_z_vals.min():.2f}, {_base_z_vals.max():.2f}] mm "
+                      f"(fringe - {abs(TRAP_FRINGE_OFFSET_MM):.0f} mm)")
+                trap_height  = _trap_height_curved
+                _trap_base_z_map: "tuple | None" = (_grid_xy, _base_z_vals)
+            else:
+                # Fallback: compute scalar height the old way.
+                trap_height  = _compute_trap_height_from_fringe(shapely_inset, fringe_mesh)
+                _trap_base_z_map = None
+                if fringe_mesh is not None:
+                    print(f"  Trap {i}: height from fringe boundary = {trap_height:.2f} mm "
+                          f"(fringe_boundary_max + {TRAP_FRINGE_OFFSET_MM:.1f} mm offset)")
+                else:
+                    print(f"  Trap {i}: no fringe mesh — using fixed height {trap_height:.2f} mm")
+
+            # Build slab at the (possibly curved) maximum height.
             mesh = _build_slab_from_shapely(shapely_inset, trap_height)
 
             # Apply sand grain texture to the top face (must precede lift; the
             # texture detects the top via z_max-relative threshold so it works
             # at any base height, but applying it first means the lift moves a
             # finished textured surface as one block).
-            apply_sand_texture(mesh, trap_index=i)
+            # When base_z_map is provided, apply_sand_texture uses per-point
+            # curved base Z for the rake displacement and per-vertex floor guard.
+            apply_sand_texture(mesh, trap_index=i, base_z_map=_trap_base_z_map)
 
             # NOTE (Topo, 2026-09-26 — fix #600): the post-texture flatten that
             # previously lived here was erroneously wiping the sinusoidal
@@ -6262,6 +6445,7 @@ def apply_sand_texture(
     amplitude: float = 1.0,
     grain_spacing: float = 1.125,
     trap_index: int = 0,
+    base_z_map: "tuple[np.ndarray, np.ndarray] | None" = None,
 ) -> "trimesh.Trimesh":
     """
     Apply parallel rake-line displacement to the top surface of a trap slab mesh.
@@ -6318,6 +6502,16 @@ def apply_sand_texture(
        vertices with trimesh process=True to restore watertightness.
     7. Apply sand-chunk Gaussian bumps to top-surface vertices (additive).
 
+    Task (2026-09-28) changes
+    -------------------------
+    * **base_z_map** — optional curved base surface.  Pass a tuple
+      ``(grid_xy, grid_base_z)`` where ``grid_xy`` is (N,2) and
+      ``grid_base_z`` is (N,) — the per-point trap surface Z computed by
+      ``_compute_trap_surface_from_fringe``.  When supplied, every grid point
+      and boundary ring vertex uses its own local base Z (interpolated by
+      nearest-neighbor from the supplied map) instead of the global ``z_max``.
+      The floor guard is also per-vertex: ``local_base_z + 0.5 mm``.
+
     Parameters
     ----------
     mesh         : trimesh.Trimesh — closed watertight trap slab in mm coords.
@@ -6327,6 +6521,10 @@ def apply_sand_texture(
     trap_index   : integer used to seed the per-trap chunk RNG (different
                    values produce different chunk patterns on otherwise identical
                    trap shapes).
+    base_z_map   : tuple (base_xy, base_z) or None.  When provided, supplies
+                   a curved base surface; grid points sample from it via
+                   nearest-neighbor lookup.  When None, the flat z_max is used
+                   (flat-slab behaviour, same as before).
 
     Returns the mesh modified in place (also returns it for convenience).
     """
@@ -6569,10 +6767,33 @@ def apply_sand_texture(
         s = _proj_minor(xy_arr)
         return amplitude * 0.5 * (1.0 + np.cos(2.0 * math.pi * s / grain_spacing))
 
+    # ------------------------------------------------------------------
+    # Task (2026-09-28): curved base surface support.
+    # When base_z_map is provided, each grid point gets its own base Z
+    # looked up by nearest-neighbor from the supplied (xy, z) map instead
+    # of the uniform z_max.  This makes the trap surface follow the fringe
+    # topology (4 mm below it everywhere).
+    # ------------------------------------------------------------------
+    if base_z_map is not None:
+        from scipy.spatial import cKDTree as _cKDTree_sand
+        _bmap_xy, _bmap_z = base_z_map
+        _bmap_xy = np.asarray(_bmap_xy, dtype=np.float64)
+        _bmap_z  = np.asarray(_bmap_z,  dtype=np.float64)
+        _bkd     = _cKDTree_sand(_bmap_xy)
+
+        def _base_z_at(xy_arr: np.ndarray) -> np.ndarray:
+            """Nearest-neighbor lookup into the curved base map."""
+            _, _nn = _bkd.query(xy_arr)
+            return _bmap_z[_nn]
+    else:
+        def _base_z_at(xy_arr: np.ndarray) -> np.ndarray:  # type: ignore[misc]
+            """Flat base: uniform z_max for all points."""
+            return np.full(len(xy_arr), z_max, dtype=np.float64)
+
     # Interior grid points.
     dz_rake = _rake_dz(grid_xy_in)
     dz      = dz_rake
-    grid_z  = z_max + dz                               # (M,)
+    grid_z  = _base_z_at(grid_xy_in) + dz              # (M,) curved or flat
 
     # Boundary ring points: include in Delaunay so the triangulation
     # reaches the polygon edge exactly, sharing XY with the wall rim.
@@ -6580,7 +6801,7 @@ def apply_sand_texture(
     # vertex is represented (multi-loop walker output).
     all_ring_idx = [int(v) for lp in all_loops for v in lp]
     ring_xy_arr  = all_verts[all_ring_idx, :2]                                 # (R, 2)
-    ring_z       = z_max + _rake_dz(ring_xy_arr)                               # (R,)
+    ring_z       = _base_z_at(ring_xy_arr) + _rake_dz(ring_xy_arr)             # (R,)
 
     # Combined point set for Delaunay: boundary ring first, then interior.
     n_ring   = len(ring_xy_arr)
@@ -6681,8 +6902,12 @@ def apply_sand_texture(
     #   top_z + chunk_delta >= trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM
     # This prevents dimples from punching through the trap slab.
 
-    trap_base_z = float(new_mesh.vertices[:, 2].min())   # slab bottom face Z
-    floor_z     = trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM
+    trap_base_z = float(new_mesh.vertices[:, 2].min())   # slab bottom face Z (global min)
+    # Task (2026-09-28): when base_z_map is provided the trap surface is curved,
+    # so the floor guard must use the per-vertex local base Z rather than the
+    # global slab minimum.  Per-vertex floor = local_base_z + 0.5 mm.
+    # When base_z_map is None (flat slab), fall back to the original scalar floor.
+    _use_per_vertex_floor = base_z_map is not None
 
     chunks = _scatter_sand_chunks(shapely_poly, trap_index=trap_index)
     if chunks:
@@ -6697,9 +6922,17 @@ def apply_sand_texture(
             dy = top_xy[:, 1] - cy_b
             dz_chunks += h_b * np.exp(-(dx ** 2 + dy ** 2) / (2.0 * sig_b ** 2))
 
-        # Apply displacement then enforce floor guard.
+        # Apply displacement then enforce floor guard (per-vertex on curved base,
+        # global scalar on flat base).
         new_z = new_mesh.vertices[top_indices, 2] + dz_chunks
-        new_z = np.maximum(new_z, floor_z)   # floor guard: no vertex below base + 0.5 mm
+        if _use_per_vertex_floor:
+            # Compute local base Z for each top vertex via nearest-neighbor lookup.
+            local_base_v = _base_z_at(top_xy)   # (T,) per-vertex base Z
+            floor_v      = local_base_v + SAND_CHUNK_FLOOR_THICKNESS_MM
+            new_z = np.maximum(new_z, floor_v)
+        else:
+            floor_z = trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM
+            new_z   = np.maximum(new_z, floor_z)
         new_mesh.vertices[top_indices, 2] = new_z
 
         n_up   = sum(1 for _, _, h, _ in chunks if h > 0)

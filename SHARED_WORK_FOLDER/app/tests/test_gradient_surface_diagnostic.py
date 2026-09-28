@@ -2318,3 +2318,435 @@ class TestChunkUpDown:
             f"rake-only max ({top_rake.max():.4f}).  "
             "Floor guard must not reduce upward chunks."
         )
+
+
+# ===========================================================================
+# L.  Task curved trap surface tracks fringe topology
+# ===========================================================================
+
+class TestCurvedTrapSurface:
+    """
+    Task — trap surface now tracks fringe topology (curved, not flat).
+
+    OLD rule: _compute_trap_height_from_fringe returned a single scalar.
+    NEW rule: trap_Z(x,y) = fringe_Z(x,y) - 4 mm at every boundary point;
+              interior is interpolated via griddata cubic.
+
+    RED before fix:
+      - _compute_trap_surface_from_fringe does not exist.
+      - apply_sand_texture does not accept a base_z_map kwarg.
+      - No per-vertex floor guard (uses global trap_base_z).
+    GREEN after fix:
+      - _compute_trap_surface_from_fringe exists and maps XY → Z.
+      - apply_sand_texture(mesh, base_z_map=arr) uses curved base per grid pt.
+      - Rake + chunks still additive on curved base.
+      - Floor guard applied per-vertex against local base Z.
+      - Fallback (no adjoining fringe) returns flat slab at TRAP_THICKNESS_MM.
+    """
+
+    # -----------------------------------------------------------------------
+    # Helpers
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _flat_fringe_mesh(z_top: float = 10.0, half_mm: float = 30.0):
+        """
+        Minimal flat fringe mesh at constant z_top, covering a square
+        ±half_mm region.  Top verts z = z_top, bottom verts z = 0.
+        """
+        import trimesh
+        from scipy.spatial import Delaunay as _Delaunay
+
+        xs = np.linspace(-half_mm, half_mm, 10)
+        ys = np.linspace(-half_mm, half_mm, 10)
+        xx, yy = np.meshgrid(xs, ys)
+        top_pts = np.column_stack([xx.ravel(), yy.ravel(),
+                                   np.full(xx.size, z_top)])
+        bot_pts = top_pts.copy(); bot_pts[:, 2] = 0.0
+        all_v = np.vstack([top_pts, bot_pts])
+        tri = _Delaunay(top_pts[:, :2])
+        n = len(top_pts)
+        top_f = tri.simplices.tolist()
+        bot_f = [[f[0]+n, f[2]+n, f[1]+n] for f in top_f]
+        return trimesh.Trimesh(
+            vertices=all_v,
+            faces=np.array(top_f + bot_f, dtype=np.int64),
+            process=False,
+        )
+
+    @staticmethod
+    def _sloped_fringe_mesh(z_left: float, z_right: float,
+                            half_mm: float = 30.0):
+        """
+        Fringe mesh where Z varies linearly from z_left (x=-half_mm) to
+        z_right (x=+half_mm).  Bottom verts at z=0.
+        """
+        import trimesh
+        from scipy.spatial import Delaunay as _Delaunay
+
+        xs = np.linspace(-half_mm, half_mm, 12)
+        ys = np.linspace(-half_mm, half_mm, 12)
+        xx, yy = np.meshgrid(xs, ys)
+        # Z = linear ramp: z_left + (z_right-z_left) * (x+half_mm)/(2*half_mm)
+        zz = z_left + (z_right - z_left) * (xx + half_mm) / (2.0 * half_mm)
+        top_pts = np.column_stack([xx.ravel(), yy.ravel(), zz.ravel()])
+        bot_pts = top_pts.copy(); bot_pts[:, 2] = 0.0
+        all_v = np.vstack([top_pts, bot_pts])
+        tri = _Delaunay(top_pts[:, :2])
+        n = len(top_pts)
+        top_f = tri.simplices.tolist()
+        bot_f = [[f[0]+n, f[2]+n, f[1]+n] for f in top_f]
+        return trimesh.Trimesh(
+            vertices=all_v,
+            faces=np.array(top_f + bot_f, dtype=np.int64),
+            process=False,
+        )
+
+    # -----------------------------------------------------------------------
+    # L-1  Flat fringe → flat trap (regression)
+    # -----------------------------------------------------------------------
+
+    def test_flat_fringe_gives_flat_trap_surface(self):
+        """
+        A trap adjoining a perfectly flat fringe at Z=H must produce a curved
+        surface where all boundary samples evaluate to Z=H-4 and all interior
+        sample points also evaluate to Z=H-4 (flat trap at constant depth).
+
+        RED before fix: _compute_trap_surface_from_fringe does not exist.
+        GREEN after fix: function exists; returns H-4 at boundary and interior.
+        """
+        gsd = _load_gsd()
+
+        if not hasattr(gsd, "_compute_trap_surface_from_fringe"):
+            pytest.fail(
+                "_compute_trap_surface_from_fringe does not exist.  "
+                "Add this helper to compute per-point trap surface Z from fringe."
+            )
+
+        H = 10.0
+        trap_poly = ShapelyPolygon([(-5, -5), (5, -5), (5, 5), (-5, 5)])
+        fringe_mesh = self._flat_fringe_mesh(z_top=H)
+
+        # Sample a regular interior grid.
+        xs = np.linspace(-4, 4, 5)
+        ys = np.linspace(-4, 4, 5)
+        gx, gy = np.meshgrid(xs, ys)
+        query_xy = np.column_stack([gx.ravel(), gy.ravel()])
+
+        z_arr = gsd._compute_trap_surface_from_fringe(trap_poly, fringe_mesh, query_xy)
+
+        assert z_arr.shape == (len(query_xy),), (
+            f"_compute_trap_surface_from_fringe returned shape {z_arr.shape}; "
+            f"expected ({len(query_xy)},)."
+        )
+
+        expected = H + gsd.TRAP_FRINGE_OFFSET_MM  # = H - 4
+        tol = 0.3  # allow 0.3 mm for interpolation near boundary
+        for i, (z, (x, y)) in enumerate(zip(z_arr, query_xy)):
+            assert abs(z - expected) <= tol, (
+                f"Flat-fringe: query ({x:.1f},{y:.1f}) → z={z:.3f} mm; "
+                f"expected {expected:.3f} mm (fringe={H}, offset={gsd.TRAP_FRINGE_OFFSET_MM}).  "
+                "Curved surface should be flat when fringe is flat."
+            )
+
+    # -----------------------------------------------------------------------
+    # L-2  Sloped fringe → sloped trap
+    # -----------------------------------------------------------------------
+
+    def test_sloped_fringe_gives_sloped_trap_surface(self):
+        """
+        A trap adjoining a fringe with linear Z ramp (z_left=10 at x=-30,
+        z_right=14 at x=+30) must produce a trap surface that is lower on the
+        left boundary than on the right boundary (slope preserved).
+
+        The exact expected Z at each boundary point is the max fringe Z within
+        the 6mm band minus 4mm.  We compute the expected values analytically
+        from the ramp formula:
+          fringe_Z(x) = z_left + (z_right - z_left) * (x + half_mm) / (2*half_mm)
+        The fringe vertices within 6mm of the left boundary (x=-8) span
+        x ≈ -14 to -2; the max fringe Z in that range is at x=-2 (steeper
+        right end), and similarly for the right boundary.
+
+        Key assertion: right boundary trap Z > left boundary trap Z by >= 1mm
+        (slope is preserved, not flattened).
+
+        Tolerance: ±0.8 mm (griddata cubic near boundary can deviate slightly).
+
+        RED before fix: function does not exist.
+        GREEN after fix: sloped fringe → sloped trap; right > left.
+        """
+        gsd = _load_gsd()
+
+        if not hasattr(gsd, "_compute_trap_surface_from_fringe"):
+            pytest.fail("_compute_trap_surface_from_fringe does not exist.")
+
+        z_left_edge, z_right_edge = 10.0, 14.0
+        half_mm = 30.0
+        trap_half = 8.0
+        trap_poly = ShapelyPolygon([
+            (-trap_half, -trap_half), (trap_half, -trap_half),
+            (trap_half,  trap_half), (-trap_half,  trap_half)
+        ])
+        fringe_mesh = self._sloped_fringe_mesh(
+            z_left=z_left_edge, z_right=z_right_edge, half_mm=half_mm
+        )
+
+        # Query at boundary midpoints.
+        query_xy = np.array([
+            [-trap_half, 0.0],   # left boundary centre
+            [ trap_half, 0.0],   # right boundary centre
+        ])
+
+        z_arr = gsd._compute_trap_surface_from_fringe(trap_poly, fringe_mesh, query_xy)
+
+        # Compute expected Z at each query point analytically:
+        # fringe_Z(x) = z_left_edge + (z_right_edge - z_left_edge) * (x + half_mm) / (2*half_mm)
+        # The band samples fringe vertices within 6mm of the boundary.
+        # At left boundary x=-8, band covers x in [-14, -2]; max fringe Z is at x=-2.
+        # At right boundary x=+8, band covers x in [+2, +14]; max fringe Z is at x=+14.
+        band = gsd.TRAP_FRINGE_BOUNDARY_BAND_MM
+        x_left_max_fringe  = -trap_half + band    # x in band closest to centre = x+band
+        x_right_max_fringe =  trap_half + band    # x in band farthest from centre = x+band
+        fringe_at_left  = (z_left_edge +
+                           (z_right_edge - z_left_edge) *
+                           (x_left_max_fringe + half_mm) / (2.0 * half_mm))
+        fringe_at_right = (z_left_edge +
+                           (z_right_edge - z_left_edge) *
+                           (x_right_max_fringe + half_mm) / (2.0 * half_mm))
+        expected_left  = fringe_at_left  + gsd.TRAP_FRINGE_OFFSET_MM
+        expected_right = fringe_at_right + gsd.TRAP_FRINGE_OFFSET_MM
+
+        tol = 0.8
+
+        assert abs(z_arr[0] - expected_left) <= tol, (
+            f"Left boundary Z = {z_arr[0]:.3f} mm; expected ~{expected_left:.2f} mm "
+            f"(fringe at left band max ≈{fringe_at_left:.2f}, offset={gsd.TRAP_FRINGE_OFFSET_MM}).  "
+            "Sloped fringe should produce sloped trap boundary (left side)."
+        )
+        assert abs(z_arr[1] - expected_right) <= tol, (
+            f"Right boundary Z = {z_arr[1]:.3f} mm; expected ~{expected_right:.2f} mm "
+            f"(fringe at right band max ≈{fringe_at_right:.2f}).  "
+            "Sloped fringe should produce sloped trap boundary (right side)."
+        )
+        # Right must be higher than left (slope direction preserved).
+        # Tolerance is 0.5mm: the ~1mm expected difference minus interpolation error.
+        assert z_arr[1] > z_arr[0] + 0.5, (
+            f"Right ({z_arr[1]:.3f}) not meaningfully higher than left ({z_arr[0]:.3f}).  "
+            f"Expected right - left >= 0.5 mm (fringe ramp {z_left_edge}→{z_right_edge} "
+            f"over ±{half_mm} mm → ~1 mm trap Z difference).  "
+            "Slope direction from fringe is not being preserved in trap surface."
+        )
+
+    # -----------------------------------------------------------------------
+    # L-3  Fallback: no adjoining fringe → flat TRAP_THICKNESS_MM slab
+    # -----------------------------------------------------------------------
+
+    def test_no_adjoining_fringe_fallback_flat(self):
+        """
+        A trap centered far from any fringe vertex (no fringe within the 6mm
+        band) must return a flat Z array at TRAP_THICKNESS_MM for all query pts.
+
+        RED before fix: function does not exist.
+        GREEN after fix: returns TRAP_THICKNESS_MM everywhere when no nearby
+                         fringe vertices are found.
+        """
+        gsd = _load_gsd()
+
+        if not hasattr(gsd, "_compute_trap_surface_from_fringe"):
+            pytest.fail("_compute_trap_surface_from_fringe does not exist.")
+
+        # Fringe far away (at x=+100, trap at origin) — no vertices within band.
+        trap_poly = ShapelyPolygon([(-5, -5), (5, -5), (5, 5), (-5, 5)])
+
+        import trimesh
+        from scipy.spatial import Delaunay as _Delaunay
+        # Place fringe at x=100 — well outside any 6mm band around the trap
+        far_pts = np.array([
+            [100.0, -5.0, 8.0], [105.0, -5.0, 8.0],
+            [100.0,  5.0, 8.0], [105.0,  5.0, 8.0],
+        ])
+        far_bot = far_pts.copy(); far_bot[:, 2] = 0.0
+        far_all = np.vstack([far_pts, far_bot])
+        far_tri = _Delaunay(far_pts[:, :2])
+        n = len(far_pts)
+        tf = far_tri.simplices.tolist()
+        bf = [[f[0]+n, f[2]+n, f[1]+n] for f in tf]
+        far_fringe = trimesh.Trimesh(
+            vertices=far_all,
+            faces=np.array(tf + bf, dtype=np.int64),
+            process=False,
+        )
+
+        query_xy = np.array([[0.0, 0.0], [2.0, 2.0], [-2.0, 1.0]])
+        z_arr = gsd._compute_trap_surface_from_fringe(trap_poly, far_fringe, query_xy)
+
+        for i, (z, (x, y)) in enumerate(zip(z_arr, query_xy)):
+            assert abs(z - gsd.TRAP_THICKNESS_MM) < 0.1, (
+                f"No-fringe fallback: query ({x:.1f},{y:.1f}) → z={z:.3f} mm; "
+                f"expected TRAP_THICKNESS_MM={gsd.TRAP_THICKNESS_MM:.1f} mm.  "
+                "Fallback to flat slab when fringe is far away."
+            )
+
+    # -----------------------------------------------------------------------
+    # L-4  Rake + chunks still work on curved base surface
+    # -----------------------------------------------------------------------
+
+    def test_rake_and_chunks_on_curved_base(self):
+        """
+        apply_sand_texture must accept a base_z_map kwarg.  When supplied,
+        the rake displacement and chunk bumps are applied additively on top
+        of the per-grid-point base Z rather than a uniform z_max.
+
+        We provide a curved base (sloped from 6 to 10 across a 20mm trap).
+        After apply_sand_texture with that base_z_map:
+          - The top-surface Z range must be >= rake amplitude * 0.5 (rake visible).
+          - The max top Z must be above the max base Z (chunks/rake added on top).
+          - The slope of the surface must still be visible (right side higher
+            than left side by > 1 mm, reflecting ~4mm slope minus rake effect).
+
+        RED before fix: apply_sand_texture does not accept base_z_map.
+        GREEN after fix: base_z_map drives per-point base; rake+chunks on top.
+        """
+        import inspect
+        gsd = _load_gsd()
+
+        sig = inspect.signature(gsd.apply_sand_texture)
+        if "base_z_map" not in sig.parameters:
+            pytest.fail(
+                "apply_sand_texture does not accept a `base_z_map` parameter.  "
+                "Add `base_z_map: np.ndarray | None = None` to its signature."
+            )
+
+        from generate_stl_3mf import _build_slab_from_shapely
+
+        # 20×20 mm trap, slab height set to max of curved surface (10 mm).
+        side = 20.0
+        poly = ShapelyPolygon([(0, 0), (side, 0), (side, side), (0, side)])
+        mesh = _build_slab_from_shapely(poly, 10.0)
+
+        # Build a curved base that goes from 6 on the left to 10 on the right
+        # (4mm slope across 20mm).
+        grid_step = 0.225   # matches default inside apply_sand_texture
+        xs = np.arange(0.0, side + grid_step, grid_step)
+        ys = np.arange(0.0, side + grid_step, grid_step)
+        gx, gy = np.meshgrid(xs, ys)
+        gxy = np.column_stack([gx.ravel(), gy.ravel()])
+        # Select points inside the polygon (crude: all inside [0,20]x[0,20]).
+        mask = ((gxy[:, 0] >= 0) & (gxy[:, 0] <= side) &
+                (gxy[:, 1] >= 0) & (gxy[:, 1] <= side))
+        gxy_in = gxy[mask]
+        base_z = 6.0 + 4.0 * (gxy_in[:, 0] / side)  # ramp from 6 to 10
+
+        gsd.apply_sand_texture(mesh, trap_index=0, base_z_map=(gxy_in, base_z))
+
+        top_mask = mesh.vertices[:, 2] > 0.5
+        top_v    = mesh.vertices[top_mask]
+        assert len(top_v) > 0, "No top-surface vertices after apply_sand_texture."
+
+        # Rake must be visible (Z range >= half amplitude).
+        z_range = float(top_v[:, 2].max() - top_v[:, 2].min())
+        assert z_range >= 0.35 * 0.5, (
+            f"Z range = {z_range:.4f} mm < 0.175 mm.  Rake not visible on curved base."
+        )
+
+        # Max top Z must be above max base Z (rake + chunks added).
+        max_base = float(base_z.max())
+        assert float(top_v[:, 2].max()) > max_base, (
+            f"Max top Z ({float(top_v[:, 2].max()):.3f}) <= max base Z ({max_base:.3f}).  "
+            "Rake/chunks must be additive on curved base."
+        )
+
+        # Slope preserved: right-side top verts (x > 15) higher than left (x < 5).
+        left_z  = top_v[top_v[:, 0] < 5.0,  2]
+        right_z = top_v[top_v[:, 0] > 15.0, 2]
+        if len(left_z) > 0 and len(right_z) > 0:
+            assert float(right_z.mean()) > float(left_z.mean()) + 1.0, (
+                f"Right mean Z ({float(right_z.mean()):.3f}) not > left mean + 1mm "
+                f"({float(left_z.mean()) + 1.0:.3f}).  "
+                "Fringe slope not preserved through curved base."
+            )
+
+    # -----------------------------------------------------------------------
+    # L-5  Per-vertex floor guard on curved base
+    # -----------------------------------------------------------------------
+
+    def test_per_vertex_floor_guard_on_curved_base(self):
+        """
+        The floor guard (dimples cannot push vertex below local_base_z + 0.5mm)
+        must use the per-vertex base Z, not the global slab minimum.
+
+        With a curved base (6 mm on left, 10 mm on right) and all-down chunks:
+          - No vertex at any position may fall below local_base_z + 0.5.
+          - A vertex at base 10 may only go down to 10.5 (not 6.5).
+
+        RED before fix: global trap_base_z (slab bottom = 0) is used as floor,
+                        which is far too permissive for a curved surface where
+                        the actual local base is ~6-10mm above 0.
+        GREEN after fix: local per-vertex base used; floor = local_base + 0.5.
+        """
+        import inspect
+        gsd = _load_gsd()
+
+        sig = inspect.signature(gsd.apply_sand_texture)
+        if "base_z_map" not in sig.parameters:
+            pytest.fail(
+                "apply_sand_texture does not accept a `base_z_map` parameter.  "
+                "Per-vertex floor guard requires local base Z per grid point."
+            )
+
+        from generate_stl_3mf import _build_slab_from_shapely
+
+        side = 20.0
+        poly = ShapelyPolygon([(0, 0), (side, 0), (side, side), (0, side)])
+        # Build slab at max of curved surface (10 mm).
+        mesh = _build_slab_from_shapely(poly, 10.0)
+
+        grid_step = 0.225
+        xs = np.arange(0.0, side + grid_step, grid_step)
+        ys = np.arange(0.0, side + grid_step, grid_step)
+        gx, gy = np.meshgrid(xs, ys)
+        gxy = np.column_stack([gx.ravel(), gy.ravel()])
+        mask = ((gxy[:, 0] >= 0) & (gxy[:, 0] <= side) &
+                (gxy[:, 1] >= 0) & (gxy[:, 1] <= side))
+        gxy_in = gxy[mask]
+        base_z = 6.0 + 4.0 * (gxy_in[:, 0] / side)   # 6 → 10
+
+        orig_frac = gsd.SAND_CHUNK_UP_FRACTION
+        orig_min  = gsd.SAND_CHUNK_MIN
+        try:
+            gsd.SAND_CHUNK_UP_FRACTION = 0.0   # force all dimples
+            gsd.SAND_CHUNK_MIN = 30             # stress the floor guard
+            gsd.apply_sand_texture(
+                mesh, trap_index=42,
+                base_z_map=(gxy_in, base_z),
+            )
+        finally:
+            gsd.SAND_CHUNK_UP_FRACTION = orig_frac
+            gsd.SAND_CHUNK_MIN = orig_min
+
+        # Build a lookup: for each top-surface vertex, find nearest grid base_z.
+        # apply_sand_texture defines "top" as z > (z_max - amplitude - 0.5);
+        # with base_z_map the effective z_max is max(base_z) ≈ 10 mm, amplitude=1.0,
+        # so top threshold ≈ 10 - 1.0 - 0.5 = 8.5 mm.  Use that same threshold.
+        from scipy.spatial import cKDTree as _cKDTree
+        z_max_surf  = float(mesh.vertices[:, 2].max())
+        amplitude   = 1.0   # default apply_sand_texture amplitude
+        top_thresh  = z_max_surf - amplitude - 0.5
+        top_mask    = mesh.vertices[:, 2] > top_thresh
+        top_v       = mesh.vertices[top_mask]
+        assert len(top_v) > 0, "No top-surface vertices."
+
+        kd  = _cKDTree(gxy_in)
+        _, nn_idx = kd.query(top_v[:, :2])
+        local_base = base_z[nn_idx]
+        floor = local_base + 0.5
+
+        below_floor = top_v[:, 2] < floor - 1e-3
+        n_viol = int(below_floor.sum())
+        if n_viol > 0:
+            worst = float((floor - top_v[:, 2])[below_floor].max())
+            pytest.fail(
+                f"{n_viol} top vertices below local floor (local_base + 0.5 mm).  "
+                f"Worst violation: {worst:.3f} mm below floor.  "
+                "Floor guard must use per-vertex local base Z, not global slab min."
+            )

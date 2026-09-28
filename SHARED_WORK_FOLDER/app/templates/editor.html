@@ -998,23 +998,28 @@ function polygonEditor() {
             this.contourStep = result.contourStep;
           }
 
+          // ── OCR elevation wiring (task 650, v4.79) ──────────────────────
+          // The server runs golf_intel_ocr on the same image and returns
+          // elevationMarkers: [{x, y, mm}] — already clamped to 0..50 mm.
+          // Populate elevationSpikes so they persist to the EGM and flow
+          // through to the 3MF heightmap (no extra user action required).
+          if (Array.isArray(result.elevationMarkers) && result.elevationMarkers.length > 0) {
+            this.elevationSpikes = result.elevationMarkers.map(m => ({
+              x: m.x,
+              y: m.y,
+              mm: m.mm,
+            }));
+            console.log('[runDetection] OCR elevation spikes:', this.elevationSpikes.length, this.elevationSpikes);
+          } else {
+            // No markers detected — leave elevationSpikes as cleared by startNewProject()
+            console.log('[runDetection] No OCR elevation markers returned from server');
+          }
+
           this.selectedPoly = 0;
           this.draw();
-          // Debug: draw a red circle at each polygon's first point
-          var _c = this.$refs.canvas, _ctx = _c ? _c.getContext('2d') : null;
-          if (_ctx) {
-            _ctx.fillStyle = 'red';
-            for (var _p of this.polygons) {
-              if (_p.points.length > 0) {
-                var _pt = this.imgToCanvas(_p.points[0].x, _p.points[0].y);
-                _ctx.beginPath();
-                _ctx.arc(_pt.x, _pt.y, 20, 0, Math.PI*2);
-                _ctx.fill();
-              }
-            }
-          }
           const totalRegions = this.polygons.length + this.contours.length;
-          this.flash('Detected ' + this.polygons.length + ' region(s) + ' + this.contours.length + ' contour(s) — scale=' + this.scale.toFixed(3), true);
+          const spikeNote = this.elevationSpikes.length > 0 ? ' + ' + this.elevationSpikes.length + ' OCR spike(s)' : '';
+          this.flash('Detected ' + this.polygons.length + ' region(s) + ' + this.contours.length + ' contour(s)' + spikeNote + ' — scale=' + this.scale.toFixed(3), true);
           this.autoSave();
         } else if (result.status === 'error') {
           console.warn('Detection server error:', result.msg);

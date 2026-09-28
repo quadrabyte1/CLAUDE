@@ -1,0 +1,1 @@
+{"event_id": "clarify.a07a945131641bd20639f5142a823083", "schedule": [{"event_id": "clarify.a07a945131641bd20639f5142a823083", "kind": "clarify_immediate", "fire_at": "2026-09-28T11:41:57.393005+00:00", "tz": "UTC", "body": "Homunculus needs input: Did you mean AM or PM? (e.g. '9 AM' or '9 PM') (memo about '(upbeat music) Schedule gym at 11 o'cloc')", "status": "pending"}]}

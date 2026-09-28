@@ -424,9 +424,225 @@ class TestTheatersFilterConfig:
 
 class TestRegressionV325:
 
-    def test_app_version_is_v3_25(self, tmp_path):
-        """APP_VERSION must be V3.25 (version bump from V3.24)."""
+    def test_app_version_is_at_least_v3_25(self, tmp_path):
+        """APP_VERSION must be V3.25 or higher (version bump from V3.24).
+
+        Updated in V3.26: the test now accepts any version >= V3.25 so it
+        does not block future version bumps.
+        """
         ms_app, client, db_path = _make_app(tmp_path)
-        assert ms_app.APP_VERSION == "V3.25", (
-            f"Expected V3.25, got {ms_app.APP_VERSION!r}"
+        major, minor = ms_app.APP_VERSION.lstrip("V").split(".")
+        assert (int(major), int(minor)) >= (3, 25), (
+            f"Expected V3.25 or higher, got {ms_app.APP_VERSION!r}"
+        )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# V3.26 — title_type short-circuit for _apply_theaters_filter
+# Bug→TDD: RED first, then Part B implementation, then GREEN.
+#
+# Root cause: V3.25 reads OMDb Type to detect series. But 366/370 cached
+# title_metadata rows pre-date the V3.25 schema addition and have empty
+# type. So tvSeries titles fall through to the theatrical-window heuristic
+# and get dropped if released within 180 days. The fix: use
+# titles.title_type (from the match row) as the authoritative kind signal,
+# not OMDb Type.
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestTheatersFilterTitleTypeShortCircuit:
+    """V3.26: _apply_theaters_filter must use title_type from match row."""
+
+    def _call_theaters_filter(
+        self,
+        db_path: str,
+        match_rows: list,
+        omdb_map: dict,
+        only_in_theaters_allowed: bool,
+    ):
+        """Shared helper — mirrors TestApplyTheatersFilter._call_theaters_filter."""
+        ms_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        if ms_dir not in sys.path:
+            sys.path.insert(0, ms_dir)
+        from movie_scanner.scanner import Scanner
+        from movie_scanner.omdb import OMDbClient
+
+        scanner = Scanner(db_path=db_path)
+
+        def _fake_fetch(tconst: str, **kwargs) -> dict:
+            if tconst in omdb_map:
+                raw = omdb_map[tconst]
+                return {
+                    "plot": "Some plot.",
+                    "released": raw.get("Released"),
+                    "runtime": None,
+                    "director": None,
+                    "rt_score": None,
+                    "imdb_rating": None,
+                    "metascore": None,
+                    "country": "USA",
+                    "language": "English",
+                    "dvd": raw.get("DVD"),
+                    "type": raw.get("Type"),   # may be None (empty cache)
+                    "error": None,
+                }
+            return {
+                "plot": None, "released": None, "runtime": None,
+                "director": None, "rt_score": None, "imdb_rating": None,
+                "metascore": None, "country": None, "language": None,
+                "dvd": None, "type": None,
+                "error": "Movie not found!",
+            }
+
+        with patch.object(OMDbClient, "fetch", side_effect=_fake_fetch):
+            kept, dropped = scanner._apply_theaters_filter(
+                db_path=db_path,
+                match_rows=match_rows,
+                only_in_theaters_allowed=only_in_theaters_allowed,
+                on_progress=lambda _: None,
+            )
+        return kept, dropped
+
+    def test_b1_tvseries_empty_omdb_type_passes_when_unchecked(self, tmp_path):
+        """B1 — Neagley regression: tvSeries + empty OMDb type + recent Release
+        → title PASSES when only_in_theaters=False (checkbox unchecked).
+
+        This is the exact failure mode: cached OMDb row has type=None so the
+        old code fell through to the theatrical heuristic and dropped the title.
+        V3.26 short-circuits on title_type='tvSeries' before touching OMDb type.
+        """
+        db_path = _setup_scanner_db(tmp_path)
+        today = date.today()
+        released_12_days_ago = (today - timedelta(days=12)).strftime("%d %b %Y")
+
+        # Match row has title_type='tvSeries' (index 3)
+        row = _make_match_row("tt33539520", title_type="tvSeries")
+
+        # OMDb cache row has empty type (pre-V3.25 schema) and recent Release
+        omdb_map = {
+            "tt33539520": {
+                "DVD": "N/A",
+                "Released": released_12_days_ago,
+                "Type": None,     # empty — the root cause
+            }
+        }
+        kept, dropped = self._call_theaters_filter(
+            db_path, [row], omdb_map, only_in_theaters_allowed=False
+        )
+        assert dropped == 0, (
+            f"tvSeries should never be filtered by theaters check; dropped={dropped}"
+        )
+        assert len(kept) == 1, f"Expected Neagley to pass; kept={kept}"
+
+    def test_b2_movie_in_theaters_still_filtered(self, tmp_path):
+        """B2 — regression: title_type='movie', empty DVD, released 30 days ago
+        → dropped when only_in_theaters=False (theaters check still works for movies).
+        """
+        db_path = _setup_scanner_db(tmp_path)
+        today = date.today()
+        released_30_days_ago = (today - timedelta(days=30)).strftime("%d %b %Y")
+
+        row = _make_match_row("ttMovie001", title_type="movie")
+        omdb_map = {
+            "ttMovie001": {
+                "DVD": "N/A",
+                "Released": released_30_days_ago,
+                "Type": "movie",
+            }
+        }
+        kept, dropped = self._call_theaters_filter(
+            db_path, [row], omdb_map, only_in_theaters_allowed=False
+        )
+        assert dropped == 1, (
+            f"Movie released 30 days ago with no DVD should be filtered; dropped={dropped}"
+        )
+        assert len(kept) == 0, f"Expected movie to be excluded; kept={kept}"
+
+    def test_b3_movie_with_past_dvd_passes(self, tmp_path):
+        """B3 — movie with past DVD date passes even when unchecked (already streaming)."""
+        db_path = _setup_scanner_db(tmp_path)
+        today = date.today()
+        past_dvd = (today - timedelta(days=60)).strftime("%d %b %Y")
+        released_90_days_ago = (today - timedelta(days=90)).strftime("%d %b %Y")
+
+        row = _make_match_row("ttMovie002", title_type="movie")
+        omdb_map = {
+            "ttMovie002": {
+                "DVD": past_dvd,
+                "Released": released_90_days_ago,
+                "Type": "movie",
+            }
+        }
+        kept, dropped = self._call_theaters_filter(
+            db_path, [row], omdb_map, only_in_theaters_allowed=False
+        )
+        assert dropped == 0, f"Movie with past DVD should pass; dropped={dropped}"
+        assert len(kept) == 1, f"Expected movie with past DVD to be kept; kept={kept}"
+
+    def test_b4_only_in_theaters_true_bypasses_all_filtering(self, tmp_path):
+        """B4 — regression: only_in_theaters=True → no filtering regardless of type."""
+        db_path = _setup_scanner_db(tmp_path)
+        today = date.today()
+        recent = (today - timedelta(days=5)).strftime("%d %b %Y")
+
+        rows = [
+            _make_match_row("ttSeries1", title_type="tvSeries"),
+            _make_match_row("ttMovie3",  title_type="movie"),
+            _make_match_row("ttMini1",   title_type="tvMiniSeries"),
+        ]
+        omdb_map = {
+            "ttSeries1": {"DVD": "N/A", "Released": recent, "Type": None},
+            "ttMovie3":  {"DVD": "N/A", "Released": recent, "Type": "movie"},
+            "ttMini1":   {"DVD": "N/A", "Released": recent, "Type": None},
+        }
+        kept, dropped = self._call_theaters_filter(
+            db_path, rows, omdb_map, only_in_theaters_allowed=True
+        )
+        assert dropped == 0, f"only_in_theaters=True should pass everything; dropped={dropped}"
+        assert len(kept) == 3, f"Expected all 3 titles kept; kept={kept}"
+
+    def test_b5_tvmovie_treated_like_tvseries_never_filtered(self, tmp_path):
+        """B5 — tvMovie (made-for-TV) is never in theaters → always passes.
+
+        IMDb tvMovie = made-for-TV film. Even with a very recent release and
+        no DVD date, it should never be classified as 'only in theaters'.
+        """
+        db_path = _setup_scanner_db(tmp_path)
+        today = date.today()
+        very_recent = (today - timedelta(days=3)).strftime("%d %b %Y")
+
+        row = _make_match_row("ttTVMovie1", title_type="tvMovie")
+        omdb_map = {
+            "ttTVMovie1": {
+                "DVD": "N/A",
+                "Released": very_recent,
+                "Type": None,   # empty cache — the problem scenario
+            }
+        }
+        kept, dropped = self._call_theaters_filter(
+            db_path, [row], omdb_map, only_in_theaters_allowed=False
+        )
+        assert dropped == 0, (
+            f"tvMovie should never be filtered by theaters check; dropped={dropped}"
+        )
+        assert len(kept) == 1, f"Expected tvMovie to pass; kept={kept}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# V3.26 — APP_VERSION regression
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+class TestRegressionV326:
+
+    def test_app_version_is_at_least_v3_26(self, tmp_path):
+        """APP_VERSION must be V3.26 or higher after the Part B fix.
+
+        Updated in V3.27: accepts any version >= V3.26 so this test does not
+        block future version bumps.
+        """
+        ms_app, client, db_path = _make_app(tmp_path)
+        major, minor = ms_app.APP_VERSION.lstrip("V").split(".")
+        assert (int(major), int(minor)) >= (3, 26), (
+            f"Expected V3.26 or higher, got {ms_app.APP_VERSION!r}"
         )

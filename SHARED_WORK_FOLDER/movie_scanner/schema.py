@@ -168,6 +168,22 @@ CREATE TABLE IF NOT EXISTS match_seasons (
 );
 CREATE INDEX IF NOT EXISTS idx_match_seasons_match ON match_seasons(match_id);
 
+-- Scanner-elimination log (V3.27). Records every title that was dropped by a
+-- filter rule during scan(), with a short reason code. Used by the
+-- "Show dismissed" Reason column in the UI to enable rapid self-diagnosis
+-- (e.g. "only_in_theaters:filter_dropped" vs "rating:6.8<7.5").
+-- One row per (scan run, tconst) drop event. Cleared at the start of each
+-- fresh scan alongside titles+matches so the table always reflects the
+-- current run's eliminations.
+CREATE TABLE IF NOT EXISTS scan_eliminations (
+    id             INTEGER PRIMARY KEY,
+    tconst         TEXT NOT NULL,
+    primary_title  TEXT,
+    reason         TEXT NOT NULL,
+    eliminated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_scan_eliminations_tconst ON scan_eliminations(tconst);
+
 -- Parental-guide severity cache (V3.12). Populated on-demand by the
 -- scanner AFTER a title passes the existing rating/votes/year/genre
 -- filters. Rows are refetched when ``fetched_at`` is older than 90 days.
@@ -331,6 +347,27 @@ def apply_schema(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS previous_match_tconsts (
             tconst  TEXT PRIMARY KEY
         )
+    """)
+
+    # V3.27 migration: scanner-elimination log. Records the reason each
+    # title was dropped by a filter during scan(). Used by the "Show
+    # dismissed" Reason column in the UI. Idempotent — CREATE IF NOT
+    # EXISTS is safe on every startup. The table is cleared at the start
+    # of every fresh scan (alongside matches + titles in /run), so old
+    # data never accumulates. No back-fill needed: pre-V3.27 scans have
+    # no elimination records; the UI just shows blank for those rows.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS scan_eliminations (
+            id             INTEGER PRIMARY KEY,
+            tconst         TEXT NOT NULL,
+            primary_title  TEXT,
+            reason         TEXT NOT NULL,
+            eliminated_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now'))
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_scan_eliminations_tconst
+          ON scan_eliminations(tconst)
     """)
 
     # V3.12 migration: seed the new parental-guide config keys on DBs whose

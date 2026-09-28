@@ -395,6 +395,49 @@ class Scanner:
         with sqlite3.connect(db_path) as conn:
             apply_schema(conn)
 
+    # ── Elimination log (V3.27) ────────────────────────────────────────────
+
+    def _record_elimination(
+        self,
+        tconst: str,
+        primary_title: str,
+        reason: str,
+    ) -> None:
+        """Write one row to scan_eliminations explaining WHY a title was dropped.
+
+        Called inline at each filter-drop site so the "Show dismissed" UI can
+        surface the reason without any manual DB archaeology.
+
+        Design notes
+        ------------
+        - Opens and closes its own connection (one line, no shared state).
+        - INSERT OR IGNORE so a double-call for the same tconst (shouldn't
+          happen in normal flow, but defensive) doesn't raise.
+        - Reason codes are short, human-readable strings like "year:2020<2026"
+          or "only_in_theaters:filter_dropped". No structured columns — a single
+          TEXT column is enough for the display use case and is trivially
+          extensible (new filter rules just use a new prefix).
+
+        Supported reason prefixes (V3.27)
+        ----------------------------------
+        year:<actual_year><<min_year>       failed year gate
+        rating:<actual><<min>               failed rating gate
+        votes:<actual><<min>                failed votes gate
+        genre:excluded=<genre>              excluded-genre hit
+        country:<country>                   excluded-country hit
+        plot:missing                        no OMDb plot
+        only_in_theaters:filter_dropped     in-theaters filter dropped it
+        dismissed_by_user                   user clicked X in the UI
+        """
+        conn = sqlite3.connect(self._db_path)
+        conn.execute(
+            "INSERT OR IGNORE INTO scan_eliminations "
+            "(tconst, primary_title, reason) VALUES (?, ?, ?)",
+            (tconst, primary_title, reason),
+        )
+        conn.commit()
+        conn.close()
+
     # ── Cancellation (V3.13) ───────────────────────────────────────────────
 
     def cancel(self) -> None:
@@ -707,6 +750,12 @@ class Scanner:
                 kept.append(match_row)
             else:
                 dropped += 1
+                # V3.27 — record plot elimination reason.
+                self._record_elimination(
+                    tconst=tconst,
+                    primary_title=match_row[1] if len(match_row) > 1 else tconst,
+                    reason="plot:missing",
+                )
                 if dropped % 10 == 0 or dropped == 1:
                     on_progress(
                         f"plot_filter: {dropped} title(s) dropped so far "
@@ -718,7 +767,22 @@ class Scanner:
         )
         return kept, dropped
 
-    # ── V3.25: Theatrical-window filter ────────────────────────────────────
+    # ── V3.26: Theatrical-window filter (title_type short-circuit) ────────────
+    #
+    # V3.25 bug: the filter read OMDb ``type`` to detect series, but 99% of
+    # cached ``title_metadata`` rows pre-date the V3.25 schema addition of the
+    # ``type`` column -- those rows have ``type=NULL``.  So a tvSeries released
+    # within 180 days fell through to the theatrical-window heuristic and was
+    # dropped.  Fix: use ``title_type`` from the IMDb match row (column index 3)
+    # as the authoritative "kind of title" signal; OMDb ``type`` is only a
+    # secondary fallback inside ``is_only_in_theaters`` itself (which we still
+    # call unchanged for ``movie`` rows so its unit tests remain green).
+
+    # Title types that are NEVER in theaters -- skip the theatrical-window check
+    # entirely.  Matches ``titles.title_type`` values from the IMDb basics dump.
+    _NON_THEATRICAL_TYPES = frozenset({
+        "tvSeries", "tvMovie", "tvEpisode", "tvMiniSeries", "tvSpecial",
+    })
 
     def _apply_theaters_filter(
         self,
@@ -732,14 +796,15 @@ class Scanner:
         Parameters
         ----------
         db_path:
-            Path to scanner.db — used to read the OMDb API key and to pass to
+            Path to scanner.db -- used to read the OMDb API key and to pass to
             OMDbClient so its cache writes land in the right place.
         match_rows:
             The list of (tconst, ...) tuples coming out of _apply_plot_filter.
+            Column 3 (index 3) is ``title_type`` from the IMDb basics dump.
         only_in_theaters_allowed:
-            True  → pass everything through (checkbox is checked).
-            False → exclude titles whose OMDb data indicates they are still
-                    only in theaters (checkbox is unchecked).
+            True  -> pass everything through (checkbox is checked).
+            False -> exclude titles whose data indicates they are still only
+                    in theaters (checkbox is unchecked).
         on_progress:
             Progress callback.
 
@@ -747,15 +812,28 @@ class Scanner:
         -------
         (kept_rows, dropped_count)
 
+        Short-circuit logic (V3.26)
+        ---------------------------
+        ``titles.title_type`` (match row index 3) is authoritative for what
+        kind of title this is.  OMDb's ``Type`` field is unreliable because
+        pre-V3.25 cached rows have ``type=NULL``.
+
+        * ``title_type`` in _NON_THEATRICAL_TYPES (tvSeries, tvMovie, ...)
+          -> never in theaters -> always passes, no OMDb call.
+        * ``title_type == 'movie'`` -> run ``is_only_in_theaters`` against
+          the OMDb DVD/Released fields as before.
+        * Anything else (short, video, videoGame, ...) -> treat as never-in-
+          theaters (safe default; these are not theatrical releases).
+
         Fail-open behaviour
         -------------------
-        * If ``only_in_theaters_allowed`` is True → all rows are kept (no API calls).
-        * If the OMDb API key is not configured → all rows are kept (no filtering).
-        * If a title's OMDb fetch fails or returns no DVD/Released data →
-          the title is kept (unknown status → don't over-filter).
+        * If ``only_in_theaters_allowed`` is True -> all rows kept (no API calls).
+        * If the OMDb API key is not configured -> all rows kept.
+        * If OMDb fetch fails or returns no usable date fields -> title kept
+          (unknown status -> don't over-filter).
         """
         if only_in_theaters_allowed:
-            on_progress("theaters_filter: checkbox checked — all titles permitted")
+            on_progress("theaters_filter: checkbox checked -- all titles permitted")
             return match_rows, 0
 
         import sqlite3 as _sqlite3
@@ -768,7 +846,7 @@ class Scanner:
 
         if not row or not row["value"]:
             on_progress(
-                "theaters_filter: no OMDb API key configured — skipping (all titles kept)"
+                "theaters_filter: no OMDb API key configured -- skipping (all titles kept)"
             )
             return match_rows, 0
 
@@ -779,10 +857,26 @@ class Scanner:
 
         for match_row in match_rows:
             tconst = match_row[0]
+            # Column 3 is title_type -- the IMDb-authoritative kind field.
+            title_type: str = match_row[3] if len(match_row) > 3 else "movie"
+
+            # V3.26 short-circuit: non-theatrical title types are never in
+            # cinemas -- skip the OMDb heuristic entirely.
+            if title_type in self._NON_THEATRICAL_TYPES:
+                kept.append(match_row)
+                continue
+
+            # Only run the OMDb theatrical-window check for movies (and any
+            # unknown types, treated conservatively as never-in-theaters).
+            if title_type != "movie":
+                # short, video, videoGame, etc. -> safe default: pass through.
+                kept.append(match_row)
+                continue
+
             meta = omdb_client.fetch(tconst)
 
             if meta.get("error"):
-                # OMDb fetch failed — fail open, include the title.
+                # OMDb fetch failed -- fail open, include the title.
                 kept.append(match_row)
                 continue
 
@@ -796,6 +890,12 @@ class Scanner:
 
             if is_only_in_theaters(omdb_lookup, today):
                 dropped += 1
+                # V3.27 — record the reason so the Show Dismissed view can explain it.
+                self._record_elimination(
+                    tconst=tconst,
+                    primary_title=match_row[1] if len(match_row) > 1 else tconst,
+                    reason="only_in_theaters:filter_dropped",
+                )
             else:
                 kept.append(match_row)
 
@@ -804,7 +904,6 @@ class Scanner:
             f"{dropped} excluded (only in theaters)"
         )
         return kept, dropped
-
     # ── Public API ─────────────────────────────────────────────────────────
 
     def scan(
@@ -1047,6 +1146,13 @@ class Scanner:
 
                 # Exclusion first — one excluded genre kills the title
                 if exclude and any(g in exclude for g in title_genres_lower):
+                    # V3.27 — record which genre triggered exclusion.
+                    excluded_g = next(g for g in title_genres_lower if g in exclude)
+                    self._record_elimination(
+                        tconst=tconst,
+                        primary_title=primary_title,
+                        reason=f"genre:excluded={excluded_g}",
+                    )
                     continue
 
                 # Year filter — V3.17 STRICT (reverts V3.13 per-season branch).
@@ -1066,6 +1172,13 @@ class Scanner:
                 is_series = title_type in self._SERIES_TYPES
                 if min_year > 0:
                     if start_year is None or int(start_year) < min_year:
+                        # V3.27 — record year elimination reason.
+                        actual_year = start_year if start_year is not None else "unknown"
+                        self._record_elimination(
+                            tconst=tconst,
+                            primary_title=primary_title,
+                            reason=f"year:{actual_year}<{min_year}",
+                        )
                         continue
                 if is_series and min_year > 0:
                     # Display-only: show which seasons meet the min_year gate
@@ -1089,7 +1202,21 @@ class Scanner:
                 if not rating_row:
                     continue
                 rating, votes = rating_row
-                if rating < min_rating or votes < min_votes:
+                if rating < min_rating:
+                    # V3.27 — record rating elimination reason.
+                    self._record_elimination(
+                        tconst=tconst,
+                        primary_title=primary_title,
+                        reason=f"rating:{rating}<{min_rating}",
+                    )
+                    continue
+                if votes < min_votes:
+                    # V3.27 — record votes elimination reason.
+                    self._record_elimination(
+                        tconst=tconst,
+                        primary_title=primary_title,
+                        reason=f"votes:{votes}<{min_votes}",
+                    )
                     continue
 
                 # Include-genre filter
@@ -1112,7 +1239,17 @@ class Scanner:
                             for c in meta["country"].split(",")
                             if c.strip()
                         ]
-                        if any(ec in tc for ec in exclude_countries for tc in title_countries):
+                        matched_country = next(
+                            (tc for ec in exclude_countries for tc in title_countries if ec in tc),
+                            None,
+                        )
+                        if matched_country is not None:
+                            # V3.27 — record country elimination reason.
+                            self._record_elimination(
+                                tconst=tconst,
+                                primary_title=primary_title,
+                                reason=f"country:{matched_country}",
+                            )
                             continue
 
                 match_rows.append((

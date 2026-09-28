@@ -33,7 +33,24 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
 app.secret_key = "moviescanner-dev"  # required for flash()
 
-APP_VERSION = "V3.25"
+APP_VERSION = "V3.27"
+# V3.27 — Dismissal Reason column. New scan_eliminations table records WHY
+#          each title was dropped by a scanner filter rule (year, rating, votes,
+#          genre, country, plot, only_in_theaters). New Scanner._record_elimination()
+#          method called inline at every filter drop site. When "Show dismissed"
+#          is checked, the Matches table shows a Reason column populated from
+#          scan_eliminations; user-manually-dismissed titles show "dismissed_by_user".
+#          Migration: scan_eliminations table added via apply_schema() — safe on
+#          existing DBs. Table cleared at the start of every /run alongside
+#          matches + titles so it always reflects the current scan only.
+#
+# V3.26 — Theaters filter title_type short-circuit. _apply_theaters_filter now
+#          uses titles.title_type (from the IMDb match row) as the authoritative
+#          "kind of title" signal rather than OMDb Type. tvSeries/tvMovie/
+#          tvMiniSeries/tvSpecial/tvEpisode are treated as never-in-theaters and
+#          skip the OMDb heuristic entirely. Fixes Neagley (tt33539520) and all
+#          other tvSeries dropped when their cached OMDb row had empty type.
+#
 # V3.25 — "Only In Theaters" filter checkbox. When unchecked (default), titles
 #          that are still only in theaters (no home-video/streaming yet) are
 #          excluded from the matches list. When checked, all titles including
@@ -288,6 +305,17 @@ def index():
             "ORDER BY m.rating DESC, m.num_votes DESC LIMIT 500"
         ).fetchall()
 
+    # V3.27 — load elimination reasons so the "Show dismissed" Reason column
+    # can show WHY a user-dismissed match was dropped (or "dismissed_by_user"
+    # if it was a manual dismissal). Keyed by tconst → reason string.
+    # Only loaded when show_dismissed is active (no cost in the default view).
+    elimination_reasons: dict[str, str] = {}
+    if show_dismissed:
+        for er in db.execute(
+            "SELECT tconst, reason FROM scan_eliminations"
+        ).fetchall():
+            elimination_reasons[er["tconst"]] = er["reason"]
+
     # V3.13 — attach the qualifying-season list to each match row so the
     # template can render the "▼ N season(s) match" affordance under
     # series. One query total, indexed by match_id. Movies get an empty
@@ -330,6 +358,18 @@ def index():
         # No previous scan → never flag (avoids the first-run everything-
         # is-new noise).
         d["is_new"] = has_previous_run and (r["tconst"] not in previous_tconsts)
+        # V3.27 — dismissal reason for the "Show dismissed" Reason column.
+        # Priority: scanner-recorded elimination reason → "dismissed_by_user"
+        # for manual dismissals → None for active (non-dismissed) matches.
+        if show_dismissed:
+            if r["tconst"] in elimination_reasons:
+                d["dismissal_reason"] = elimination_reasons[r["tconst"]]
+            elif r["dismissed_at"] is not None:
+                d["dismissal_reason"] = "dismissed_by_user"
+            else:
+                d["dismissal_reason"] = None
+        else:
+            d["dismissal_reason"] = None
         matches.append(d)
 
     db.close()
@@ -590,6 +630,9 @@ def start_run():
     # runs table is intentionally kept so history isn't lost.
     db.execute("DELETE FROM matches")
     db.execute("DELETE FROM titles")
+    # V3.27 — clear the scan eliminations log so the table always reflects
+    # the current scan's drops (not stale reasons from prior runs).
+    db.execute("DELETE FROM scan_eliminations")
     db.commit()
     db.close()
 

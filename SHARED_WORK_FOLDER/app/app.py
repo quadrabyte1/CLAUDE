@@ -23,7 +23,14 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.75"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.80"  # unified version for all main-app pages, shown in every sticky footer
+
+# ── detect_boundaries: classifier knobs ────────────────────────────────────
+# When True the green polygon interior is excluded from trap/water detection.
+# This prevents the slope-gradient color bands on the putting surface from
+# being misclassified as water or sand.  Set to False only for edge cases
+# where a real hazard exists inside the green perimeter (e.g., island holes).
+MASK_GREEN_INTERIOR_FROM_HAZARDS = True
 
 # ── Display baseline for task counts ──────────────────────────────────────
 # Dashboard task counts only reflect tasks with id strictly greater than the
@@ -1179,6 +1186,94 @@ def print_constants():
     })
 
 
+# ── OCR elevation wiring helpers ─────────────────────────────────────────────
+# These functions bridge golf_intel_ocr.extract_numeric_markers() output into
+# the elevationSpikes format expected by gradient_surface_diagnostic.py and the
+# editor's Alpine.js state.  Task 650 (Sienna) — initial mm=value mapping.
+#
+# Reasonable elevation range for a golf putting-green plaque:
+#   0 < mm <= 50  (sub-millimetre values are implausible; >50 mm would be taller
+#   than the plaque itself)
+_OCR_SPIKE_MIN_MM = 0.0          # exclusive lower bound (0 is meaningless)
+_OCR_SPIKE_MAX_MM = 50.0         # inclusive upper bound
+
+
+def clamp_ocr_value(v: float) -> "float | None":
+    """
+    Validate and clamp a raw OCR decimal value to a plausible mm elevation.
+
+    Returns the float unchanged if 0 < v <= 50, or None if the value is
+    outside the realistic range for a golf-plate elevation spike.  Also
+    rejects NaN and Infinity.
+
+    This is intentionally strict: OCR mis-reads (e.g. "100" from a label
+    artefact) are silently dropped rather than being clamped to 50 mm,
+    because a mis-read should not silently produce a tall spike.
+    """
+    import math as _math
+    if not isinstance(v, (int, float)):
+        return None
+    if _math.isnan(v) or _math.isinf(v):
+        return None
+    if v <= _OCR_SPIKE_MIN_MM or v > _OCR_SPIKE_MAX_MM:
+        return None
+    return float(v)
+
+
+def markers_to_elevation_spikes(
+    markers: "list[tuple]",
+) -> "list[dict]":
+    """
+    Convert OCR marker triples to elevation spike dicts suitable for the EGM
+    elevationSpikes field and the editor's Alpine.js state.
+
+    Parameters
+    ----------
+    markers : list of (x, y, value) tuples
+        Output of golf_intel_ocr.extract_numeric_markers().
+        x, y are pixel coordinates (int or float); value is a float mm elevation.
+
+    Returns
+    -------
+    list of {"x": int, "y": int, "mm": float}
+        Out-of-range values (clamped → None) are silently dropped.
+        Dropped markers are printed to stdout for diagnostic purposes.
+
+    Wiring diagram (task 650):
+        extract_numeric_markers(image)        (golf_intel_ocr.py)
+          → [(x_px, y_px, value_mm), ...]
+          → markers_to_elevation_spikes()     (this function, app.py)
+          → [{"x", "y", "mm"}, ...]
+          → detect_boundaries response field "elevationMarkers"
+          → runDetection() in editor.html
+          → this.elevationSpikes              (Alpine.js state)
+          → autoSave() → .egm persisted
+          → generate_models → run_pipeline → gradient_surface_diagnostic.py
+          → Gaussian spike applied to Z_fringe array
+          → build_fringe_mesh → 3MF vertices have height ≈ mm at spike position
+    """
+    spikes = []
+    for entry in markers:
+        try:
+            x_raw, y_raw, v_raw = entry[0], entry[1], entry[2]
+        except (IndexError, TypeError):
+            continue
+        clamped = clamp_ocr_value(v_raw)
+        if clamped is None:
+            print(
+                f"[ocr_elevation] Dropped out-of-range marker: "
+                f"({x_raw}, {y_raw}) value={v_raw!r} — "
+                f"acceptable range: (0, {_OCR_SPIKE_MAX_MM}]"
+            )
+            continue
+        spikes.append({
+            "x": int(round(float(x_raw))),
+            "y": int(round(float(y_raw))),
+            "mm": clamped,
+        })
+    return spikes
+
+
 # ── Point-clamping helpers ────────────────────────────────────────────────────
 
 def _clamp_point_to_image(x: float, y: float, w: int, h: int) -> tuple:
@@ -1284,12 +1379,29 @@ def detect_boundaries():
     green_mask = cv2.GaussianBlur(green_mask, (21, 21), 0)
     _, green_mask = cv2.threshold(green_mask, 127, 255, cv2.THRESH_BINARY)
 
-    # --- Detect sand traps: pale cream/beige ---
+    # --- Green-interior exclusion mask ---
+    # When MASK_GREEN_INTERIOR_FROM_HAZARDS is True the green polygon interior
+    # is excluded from both trap and water classification.  This prevents the
+    # slope-gradient color bands rendered inside the putting surface from being
+    # misclassified as hazards.  On Golf Intelligence heat maps the low-elevation
+    # zones appear as blue/teal — indistinguishable from water without this mask.
+    # Disable (False) only for rare island holes where a hazard truly sits inside
+    # the green perimeter.
+    if MASK_GREEN_INTERIOR_FROM_HAZARDS:
+        _hazard_search_area = cv2.bitwise_not(green_mask)  # 255 = outside green
+    else:
+        _hazard_search_area = np.full((h, w), 255, dtype=np.uint8)  # unrestricted
+
+    # --- Detect sand traps: pale cream/beige/tan ---
+    # H range widened from [15,34] to [10,40] to catch light beige (H≈13) such
+    # as the Stanford H8 lower-left trap.  Saturation and value bounds unchanged.
+    # Pixels inside the green are excluded by _hazard_search_area.
     trap_mask = (
-        (hue >= 15) & (hue <= 34) &
+        (hue >= 10) & (hue <= 40) &
         (sat >= 15) & (sat <= 60) &
         (val >= 200)
     ).astype(np.uint8) * 255
+    trap_mask = cv2.bitwise_and(trap_mask, _hazard_search_area)
     kernel_t = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
     trap_mask = cv2.morphologyEx(trap_mask, cv2.MORPH_CLOSE, kernel_t, iterations=3)
     trap_mask = cv2.morphologyEx(trap_mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)), iterations=2)
@@ -1306,21 +1418,35 @@ def detect_boundaries():
     traps.sort(key=lambda x: x[1], reverse=True)
     traps = traps[:5]  # max 5 traps
 
-    # --- Detect water hazards: royal blue regions ---
-    # Royal blue centers around HSV hue 120 in OpenCV's 0-179 scale. We allow
-    # 100-130 to tolerate cyan-leaning and violet-leaning blues. Saturation
-    # >=130 keeps pale/sky-blue UI overlays out. Value 130-220 excludes the
-    # darker dark-blue gradient arrows (V~60-90) that sit on the green and
-    # also excludes near-white reflections (V>220).
-    # Tuned against ItWentIn/GolfCourses/PGA West-Arnold Palmer/
-    # Images/PGA West - Arnold Palmer.png — water samples there register as
-    # H=104-105, S~172, V=164-184. Stanford Hole 8 contains no water and
-    # produces 0 polygons after morphology + 500 px area filter.
-    water_mask = (
+    # --- Detect water hazards: deep blue/cyan regions ---
+    # Two complementary filters are OR-combined so both saturated blue water
+    # (e.g. PGA West, H≈104-105, S≈172, V=164-184) and pale-cyan water
+    # (e.g. Stanford H8 LR, H≈90, S≈29, V≈238) are detected.
+    #
+    # High-saturation path (original): royal blue / bright cyan water bodies.
+    #   H 100-130, S≥130, V 130-220.  Excludes darker gradient arrows (V<130)
+    #   and near-white reflections (V>220).
+    #
+    # Pale-cyan path (new, 2026-09-28): very desaturated cyan areas that appear
+    #   as light background tints on Golf Intelligence heat maps.  H 80-105
+    #   (pure cyan at H=90), S 15-50 (above gray background S=0 but below the
+    #   slope-gradient S≥100), V≥200 (bright enough to be a surface, not a dark
+    #   gradient band).  S cap of 50 ensures the slope-band interior colors
+    #   (S≈100-255) are never pulled in even if green masking were disabled.
+    #
+    # Pixels inside the green are excluded by _hazard_search_area.
+    _water_high_sat = (
         (hue >= 100) & (hue <= 130) &
         (sat >= 130) &
         (val >= 130) & (val <= 220)
     ).astype(np.uint8) * 255
+    _water_pale_cyan = (
+        (hue >= 80) & (hue <= 105) &
+        (sat >= 15) & (sat <= 50) &
+        (val >= 200)
+    ).astype(np.uint8) * 255
+    water_mask = cv2.bitwise_or(_water_high_sat, _water_pale_cyan)
+    water_mask = cv2.bitwise_and(water_mask, _hazard_search_area)
     kernel_w = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11, 11))
     water_mask = cv2.morphologyEx(water_mask, cv2.MORPH_CLOSE, kernel_w, iterations=3)
     water_mask = cv2.morphologyEx(water_mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7)), iterations=2)
@@ -1607,11 +1733,34 @@ def detect_boundaries():
         print(f"[detect_boundaries] Clamped {total_clamped} point(s) to image frame "
               f"({w}x{h})")
 
+    # ── Golf Intelligence OCR — elevation markers ─────────────────────────────
+    # Run numeric-marker OCR on the same image used for boundary detection.
+    # Detected decimal values (e.g. "2.8", "1.4") are converted to elevationSpike
+    # dicts and returned as `elevationMarkers` so the editor's runDetection()
+    # handler can immediately populate this.elevationSpikes — no extra round-trip.
+    #
+    # OCR is wrapped in a broad try/except so a missing EasyOCR install or an
+    # unexpected image format never crashes the boundary detection response.
+    elevation_markers: list[dict] = []
+    try:
+        from golf_intel_ocr import extract_numeric_markers as _extract_ocr
+        raw_markers = _extract_ocr(img_path)
+        elevation_markers = markers_to_elevation_spikes(raw_markers)
+        print(
+            f"[detect_boundaries] Golf Intel OCR: "
+            f"{len(raw_markers)} raw marker(s) → "
+            f"{len(elevation_markers)} elevation spike(s)"
+        )
+    except Exception as _ocr_err:
+        # Non-fatal: log but do not fail the whole detect_boundaries call.
+        print(f"[detect_boundaries] OCR skipped ({type(_ocr_err).__name__}: {_ocr_err})")
+
     return jsonify({
         "status": "ok",
         "imageSize": {"width": w, "height": h},
         "polygons": polygons,
         "contourStep": 0.5,
+        "elevationMarkers": elevation_markers,
     })
 
 

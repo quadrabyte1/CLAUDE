@@ -704,6 +704,11 @@
               <th class="text-left  px-3 py-2 font-medium sortable" data-col="matched" data-dir="text">
                 Matched<span class="sort-arrow"></span><span class="resize-handle"></span>
               </th>
+              {% if show_dismissed %}
+              <th class="text-left px-3 py-2 font-medium" title="Why this title was filtered or dismissed">
+                Reason<span class="resize-handle"></span>
+              </th>
+              {% endif %}
             </tr>
           </thead>
           <tbody id="matches-tbody" class="divide-y divide-gray-100">
@@ -771,6 +776,34 @@
               <td class="px-3 py-1.5 text-gray-700 align-top">{{ m.matched_tags }}</td>
               <td class="px-3 py-1.5 text-gray-400 align-top">{{ m.genres or '' }}</td>
               <td class="px-3 py-1.5 font-mono text-gray-400 align-top">{{ (m.matched_at or '')[:10] }}</td>
+              {% if show_dismissed %}
+              <td class="px-3 py-1.5 align-top">
+                {% if m.dismissal_reason %}
+                  <span class="inline-block font-mono text-[10px] px-1.5 py-0.5 rounded
+                               {% if m.dismissal_reason == 'dismissed_by_user' %}
+                               bg-gray-100 text-gray-500 border border-gray-200
+                               {% elif m.dismissal_reason.startswith('only_in_theaters') %}
+                               bg-blue-50 text-blue-700 border border-blue-200
+                               {% elif m.dismissal_reason.startswith('rating') or m.dismissal_reason.startswith('votes') %}
+                               bg-amber-50 text-amber-700 border border-amber-200
+                               {% elif m.dismissal_reason.startswith('year') %}
+                               bg-purple-50 text-purple-700 border border-purple-200
+                               {% elif m.dismissal_reason.startswith('genre') %}
+                               bg-red-50 text-red-700 border border-red-200
+                               {% elif m.dismissal_reason.startswith('country') %}
+                               bg-orange-50 text-orange-700 border border-orange-200
+                               {% elif m.dismissal_reason.startswith('plot') %}
+                               bg-yellow-50 text-yellow-700 border border-yellow-200
+                               {% else %}
+                               bg-gray-100 text-gray-500 border border-gray-200
+                               {% endif %}
+                               "
+                        title="{{ m.dismissal_reason }}">{{ m.dismissal_reason }}</span>
+                {% else %}
+                  <span class="text-gray-300">—</span>
+                {% endif %}
+              </td>
+              {% endif %}
             </tr>
             {% endfor %}
           </tbody>

@@ -4,11 +4,13 @@ db/workspace.db-shm
 db/workspace.db-wal
 
 # MovieScanner — local scanner DB + downloaded IMDB dataset dumps
+# Wildcards below catch scanner.db, scanner.db-shm/-wal, and every
+# scanner.db.pre_* / .backup / other suffix variant.
 MovieScanner/db/scanner.db
-MovieScanner/db/scanner.db-shm
-MovieScanner/db/scanner.db-wal
-MovieScanner/db/scanner.db.pre_restore_*
+MovieScanner/db/scanner.db-*
+MovieScanner/db/scanner.db.*
 MovieScanner/db/backups/
+MovieScanner/db/data/
 MovieScanner/data/*.tsv.gz
 
 # Python

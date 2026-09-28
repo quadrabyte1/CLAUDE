@@ -15,6 +15,10 @@ Test coverage:
   T3   Real-image smoke test — DeLaveaga Hole 3 yields N >= 3 markers
   T4   Overlay writer — PNG written, same dims, marker pixels non-white
   T5   Idempotency — same image returns same values twice
+  T6   Stanford H8 interior recall — >= 12 of 14 known markers detected
+  T7   Stanford H8 exterior labels — >= 8 of 12 distance-ring labels detected
+  T8   No duplicate detections — markers within 10px collapse to one
+  T9   DeLaveaga regression — detection count does not drop below v4.79 baseline (9)
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ from golf_intel_ocr import (
     generate_diagnostic_overlay,
     _is_valid_marker,
     _deduplicate,
+    extract_numeric_markers_with_exterior,
 )
 
 # ---------------------------------------------------------------------------
@@ -372,3 +377,187 @@ class TestIdempotency:
         r1 = extract_numeric_markers(img_path)
         r2 = extract_numeric_markers(img_path)
         assert r1 == r2, f"Not idempotent on synthetic: {r1} vs {r2}"
+
+
+# ===========================================================================
+# T6   Stanford H8 — interior recall (>= 12/14 known markers)
+# ===========================================================================
+
+# Known interior decimal marker positions and values for Stanford H8.
+# Positions are approximate pixel centres; tolerance is ±15px.
+# Values are rounded to 1 decimal place.
+_STANFORD_H8_INTERIOR_KNOWN = [
+    # (approx_cx, approx_cy, value)
+    (330, 123, 2.1),
+    (507, 116, 1.4),
+    (669, 115, 1.7),
+    (507, 274, 1.6),
+    (152, 284, 2.2),
+    (299, 292, 0.6),
+    (676, 272, 3.0),
+    (146, 455, 2.9),
+    (499, 470, 2.8),
+    (680, 475, 2.6),
+    (320, 478, 2.2),
+    (315, 628, 2.7),
+    (137, 631, 4.3),
+    (321, 815, 2.3),
+    (502, 817, 3.8),
+]
+
+# Known exterior distance-ring label positions for Stanford H8.
+_STANFORD_H8_EXTERIOR_KNOWN = [
+    # (approx_cx, approx_cy, value)
+    (153, 143, 30.0),
+    (716, 144, 30.0),
+    (54,  279, 25.0),
+    (760, 279, 25.0),
+    (41,  415, 20.0),
+    (777, 416, 20.0),
+    (57,  551, 15.0),
+    (771, 551, 15.0),
+    (95,  687, 10.0),
+    (717, 687, 10.0),
+    (149, 820, 5.0),
+    (622, 822, 5.0),
+]
+
+
+def _count_matched_markers(
+    detected: list[tuple[int, int, float]],
+    known: list[tuple[int, int, float]],
+    pos_tol: int = 15,
+    val_tol: float = 0.2,
+) -> int:
+    """Count how many known markers are matched in detected within tolerances."""
+    matched = 0
+    for kx, ky, kv in known:
+        for dx, dy, dv in detected:
+            if abs(dx - kx) <= pos_tol and abs(dy - ky) <= pos_tol and abs(dv - kv) <= val_tol:
+                matched += 1
+                break
+    return matched
+
+
+@pytest.mark.skipif(not _STANFORD_H8.exists(), reason="Stanford Hole 8 image not present")
+class TestStanfordH8InteriorRecall:
+    """
+    T6 — >= 12 of 14 known interior decimal markers detected on Stanford H8.
+
+    Uses extract_numeric_markers_with_exterior which returns ALL detections
+    (interior + exterior combined).  We filter to those with value <= 9.9
+    (interior decimals) for the interior count.
+    """
+
+    @pytest.fixture(scope="class")
+    def all_markers(self):
+        return extract_numeric_markers_with_exterior(_STANFORD_H8)
+
+    def test_interior_recall_at_least_12_of_14(self, all_markers):
+        # Only decimal-range values are interior markers (0.1–9.9 range used by GI)
+        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
+        matched = _count_matched_markers(interior, _STANFORD_H8_INTERIOR_KNOWN)
+        assert matched >= 12, (
+            f"Interior recall: matched {matched}/14 known interior markers. "
+            f"Detected interior markers: {interior}"
+        )
+
+    def test_interior_values_are_floats_in_range(self, all_markers):
+        for mx, my, mv in all_markers:
+            assert isinstance(mv, float), f"Non-float value: {mv}"
+            assert 0.1 <= mv <= 99.9, f"Value {mv} out of range at ({mx},{my})"
+
+    def test_interior_positions_within_image_bounds(self, all_markers):
+        img = Image.open(_STANFORD_H8)
+        iw, ih = img.size
+        for mx, my, mv in all_markers:
+            assert 0 <= mx < iw, f"x={mx} outside width={iw}"
+            assert 0 <= my < ih, f"y={my} outside height={ih}"
+
+
+# ===========================================================================
+# T7   Stanford H8 — exterior distance-ring label recall (>= 8/12)
+# ===========================================================================
+
+@pytest.mark.skipif(not _STANFORD_H8.exists(), reason="Stanford Hole 8 image not present")
+class TestStanfordH8ExteriorRecall:
+    """
+    T7 — >= 8 of 12 exterior distance-ring labels (5,10,15,20,25,30 left+right)
+    detected on Stanford H8.
+    """
+
+    @pytest.fixture(scope="class")
+    def all_markers(self):
+        return extract_numeric_markers_with_exterior(_STANFORD_H8)
+
+    def test_exterior_recall_at_least_8_of_12(self, all_markers):
+        # Exterior labels are integers: 5, 10, 15, 20, 25, 30
+        exterior_vals = {5.0, 10.0, 15.0, 20.0, 25.0, 30.0}
+        exterior = [(x, y, v) for x, y, v in all_markers if v in exterior_vals]
+        matched = _count_matched_markers(
+            exterior, _STANFORD_H8_EXTERIOR_KNOWN, pos_tol=25, val_tol=0.5
+        )
+        assert matched >= 8, (
+            f"Exterior recall: matched {matched}/12 known exterior labels. "
+            f"Detected exterior: {exterior}"
+        )
+
+
+# ===========================================================================
+# T8   No duplicate detections (within 10px)
+# ===========================================================================
+
+class TestNoDuplicates:
+    """T8 — two detections within 10px of each other should collapse to one."""
+
+    @pytest.mark.skipif(not _STANFORD_H8.exists(), reason="Stanford Hole 8 image not present")
+    def test_no_duplicates_stanford_h8(self):
+        markers = extract_numeric_markers_with_exterior(_STANFORD_H8)
+        DEDUP_RADIUS = 10
+        for i, (ax, ay, av) in enumerate(markers):
+            for j, (bx, by, bv) in enumerate(markers):
+                if i >= j:
+                    continue
+                dist = max(abs(ax - bx), abs(ay - by))
+                assert dist >= DEDUP_RADIUS, (
+                    f"Duplicate markers within {DEDUP_RADIUS}px: "
+                    f"({ax},{ay},{av}) and ({bx},{by},{bv}) distance={dist}"
+                )
+
+    def test_no_duplicates_synthetic(self, tmp_path):
+        """Deduplicate is applied — identical positions should collapse."""
+        labels = [(80, 80, "2.5"), (200, 200, "3.8"), (82, 80, "2.5")]
+        img_path = _make_synthetic_image(tmp_path, labels)
+        markers = extract_numeric_markers_with_exterior(img_path)
+        # Check no two markers are within 10px of each other
+        for i, (ax, ay, av) in enumerate(markers):
+            for j, (bx, by, bv) in enumerate(markers):
+                if i >= j:
+                    continue
+                dist = max(abs(ax - bx), abs(ay - by))
+                assert dist >= 10, (
+                    f"Duplicate markers within 10px at ({ax},{ay}) and ({bx},{by})"
+                )
+
+
+# ===========================================================================
+# T9   DeLaveaga H3 regression (>= v4.79 baseline of 9 markers)
+# ===========================================================================
+
+@pytest.mark.skipif(not _DL_H3.exists(), reason="DeLaveaga Hole 3 not present")
+class TestDeLaveagaH3Regression:
+    """
+    T9 — DeLaveaga H3 detection count must not drop below the v4.79 baseline of 9.
+    """
+
+    _BASELINE = 9  # markers found by v4.79
+
+    def test_regression_count_not_dropped(self):
+        # Use the combined function so both passes are exercised
+        markers = extract_numeric_markers_with_exterior(_DL_H3)
+        # Only count interior decimal markers for regression (value <= 9.9)
+        interior = [(x, y, v) for x, y, v in markers if v <= 9.9]
+        assert len(interior) >= self._BASELINE, (
+            f"DeLaveaga H3 regression: expected >= {self._BASELINE} interior markers, "
+            f"got {len(interior)}: {interior}"
+        )

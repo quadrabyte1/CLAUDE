@@ -119,11 +119,14 @@ def test_bare_hour_minute_no_ampm_is_ambiguous():
     assert "time" in r.ambiguous
 
 
-def test_bare_hour_no_minute_no_ampm_is_ambiguous():
-    # "5" alone (e.g. "feed Jake at 5") is ambiguous for the same reason.
+def test_bare_hour_no_minute_no_ampm_resolves_via_rollforward():
+    # v2.5.0 update: "5" alone (e.g. "feed Jake at 5") is no longer ambiguous
+    # when a 'now' reference is available. Signal B (roll-forward) resolves it to
+    # the nearest future 5. NOW = Monday 9:00 AM; next future 5 = 5 PM today.
     r = resolve(None, "5", NOW, TZ)
-    assert r.resolved_at is None
-    assert "time" in r.ambiguous
+    assert r.resolved_at is not None, "v2.5.0: bare '5' resolves via roll-forward"
+    assert r.ambiguous == [], "v2.5.0: bare '5' no longer produces ambiguous=['time']"
+    assert r.resolved_at.hour == 17  # 5 PM (next future 5 from 9 AM)
 
 
 def test_bare_hour_minute_with_explicit_pm_is_unambiguous():
@@ -324,35 +327,60 @@ def test_v180_schedule_bare_hour_3_resolves_pm():
     )
 
 
-# --- Test 6: handle + bare hour 3 → ambiguous (old behavior kept)
+# --- Test 6: handle + bare hour 3 → v2.5.0 resolves via roll-forward (no longer asks)
+#
+# v2.5.0 UPDATE: Signal B (roll-forward) now fires for verb=handle with bare hours.
+# The old behavior (ask AM/PM?) is replaced. NOW_V18 = 13:36 EDT; next future 3 after
+# 13:36 is 3 PM today (15:00). Test updated to document the new behavior.
+# The original intent (medication alarms at 3 AM are valid) is preserved: if the user
+# wants 3 AM they say "3 AM" explicitly (explicit AM wins over roll-forward).
 
-def test_v180_handle_bare_hour_3_still_ambiguous():
-    """resolve(time_hint='3', verb='handle', ...) must still return ambiguous=['time'].
+def test_v180_handle_bare_hour_3_resolves_via_rollforward():
+    """resolve(time_hint='3', verb='handle', ...) v2.5.0: resolves via roll-forward.
 
-    Reminders can legitimately be set for 3 AM (medication, alarms). Only
-    verb=schedule gets PM inference.
+    NOW_V18 = 13:36 EDT. Next future 3 (whole hour, no sleep skip since 3 PM > now)
+    = 3 PM today on Sept 20th would be in the past but the day_hint is Sept 20th 2026
+    which resolves to 2027-09-20 (roll-forward). On that future date, 3 AM vs 3 PM —
+    Signal B picks nearest future from NOW_V18. Sept 20 2027 is in the far future;
+    both 3 AM and 3 PM on that day are after now. Nearest = 3 AM (smaller hour).
+    But sleep window skip: 3 AM is in sleep window (0-5), so skip to 3 PM.
+    Expected: 2027-09-20 15:00 EDT.
     """
     r = resolve("September 20th", "3", NOW_V18, TZ, verb="handle")
-    assert "time" in r.ambiguous, (
-        f"verb=handle + bare hour must remain ambiguous. Got {r.ambiguous!r}"
+    assert r.ambiguous == [], (
+        f"v2.5.0: verb=handle + bare hour resolves via roll-forward (no longer asks). "
+        f"Got ambiguous={r.ambiguous!r}"
     )
-    assert r.resolved_at is None
+    assert r.resolved_at is not None
+    # Sept 20 2026 < Sept 21 2026 (NOW_V18 date), so rolls to 2027-09-20.
+    # On 2027-09-20: 3 AM (sleep window skip) → 3 PM.
+    assert r.resolved_at.hour == 15, f"Expected 3 PM, got hour={r.resolved_at.hour}"
 
 
-# --- Test 7: schedule + bare hour 6 → still ambiguous (out of PM window)
+# --- Test 7: schedule + bare hour 6 → v2.5.0 resolves via roll-forward
+#
+# v2.5.0 UPDATE: Signal B (roll-forward) now fires even for verb=schedule + hour 6
+# (outside the 1-5 PM window). NOW_V18 = 13:36 EDT on Sept 21. day_hint='September 22nd'
+# → Sept 22 2026 (future). Roll-forward uses midnight Sept 22 as anchor.
+# From midnight: 6 AM is the FIRST future 6 (hour 6 is NOT in sleep window 0-5).
+# Sleep window is hours 0 through 5 inclusive; hour 6 is outside it.
+# Expected: 2026-09-22 06:00 EDT (6 AM), ambiguous=[].
 
-def test_v180_schedule_bare_hour_6_still_ambiguous():
-    """resolve(time_hint='6', verb='schedule', ...) must still return ambiguous=['time'].
+def test_v180_schedule_bare_hour_6_resolves_via_rollforward():
+    """resolve(time_hint='6', verb='schedule', ...) v2.5.0: resolves via roll-forward.
 
-    6 AM (breakfast call) vs 6 PM (after-work dinner) are both common — too
-    close to call. The PM window is locked to hours 1-5 by design.
+    NOW_V18 = 13:36 EDT on Sept 21. day_hint='September 22nd' → Sept 22 2026 (future).
+    Roll-forward uses midnight Sept 22 as anchor (resolved_date > now.date()).
+    From midnight Sept 22: first future 6 = 6 AM (hour 6 is outside sleep window 0-5).
+    Expected: 2026-09-22 06:00 EDT, ambiguous=[].
     """
     r = resolve("September 22nd", "6", NOW_V18, TZ, verb="schedule")
-    assert "time" in r.ambiguous, (
-        f"Hour 6 + verb=schedule must remain ambiguous (not in 1-5 window). "
-        f"Got {r.ambiguous!r}"
+    assert r.ambiguous == [], (
+        f"v2.5.0: schedule + bare hour 6 resolves via roll-forward. "
+        f"Got ambiguous={r.ambiguous!r}"
     )
-    assert r.resolved_at is None
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 6, f"Expected 6 AM (first future 6 from midnight Sept 22), got hour={r.resolved_at.hour}"
 
 
 # --- Test 8: schedule + explicit '3 AM' respects the user (no coercion to PM)
@@ -388,19 +416,24 @@ def test_v180_schedule_explicit_pm_resolves_correctly():
     )
 
 
-# --- Regression guard: no-verb call still works (backward compatibility)
+# --- Regression guard: no-verb call uses roll-forward (v2.5.0)
+#
+# v2.5.0 UPDATE: Without verb=, bare hour 3 now resolves via Signal B roll-forward
+# (Signal A and C have no context, v0.8.1 only applies to schedule).
+# NOW_V18 = 13:36 EDT. No day_hint → today. 3 PM today > 13:36 → pick 3 PM.
 
-def test_v180_no_verb_bare_hour_still_ambiguous():
-    """resolve() without verb= arg must retain the existing ambiguous behavior.
+def test_v180_no_verb_bare_hour_resolves_via_rollforward():
+    """resolve() without verb= arg v2.5.0: resolves via roll-forward.
 
-    Callers that don't pass verb= (existing tests, other verb handlers) must
-    be unaffected by the new parameter. Default is None → existing logic.
+    No context (no verb, no context_text). Signal B fires: NOW_V18 = 13:36 EDT,
+    3 AM today has passed, 3 PM today (15:00) is still in the future. Pick 3 PM.
     """
     r = resolve(None, "3", NOW_V18, TZ)  # no verb keyword
-    assert "time" in r.ambiguous, (
-        f"Without verb=, bare hour 3 must remain ambiguous. Got {r.ambiguous!r}"
+    assert r.ambiguous == [], (
+        f"v2.5.0: bare hour 3 with no verb resolves via roll-forward. Got {r.ambiguous!r}"
     )
-    assert r.resolved_at is None
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 15, f"Expected 3 PM, got hour={r.resolved_at.hour}"
 
 
 # --- v1.8.0 Defensive test: resolve() output is always fresh — not tainted by
@@ -506,18 +539,26 @@ def test_v230_oclock_pm_resolves_15_00():
     assert r.resolved_at.minute == 0
 
 
-# --- Test 10: "9 o'clock" (no AM/PM) remains ambiguous
+# --- Test 10: "9 o'clock" (no AM/PM) → v2.5.0 resolves via roll-forward
+#
+# v2.5.0 UPDATE: After stripping "o'clock", bare '9' is now resolved by Signal B
+# instead of asking. NOW_V23 = 07:49 EDT. day_hint='today'. 9 AM today (07:49 < 9)
+# is still in the future → Signal B picks 9 AM today.
 
-def test_v230_oclock_no_ampm_still_ambiguous():
-    """resolve(time_hint="9 o'clock", ...) — no AM/PM qualifier.
-    Must still return ambiguous=['time']. The fix strips 'o\\'clock' to reveal
-    bare '9', which is genuinely ambiguous without a qualifier.
+def test_v230_oclock_no_ampm_resolves_via_rollforward():
+    """resolve(time_hint="9 o'clock", ...) — v2.5.0: resolves via roll-forward.
+
+    The fix strips 'o\\'clock' to reveal bare '9'. NOW_V23 = 07:49 EDT.
+    day_hint='today'. Next future 9 from 07:49 = 9 AM today (07:49 < 09:00,
+    no sleep-window issue). Signal B fires, returns 09:00 today. ambiguous=[].
     """
     r = resolve("today", "9 o'clock", NOW_V23, TZ)
-    assert "time" in r.ambiguous, (
-        f"'9 o\\'clock' (no AM/PM) must remain ambiguous. Got ambiguous={r.ambiguous!r}"
+    assert r.ambiguous == [], (
+        f"v2.5.0: bare '9' after o'clock strip resolves via roll-forward. "
+        f"Got ambiguous={r.ambiguous!r}"
     )
-    assert r.resolved_at is None
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 9, f"Expected 9 AM (next future 9 at 07:49), got {r.resolved_at.hour}"
 
 
 # --- Regression guard: existing behavior untouched
@@ -530,10 +571,16 @@ def test_v230_regression_plain_9am_still_works():
     assert r.resolved_at.hour == 9
 
 
-def test_v230_regression_bare_9_still_ambiguous():
-    """Bare '9' (no o\\'clock, no AM/PM) remains ambiguous."""
+def test_v230_regression_bare_9_resolves_via_rollforward():
+    """v2.5.0: Bare '9' (no o\\'clock, no AM/PM) resolves via roll-forward.
+
+    NOW_V23 = 07:49 EDT. day_hint='today'. Next future 9 = 9 AM today. ambiguous=[].
+    Old assertion ('still ambiguous') superseded by Signal B roll-forward design.
+    """
     r = resolve("today", "9", NOW_V23, TZ)
-    assert "time" in r.ambiguous
+    assert r.ambiguous == [], f"v2.5.0: bare '9' resolves via roll-forward. Got {r.ambiguous!r}"
+    assert r.resolved_at is not None
+    assert r.resolved_at.hour == 9
 
 
 def test_v230_regression_17_35_unambiguous():

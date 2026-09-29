@@ -875,14 +875,18 @@ def test_v180_e2e_schedule_bare_hour_3_resolves_pm(tmp_path, monkeypatch):
     assert ev.starts_at.minute == 0
 
 
-# --- Test 11: handle + bare '3' → stored=False, clarifying question (old behavior)
+# --- Test 11: handle + bare '3' → v2.5.0: stored=True via roll-forward (no longer asks)
+#
+# v2.5.0 UPDATE: Signal B (roll-forward) fires for verb=handle + bare hour 3.
+# NOW_V18 = 13:36 EDT on Sept 21. day_hint='September 22nd' → Sept 22 2026.
+# On Sept 22: 3 AM (sleep window, skip) → 3 PM. No clarifying question.
 
-def test_v180_e2e_handle_bare_hour_3_still_asks(tmp_path, monkeypatch):
+def test_v180_e2e_handle_bare_hour_3_resolves_via_rollforward(tmp_path, monkeypatch):
     """POST /capture/parsed with verb=handle, time_hint='3'
-    → stored=False, clarifying_question about AM/PM.
+    → v2.5.0: stored=True, resolves to 3 PM via Signal B roll-forward.
 
-    The PM-inference rule is scoped to verb=schedule only. Reminders can
-    legitimately be at 3 AM (medication, alarms). Handle must still ask.
+    No clarifying question. The new disambiguation stack handles this without
+    asking the user. 3 AM is in the sleep window (skipped), so Signal B picks 3 PM.
     """
     client = _v18_client(tmp_path, monkeypatch)
     payload = {
@@ -900,17 +904,20 @@ def test_v180_e2e_handle_bare_hour_3_still_asks(tmp_path, monkeypatch):
     r = client.post("/capture/parsed", json=payload)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["stored"] is False, (
-        f"verb=handle + bare hour must still ask (stored=False). Got: {body}"
+    assert body["stored"] is True, (
+        f"v2.5.0: verb=handle + bare hour resolves via roll-forward (stored=True). Got: {body}"
     )
-    assert body.get("clarifying_question"), (
-        f"Expected a clarifying_question for handle + bare hour. Got: {body}"
+    assert body.get("clarifying_question") is None, (
+        f"v2.5.0: no clarifying question expected. Got: {body.get('clarifying_question')}"
     )
-    assert "time" in body.get("ambiguous_fields", []), (
-        f"Expected 'time' in ambiguous_fields. Got: {body.get('ambiguous_fields')}"
+    # Event should be at 3 PM on September 22nd 2026.
+    assert body["event_id"] is not None
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(rr for rr in rows if rr.kind.value == "strike_0")
+    local_fire = strike_0.fire_at.astimezone(TZ)
+    assert local_fire.hour == 15, (
+        f"Expected 3 PM (15:00), got hour={local_fire.hour}"
     )
-    # Nothing stored in vault.
-    assert cal.list_events(tmp_path) == []
 
 
 # ===========================================================================
@@ -1182,15 +1189,19 @@ def test_v190_handle_with_explicit_time_hint_uses_that_time(tmp_path, monkeypatc
     assert strike_0.fire_at.date().isoformat() == "2026-09-25"
 
 
-# --- Test 7: bare-hour ambiguous time_hint still asks (unchanged from v1.8)
+# --- Test 7: bare-hour time_hint → v2.5.0: resolves via roll-forward (no longer asks)
+#
+# v2.5.0 UPDATE: Signal B fires for verb=handle + bare hour 3 + day_hint='Friday'.
+# NOW_V19 = 09:05 EDT Monday Sept 22. Friday = Sept 25 2026.
+# On Sept 25: 3 AM (sleep window, skip) → 3 PM. stored=True, no clarifying_question.
 
 
-def test_v190_handle_bare_hour_time_hint_still_asks(tmp_path, monkeypatch):
+def test_v190_handle_bare_hour_time_hint_resolves_via_rollforward(tmp_path, monkeypatch):
     """verb=handle, day_hint='Friday', time_hint='3' (bare hour, no AM/PM)
-    → stored=False, clarifying_question, ambiguous_fields=['time'].
+    → v2.5.0: stored=True, resolves to 3 PM via Signal B roll-forward.
 
-    This fix is ONLY about null time_hint. A bare-hour time_hint is genuinely
-    ambiguous and must still ask.
+    The v1.9.0 assertion ("still asks") is superseded. Roll-forward picks 3 PM
+    (3 AM is in the sleep window and is skipped).
     """
     client = _v19_client(tmp_path, monkeypatch)
     payload = {
@@ -1208,12 +1219,18 @@ def test_v190_handle_bare_hour_time_hint_still_asks(tmp_path, monkeypatch):
     r = client.post("/capture/parsed", json=payload)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["stored"] is False, (
-        f"bare-hour time_hint must still ask. Got: {body}"
+    assert body["stored"] is True, (
+        f"v2.5.0: bare-hour time_hint resolves via roll-forward. Got: {body}"
     )
-    assert body.get("clarifying_question") is not None
-    assert "time" in body.get("ambiguous_fields", [])
-    assert cal.list_events(tmp_path) == []
+    assert body.get("clarifying_question") is None
+    # Event must be at 3 PM on Friday Sept 25.
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(rr for rr in rows if rr.kind.value == "strike_0")
+    local_fire = strike_0.fire_at.astimezone(TZ)
+    assert local_fire.hour == 15, (
+        f"Expected 3 PM (15:00), got hour={local_fire.hour}"
+    )
+    assert local_fire.date().isoformat() == "2026-09-25"
 
 
 # --- Test 8: full regression — all 161 existing tests still pass (enforced by
@@ -1318,12 +1335,18 @@ def test_v230_e2e_oclock_am_stores_at_0900(tmp_path, monkeypatch):
     )
 
 
-# --- Test 13: Regression guard — bare "9 o'clock" (no qualifier) still asks
+# --- Test 13: bare "9 o'clock" (no qualifier) → v2.5.0: resolves via roll-forward
+#
+# v2.5.0 UPDATE: After stripping "o'clock" → bare '9'. Signal B fires.
+# NOW_V23_E2E = 07:49 EDT. day_hint='today'. Next future 9 from 07:49 = 9 AM today.
+# stored=True, no clarifying_question.
 
-def test_v230_e2e_oclock_no_qualifier_still_asks(tmp_path, monkeypatch):
+def test_v230_e2e_oclock_no_qualifier_resolves_via_rollforward(tmp_path, monkeypatch):
     """POST /capture/parsed with time_hint="9 o'clock" (no AM/PM qualifier)
-    → stored=False, clarifying_question. The o\\'clock normalization reveals a
-    bare '9' which is genuinely ambiguous for verb=handle.
+    → v2.5.0: stored=True, resolves to 9 AM via Signal B roll-forward.
+
+    The o\\'clock normalization reveals bare '9'. NOW_V23_E2E = 07:49 EDT.
+    day_hint='today'. Next future 9 from 07:49 = 9 AM today. No asking.
     """
     client = _v23_client(tmp_path, monkeypatch)
     payload = {
@@ -1341,9 +1364,17 @@ def test_v230_e2e_oclock_no_qualifier_still_asks(tmp_path, monkeypatch):
     r = client.post("/capture/parsed", json=payload)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["stored"] is False, (
-        f"Bare '9 o\\'clock' (no AM/PM) must remain ambiguous. Got: {body}"
+    assert body["stored"] is True, (
+        f"v2.5.0: bare '9 o\\'clock' resolves via roll-forward (stored=True). Got: {body}"
     )
-    assert body.get("clarifying_question") is not None, (
-        f"Expected a clarifying_question. Got: {body}"
+    assert body.get("clarifying_question") is None, (
+        f"v2.5.0: no clarifying_question expected. Got: {body.get('clarifying_question')}"
     )
+    # Event must be at 9 AM today (2026-09-25).
+    rows = rem.read_event_rows(tmp_path, body["event_id"])
+    strike_0 = next(rr for rr in rows if rr.kind.value == "strike_0")
+    local_fire = strike_0.fire_at.astimezone(TZ)
+    assert local_fire.hour == 9, (
+        f"Expected 9 AM, got hour={local_fire.hour}"
+    )
+    assert local_fire.date().isoformat() == "2026-09-25"

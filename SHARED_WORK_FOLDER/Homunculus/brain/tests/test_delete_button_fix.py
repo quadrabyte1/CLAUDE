@@ -251,14 +251,20 @@ def test_dashboard_version_is_v07(tmp_path: Path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# D5. Herman VERSION must be 2.4.2 after the fix
+# D5. Herman VERSION must be >= 2.4.2 after the fix
+# v2.5.0 update: version bumped to 2.5.0 for the AM/PM disambiguation feature.
+# The delete-button fix shipped in 2.4.2; subsequent versions must be >= that.
 # ---------------------------------------------------------------------------
 
 
-def test_herman_version_is_242():
-    """Herman VERSION must be 2.4.2 (patch bump) after the delete-button fix."""
+def test_herman_version_is_at_least_242():
+    """Herman VERSION must be >= 2.4.2 (delete-button fix baseline).
+
+    v2.5.0 update: VERSION is now 2.5.0 (AM/PM disambiguation feature).
+    The delete-button fix is baked in at 2.4.2; this test relaxes to >= 2.4.2.
+    """
     from homunculus_brain import VERSION
-    assert VERSION == "2.4.2", (
-        f"Expected VERSION='2.4.2', got {VERSION!r}. "
-        "Bump VERSION in homunculus_brain/__init__.py."
+    major, minor, patch = (int(x) for x in VERSION.split("."))
+    assert (major, minor, patch) >= (2, 4, 2), (
+        f"Herman VERSION must be >= 2.4.2 (delete-button fix baseline). Got {VERSION!r}."
     )

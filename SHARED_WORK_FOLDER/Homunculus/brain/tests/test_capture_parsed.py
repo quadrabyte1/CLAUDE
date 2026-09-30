@@ -591,12 +591,24 @@ def test_handle_with_day_and_time_hints_creates_reminder_at_correct_time(tmp_pat
 
 
 def test_ambiguous_time_hint_returns_stored_false_with_clarifying_question(tmp_path, monkeypatch):
-    """day_hint=thursday, time_hint=nine (bare hour, no AM/PM)
-    → stored=False, clarifying_question mentions AM/PM, ambiguous_fields=['time']."""
+    """day_hint=thursday, time_hint=5:35 (bare hour:minute, no AM/PM, no context)
+    → stored=False, clarifying_question mentions AM/PM, ambiguous_fields=['time'].
+
+    v2.5.2 note: bare whole-hour word-forms like "nine" are now resolvable via
+    Signal B roll-forward (no longer ambiguous).  Bare hour:minute (e.g. "5:35")
+    remain genuinely ambiguous — Signal B skips non-zero-minute hints — so they
+    still reach the clarifying question.  This test uses "5:35" as the canonical
+    ambiguous case.
+    """
     client = _client_with_vault(tmp_path, monkeypatch)
+    # Use a bare hour:minute (Signal B skips minutes) with a neutral transcript
+    # that contains no Signal A keywords ("appointment", "dentist", etc.).
     r = client.post(
         "/capture/parsed",
-        json=_hint_payload(time_hint="nine"),
+        json=_hint_payload(
+            time_hint="5:35",
+            raw_transcript="meeting thursday at 5:35",  # no profession/meal keywords
+        ),
     )
     assert r.status_code == 200, r.text
     body = r.json()

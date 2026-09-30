@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-10-01-wake-up",
+  "schedule": [
+    {
+      "event_id": "2026-10-01-wake-up",
+      "kind": "heads_up_30",
+      "fire_at": "2026-10-01T05:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: wake up at 6:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-wake-up",
+      "kind": "pre_5",
+      "fire_at": "2026-10-01T05:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: wake up at 6:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-wake-up",
+      "kind": "strike_0",
+      "fire_at": "2026-10-01T06:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "wake up is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-wake-up",
+      "kind": "strike_5",
+      "fire_at": "2026-10-01T06:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? wake up started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-wake-up",
+      "kind": "strike_10",
+      "fire_at": "2026-10-01T06:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: wake up \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-wake-up",
+      "kind": "strike_15",
+      "fire_at": "2026-10-01T06:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. wake up. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

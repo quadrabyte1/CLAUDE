@@ -1,3 +1,12 @@
+# v0.12 — 2026-09-30 Topo — curved per-point trap surface is the new default (task 666).
+#         Flip TRAP_SURFACE_CURVED: False → True.
+#         Fix curved path: was using max(fringe Z within band) per ring sample —
+#         now uses nearest-neighbor fringe Z per ring sample point (true per-point).
+#         Old behavior on sloped fringe: low-end boundary picked max fringe (high side),
+#         producing a gap > 2 mm at the low fringe point.  Now gap = 2 mm everywhere.
+#         TRAP_FRINGE_OFFSET_MM = -2.0 unchanged.
+#         TRAP_SURFACE_CURVED=False still restores flat min-2 (task 662 path).
+#         APP_VERSION bumped to v4.84.
 # v0.11 — 2026-09-30 Topo — flat-min trap surface (task 662).
 #         Revert trap surface to flat scalar: Z = min(fringe boundary Z) - 2mm.
 #         TRAP_FRINGE_OFFSET_MM reverted -4.0 → -2.0 (full circle from v0.04).
@@ -5000,13 +5009,14 @@ TRAP_FRINGE_BOUNDARY_BAND_MM: float = 6.0   # XY band width around trap perimete
 TRAP_FRINGE_OFFSET_MM:        float = -2.0  # mm offset applied to fringe boundary min → trap height
                                             # v0.04: -2.0 (max), v0.05–v0.09: -4.0 (max),
                                             # v0.11: -2.0 (min) — full circle per Thomas.
-# Task v0.11 (Topo, 2026-09-30): flat scalar surface is default.
-# When False (default): _compute_trap_surface_from_fringe returns a flat Z-map
-#   filled with min(fringe boundary Z) + TRAP_FRINGE_OFFSET_MM.
-# When True:  restores the task-654 per-point curved behavior
-#   (trap_Z(x,y) = fringe_Z(x,y) + TRAP_FRINGE_OFFSET_MM, griddata interior).
+# Task v0.11 (Topo, 2026-09-30): flat scalar surface was default.
+# Task v0.12 (Topo, 2026-09-30): per-point curved surface is now the default.
+# When True (default): _compute_trap_surface_from_fringe uses nearest-neighbor
+#   fringe Z per boundary ring sample → trap_Z = fringe_Z_nearest + offset.
+#   Each boundary point tracks its local fringe Z; interior via griddata cubic.
+# When False: reverts to v0.11 flat scalar = min(fringe boundary Z) + offset.
 # Same flag pattern as SAND_RAKE_ALIGN_TO_MAJOR_AXIS — cheap insurance.
-TRAP_SURFACE_CURVED: bool = False  # False = flat min scalar (new default); True = per-point curved (task 654)
+TRAP_SURFACE_CURVED: bool = True  # True = per-point curved (default v0.12); False = flat min (task 662)
 # Task #608 (Topo, 2026-09-26): discrete Gaussian mound "chunks" scattered
 # across the trap top after the rake pass.  Replaces the sinusoidal jitter
 # (SAND_JITTER_AMPLITUDE_MM, removed) which was imperceptible at 0.08 mm next
@@ -5429,18 +5439,20 @@ def _compute_trap_surface_from_fringe(
     --------
     Behaviour is controlled by the module-level flag ``TRAP_SURFACE_CURVED``:
 
-    **TRAP_SURFACE_CURVED = False** (default, v0.11):
+    **TRAP_SURFACE_CURVED = True** (default, v0.12):
+        Per-point curved surface.  For each boundary ring sample the **nearest**
+        fringe vertex Z is found (nearest-neighbour lookup), giving a true per-point
+        offset: ``trap_Z = fringe_Z_nearest + offset_mm``.  Interior points are
+        filled via ``scipy.interpolate.griddata`` cubic + linear fallback.
+        Gap between trap edge and fringe is uniform (``|offset_mm|`` mm) at every
+        boundary point, regardless of fringe slope.
+
+    **TRAP_SURFACE_CURVED = False** (v0.11 fallback):
         Flat scalar surface.  All query points return the same value:
             Z = min(fringe boundary Z within band) + offset_mm
         This is the "flat min" rule: trap sits ``|offset_mm|`` mm below the
-        *lowest* fringe point around its perimeter, so the trap never rises
-        above the fringe at any interface point.
-
-    **TRAP_SURFACE_CURVED = True** (preserved from task 654):
-        Per-point curved surface.  For each boundary ring sample the **max**
-        fringe Z within the band is found (preserving the highest-point rule
-        at each interface cross-section), then interior points are filled via
-        ``scipy.interpolate.griddata`` cubic + linear fallback.
+        *lowest* fringe point around its perimeter.  On sloped fringe, the gap
+        at the high end is larger than offset_mm.
 
     Caller stability
     ----------------
@@ -5449,9 +5461,9 @@ def _compute_trap_surface_from_fringe(
 
     Fallback
     --------
-    If ``fringe_mesh`` is None, or no fringe vertices exist within
-    ``boundary_band_mm`` of any ring sample, every query point returns
-    ``TRAP_THICKNESS_MM`` (same flat-slab behaviour as before).
+    If ``fringe_mesh`` is None, or the fringe mesh has no top-surface vertices,
+    every query point returns ``TRAP_THICKNESS_MM`` (flat slab fallback).
+    The ``boundary_band_mm`` parameter is only used by the flat (False) path.
 
     Parameters
     ----------
@@ -5463,7 +5475,8 @@ def _compute_trap_surface_from_fringe(
     query_xy : np.ndarray, shape (N, 2)
         XY positions at which to evaluate the trap surface Z.
     boundary_band_mm : float
-        XY distance from trap exterior within which fringe verts are sampled.
+        XY distance from trap exterior within which fringe verts are sampled
+        (flat path only; curved path uses NN regardless of band).
     offset_mm : float
         Signed depth offset applied to the boundary anchor Z.
         Negative → trap below fringe.
@@ -5512,24 +5525,16 @@ def _compute_trap_surface_from_fringe(
     nearby_indices = fringe_kd.query_ball_point(ring_pts, r=boundary_band_mm)
 
     if TRAP_SURFACE_CURVED:
-        # Curved path (task 654): use per-sample max fringe Z for interpolation.
-        ring_z_boundary = np.full(len(ring_pts), np.nan, dtype=np.float64)
-        for k, idxs in enumerate(nearby_indices):
-            if idxs:
-                ring_z_boundary[k] = float(fringe_top[np.array(idxs, dtype=int), 2].max())
-
-        # --- Fallback path 2: no boundary fringe within band ---
-        valid_mask = np.isfinite(ring_z_boundary)
-        if not valid_mask.any():
-            return np.full(n_query, fallback, dtype=np.float64)
-
-        # For ring samples with no nearby fringe, fill from nearest valid sample.
-        if not valid_mask.all():
-            valid_idx  = np.where(valid_mask)[0]
-            invalid_idx = np.where(~valid_mask)[0]
-            kd_ring    = _cKDTree(ring_pts[valid_idx])
-            _, nn      = kd_ring.query(ring_pts[invalid_idx])
-            ring_z_boundary[invalid_idx] = ring_z_boundary[valid_idx[nn]]
+        # Curved path (task 666, v0.12): per-sample NEAREST fringe Z.
+        # For each ring sample, query the single nearest fringe vertex and use
+        # its Z value.  This gives a true per-point 2 mm offset at every
+        # boundary sample, regardless of fringe slope.
+        # (Old v0.09 path used max(within band) which over-lifted the trap on
+        # the low side of a sloped fringe — gap could exceed 2 mm there.)
+        _, nn_idxs = fringe_kd.query(ring_pts)
+        ring_z_boundary = fringe_top[nn_idxs, 2].copy().astype(np.float64)
+        # NN query always returns a valid index when fringe_top is non-empty
+        # (guaranteed above), so ring_z_boundary is always fully finite.
 
         # Apply offset: trap Z at each ring sample = fringe boundary Z + offset_mm.
         ring_z_trap = ring_z_boundary + offset_mm

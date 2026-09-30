@@ -2616,51 +2616,15 @@ function polygonEditor() {
             y_mm: this.TEE_HOLE_DEFAULT_MM,
           };
         }
-        // v4.71 — load-time healing: clamp any off-frame polygon points to the
-        // image boundary.  The server already does this when imageSize is stored
-        // in the EGM; the JS layer is a belt-and-suspenders for legacy files.
-        // clampPt uses the image dimensions from data.imageSize (if present) or
-        // falls back to the natural image size once loadImage() fires.
-        const off_frame_count = data.off_frame_count || 0;
-        let clampCount = off_frame_count;  // server already counted server-side heals
-
-        // JS-side belt-and-suspenders clamp (catches cases where imageSize was
-        // absent from the EGM so the server couldn't clamp).
-        if (Array.isArray(data.polygons) && data.imageSize) {
-          const iw = data.imageSize.width;
-          const ih = data.imageSize.height;
-          const clampPt = (pt) => {
-            const cx = Math.max(0, Math.min(iw, pt.x));
-            const cy = Math.max(0, Math.min(ih, pt.y));
-            if (cx !== pt.x || cy !== pt.y) {
-              clampCount++;  // count extra JS-side clamps on top of server count
-              console.log('[loadProject] JS-clamp: (' + pt.x + ',' + pt.y +
-                          ') → (' + cx + ',' + cy + ') for ' + iw + 'x' + ih);
-            }
-            return { x: cx, y: cy };
-          };
-          data.polygons = data.polygons.map(poly => ({
-            ...poly,
-            points: Array.isArray(poly.points) ? poly.points.map(clampPt) : poly.points,
-          }));
-        }
-
+        // v4.83 — off-frame points are intentional (users can drag control
+        // points outside the image frame deliberately). Polygon coords are
+        // loaded as-is; no clamping, no dirty-flag, no toast.
         this._pendingRestore = data.polygons;
         this.loadImage();
         this.refreshGpsFiles();  // populate GPS file picker for the loaded course
         this.scheduleGpsPreview();
 
-        // Show toast + mark dirty when points were clamped
-        if (clampCount > 0) {
-          this._pendingAutoSave = true;  // save will fire once image loads
-          this.flash(
-            'Clamped ' + clampCount + ' off-frame point' + (clampCount === 1 ? '' : 's') +
-            ' to the image edge — ' + data.course + ' — Hole ' + data.hole,
-            true, '', 7000
-          );
-        } else {
-          this.flash('Loaded: ' + data.course + ' — Hole ' + data.hole, true);
-        }
+        this.flash('Loaded: ' + data.course + ' — Hole ' + data.hole, true);
       } catch (err) {
         console.error('loadProject failed:', err, 'filename=', proj.filename);
         this.flash('Error loading project: ' + (err && err.message ? err.message : err), false, '', 15000);

@@ -1,27 +1,26 @@
 """
-test_clamp_points_to_frame.py  —  Bug→TDD: clamp auto-analyzed + loaded points to image frame
+test_clamp_points_to_frame.py  —  Bug→TDD: clamp auto-analyzed points to image frame
 
-Two-part fix:
-
-Part 1: Generation clamp
+Generation-time clamp (KEPT):
   Points produced by detect_boundaries that fall outside [0,w] x [0,h] must be
   clamped (snapped) to the image boundary before the API response is returned.
+  _clamp_point_to_image() and _clamp_polygon_points() helpers support this.
 
-Part 2: Load-time healing
-  When /api/boundaries/load returns an EGM whose polygon points are outside the
-  image bounds, the app layer (Python side) should detect and report how many
-  points were off-frame.  The JS editor heals them on load and marks dirty.
+Load-time clamp (REMOVED — see test_remove_load_time_clamp.py):
+  Off-frame polygon points in saved EGMs are intentional (users drag control
+  points outside the image frame on purpose). The old load-time healing is gone.
+  T4, T6b, T7, T8 have been updated to match the new no-clamp contract.
 
 Tests
 -----
 T1  _clamp_point_to_image() helper — basic clamp & pass-through
 T2  _clamp_polygon_points() — applies clamp to a list, deduplicates consecutive dupes
 T3  detect_boundaries clamp integration — response has no out-of-frame points
-T4  load_boundaries_clamped_count — /api/boundaries/load reports off_frame_count
-T5  load_boundaries_clean — clean EGM: off_frame_count == 0
-T6  JS source — loadProject() heals off-frame points from server response
-T7  JS source — dirty flag set when off-frame points found
-T8  JS source — toast shown when N > 0 off-frame points clamped
+T4  load_boundaries — off-frame points pass through unchanged (no load-time clamp)
+T5  load_boundaries_clean — off_frame_count absent or 0 (field removed)
+T6  JS source — loadProject() does NOT apply a clamp to loaded polygon points
+T7  JS source — no dirty flag set from off-frame handling
+T8  JS source — no "Clamped N off-frame" toast
 """
 import json
 import os
@@ -339,62 +338,60 @@ class TestDetectBoundariesClamp:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T4: /api/boundaries/load — off_frame_count reported for EGM with bad points
+# T4: /api/boundaries/load — off-frame points pass through unchanged
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestLoadBoundariesOffFrameCount:
+class TestLoadBoundariesOffFramePassThrough:
 
-    def test_load_returns_off_frame_count(self, egm_with_offframe_points):
-        """T4a: /api/boundaries/load includes off_frame_count in response."""
+    def test_offframe_points_not_clamped_on_load(self, egm_with_offframe_points):
+        """T4a: load_boundaries must NOT clamp off-frame points — raw coords pass through."""
         client, fname, egm_data = egm_with_offframe_points
         resp = client.get(f"/api/boundaries/load?filename={fname}")
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["status"] == "ok"
-        assert "off_frame_count" in data, (
-            "Response missing 'off_frame_count' key. "
-            "Add off_frame_count to /api/boundaries/load response when imageSize is present."
-        )
-        # The fixture has 4 out-of-frame points
-        assert data["off_frame_count"] == 4, (
-            f"Expected off_frame_count=4, got {data['off_frame_count']}. "
-            "Points outside [0,w]x[0,h] should be counted."
+
+        # Fixture has y=900 on an 800-tall image; it must come back as y=900.
+        pts = data["polygons"][0]["points"]
+        offframe_pt = next((p for p in pts if p["y"] == 900), None)
+        assert offframe_pt is not None, (
+            f"Off-frame point (y=900) was clamped or removed on load. "
+            f"Returned points: {pts}. "
+            "load_boundaries must return coords as-is from the EGM."
         )
 
-    def test_load_returns_clamped_points(self, egm_with_offframe_points):
-        """T4b: The returned polygons have clamped points (not the raw bad values)."""
+    def test_no_offframe_count_or_zero(self, egm_with_offframe_points):
+        """T4b: off_frame_count is absent or 0 — load-time counting is removed."""
         client, fname, egm_data = egm_with_offframe_points
         resp = client.get(f"/api/boundaries/load?filename={fname}")
         data = resp.get_json()
-        iw = data["imageSize"]["width"]
-        ih = data["imageSize"]["height"]
-        for poly in data.get("polygons", []):
-            for pt in poly["points"]:
-                assert 0 <= pt["x"] <= iw, f"x={pt['x']} out of [0, {iw}]"
-                assert 0 <= pt["y"] <= ih, f"y={pt['y']} out of [0, {ih}]"
+        count = data.get("off_frame_count", 0)
+        assert count == 0, (
+            f"off_frame_count={count} — load_boundaries must not count off-frame points "
+            "after the load-time clamp removal."
+        )
 
 
 class TestLoadBoundariesCleanEGM:
 
     def test_off_frame_count_zero_for_clean_egm(self, egm_all_inside):
-        """T5: Clean EGM → off_frame_count == 0 (no toast)."""
+        """T5: Clean EGM → off_frame_count absent or 0."""
         client, fname, egm_data = egm_all_inside
         resp = client.get(f"/api/boundaries/load?filename={fname}")
         assert resp.status_code == 200
         data = resp.get_json()
         assert data["status"] == "ok"
-        # Either key absent or explicitly 0
         count = data.get("off_frame_count", 0)
         assert count == 0, (
-            f"Expected off_frame_count=0 for clean EGM, got {count}."
+            f"Expected off_frame_count=0 (or absent) for clean EGM, got {count}."
         )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# T6: JS source — loadProject() heals off-frame points from server response
+# T6–T8: JS source — loadProject() does NOT clamp, dirty, or toast for off-frame
 # ─────────────────────────────────────────────────────────────────────────────
 
-class TestLoadProjectJsHealing:
+class TestLoadProjectNoClampBehavior:
 
     def _get_load_project_body(self):
         src = _read_editor_js()
@@ -403,57 +400,38 @@ class TestLoadProjectJsHealing:
         assert m, "loadProject() not found in editor.html"
         return m.group(1)
 
-    def test_loads_off_frame_count_from_response(self):
-        """T6a: loadProject() reads data.off_frame_count from the API response."""
+    def test_no_clamppt_in_load_project(self):
+        """T6: loadProject() must NOT define clampPt for loaded polygon points."""
         body = self._get_load_project_body()
-        assert "off_frame_count" in body, (
-            "loadProject() does not read off_frame_count from the API response. "
-            "Add: const clampCount = data.off_frame_count || 0;"
+        assert "clampPt" not in body, (
+            "loadProject() still defines clampPt. "
+            "Remove the JS belt-and-suspenders clamp — off-frame coords must pass through."
         )
 
-    def test_clamp_applied_to_restored_points(self):
-        """T6b: loadProject() applies clamping to polygon points from the response."""
+    def test_no_clamp_map_over_poly_points(self):
+        """T6b: loadProject() must not map a clamp function over polygon points."""
         body = self._get_load_project_body()
-        # Must reference either a clamp function or Math.min/Math.max on point coords
-        has_clamp_logic = (
-            "clampPt" in body
-            or ("Math.min" in body and "Math.max" in body)
-            or "_clampLoadedPoints" in body
-            or "clampLoadedPoints" in body
-        )
-        assert has_clamp_logic, (
-            "loadProject() does not appear to clamp loaded polygon points. "
-            "Add client-side clamping of loaded points to [0, imgW] x [0, imgH]."
+        assert "poly.points.map(clamp" not in body and "points.map(clamp" not in body, (
+            "loadProject() still maps a clamp over polygon points. "
+            "Remove this — intentional off-frame placements must be preserved."
         )
 
-    def test_dirty_flag_set_when_clamped(self):
-        """T7: _pendingAutoSave or dirty flag is set when off-frame points were clamped."""
+    def test_no_pending_autosave_from_offframe_block(self):
+        """T7: loadProject() must not set _pendingAutoSave = true from off-frame handling."""
         body = self._get_load_project_body()
-        # Must set _pendingAutoSave = true (or call autoSave) when clampCount > 0
-        assert "_pendingAutoSave" in body or "autoSave" in body, (
-            "loadProject() never sets _pendingAutoSave or calls autoSave. "
-            "Set _pendingAutoSave = true when off_frame_count > 0 so the fix is persisted."
+        has_clampcount_dirty = (
+            ("clampCount" in body or "off_frame_count" in body)
+            and "_pendingAutoSave = true" in body
         )
-        # Specifically: must be conditional on clamp count
-        assert "clampCount" in body or "off_frame_count" in body, (
-            "dirty-flag logic is unconditional — it must only trigger when clampCount > 0."
+        assert not has_clampcount_dirty, (
+            "loadProject() still sets _pendingAutoSave = true based on clampCount. "
+            "Remove this — loading off-frame points must not dirty the project."
         )
 
-    def test_toast_shown_when_offframe_points_clamped(self):
-        """T8: A flash/toast is shown to the user when N > 0 points were clamped."""
+    def test_no_clamped_offframe_toast(self):
+        """T8: loadProject() must not show a 'Clamped N off-frame' toast."""
         body = self._get_load_project_body()
-        # Must call this.flash() referencing the clamp count
-        assert "flash" in body, (
-            "loadProject() does not call this.flash(). "
-            "Show a toast: 'Clamped N off-frame points to the image edge'."
-        )
-        # The flash call must be conditional on clampCount > 0
-        has_conditional_flash = (
-            "clampCount" in body and "flash" in body
-        ) or (
-            "off_frame_count" in body and "flash" in body
-        )
-        assert has_conditional_flash, (
-            "Toast is not conditional on clampCount > 0. "
-            "Only show the toast when points were actually clamped."
+        assert "Clamped" not in body or "off-frame" not in body, (
+            "loadProject() still shows a 'Clamped N off-frame point(s)' toast. "
+            "Remove this — off-frame points are intentional."
         )

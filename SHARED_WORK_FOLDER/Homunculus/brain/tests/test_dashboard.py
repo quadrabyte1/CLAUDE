@@ -756,14 +756,14 @@ def test_v05_full_pipeline_clarify_row_in_dashboard(tmp_path: Path, monkeypatch)
         # Post an ambiguous capture
         r_cap = client.post("/capture/parsed", json={
             "verb": "schedule",
-            "subject": "call the vet",
+            "subject": "team sync",
             "when": None,
             "day_hint": "friday",
-            "time_hint": "nine",   # text bare-hour → genuinely ambiguous for any verb
+            "time_hint": "5:35",   # bare hour:minute, no AM/PM → genuinely ambiguous
             "criticality": "normal",
             "confidence": 0.85,
-            "raw_transcript": "call the vet at nine",
-            "audio_path": "/tmp/vet.m4a",
+            "raw_transcript": "team sync friday at 5:35",   # no profession/meal keywords
+            "audio_path": "/tmp/sync.m4a",
             "captured_at": datetime(2026, 9, 22, 14, 0,
                                     tzinfo=ZoneInfo("America/New_York")).isoformat(),
         })

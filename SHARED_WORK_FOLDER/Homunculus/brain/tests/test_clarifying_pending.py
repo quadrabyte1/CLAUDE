@@ -60,21 +60,27 @@ def _client(tmp_path: Path, monkeypatch, *, morning_anchor: int = 9) -> TestClie
 def _ambiguous_payload(**overrides) -> dict:
     """Returns a payload that will trigger stored=False + clarifying_question.
 
-    Uses time_hint="nine" with verb=schedule — the word "nine" is a bare
-    text hour that date_resolver cannot resolve to AM or PM, so it returns
-    ambiguous=['time'] regardless of the PM-inference rule (which only fires
-    on numeric bare hours 1–5 for the schedule verb).
+    Uses time_hint="5:35" with verb=schedule — a bare hour:minute with no
+    AM/PM marker.  Signal B (roll-forward) only applies to whole hours (minute
+    == 0), so "5:35" with no AM/PM and no context qualifier remains genuinely
+    ambiguous and reaches the clarifying question.
+
+    v2.5.2 note: the previous fixture used time_hint="nine" which is now
+    resolvable via word-form normalisation + Signal B roll-forward.  "5:35"
+    is the canonical genuinely-ambiguous case going forward.  The transcript
+    is also kept neutral (no profession/meal keywords) so Signal A does not
+    fire.
     """
     payload = {
         "verb": "schedule",
-        "subject": "call the vet",
+        "subject": "team sync",
         "when": None,
         "day_hint": "friday",
-        "time_hint": "nine",       # text bare-hour → genuinely ambiguous
+        "time_hint": "5:35",       # bare hour:minute, no AM/PM → genuinely ambiguous
         "criticality": "normal",
         "confidence": 0.85,
-        "raw_transcript": "call the vet at nine",
-        "audio_path": "/Users/thomas/sprite/inbox/vet.m4a",
+        "raw_transcript": "team sync friday at 5:35",   # no meal/profession keywords
+        "audio_path": "/Users/thomas/sprite/inbox/sync.m4a",
         "captured_at": NOW.isoformat(),
     }
     payload.update(overrides)
@@ -164,7 +170,9 @@ def test_clarify_sidecar_written_on_stored_false(tmp_path, monkeypatch):
 def test_clarify_sidecar_body_contains_question_and_excerpt(tmp_path, monkeypatch):
     """Notification body includes the clarifying question and first ~40 chars of transcript."""
     client = _client(tmp_path, monkeypatch)
-    transcript = "call the vet at 3"
+    # Neutral transcript: no meal/profession/qualifier keywords so Signal A/C do not fire.
+    # Bare hour:minute keeps Signal B from firing so the clarifying question is reached.
+    transcript = "team sync friday at 5:35"
     r = client.post("/capture/parsed", json=_ambiguous_payload(raw_transcript=transcript))
     assert r.status_code == 200, r.text
     body = r.json()
@@ -449,19 +457,20 @@ def test_multiple_pending_entries_reflected_in_summary(tmp_path, monkeypatch):
     """Two different ambiguous captures → daily summary body mentions 2 pending."""
     client = _client(tmp_path, monkeypatch)
 
-    # First ambiguous capture
+    # First ambiguous capture — neutral transcript (no Signal A/C keywords), bare hour:minute
     r1 = client.post("/capture/parsed", json=_ambiguous_payload(
-        subject="vet call",
-        raw_transcript="call the vet at 3",
+        subject="team sync",
+        raw_transcript="team sync friday at 5:35",
         captured_at=NOW.isoformat(),
     ))
     assert r1.json()["stored"] is False
 
     # Second ambiguous capture (different subject, different captured_at to get different record_id)
     r2 = client.post("/capture/parsed", json=_ambiguous_payload(
-        subject="doctor appointment at 3",
-        raw_transcript="doctor appointment at 3",
+        subject="budget review at 7:45",
+        raw_transcript="budget review friday at 7:45",
         captured_at=(NOW + timedelta(minutes=30)).isoformat(),
+        time_hint="7:45",
     ))
     assert r2.json()["stored"] is False
 

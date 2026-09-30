@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.82"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.84"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── detect_boundaries: classifier knobs ────────────────────────────────────
 # When True the green polygon interior is excluded from trap/water detection.
@@ -1149,28 +1149,11 @@ def load_boundaries():
     except ImportError as _imp_err:
         print(f"[load_boundaries] WARN: could not import print constants from generate_stl_3mf: {_imp_err!r}")
 
-    # Load-time healing: if the EGM has imageSize recorded, clamp any off-frame
-    # polygon points to the image boundary and report the count to the client.
-    # The client shows a toast when count > 0 and marks the project dirty so
-    # the fix is persisted on the next save.
-    off_frame_count = 0
-    img_size = data.get("imageSize")
-    if img_size and isinstance(img_size, dict):
-        iw = img_size.get("width")
-        ih = img_size.get("height")
-        if iw and ih:
-            for poly in data.get("polygons", []):
-                pts = poly.get("points", [])
-                clamped_pts, n = _clamp_polygon_points(pts, iw, ih)
-                if n:
-                    print(
-                        f"[load_boundaries] Healed {n} off-frame point(s) in "
-                        f"'{poly.get('name', poly.get('type', '?'))}' "
-                        f"from {filename}"
-                    )
-                poly["points"] = clamped_pts
-                off_frame_count += n
-    data["off_frame_count"] = off_frame_count
+    # Off-frame polygon points are intentional (users can drag control points
+    # outside the image frame deliberately). Return coords as-is from the EGM —
+    # no load-time clamping. The generation-time clamp in detect_boundaries
+    # still constrains auto-analyzed output to the frame; only hand-placed
+    # off-frame points are preserved here.
 
     return jsonify(data)
 

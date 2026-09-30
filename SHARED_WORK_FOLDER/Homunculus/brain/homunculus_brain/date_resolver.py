@@ -5,6 +5,18 @@ morning"). It is unreliable at turning those words into an actual calendar
 date. Everything below is pure Python so the math is testable and never
 guesses.
 
+v2.5.2 — word-form hour normalisation.
+
+Sprite's on-device LLM sometimes emits the spoken word rather than the digit
+in ``time_hint`` (e.g. "three" instead of "3"). The previous regex only
+matched digit forms, so word-form hints would fall through to a clarifying
+question, bypassing Signals A, B, and C.
+
+A word → digit normalisation pass now runs before the regex so that all
+three signals get a chance to fire for word-form hints.  Only hour words
+one–twelve are mapped; this is a pure string normalisation and does not
+affect any existing digit-form paths.
+
 v2.5.0 — AM/PM disambiguation overhaul.
 
 Three layered signals reduce clarifying-question rate from >50 % to ~5 %:
@@ -538,6 +550,38 @@ _TIME_REGEX = re.compile(
 # _TIME_REGEX which expects the format: digit [colon minute] [AM/PM].
 _OCLOCK_RE = re.compile(r"\bo'?clock\b", re.IGNORECASE)
 
+# v2.5.2 — word-form hour normalisation.
+#
+# Sprite's LLM sometimes emits the spoken word rather than the digit:
+#   "Plumber at three" → time_hint="three"
+#   "Call mom at eight tonight" → time_hint="eight"
+#
+# These word-forms fail _TIME_REGEX (which only matches \d{1,2}), causing the
+# resolver to return ambiguous=True immediately — bypassing Signals A, B, and C
+# entirely.
+#
+# Fix: map English hour words to their digit strings BEFORE the regex runs.
+# This is a pure normalisation step — no semantic change for any existing path
+# because digit-form hints already worked correctly.
+#
+# Only hour words (one through twelve) are included. "Thirteen" through "twenty
+# three" are not natural speech forms for clock times and are omitted; the
+# resolver's existing out-of-range guard handles them if they appear.
+_WORD_HOUR_MAP: dict[str, str] = {
+    "one":     "1",
+    "two":     "2",
+    "three":   "3",
+    "four":    "4",
+    "five":    "5",
+    "six":     "6",
+    "seven":   "7",
+    "eight":   "8",
+    "nine":    "9",
+    "ten":     "10",
+    "eleven":  "11",
+    "twelve":  "12",
+}
+
 # v2.5.1 — military time: 4-digit HHMM in range 0000-2359.
 # Matches bare "1400", "0900", "1830" — unambiguous 24-hour notation.
 # Must be exactly 4 digits with no surrounding alpha chars (word boundary).
@@ -585,6 +629,15 @@ def _resolve_time(
     # no time information beyond marking the preceding digit as an hour.
     if time_hint:
         time_hint = _OCLOCK_RE.sub("", time_hint).strip()
+
+    # v2.5.2 — word-form hour normalisation.
+    # Map "three" → "3", "eight" → "8", etc. BEFORE the regex runs so that
+    # Signals A, B, and C can still fire.  The normalisation is a pure string
+    # substitution; it does not affect any downstream logic.
+    if time_hint:
+        _stripped_lower = time_hint.strip().lower()
+        if _stripped_lower in _WORD_HOUR_MAP:
+            time_hint = _WORD_HOUR_MAP[_stripped_lower]
 
     hint = _normalize(time_hint)
 

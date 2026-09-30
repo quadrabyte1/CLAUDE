@@ -1,3 +1,23 @@
+# v0.11 — 2026-09-30 Topo — flat-min trap surface (task 662).
+#         Revert trap surface to flat scalar: Z = min(fringe boundary Z) - 2mm.
+#         TRAP_FRINGE_OFFSET_MM reverted -4.0 → -2.0 (full circle from v0.04).
+#         Sampling changed from max → min of boundary anchor Z values.
+#         Curved-surface implementation preserved behind TRAP_SURFACE_CURVED flag
+#         (default False; same pattern as SAND_RAKE_ALIGN_TO_MAJOR_AXIS).
+#         When TRAP_SURFACE_CURVED=False: _compute_trap_surface_from_fringe
+#         returns a Z-map filled with the scalar min value (caller signature stable).
+#         Floor guard reverts to per-slab scalar (trap_base_z + 0.5mm) since
+#         base_z_map is None on the flat path.  Rake + chunks unaffected.
+#         APP_VERSION bumped to v4.82.
+# v0.10 — 2026-09-29 Sienna — exterior OCR markers become fringe/green boundary
+#         anchors (task 658).  classify_ocr_markers() in app.py splits OCR
+#         markers into interior (elevationMarkers → Gaussian spikes) and exterior
+#         (fringeBoundaryHeights → boundary anchors).  In build_fringe_mesh,
+#         bnd_z entries at the nearest green boundary polyline point are overridden
+#         to the anchor value BEFORE the IDW fringe-Z computation runs (Approach A).
+#         This forces fringe Z and green seam Z to match at the interface, yielding
+#         a continuous fringe/green surface driven by the exterior number.
+#         APP_VERSION bumped to v4.81.
 # v0.09 — 2026-09-28 Topo — curved trap surface tracks fringe topology.
 #         NEW rule: trap_Z(x,y) = fringe_Z(x,y) - 4mm at every boundary point;
 #         interior interpolated via scipy.interpolate.griddata (cubic + linear
@@ -3216,7 +3236,72 @@ def build_fringe_mesh(
     # Pre-compute boundary-point Z by looking up the nearest green cell Z for
     # each boundary point. This is O(N_bnd) and only runs once per hole.
     _bnd_nearest_dists, _bnd_nearest_idxs = green_kd.query(gbnd, k=1)
-    bnd_z = green_cell_z[_bnd_nearest_idxs]  # shape (N_bnd,)
+    bnd_z = green_cell_z[_bnd_nearest_idxs].copy()  # shape (N_bnd,) — mutable copy
+
+    # ── Fringe boundary height anchors (task 658, Sienna) ────────────────────
+    # Exterior OCR markers (numbers printed on the black boundary line outside
+    # the green) set the fringe Z — and the green seam Z — at the nearest
+    # boundary interface point.  Approach A: override `bnd_z` entries before
+    # the per-cell IDW interpolation runs; the existing loop uses `bnd_z` as
+    # its interpolation source, so the anchors propagate automatically.
+    #
+    # The `gbnd` polyline is very dense (~0.2 mm spacing after Catmull-Rom
+    # densification).  A single overridden entry is diluted to near zero in
+    # K=24 IDW (the other 23 entries in the nearest-K set stay at natural Z).
+    # Fix: override the K_BND_IDW nearest gbnd points to the anchor location.
+    # When a fringe cell queries its K=24 nearest boundary points, all K of
+    # them are now anchored → the IDW returns exactly anchor_Z.
+    #
+    # Multiple anchors: each anchor owns the K_BND_IDW nearest gbnd indices
+    # from its own projection.  If two anchors overlap, the later one wins
+    # (harmless — OCR values in the same region should agree to within 0.5mm).
+    #
+    # Green-side continuity: `bnd_z` drives the fringe IDW, and the seam-reseat
+    # section below uses `g_bdry_arr` (green top-boundary ring Z) as a separate
+    # KD-tree source.  Both are overridden independently with the same anchor Z
+    # so fringe Z == green seam Z at the interface.
+    _raw_fbh = egm_data.get("fringeBoundaryHeights") or []
+    _fbh_anchor_count = 0
+    if _raw_fbh:
+        gbnd_kd_anchors = cKDTree(gbnd)   # (N_bnd, 2) — reused in seam section
+        _k_override = K_BND_IDW          # override this many consecutive boundary pts
+        for _fbh in _raw_fbh:
+            try:
+                _ax_px = float(_fbh["x"])
+                _ay_px = float(_fbh["y"])
+                _av_mm = float(_fbh["value"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not (0.0 < _av_mm <= 50.0):
+                continue   # reject out-of-range values (matches _OCR_SPIKE_MAX_MM)
+            # Convert pixel coords to mm-space using the same transform as polygons
+            _a_mm = _px_to_mm_2d(
+                np.array([[_ax_px, _ay_px]], dtype=np.float64), scale, centroid_px
+            )[0]
+            # Find K_BND_IDW nearest gbnd points; override all of them so that
+            # any fringe cell whose IDW set includes the anchor area returns
+            # anchor_Z as the dominant value.
+            _k = min(_k_override, len(gbnd))
+            _adists, _aidxs = gbnd_kd_anchors.query(_a_mm[:2], k=_k)
+            _aidxs = np.atleast_1d(_aidxs)
+            _adists = np.atleast_1d(_adists)
+            _nearest_dist = float(_adists[0]) if len(_adists) > 0 else 0.0
+            # Clamp to sane elevation range
+            _z_anchor = max(BASE_THICKNESS_MM,
+                            min(_av_mm, BASE_THICKNESS_MM + _elevation_range_mm))
+            for _ai in _aidxs:
+                bnd_z[int(_ai)] = _z_anchor
+            _fbh_anchor_count += 1
+            print(
+                f"  FringeBoundaryAnchor: px=({_ax_px:.1f},{_ay_px:.1f}) "
+                f"→ mm=({_a_mm[0]:+.2f},{_a_mm[1]:+.2f}) "
+                f"→ nearest gbnd=({gbnd[int(_aidxs[0]),0]:+.2f},{gbnd[int(_aidxs[0]),1]:+.2f}) "
+                f"value={_av_mm:.3f} mm "
+                f"(override {len(_aidxs)} pts, nearest dist={_nearest_dist:.2f} mm)"
+            )
+        if _fbh_anchor_count:
+            print(f"  Fringe boundary anchors: {_fbh_anchor_count} anchor(s) "
+                  f"injected into bnd_z ({_k_override} pts each, Approach A)")
 
     gbnd_kd_lerp = cKDTree(gbnd)
 
@@ -3387,6 +3472,47 @@ def build_fringe_mesh(
                 )
     if g_bdry_pts:
         g_bdry_arr = np.asarray(g_bdry_pts, dtype=np.float64)
+
+        # ── Inject fringe boundary anchors into g_bdry_arr (task 658) ────────
+        # Override the K_SEAM_NEIGHBOURS nearest green top-boundary ring
+        # vertices (g_bdry_arr[:, 2]) to the anchor Z.  The seam-reseat below
+        # IDW-blends K=4 g_bdry_arr entries per fringe seam cell; overriding
+        # all K=4 nearest entries ensures the seam cell gets anchor_Z via IDW.
+        # This makes green seam Z == fringe Z at the interface (continuity).
+        if _raw_fbh and len(g_bdry_arr) > 0:
+            _g_bdry_kd_anchor = cKDTree(g_bdry_arr[:, :2])
+            # Override K_BND_IDW nearest green ring vertices so that when the
+            # seam-reseat IDW queries its K=4 neighbours, all 4 are anchored.
+            # K_SEAM_NEIGHBOURS (=4) is defined just below, but K_BND_IDW (=24)
+            # is already defined above; using it ensures full band coverage.
+            _k_seam = min(K_BND_IDW, len(g_bdry_arr))
+            _seam_anchor_count = 0
+            for _fbh in _raw_fbh:
+                try:
+                    _ax_px = float(_fbh["x"])
+                    _ay_px = float(_fbh["y"])
+                    _av_mm = float(_fbh["value"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not (0.0 < _av_mm <= 50.0):
+                    continue
+                _a_mm = _px_to_mm_2d(
+                    np.array([[_ax_px, _ay_px]], dtype=np.float64), scale, centroid_px
+                )[0]
+                _gz_anchor = max(BASE_THICKNESS_MM,
+                                 min(_av_mm, BASE_THICKNESS_MM + _elevation_range_mm))
+                # Override K_SEAM_NEIGHBOURS nearest green boundary ring vertices
+                _k_s = min(_k_seam, len(g_bdry_arr))
+                _sa_dists, _sa_idxs = _g_bdry_kd_anchor.query(_a_mm[:2], k=_k_s)
+                _sa_idxs = np.atleast_1d(_sa_idxs)
+                for _si in _sa_idxs:
+                    g_bdry_arr[int(_si), 2] = _gz_anchor
+                _seam_anchor_count += 1
+            if _seam_anchor_count:
+                print(f"  FringeBoundaryAnchor: {_seam_anchor_count} anchor(s) "
+                      f"injected into g_bdry_arr (seam continuity, "
+                      f"{_k_seam} pts each)")
+
         g_bdry_kd = cKDTree(g_bdry_arr[:, :2])
         # Fringe cell spacing (approx; grid may be anisotropic — take max for safety)
         dx_fringe = float(xs_mm[1] - xs_mm[0])
@@ -4870,8 +4996,17 @@ PRINT_TOLERANCE_MM: float = 0.03125  # inset each piece for easier fit
 # TRAP_FRINGE_OFFSET_MM.
 # Task #606 (Topo, 2026-09-26): offset changed -2.0 → -4.0 mm per Thomas's
 # request: trap now sits 4 mm below the fringe rim instead of 2 mm.
-TRAP_FRINGE_BOUNDARY_BAND_MM: float = 6.0  # XY band width around trap perimeter to sample fringe Z
-TRAP_FRINGE_OFFSET_MM:        float = -4.0  # mm offset applied to fringe boundary max → trap height
+TRAP_FRINGE_BOUNDARY_BAND_MM: float = 6.0   # XY band width around trap perimeter to sample fringe Z
+TRAP_FRINGE_OFFSET_MM:        float = -2.0  # mm offset applied to fringe boundary min → trap height
+                                            # v0.04: -2.0 (max), v0.05–v0.09: -4.0 (max),
+                                            # v0.11: -2.0 (min) — full circle per Thomas.
+# Task v0.11 (Topo, 2026-09-30): flat scalar surface is default.
+# When False (default): _compute_trap_surface_from_fringe returns a flat Z-map
+#   filled with min(fringe boundary Z) + TRAP_FRINGE_OFFSET_MM.
+# When True:  restores the task-654 per-point curved behavior
+#   (trap_Z(x,y) = fringe_Z(x,y) + TRAP_FRINGE_OFFSET_MM, griddata interior).
+# Same flag pattern as SAND_RAKE_ALIGN_TO_MAJOR_AXIS — cheap insurance.
+TRAP_SURFACE_CURVED: bool = False  # False = flat min scalar (new default); True = per-point curved (task 654)
 # Task #608 (Topo, 2026-09-26): discrete Gaussian mound "chunks" scattered
 # across the trap top after the rake pass.  Replaces the sinusoidal jitter
 # (SAND_JITTER_AMPLITUDE_MM, removed) which was imperceptible at 0.08 mm next
@@ -5179,9 +5314,14 @@ def _compute_trap_height_from_fringe(
     """
     Return the target top-surface height for a trap slab (mm).
 
-    Task #604 rule: find the maximum Z of fringe-mesh top-surface vertices
-    within ``boundary_band_mm`` of the trap polygon's exterior ring, then
-    add ``offset_mm`` (= -2.0 → 2 mm below the fringe rim).
+    v0.11 rule (flat-min, TRAP_SURFACE_CURVED=False):
+        find the MINIMUM Z of fringe-mesh top-surface vertices within
+        ``boundary_band_mm`` of the trap polygon's exterior ring, then
+        add ``offset_mm`` (= -2.0 → 2 mm below the lowest fringe point).
+
+    v0.04/v0.05/v0.09 rule (max-based, used when TRAP_SURFACE_CURVED=True):
+        find the MAXIMUM Z in the band (preserves historic per-side behavior
+        of the scalar helper in curved mode).
 
     "Adjoining fringe" is defined as fringe vertices within
     TRAP_FRINGE_BOUNDARY_BAND_MM of the trap exterior.  This correctly
@@ -5206,12 +5346,12 @@ def _compute_trap_height_from_fringe(
         XY distance from trap exterior within which fringe verts are
         considered "adjoining".
     offset_mm : float
-        Height delta applied to fringe boundary max.  Negative means trap
-        top sits below the fringe rim (default -2.0 mm).
+        Height delta applied to fringe boundary min (or max in curved mode).
+        Negative means trap top sits below the fringe rim (default -2.0 mm).
 
     Returns
     -------
-    float : trap slab height in mm (>= 0).
+    float : trap slab height in mm (>= 1.0).
     """
     from scipy.spatial import cKDTree as _cKDTree
 
@@ -5260,8 +5400,14 @@ def _compute_trap_height_from_fringe(
         flat_indices = set(nn_idxs.tolist())
 
     boundary_z = fringe_verts_top[np.array(sorted(flat_indices), dtype=int), 2]
-    fringe_boundary_max = float(boundary_z.max())
-    trap_height = fringe_boundary_max + offset_mm
+    if TRAP_SURFACE_CURVED:
+        # Curved mode (task 654): use max so each side tracks its local fringe peak.
+        fringe_boundary_ref = float(boundary_z.max())
+    else:
+        # Flat-min mode (v0.11 default): use min so the trap sits below the
+        # lowest fringe interface point around its entire perimeter.
+        fringe_boundary_ref = float(boundary_z.min())
+    trap_height = fringe_boundary_ref + offset_mm
     if trap_height < 1.0:
         # Guard: never produce a slab thinner than 1 mm regardless of offset.
         trap_height = 1.0
@@ -5277,28 +5423,29 @@ def _compute_trap_surface_from_fringe(
 ) -> "np.ndarray":
     """
     Return per-point trap surface Z values (mm) for an arbitrary set of XY
-    query points, producing a *curved* trap surface that tracks the fringe
-    topology rather than a single flat slab height.
+    query points.
 
-    Task rule (2026-09-28):
-        trap_Z(x, y) = fringe_Z(x, y) − 4 mm  at every boundary ring point.
-        Interior points are interpolated with scipy griddata (cubic, with
-        linear-fill fallback) from the boundary constraint values.
+    Dispatch
+    --------
+    Behaviour is controlled by the module-level flag ``TRAP_SURFACE_CURVED``:
 
-    Algorithm
-    ---------
-    1. Densify the trap exterior ring (≤ 1 mm spacing).
-    2. For each ring sample, query all fringe top-surface vertices within
-       ``boundary_band_mm``.  The **maximum** fringe Z among those candidates
-       plus ``offset_mm`` (= -4 mm) is the boundary trap Z at that ring point.
-       Multiple adjoining fringes are handled automatically because we take
-       the max across ALL fringe verts within the band at each ring sample.
-    3. Fill interior query points via ``scipy.interpolate.griddata`` cubic,
-       falling back to linear when cubic produces NaNs (common near convex-
-       hull boundary).
-    4. Any remaining NaN (query point outside the convex hull of the boundary
-       ring) is filled with the mean of all boundary Z values — a safe
-       neutral fallback.
+    **TRAP_SURFACE_CURVED = False** (default, v0.11):
+        Flat scalar surface.  All query points return the same value:
+            Z = min(fringe boundary Z within band) + offset_mm
+        This is the "flat min" rule: trap sits ``|offset_mm|`` mm below the
+        *lowest* fringe point around its perimeter, so the trap never rises
+        above the fringe at any interface point.
+
+    **TRAP_SURFACE_CURVED = True** (preserved from task 654):
+        Per-point curved surface.  For each boundary ring sample the **max**
+        fringe Z within the band is found (preserving the highest-point rule
+        at each interface cross-section), then interior points are filled via
+        ``scipy.interpolate.griddata`` cubic + linear fallback.
+
+    Caller stability
+    ----------------
+    Both paths return ``np.ndarray`` of shape ``(N,)`` — the flat path fills
+    every element with the scalar, so the caller signature is identical.
 
     Fallback
     --------
@@ -5318,7 +5465,8 @@ def _compute_trap_surface_from_fringe(
     boundary_band_mm : float
         XY distance from trap exterior within which fringe verts are sampled.
     offset_mm : float
-        Signed depth offset applied at each boundary ring point.
+        Signed depth offset applied to the boundary anchor Z.
+        Negative → trap below fringe.
 
     Returns
     -------
@@ -5326,7 +5474,6 @@ def _compute_trap_surface_from_fringe(
         Trap surface Z in mm at each query point.
     """
     from scipy.spatial import cKDTree as _cKDTree
-    from scipy.interpolate import griddata as _griddata
 
     query_xy = np.asarray(query_xy, dtype=np.float64)
     n_query  = len(query_xy)
@@ -5361,49 +5508,68 @@ def _compute_trap_surface_from_fringe(
 
     ring_pts = np.array(ring_pts, dtype=np.float64)  # (M, 2)
 
-    # --- Step 2: per ring-sample, find max fringe Z within the band ---
+    # --- Step 2: per ring-sample, collect fringe Z within the band ---
     nearby_indices = fringe_kd.query_ball_point(ring_pts, r=boundary_band_mm)
 
-    ring_z_boundary = np.full(len(ring_pts), np.nan, dtype=np.float64)
-    for k, idxs in enumerate(nearby_indices):
-        if idxs:
-            ring_z_boundary[k] = float(fringe_top[np.array(idxs, dtype=int), 2].max())
+    if TRAP_SURFACE_CURVED:
+        # Curved path (task 654): use per-sample max fringe Z for interpolation.
+        ring_z_boundary = np.full(len(ring_pts), np.nan, dtype=np.float64)
+        for k, idxs in enumerate(nearby_indices):
+            if idxs:
+                ring_z_boundary[k] = float(fringe_top[np.array(idxs, dtype=int), 2].max())
 
-    # --- Fallback path 2: no boundary fringe within band ---
-    valid_mask = np.isfinite(ring_z_boundary)
-    if not valid_mask.any():
-        return np.full(n_query, fallback, dtype=np.float64)
+        # --- Fallback path 2: no boundary fringe within band ---
+        valid_mask = np.isfinite(ring_z_boundary)
+        if not valid_mask.any():
+            return np.full(n_query, fallback, dtype=np.float64)
 
-    # For ring samples with no nearby fringe, fill from nearest valid sample.
-    if not valid_mask.all():
-        valid_idx = np.where(valid_mask)[0]
-        invalid_idx = np.where(~valid_mask)[0]
-        kd_ring = _cKDTree(ring_pts[valid_idx])
-        _, nn = kd_ring.query(ring_pts[invalid_idx])
-        ring_z_boundary[invalid_idx] = ring_z_boundary[valid_idx[nn]]
+        # For ring samples with no nearby fringe, fill from nearest valid sample.
+        if not valid_mask.all():
+            valid_idx  = np.where(valid_mask)[0]
+            invalid_idx = np.where(~valid_mask)[0]
+            kd_ring    = _cKDTree(ring_pts[valid_idx])
+            _, nn      = kd_ring.query(ring_pts[invalid_idx])
+            ring_z_boundary[invalid_idx] = ring_z_boundary[valid_idx[nn]]
 
-    # Apply offset: trap is 4 mm below fringe boundary Z at each ring sample.
-    ring_z_trap = ring_z_boundary + offset_mm
-    # Guard: no sample below 1 mm.
-    ring_z_trap = np.maximum(ring_z_trap, 1.0)
+        # Apply offset: trap Z at each ring sample = fringe boundary Z + offset_mm.
+        ring_z_trap = ring_z_boundary + offset_mm
+        # Guard: no sample below 1 mm.
+        ring_z_trap = np.maximum(ring_z_trap, 1.0)
 
-    # --- Step 3: interpolate interior points from boundary constraints ---
-    # Boundary ring points are the "known" values; query_xy are unknowns.
-    # We combine ring samples + query points for griddata interpolation.
-    # Try cubic first; fill NaN with linear; fill remaining NaN with mean.
-    mean_boundary_z = float(ring_z_trap.mean())
+        # --- Step 3: interpolate interior points from boundary constraints ---
+        from scipy.interpolate import griddata as _griddata
+        mean_boundary_z = float(ring_z_trap.mean())
+        z_out = _griddata(ring_pts, ring_z_trap, query_xy, method="cubic")
 
-    z_out = _griddata(ring_pts, ring_z_trap, query_xy, method="cubic")
+        # NaN from cubic outside convex hull → fill with linear.
+        nan_mask = ~np.isfinite(z_out)
+        if nan_mask.any():
+            z_linear = _griddata(ring_pts, ring_z_trap, query_xy[nan_mask], method="linear")
+            still_nan = ~np.isfinite(z_linear)
+            z_linear[still_nan] = mean_boundary_z
+            z_out[nan_mask] = z_linear
 
-    # NaN from cubic outside convex hull → fill with linear.
-    nan_mask = ~np.isfinite(z_out)
-    if nan_mask.any():
-        z_linear = _griddata(ring_pts, ring_z_trap, query_xy[nan_mask], method="linear")
-        still_nan = ~np.isfinite(z_linear)
-        z_linear[still_nan] = mean_boundary_z
-        z_out[nan_mask] = z_linear
+        return z_out
 
-    return z_out
+    else:
+        # Flat min path (v0.11 default):
+        # Collect ALL fringe Z values from the entire boundary band across all
+        # ring samples, then take the global minimum.  This ensures the trap
+        # top never exceeds the lowest fringe interface point.
+        all_boundary_z = []
+        for idxs in nearby_indices:
+            if idxs:
+                all_boundary_z.extend(
+                    fringe_top[np.array(idxs, dtype=int), 2].tolist()
+                )
+
+        if not all_boundary_z:
+            # Fallback path 2: no boundary fringe within band.
+            return np.full(n_query, fallback, dtype=np.float64)
+
+        fringe_boundary_min = float(np.min(all_boundary_z))
+        trap_scalar_z = max(fringe_boundary_min + offset_mm, 1.0)
+        return np.full(n_query, trap_scalar_z, dtype=np.float64)
 
 
 def _scatter_sand_chunks(
@@ -5624,24 +5790,17 @@ def export_trap_stls(
                 print(f"  Trap {i}: inset produced empty polygon — skipping.")
                 continue
 
-            # Task #604 (Topo, 2026-09-26): trap height = adjoining fringe max Z
-            # − 2 mm.  "Adjoining fringe" = fringe top-surface vertices within
-            # Task (2026-09-28): curved trap surface tracks fringe topology.
-            # NEW rule: trap_Z(x,y) = fringe_Z(x,y) - 4mm at every boundary
-            # point; interior interpolated via griddata cubic.  We compute a
-            # dense interior grid of base-Z values, then pass it into
-            # apply_sand_texture as base_z_map so rake + chunks are applied
-            # on top of the per-point curved base.
-            #
-            # Slab height = max of the curved surface (to ensure walls are tall
-            # enough everywhere).  The curved top is sculpted in apply_sand_texture.
-            #
-            # Fallback: if _compute_trap_surface_from_fringe returns all-flat
-            # (no adjoining fringe), we still get a correct flat slab at
-            # TRAP_THICKNESS_MM via the old scalar path.
+            # Task v0.11 (Topo, 2026-09-30): flat-min trap surface.
+            # TRAP_SURFACE_CURVED=False (default): trap top is a flat scalar at
+            #   min(fringe boundary Z) + TRAP_FRINGE_OFFSET_MM (-2mm).
+            # TRAP_SURFACE_CURVED=True: per-point curved surface (task 654).
+            # In both cases _compute_trap_surface_from_fringe returns a Z-map
+            # of shape (N,); the flat path fills every element with the scalar.
             from generate_stl_3mf import _build_slab_from_shapely
 
-            # Build the interior grid for base-Z sampling.
+            # Build the interior grid for base-Z sampling (used only on curved path;
+            # on flat path the grid is still passed in for a uniform-Z result which
+            # detects the fringe-min height).
             _gstep = 0.225   # matches apply_sand_texture default grain_spacing*0.2
             _minx_t, _miny_t, _maxx_t, _maxy_t = shapely_inset.bounds
             _gxs = np.arange(_minx_t, _maxx_t + _gstep, _gstep)
@@ -5652,23 +5811,31 @@ def export_trap_stls(
             _base_z_vals = _compute_trap_surface_from_fringe(
                 shapely_inset, fringe_mesh, _grid_xy
             )
-            _trap_height_curved = float(_base_z_vals.max())
+            _computed_height = float(_base_z_vals.max())  # scalar on flat, max on curved
             _is_fallback = (fringe_mesh is None or
-                            abs(_trap_height_curved - TRAP_THICKNESS_MM) < 0.05)
+                            abs(_computed_height - TRAP_THICKNESS_MM) < 0.05)
 
             if not _is_fallback:
-                print(f"  Trap {i}: curved surface, base Z range "
-                      f"[{_base_z_vals.min():.2f}, {_base_z_vals.max():.2f}] mm "
-                      f"(fringe - {abs(TRAP_FRINGE_OFFSET_MM):.0f} mm)")
-                trap_height  = _trap_height_curved
-                _trap_base_z_map: "tuple | None" = (_grid_xy, _base_z_vals)
+                if TRAP_SURFACE_CURVED:
+                    print(f"  Trap {i}: curved surface, base Z range "
+                          f"[{_base_z_vals.min():.2f}, {_base_z_vals.max():.2f}] mm "
+                          f"(fringe - {abs(TRAP_FRINGE_OFFSET_MM):.0f} mm)")
+                    trap_height  = _computed_height
+                    _trap_base_z_map: "tuple | None" = (_grid_xy, _base_z_vals)
+                else:
+                    # Flat-min path: uniform Z scalar from _compute_trap_surface_from_fringe.
+                    # base_z_map is not needed — apply_sand_texture uses uniform z_max.
+                    trap_height  = _computed_height
+                    _trap_base_z_map = None
+                    print(f"  Trap {i}: flat surface, height = {trap_height:.2f} mm "
+                          f"(fringe_boundary_min + {TRAP_FRINGE_OFFSET_MM:.1f} mm offset)")
             else:
-                # Fallback: compute scalar height the old way.
+                # Fallback: no adjoining fringe → fixed TRAP_THICKNESS_MM.
                 trap_height  = _compute_trap_height_from_fringe(shapely_inset, fringe_mesh)
                 _trap_base_z_map = None
                 if fringe_mesh is not None:
                     print(f"  Trap {i}: height from fringe boundary = {trap_height:.2f} mm "
-                          f"(fringe_boundary_max + {TRAP_FRINGE_OFFSET_MM:.1f} mm offset)")
+                          f"(fringe_boundary_min + {TRAP_FRINGE_OFFSET_MM:.1f} mm offset)")
                 else:
                     print(f"  Trap {i}: no fringe mesh — using fixed height {trap_height:.2f} mm")
 

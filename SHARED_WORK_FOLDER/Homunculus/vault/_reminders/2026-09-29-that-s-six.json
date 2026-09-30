@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-09-29-that-s-six",
+  "schedule": [
+    {
+      "event_id": "2026-09-29-that-s-six",
+      "kind": "heads_up_30",
+      "fire_at": "2026-09-29T22:38:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: That's six at 11:08 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-29-that-s-six",
+      "kind": "pre_5",
+      "fire_at": "2026-09-29T23:03:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: That's six at 11:08 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-29-that-s-six",
+      "kind": "strike_0",
+      "fire_at": "2026-09-29T23:08:00-04:00",
+      "tz": "America/New_York",
+      "body": "That's six is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-29-that-s-six",
+      "kind": "strike_5",
+      "fire_at": "2026-09-29T23:13:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? That's six started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-29-that-s-six",
+      "kind": "strike_10",
+      "fire_at": "2026-09-29T23:18:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: That's six \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-09-29-that-s-six",
+      "kind": "strike_15",
+      "fire_at": "2026-09-29T23:23:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. That's six. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

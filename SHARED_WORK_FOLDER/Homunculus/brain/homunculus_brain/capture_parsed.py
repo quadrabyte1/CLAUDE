@@ -515,6 +515,7 @@ def _handle_schedule(
             tz,
             morning_anchor_hour=config.morning_anchor_hour,
             verb=req.verb.value,
+            context_text=req.raw_transcript,   # v2.5.1: forward full memo for Signals A/C
         )
         # resolved_at is non-None here because _resolve_from_hints would have
         # returned a clarification response if it were None.
@@ -644,6 +645,8 @@ def _handle_handle(
                 tz,
                 morning_anchor_hour=config.morning_anchor_hour,
                 verb=req.verb.value,
+                # No context_text here: we're only resolving the day, not the time.
+                # Time is being overridden to the default handle-hour regardless.
             )
             assert day_resolved.resolved_at is not None, (
                 "day should have resolved cleanly — _resolve_from_hints already checked"
@@ -660,6 +663,7 @@ def _handle_handle(
                 tz,
                 morning_anchor_hour=config.morning_anchor_hour,
                 verb=req.verb.value,
+                context_text=req.raw_transcript,   # v2.5.1: forward full memo for Signals A/C
             )
             assert resolved.resolved_at is not None
             first_alert = resolved.resolved_at
@@ -965,6 +969,9 @@ def _resolve_from_hints(
             tz,
             morning_anchor_hour=config.morning_anchor_hour,
             verb=req.verb.value,
+            # No context_text here: we're only checking day resolution.
+            # The time is a stand-in "morning"; context_text would only affect
+            # time resolution, which is irrelevant in this branch.
         )
         if day_check.ambiguous:
             # Day was unparseable — ask about the day, not the time.
@@ -990,6 +997,7 @@ def _resolve_from_hints(
         tz,
         morning_anchor_hour=config.morning_anchor_hour,
         verb=req.verb.value,
+        context_text=req.raw_transcript,   # v2.5.1: forward full memo for Signals A/C
     )
     if result.ambiguous:
         # Build a clarifying question matching the /capture/text style.

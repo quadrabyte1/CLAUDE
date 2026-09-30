@@ -538,6 +538,19 @@ _TIME_REGEX = re.compile(
 # _TIME_REGEX which expects the format: digit [colon minute] [AM/PM].
 _OCLOCK_RE = re.compile(r"\bo'?clock\b", re.IGNORECASE)
 
+# v2.5.1 — military time: 4-digit HHMM in range 0000-2359.
+# Matches bare "1400", "0900", "1830" — unambiguous 24-hour notation.
+# Must be exactly 4 digits with no surrounding alpha chars (word boundary).
+# Pattern: HH in [00-23], MM in [00-59].
+_MILITARY_TIME_RE = re.compile(
+    r"""^\s*
+        (?P<mil_hh>[01]\d|2[0-3])   # Hours 00-23
+        (?P<mil_mm>[0-5]\d)          # Minutes 00-59
+        \s*$
+    """,
+    re.VERBOSE,
+)
+
 _SCHEDULE_PM_HOURS = frozenset({1, 2, 3, 4, 5})
 
 
@@ -582,6 +595,22 @@ def _resolve_time(
         if hint == "morning":
             return time(hour=morning_anchor_hour), False, f"morning -> {morning_anchor_hour:02d}:00"
         return time(hour=TIME_OF_DAY_ANCHORS[hint]), False, f"{hint} -> {TIME_OF_DAY_ANCHORS[hint]:02d}:00"
+
+    # === Step 0: Military time (HHMM 4-digit, 24-hour) — unambiguous by construction ===
+    #
+    # v2.5.1: Before the normal 1-2 digit regex, check for 4-digit HHMM.
+    # "1400" → 14:00 (2 PM), "0900" → 09:00 (9 AM), "1830" → 18:30 (6:30 PM).
+    # Military time is unambiguous — no signal processing needed.
+    mil_match = _MILITARY_TIME_RE.match(hint)
+    if mil_match:
+        mil_hour = int(mil_match.group("mil_hh"))
+        mil_minute = int(mil_match.group("mil_mm"))
+        if 0 <= mil_hour < 24 and 0 <= mil_minute < 60:
+            return (
+                time(hour=mil_hour, minute=mil_minute),
+                False,
+                f"military-time '{hint}' -> {mil_hour:02d}:{mil_minute:02d}",
+            )
 
     match = _TIME_REGEX.match(hint)
     if not match:

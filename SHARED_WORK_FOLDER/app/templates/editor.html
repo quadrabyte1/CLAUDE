@@ -820,8 +820,18 @@ function polygonEditor() {
     // fringe elevation (mm above base) at a specific (x,y) image-pixel
     // location. Rendered as HTML overlays on top of the canvas.
     // Persisted at the top level of the .egm payload as `elevationSpikes`.
-    // Geometry pipeline (Topo) will consume these in a follow-up task.
+    // Geometry pipeline (Topo) applies these as Gaussian bumps on the fringe.
     elevationSpikes: [],   // [{x, y, mm}] — x,y in image-pixel coords
+
+    // Fringe boundary heights (task 658, v4.81) — exterior OCR markers that
+    // sit on the black boundary line surrounding the green.  Their value drives
+    // fringe Z (and green seam Z) at the nearest green/fringe interface point,
+    // creating a continuous fringe/green surface anchored by the exterior number.
+    // Populated by runDetection() from the server's fringeBoundaryHeights field.
+    // Persisted to the EGM as `fringeBoundaryHeights`.
+    // The geometry pipeline (gradient_surface_diagnostic.py) consumes these as
+    // boundary anchors — they are NOT shown in the UI spike list (silent geometry).
+    fringeBoundaryHeights: [],  // [{x, y, value}] — x,y in image-pixel coords
     _spikeDrag: null,      // {idx, startClientX, startClientY, startX, startY, moved} during drag
 
     // Tee-hole marker — a single optional point (in mm from print top-left)
@@ -998,11 +1008,16 @@ function polygonEditor() {
             this.contourStep = result.contourStep;
           }
 
-          // ── OCR elevation wiring (task 650, v4.79) ──────────────────────
-          // The server runs golf_intel_ocr on the same image and returns
-          // elevationMarkers: [{x, y, mm}] — already clamped to 0..50 mm.
-          // Populate elevationSpikes so they persist to the EGM and flow
-          // through to the 3MF heightmap (no extra user action required).
+          // ── OCR elevation wiring (task 650, v4.79; task 658, v4.81) ────
+          // The server classifies OCR markers into two groups:
+          //
+          //   elevationMarkers   — interior markers (inside the green polygon).
+          //     → populate elevationSpikes (Gaussian bumps on fringe surface).
+          //
+          //   fringeBoundaryHeights — exterior markers (on the black outline).
+          //     → populate fringeBoundaryHeights (boundary anchors driving
+          //       fringe Z and green seam Z at the interface).
+          //     → NOT shown in the UI spike list; consumed silently by geometry.
           if (Array.isArray(result.elevationMarkers) && result.elevationMarkers.length > 0) {
             this.elevationSpikes = result.elevationMarkers.map(m => ({
               x: m.x,
@@ -1011,15 +1026,27 @@ function polygonEditor() {
             }));
             console.log('[runDetection] OCR elevation spikes:', this.elevationSpikes.length, this.elevationSpikes);
           } else {
-            // No markers detected — leave elevationSpikes as cleared by startNewProject()
+            // No interior markers detected — leave elevationSpikes as cleared by startNewProject()
             console.log('[runDetection] No OCR elevation markers returned from server');
+          }
+          if (Array.isArray(result.fringeBoundaryHeights) && result.fringeBoundaryHeights.length > 0) {
+            this.fringeBoundaryHeights = result.fringeBoundaryHeights.map(m => ({
+              x: m.x,
+              y: m.y,
+              value: m.value,
+            }));
+            console.log('[runDetection] OCR fringe boundary heights:', this.fringeBoundaryHeights.length, this.fringeBoundaryHeights);
+          } else {
+            // No exterior markers detected — clear any stale anchors from a prior detection
+            this.fringeBoundaryHeights = [];
+            console.log('[runDetection] No OCR fringe boundary heights returned from server');
           }
 
           this.selectedPoly = 0;
           this.draw();
-          const totalRegions = this.polygons.length + this.contours.length;
           const spikeNote = this.elevationSpikes.length > 0 ? ' + ' + this.elevationSpikes.length + ' OCR spike(s)' : '';
-          this.flash('Detected ' + this.polygons.length + ' region(s) + ' + this.contours.length + ' contour(s)' + spikeNote + ' — scale=' + this.scale.toFixed(3), true);
+          const anchorNote = this.fringeBoundaryHeights.length > 0 ? ' + ' + this.fringeBoundaryHeights.length + ' fringe anchor(s)' : '';
+          this.flash('Detected ' + this.polygons.length + ' region(s) + ' + this.contours.length + ' contour(s)' + spikeNote + anchorNote + ' — scale=' + this.scale.toFixed(3), true);
           this.autoSave();
         } else if (result.status === 'error') {
           console.warn('Detection server error:', result.msg);
@@ -2295,6 +2322,11 @@ function polygonEditor() {
           y: Math.round(sp.y * 100) / 100,
           mm: Math.round(sp.mm * 10) / 10,
         })),
+        fringeBoundaryHeights: this.fringeBoundaryHeights.map(a => ({
+          x: Math.round(a.x * 100) / 100,
+          y: Math.round(a.y * 100) / 100,
+          value: Math.round(a.value * 10) / 10,
+        })),
       };
       // Only serialize tee_hole when set — keeps EGMs without a tee hole
       // byte-identical to their pre-v4.24 form (backward compat).
@@ -2444,10 +2476,11 @@ function polygonEditor() {
       this.courseName         = '';
       this.holeName           = '';
       // Polygons / contours / spikes
-      this.polygons           = [];
-      this.contours           = [];
-      this.elevationSpikes    = [];
-      this.selectedPoly       = 0;
+      this.polygons              = [];
+      this.contours              = [];
+      this.elevationSpikes       = [];
+      this.fringeBoundaryHeights = [];
+      this.selectedPoly          = 0;
       this.selectedVerts      = [];
       this._pendingRestore    = null;
       // Undo / redo
@@ -2561,6 +2594,14 @@ function polygonEditor() {
               x: Number(sp.x) || 0,
               y: Number(sp.y) || 0,
               mm: (typeof sp.mm === 'number') ? sp.mm : 0,
+            }))
+          : [];
+        // Fringe boundary heights (task 658, v4.81) — restore from EGM on load.
+        this.fringeBoundaryHeights = Array.isArray(data.fringeBoundaryHeights)
+          ? data.fringeBoundaryHeights.map(a => ({
+              x: Number(a.x) || 0,
+              y: Number(a.y) || 0,
+              value: (typeof a.value === 'number') ? a.value : 0,
             }))
           : [];
         // Tee-hole: absent field = default-populate at (30, 30) on the left.
@@ -2679,6 +2720,7 @@ function polygonEditor() {
       this.selectedVerts = [];
       this.polygons = [];
       this.elevationSpikes = [];
+      this.fringeBoundaryHeights = [];
       // Default-populate the tee hole on the left side (30 mm inset) — same
       // convention as loadProject(). User can remove it explicitly.
       this.teeHole = {
@@ -3083,6 +3125,11 @@ function polygonEditor() {
           x: Math.round(sp.x * 100) / 100,
           y: Math.round(sp.y * 100) / 100,
           mm: Math.round(sp.mm * 10) / 10,
+        })),
+        fringeBoundaryHeights: this.fringeBoundaryHeights.map(a => ({
+          x: Math.round(a.x * 100) / 100,
+          y: Math.round(a.y * 100) / 100,
+          value: Math.round(a.value * 10) / 10,
         })),
         open_in_slicer: this.openInSlicer,
       };

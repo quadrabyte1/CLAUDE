@@ -10,7 +10,7 @@ Additionally, distance-ring labels (integers 5, 10, 15, 20, 25, 30) appear
 at the left and right edges of the image — these are detected by a separate
 exterior pass.
 
-Pipeline (v4.80)
+Pipeline (v4.85)
 ----------------
 Pass A — interior saturated pass:
   1. Build a **white-on-colored mask** — extract bright pixels (grayscale > 175)
@@ -132,7 +132,11 @@ _PATCH_MAX_ASPECT = 6.0
 _PATCH_PAD = 20
 
 # Scale factor applied to patches before feeding EasyOCR / Tesseract.
-_PATCH_SCALE_MIN_H = 40  # minimum height in px of the scaled patch
+# Raised from 40 → 120 so that patches (~62 px tall with 20 px padding around
+# a 22 px CC) are upscaled 2× before OCR.  At native size the ~15 px glyphs
+# were too small for EasyOCR to recognise reliably (root cause of the 6.0/6.5
+# misses on DeLaveaga H5 and similar dark-region markers on other courses).
+_PATCH_SCALE_MIN_H = 120  # minimum height in px of the scaled patch
 
 # Minimum confidence from OCR (0-1 for EasyOCR, 0-100 for Tesseract)
 _EASYOCR_MIN_CONF = 0.35

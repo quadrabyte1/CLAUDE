@@ -21,9 +21,19 @@ def test_slugify_basic():
     assert vault.slugify("...???") == "untitled"
 
 
-def test_event_id_combines_date_and_title():
+def test_event_id_combines_date_time_and_title():
+    # Format: "<YYYY-MM-DD>-<HHMM>-<title-slug>" — time is included so two
+    # events with the same title on the same day get distinct IDs.
     when = datetime(2026, 6, 12, 10, 0, tzinfo=TZ)
-    assert vault.event_id(when, "Coffee with Jane") == "2026-06-12-coffee-with-jane"
+    assert vault.event_id(when, "Coffee with Jane") == "2026-06-12-1000-coffee-with-jane"
+
+
+def test_event_id_different_times_same_title_produces_different_ids():
+    """Regression: same-day same-title different-time must not collide."""
+    tz = ZoneInfo("America/New_York")
+    id_10am = vault.event_id(datetime(2026, 6, 12, 10, 0, tzinfo=tz), "dinner")
+    id_7pm = vault.event_id(datetime(2026, 6, 12, 19, 0, tzinfo=tz), "dinner")
+    assert id_10am != id_7pm
 
 
 def test_write_and_read_markdown_roundtrip(tmp_path: Path):

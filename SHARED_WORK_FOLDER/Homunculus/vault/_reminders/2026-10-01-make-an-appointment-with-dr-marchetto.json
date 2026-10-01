@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-10-01-make-an-appointment-with-dr-marchetto",
+  "schedule": [
+    {
+      "event_id": "2026-10-01-make-an-appointment-with-dr-marchetto",
+      "kind": "heads_up_30",
+      "fire_at": "2026-10-01T07:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: make an appointment with Dr. Marchetto at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-make-an-appointment-with-dr-marchetto",
+      "kind": "pre_5",
+      "fire_at": "2026-10-01T07:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: make an appointment with Dr. Marchetto at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-make-an-appointment-with-dr-marchetto",
+      "kind": "strike_0",
+      "fire_at": "2026-10-01T08:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "make an appointment with Dr. Marchetto is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-make-an-appointment-with-dr-marchetto",
+      "kind": "strike_5",
+      "fire_at": "2026-10-01T08:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? make an appointment with Dr. Marchetto started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-make-an-appointment-with-dr-marchetto",
+      "kind": "strike_10",
+      "fire_at": "2026-10-01T08:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: make an appointment with Dr. Marchetto \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-01-make-an-appointment-with-dr-marchetto",
+      "kind": "strike_15",
+      "fire_at": "2026-10-01T08:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. make an appointment with Dr. Marchetto. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

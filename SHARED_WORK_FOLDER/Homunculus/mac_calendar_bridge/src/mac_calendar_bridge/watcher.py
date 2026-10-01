@@ -135,7 +135,13 @@ def push_if_new(
 
     # --- Fast path: pushed.jsonl ---
     if state.is_pushed(record.event_id):
-        log.debug("Already pushed %s; skipping", record.event_id)
+        # INFO (not DEBUG) so Thomas can diagnose a re-schedule collision
+        # without restarting the bridge at DEBUG level.
+        log.info(
+            "Already pushed %s (starts_at=%s); skipping",
+            record.event_id,
+            record.starts_at.isoformat(),
+        )
         return
 
     # --- Slow path: authoritative Calendar.app query ---

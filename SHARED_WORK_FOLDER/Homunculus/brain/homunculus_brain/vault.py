@@ -58,7 +58,12 @@ def slugify(text: str, max_length: int = 60) -> str:
 
 
 def event_id(starts_at: datetime, title: str) -> str:
-    return f"{starts_at.date().isoformat()}-{slugify(title)}"
+    # Include local HH:MM so two events with the same title on the same day
+    # (e.g. "dinner at 7" vs "dinner at 8") get distinct event_ids instead of
+    # both resolving to "<date>-dinner" and silently colliding in pushed.jsonl.
+    # Format: "<YYYY-MM-DD>-<HHMM>-<title-slug>", e.g. "2026-09-30-1900-dinner".
+    hhmm = starts_at.strftime("%H%M")
+    return f"{starts_at.date().isoformat()}-{hhmm}-{slugify(title)}"
 
 
 def note_id(captured_at: datetime, title: str) -> str:

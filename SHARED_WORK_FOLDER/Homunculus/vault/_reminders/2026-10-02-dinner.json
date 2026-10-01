@@ -1,50 +1,50 @@
 {
-  "event_id": "2026-09-30-dinner",
+  "event_id": "2026-10-02-dinner",
   "schedule": [
     {
-      "event_id": "2026-09-30-dinner",
+      "event_id": "2026-10-02-dinner",
       "kind": "heads_up_30",
-      "fire_at": "2026-09-30T19:30:00-04:00",
+      "fire_at": "2026-10-02T18:30:00-04:00",
       "tz": "America/New_York",
-      "body": "In 30 minutes: dinner at 8:00 PM.",
+      "body": "In 30 minutes: dinner at 7:00 PM.",
       "status": "pending"
     },
     {
-      "event_id": "2026-09-30-dinner",
+      "event_id": "2026-10-02-dinner",
       "kind": "pre_5",
-      "fire_at": "2026-09-30T19:55:00-04:00",
+      "fire_at": "2026-10-02T18:55:00-04:00",
       "tz": "America/New_York",
-      "body": "5 minutes: dinner at 8:00 PM.",
+      "body": "5 minutes: dinner at 7:00 PM.",
       "status": "pending"
     },
     {
-      "event_id": "2026-09-30-dinner",
+      "event_id": "2026-10-02-dinner",
       "kind": "strike_0",
-      "fire_at": "2026-09-30T20:00:00-04:00",
+      "fire_at": "2026-10-02T19:00:00-04:00",
       "tz": "America/New_York",
       "body": "dinner is starting now. Tap OK when you see this.",
       "status": "pending"
     },
     {
-      "event_id": "2026-09-30-dinner",
+      "event_id": "2026-10-02-dinner",
       "kind": "strike_5",
-      "fire_at": "2026-09-30T20:05:00-04:00",
+      "fire_at": "2026-10-02T19:05:00-04:00",
       "tz": "America/New_York",
       "body": "Still on? dinner started 5 minutes ago. Tap OK.",
       "status": "pending"
     },
     {
-      "event_id": "2026-09-30-dinner",
+      "event_id": "2026-10-02-dinner",
       "kind": "strike_10",
-      "fire_at": "2026-09-30T20:10:00-04:00",
+      "fire_at": "2026-10-02T19:10:00-04:00",
       "tz": "America/New_York",
       "body": "Reminder: dinner \u2014 10 minutes ago. Tap OK.",
       "status": "pending"
     },
     {
-      "event_id": "2026-09-30-dinner",
+      "event_id": "2026-10-02-dinner",
       "kind": "strike_15",
-      "fire_at": "2026-09-30T20:15:00-04:00",
+      "fire_at": "2026-10-02T19:15:00-04:00",
       "tz": "America/New_York",
       "body": "Final reminder. dinner. Tap OK or I'll log it as missed.",
       "status": "pending"

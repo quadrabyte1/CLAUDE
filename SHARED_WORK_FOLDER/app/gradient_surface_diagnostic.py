@@ -8006,10 +8006,48 @@ def _filament_for_scene_name(name: str) -> int:
     return 1
 
 
+def _load_bambu_project_settings_template() -> bytes | None:
+    """
+    Load app/templates/bambu/project_settings.config as bytes.
+
+    Returns the raw bytes on success, or None with a WARNING log if the file
+    is absent (graceful fallback — Bambu will show its dialog but geometry
+    still loads).
+
+    The result is NOT cached at module level to allow monkeypatching in tests.
+    The caller checks _PROJECT_SETTINGS_TEMPLATE (a str path) so tests can
+    override it with monkeypatch.setattr.
+    """
+    import logging as _logging
+    import os as _os
+    template_path = _PROJECT_SETTINGS_TEMPLATE
+    if not _os.path.isfile(template_path):
+        _logging.getLogger("gradient_surface_diagnostic").warning(
+            "Bambu project_settings.config template not found at %r; "
+            "skipping injection (Bambu Studio will show 'invalid config' dialog "
+            "but geometry will still load). "
+            "To silence the dialog, place a valid Bambu Studio blank-plate export at "
+            "app/templates/bambu/project_settings.config.",
+            template_path,
+        )
+        return None
+    with open(template_path, "rb") as _f:
+        return _f.read()
+
+
+# Path to the Bambu project_settings.config template.
+# Module-level so tests can monkeypatch it without touching the filesystem.
+_PROJECT_SETTINGS_TEMPLATE: str = str(
+    __import__("pathlib").Path(__file__).parent / "templates" / "bambu" / "project_settings.config"
+)
+
+
 def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     """
     Post-process a trimesh-written 3MF to add per-object extruder assignments
-    that Bambu Studio / OrcaSlicer understand.
+    that Bambu Studio / OrcaSlicer understand, and inject a complete
+    project_settings.config so Bambu Studio loads without its 'invalid config'
+    warning dialog.
 
     trimesh.Scene.export writes a single ``3D/3dmodel.model`` file with one
     ``<object id="N" name="geometry_K" ...>`` per scene geometry, in the same
@@ -8025,9 +8063,21 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
          from Scene.geometry insertion order) to derive the extruder via
          ``_filament_for_scene_name``.
       4. Writes a fresh ``Metadata/model_settings.config`` into the zip.
+      5. Writes ``Metadata/project_settings.config`` from the template at
+         app/templates/bambu/project_settings.config (verbatim copy).
+         If the template is missing, logs a WARNING and skips step 5 only —
+         step 4 still completes (graceful fallback).
+      6. Ensures ``[Content_Types].xml`` declares the 'config' extension so
+         Bambu Studio's content-type validator accepts the .config files.
 
     If counts don't line up, falls back to extruder=1 for everything and
     prints a warning rather than silently mis-tagging.
+
+    Printer assumption: the bundled template was exported from Bambu Studio
+    with a Bambu Lab A1 0.4 nozzle profile (printer_settings_id =
+    'Bambu Lab A1 0.4 nozzle'). This is Thomas's machine. Bambu Studio accepts
+    same-model profiles without complaint; no dialog appears. If a different
+    printer is used the profile keys may differ but geometry still loads.
     """
     import zipfile
     import shutil
@@ -8097,32 +8147,57 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     cfg_lines.append('')
     cfg_xml = "\n".join(cfg_lines)
 
-    # --- 3b. project_settings.config intentionally omitted (task-626 revert) ---
-    # Task 612 injected a minimal 10-key project_settings stub to silence the
-    # "invalid config, load geometry data only" warning.  That stub caused a
-    # *worse* regression: Bambu Studio's parser expects ~498 keys and aborts
-    # entirely on a truncated blob — no geometry loaded at all.
-    #
-    # The safe state is to omit project_settings.config.  Bambu Studio will show
-    # its warning dialog but geometry loads correctly.  Writing a complete,
-    # version-matched project_settings blob is tracked as future work.
+    # --- 3b. project_settings.config from template (task-674) ---
+    # Load the full ~62 KB Bambu Studio blank-plate export template.
+    # If the template is absent, fall back to pre-task-674 behaviour (no
+    # project_settings.config, Bambu shows its warning dialog but geometry loads).
+    project_settings_bytes = _load_bambu_project_settings_template()
 
-    # --- 4. Rewrite zip with the new Metadata/model_settings.config ---
+    # --- 4. Rewrite zip with new Metadata/model_settings.config,
+    #        project_settings.config (if template present), and patched
+    #        [Content_Types].xml with config extension declared.
     # zipfile cannot edit in place; copy entries to a sibling temp file then
     # atomically replace the original.
     tmp_path = path_3mf + ".tmp"
-    _SKIP_FILES = {"Metadata/model_settings.config", "Metadata/project_settings.config"}
+    _SKIP_FILES = {
+        "Metadata/model_settings.config",
+        "Metadata/project_settings.config",
+        "[Content_Types].xml",
+    }
     with zipfile.ZipFile(path_3mf, "r") as zin, \
          zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
+        # Read and patch [Content_Types].xml to ensure config extension declared.
+        try:
+            ct_xml = zin.read("[Content_Types].xml").decode("utf-8")
+        except KeyError:
+            ct_xml = (
+                '<?xml version=\'1.0\' encoding=\'utf-8\'?>\n'
+                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
+                ' <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n'
+                ' <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n'
+                '</Types>'
+            )
+        if 'Extension="config"' not in ct_xml:
+            # Insert the config extension declaration before the closing </Types> tag.
+            ct_xml = ct_xml.replace(
+                "</Types>",
+                ' <Default Extension="config" ContentType="text/xml"/>\n</Types>',
+            )
+
         for item in zin.infolist():
             if item.filename in _SKIP_FILES:
-                # Skip model_settings.config (replaced below).
-                # Also skip any stale project_settings.config from a prior
-                # task-612 run so it doesn't persist into the reverted file.
+                # Skip files we're replacing (model_settings, project_settings,
+                # Content_Types) so we write fresh copies below.
                 continue
             zout.writestr(item, zin.read(item.filename))
+
+        # Write patched [Content_Types].xml.
+        zout.writestr("[Content_Types].xml", ct_xml.encode("utf-8"))
+        # Write extruder assignments.
         zout.writestr("Metadata/model_settings.config", cfg_xml)
-        # project_settings.config is deliberately NOT written here.
+        # Write project_settings.config from template (if available).
+        if project_settings_bytes is not None:
+            zout.writestr("Metadata/project_settings.config", project_settings_bytes)
 
     shutil.move(tmp_path, path_3mf)
 

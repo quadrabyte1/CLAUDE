@@ -2,7 +2,11 @@
 test_tps_global_height_field.py — Bug→TDD for C1-continuous global height field
 via thin-plate spline (task 684, Topo 2026-10-02).
 
-Thomas's problem statement:
+Updated for task 690 (Topo 2026-10-02): fringeBoundaryHeights stripped from TPS.
+Thomas's revelation: the exterior fringe numbers are *distance-from-pin markers*,
+not altitudes.  _build_tps_base() now ignores fringe_boundary_heights_mm.
+
+Thomas's original problem statement (task 684):
     "Fringe peaks were picked up but the fringe altitude was set right at the
     boundary and dropped immediately on either side.  On the green side the
     green didn't meet that new height and the fringe didn't trail from that new
@@ -10,16 +14,13 @@ Thomas's problem statement:
     specific green height so we get continuous surface everywhere.  Nowhere can
     the derivative of the gradient be undefined."
 
-This test suite is RED-first.  The TPS functions it references do not exist
-yet; these tests will fail with AttributeError / ImportError until the
-implementation is added to gradient_surface_diagnostic.py.
-
 After implementation all tests here must be GREEN, and the existing test suite
 (88+ tests) must remain green.
 
 Tests:
-    T1  TPS fringe-anchor honored  — single anchor at (x0, y0) value=8
-        → TPS Z at that point ≈ 8 within 0.1 mm.
+    T1  TPS fringe-anchor parameter accepted but IGNORED (task 690) — single
+        fbh passed at (x0, y0) value=8 with no spikes → TPS Z at that point
+        ≈ BASE_THICKNESS_MM (frame-base driven), NOT the anchor value.
     T2  TPS interior-spike honored — single spike at interior (x1, y1) value=12
         → TPS Z at that point ≈ 12 within 0.1 mm.
     T3  Smooth outward decay — Z at frame outer edge ≈ BASE_HEIGHT_MM; no
@@ -27,13 +28,15 @@ Tests:
     T4  Degenerate 0 constraints → flat BASE_THICKNESS_MM surface.
     T5  C1 continuity across fringe/green seam — finite-difference gradient
         step at boundary < 2 mm/mm.
-    T6  Regression — fringe Z at a fringe-boundary anchor still ≈ anchor
-        value after TPS integration (build_fringe_mesh round-trip).
+    T6  Regression — build_fringe_mesh round-trip: fringe Z near boundary is
+        driven by interior spike (no fringe anchors), smoothly between spike Z
+        and BASE.  Vertex Z must be finite and > 0.
     T7  Trap + rake + chunks regression — build_fringe_mesh produces a mesh
         that still has vertices at varying heights (trap not flattened).
     T8  Water still flat — export_water_meshes on a water EGM still produces
         a slab within ±0.1 mm of BASE_THICKNESS_MM.
-    T9  Co-located constraints with conflicting Z → averaged without error.
+    T9  Co-located interior-spike constraints with conflicting Z → averaged
+        without error (fringe anchors are now ignored, test uses spikes).
     T10 TPS with only outer-frame anchors (no spikes, no fbh) → surface
         stays near BASE_THICKNESS_MM everywhere (no blow-up).
 
@@ -118,10 +121,20 @@ def _flat_green_arrays(cx_px, cy_px, r_px, grid_res=200, z_val=3.0):
 # ===========================================================================
 
 class TestTPSFringeAnchorHonored:
-    """T1: A single fringe-boundary anchor → TPS Z at snapped boundary point ≈ value."""
+    """T1 (updated task 690): fringe_boundary_heights_mm is accepted but IGNORED.
 
-    def test_single_fringe_anchor_honored(self):
-        """T1: TPS Z at snapped green-boundary point ≈ anchor value (within 0.1 mm)."""
+    Thomas's revelation: the exterior fringe numbers are *distance-from-pin
+    markers*, not altitudes.  Passing fbh no longer influences TPS Z.
+    With no interior spikes, Z is driven only by the 16-point outer-frame ring
+    at BASE_THICKNESS_MM → surface is flat at BASE everywhere.
+    """
+
+    def test_single_fringe_anchor_ignored(self):
+        """T1: fringe_boundary_heights_mm passed but IGNORED (task 690).
+
+        With no spikes, TPS Z at the snapped boundary point ≈ BASE_THICKNESS_MM
+        (frame-base driven), NOT the anchor value (8.0 mm).
+        """
         gsd = _load_gsd()
         # The function that builds the TPS base surface must exist.
         assert hasattr(gsd, "_build_tps_base"), (
@@ -154,7 +167,7 @@ class TestTPSFringeAnchorHonored:
         _, idx = bnd_kd.query(anchor_mm[:2], k=1)
         snapped_xy = green_bnd_mm[idx]  # (x_mm, y_mm)
 
-        # Build TPS surface
+        # Build TPS surface — no interior spikes
         half = gsd.PRINT_SIZE_MM / 2.0 + gsd.FRINGE_XY_EXPANSION_MM / 2.0
         grid_res = 50
         gx = np.linspace(-half, half, grid_res)
@@ -176,8 +189,12 @@ class TestTPSFringeAnchorHonored:
         nearest_idx = np.unravel_index(np.argmin(dist_sq), dist_sq.shape)
         z_at_anchor = float(z_tps[nearest_idx])
 
-        assert z_at_anchor == pytest.approx(8.0, abs=0.1), (
-            f"TPS Z at fringe anchor snapped point expected ≈ 8.0 mm, "
+        # After task 690 strip: fringe anchor is IGNORED.
+        # With no spikes, only 16 frame anchors at BASE_THICKNESS_MM → flat surface.
+        base = gsd.BASE_THICKNESS_MM
+        assert z_at_anchor == pytest.approx(base, abs=0.5), (
+            f"TPS fringe anchor should be IGNORED (task 690). "
+            f"With no spikes, Z at anchor point expected ≈ BASE ({base:.1f} mm), "
             f"got {z_at_anchor:.4f} mm"
         )
 
@@ -443,17 +460,28 @@ class TestTPSSeamContinuity:
 # ===========================================================================
 
 class TestTPSFringeMeshRoundTrip:
-    """T6: build_fringe_mesh with TPS base still honors fringe anchor."""
+    """T6 (updated task 690): build_fringe_mesh with TPS base produces valid
+    fringe mesh when fringeBoundaryHeights are present (but now ignored).
 
-    def test_fringe_mesh_anchor_z_roundtrip(self, tmp_path):
-        """T6: After TPS integration into build_fringe_mesh, anchor Z preserved."""
+    Original test verified anchor Z was honored; after the strip it verifies
+    the fringe mesh is still well-formed (finite vertices, Z ≥ BASE) even
+    when fringeBoundaryHeights are passed but ignored.
+    """
+
+    def test_fringe_mesh_valid_with_ignored_anchors(self, tmp_path):
+        """T6: build_fringe_mesh still produces a valid mesh when fbh is present
+        but ignored; top fringe vertices have Z ≥ BASE_THICKNESS_MM and are finite."""
         gsd = _load_gsd()
         cx_px, cy_px, r_px = 300.0, 300.0, 105.0
-        anchor_value = 8.0
+        # Pass fringeBoundaryHeights (now ignored) and an interior spike
+        spike_z = 9.0
         egm = _base_egm(
             cx_px, cy_px, r_px,
             fringe_boundary_heights=[
-                {"x": cx_px + r_px * 1.35, "y": cy_px, "value": anchor_value}
+                {"x": cx_px + r_px * 1.35, "y": cy_px, "value": 8.0}
+            ],
+            elevation_spikes=[
+                {"x": cx_px, "y": cy_px, "mm": spike_z}
             ],
         )
         green_bnd_px = gsd.interpolate_catmull_rom(egm["polygons"][0]["points"])
@@ -465,32 +493,26 @@ class TestTPSFringeMeshRoundTrip:
             fringe_grid_res=80,
         )
 
-        # Find fringe top vertex nearest to the anchor boundary interface
-        green_pts_px = np.array(
-            [(p["x"], p["y"]) for p in egm["polygons"][0]["points"]],
-            dtype=np.float64,
-        )
-        scale, centroid_px = gsd._compute_px_to_mm(green_pts_px, egm)
-        green_bnd_mm = gsd._px_to_mm_2d(green_bnd_px.copy(), scale, centroid_px)
-        anchor_mm = gsd._px_to_mm_2d(
-            np.array([[cx_px + r_px * 1.35, cy_px]], dtype=np.float64),
-            scale, centroid_px,
-        )[0]
-        from scipy.spatial import cKDTree
-        bnd_kd = cKDTree(green_bnd_mm)
-        _, bnd_idx = bnd_kd.query(anchor_mm[:2], k=1)
-        bnd_pt = green_bnd_mm[bnd_idx]
-
         verts = np.asarray(fringe_mesh.vertices)
+        assert len(verts) > 0, "Fringe mesh has no vertices"
+
         top_verts = verts[verts[:, 2] > gsd.BASE_THICKNESS_MM * 0.5]
-        assert len(top_verts) > 0, "No top fringe vertices found"
+        assert len(top_verts) > 0, "No top fringe vertices found (Z > BASE/2)"
 
-        dists = np.hypot(top_verts[:, 0] - bnd_pt[0], top_verts[:, 1] - bnd_pt[1])
-        nearest_z = float(top_verts[np.argmin(dists), 2])
+        # All top vertices must be finite
+        assert np.all(np.isfinite(top_verts)), "Fringe mesh top vertices contain NaN/Inf"
 
-        assert nearest_z == pytest.approx(anchor_value, abs=0.5), (
-            f"build_fringe_mesh (with TPS) fringe Z at anchor boundary ≈ "
-            f"{anchor_value} mm; got {nearest_z:.3f} mm"
+        # All top vertices must be at or above BASE_THICKNESS_MM (no negative Z)
+        assert float(top_verts[:, 2].min()) >= gsd.BASE_THICKNESS_MM - 0.1, (
+            f"Fringe top vertex Z min = {float(top_verts[:,2].min()):.3f} mm; "
+            f"expected ≥ BASE={gsd.BASE_THICKNESS_MM:.1f} mm"
+        )
+
+        # The spike at green centre should influence fringe near the boundary —
+        # max Z should be above BASE (spike is driving the surface up somewhere)
+        assert float(top_verts[:, 2].max()) > gsd.BASE_THICKNESS_MM + 0.5, (
+            f"Fringe top Z max = {float(top_verts[:,2].max()):.3f} mm; "
+            f"spike at {spike_z} mm should raise Z above BASE"
         )
 
 
@@ -578,10 +600,16 @@ class TestTPSWaterFlat:
 # ===========================================================================
 
 class TestTPSConflictingConstraints:
-    """T9: Two constraints at the same (x, y) with different Z → averaged, no error."""
+    """T9 (updated task 690): Two co-located *interior spikes* with conflicting Z
+    → averaged without error.
+
+    Original test used fringe_boundary_heights_mm for conflicting constraints;
+    updated to use elevation_spikes_mm since fringe anchors are now ignored.
+    The averaging logic applies to any co-located spike pair.
+    """
 
     def test_collocated_constraints_averaged(self):
-        """T9: Co-located (xy) with conflicting Z → no exception, Z = avg."""
+        """T9: Co-located interior spikes (xy) with conflicting Z → no exception, Z = avg."""
         gsd = _load_gsd()
         assert hasattr(gsd, "_build_tps_base"), (
             "_build_tps_base not found — TPS not yet implemented"
@@ -596,9 +624,10 @@ class TestTPSConflictingConstraints:
         green_bnd_px = gsd.interpolate_catmull_rom(egm["polygons"][0]["points"])
         green_bnd_mm = gsd._px_to_mm_2d(green_bnd_px.copy(), scale, centroid_px)
 
-        # Two constraints at EXACTLY the same XY but different Z
+        # Two interior spikes at EXACTLY the same XY but different Z
+        # (Updated from fringe anchors — fringe anchors are now ignored, task 690)
         pt_mm = np.array([5.0, 0.0])
-        conflicting = [
+        conflicting_spikes = [
             {"xy_mm": pt_mm.copy(), "z_mm": 6.0},
             {"xy_mm": pt_mm.copy(), "z_mm": 10.0},
         ]
@@ -613,20 +642,20 @@ class TestTPSConflictingConstraints:
         z_tps = gsd._build_tps_base(
             egm_data=egm,
             green_bnd_mm=green_bnd_mm,
-            elevation_spikes_mm=[],
-            fringe_boundary_heights_mm=conflicting,
+            elevation_spikes_mm=conflicting_spikes,
+            fringe_boundary_heights_mm=[],  # fringe anchors ignored (task 690)
             grid_x=GX,
             grid_y=GY,
         )
         assert z_tps.shape == GX.shape, "Output shape mismatch"
         assert np.all(np.isfinite(z_tps)), "TPS output contains NaN or Inf"
 
-        # Z at the co-located point should be near the average = 8.0
+        # Z at the co-located spike point should be near the average = 8.0
         dist_sq = (GX - pt_mm[0]) ** 2 + (GY - pt_mm[1]) ** 2
         ni = np.unravel_index(np.argmin(dist_sq), dist_sq.shape)
         z_at_pt = float(z_tps[ni])
         assert z_at_pt == pytest.approx(8.0, abs=1.0), (
-            f"Co-located constraints (6.0, 10.0) → expected Z≈8.0 (avg), got {z_at_pt:.4f}"
+            f"Co-located spikes (6.0, 10.0) → expected Z≈8.0 (avg), got {z_at_pt:.4f}"
         )
 
 

@@ -1,3 +1,14 @@
+# v0.14 — 2026-10-02 Topo — Strip fringeBoundaryHeights from TPS constraints (task 690).
+#         Thomas's revelation: exterior fringe numbers (10/15/20/25/30) are
+#         *distance-from-pin markers*, NOT altitudes.  The fringeBoundaryHeights
+#         constraint source shipped in v4.81→v4.91 was semantically wrong.
+#         _build_tps_base() now IGNORES fringe_boundary_heights_mm entirely.
+#         Parameter kept for API stability (Sienna removes callers in T2 / task 691).
+#         A deprecation notice is logged when non-empty fbh is passed.
+#         TPS base surface now shaped by: interior elevationSpikes + 16 outer-frame
+#         anchors at BASE_THICKNESS_MM only.  Fringe region interpolates smoothly
+#         between spike-driven green interior Z and base.  No crease, no artifact.
+#         APP_VERSION bumped to v4.93 (Sienna landed v4.92 first on task 691).
 # v0.13 — 2026-10-02 Topo — TPS global height field (task 684).
 #         Replaces fragmented IDW/griddata patchwork base surface with a single
 #         thin-plate-spline fit over all constraints:
@@ -2959,26 +2970,34 @@ def _build_tps_base(
 ) -> np.ndarray:
     """Build a C²-smooth global height field via thin-plate spline (TPS).
 
-    Collects all constraints — fringe-boundary anchors, interior elevation
-    spikes, and a ring of outer-frame anchors at BASE_THICKNESS_MM — then
-    fits a single ``scipy.interpolate.RBFInterpolator`` with
+    Collects all constraints — interior elevation spikes and a ring of
+    outer-frame anchors at BASE_THICKNESS_MM — then fits a single
+    ``scipy.interpolate.RBFInterpolator`` with
     ``kernel="thin_plate_spline"`` and evaluates it on ``(grid_x, grid_y)``.
 
     The TPS minimises bending energy subject to exact interpolation through
     each constraint, so it is globally C² (no undefined derivatives anywhere)
-    and passes through every anchor/spike exactly.
+    and passes through every spike exactly.
+
+    .. note::
+        ``fringe_boundary_heights_mm`` is **deprecated** (task 690, 2026-10-02).
+        Thomas's revelation: the exterior fringe numbers (10/15/20/25/30) are
+        *distance-from-pin markers*, not altitudes.  The parameter is accepted
+        for API stability but its contents are **ignored**.  Callers should be
+        updated to pass ``fringe_boundary_heights_mm=[]``; the parameter will
+        be removed in a future version.
 
     Parameters
     ----------
     egm_data : dict
         EGM data dict — used for ``elevationRange``.
     green_bnd_mm : (N, 2) array
-        Green boundary polyline in mm-space (used for snapping).
+        Green boundary polyline in mm-space (retained for API compatibility).
     elevation_spikes_mm : list of {"xy_mm": array(2,), "z_mm": float}
         Interior elevation spikes (already converted to mm-space).
     fringe_boundary_heights_mm : list of {"xy_mm": array(2,), "z_mm": float}
-        Fringe boundary anchors, each already snapped to the nearest
-        green-boundary polyline vertex (mm-space).
+        **DEPRECATED — ignored.**  Formerly fringe boundary anchors; now a
+        no-op.  Pass ``[]`` to suppress the deprecation log line.
     grid_x, grid_y : (R, C) arrays
         Meshgrid at which the surface is evaluated.
 
@@ -3021,12 +3040,18 @@ def _build_tps_base(
         z = max(BASE_THICKNESS_MM, min(z, BASE_THICKNESS_MM + _elevation_range_mm))
         _add(xy, z)
 
-    # Fringe boundary anchors (already snapped by caller)
-    for fa in fringe_boundary_heights_mm:
-        xy = np.asarray(fa["xy_mm"], dtype=np.float64)
-        z = float(fa["z_mm"])
-        z = max(BASE_THICKNESS_MM, min(z, BASE_THICKNESS_MM + _elevation_range_mm))
-        _add(xy, z)
+    # Fringe boundary anchors — DEPRECATED (task 690, Topo 2026-10-02).
+    # Thomas's revelation: the exterior fringe numbers (10/15/20/25/30) are
+    # *distance-from-pin markers*, NOT altitudes.  Adding them as height
+    # constraints was semantically wrong.  The parameter is kept for API
+    # stability (Sienna removes callers in T2); its contents are now ignored.
+    if fringe_boundary_heights_mm:
+        print(
+            f"  [TPS] DEPRECATED: fringe_boundary_heights_mm passed "
+            f"({len(fringe_boundary_heights_mm)} item(s)) but ignored — "
+            f"strip fringeBoundaryHeights from TPS constraints (task 690). "
+            f"Remove callers; this parameter will be deleted in a future version."
+        )
 
     # Outer frame anchors — 16 evenly spaced around a circle at 1.1× half
     r_frame = half * 1.1

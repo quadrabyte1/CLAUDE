@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.91"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.96"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── detect_boundaries: classifier knobs ────────────────────────────────────
 # When True the green polygon interior is excluded from trap/water detection.
@@ -1787,50 +1787,21 @@ def detect_boundaries():
     # ── Golf Intelligence OCR — elevation markers + fringe boundary heights ──────
     # Run numeric-marker OCR on the same image used for boundary detection.
     # All detected decimal values are first converted to spike dicts, then
-    # classified as interior (inside the green polygon) or exterior (outside it):
-    #
-    #   Interior markers → elevationMarkers → elevationSpikes in the EGM
-    #     → Gaussian bump on the fringe surface at that pixel position.
-    #     (Unchanged behaviour from task 650.)
-    #
-    #   Exterior markers → fringeBoundaryHeights
-    #     → boundary anchors in the EGM (task 658).
-    #     → fringe Z and green seam Z at the nearest boundary interface point
-    #     are set to that value, producing a continuous fringe/green seam driven
-    #     by the exterior number.  Value is stored as `value` (not `mm`) to
-    #     distinguish the field semantics in the EGM.
+    # OCR: interior elevation markers only.
+    # Note: exterior ring numbers (10,15,20,25,30) are distance-from-pin markers,
+    # NOT altitude values — they are intentionally excluded from the pipeline.
     #
     # OCR is wrapped in a broad try/except so a missing EasyOCR install or an
     # unexpected image format never crashes the boundary detection response.
-    elevation_markers: list[dict] = []       # interior → elevationSpikes
-    fringe_boundary_heights: list[dict] = [] # exterior → boundary anchors
+    elevation_markers: list[dict] = []
     try:
-        from golf_intel_ocr import extract_numeric_markers_with_exterior as _extract_ocr
+        from golf_intel_ocr import extract_numeric_markers as _extract_ocr
         raw_markers = _extract_ocr(img_path)
-        all_spikes = markers_to_elevation_spikes(raw_markers)
-
-        # Extract green polygon points for classification (first 'green' polygon)
-        _green_pts: list[dict] = []
-        for _poly in polygons:
-            if _poly.get("type") == "green":
-                _green_pts = _poly.get("points", [])
-                break
-
-        interior_spikes, exterior_spikes = classify_ocr_markers(all_spikes, _green_pts)
-        elevation_markers = interior_spikes
-        # Convert exterior spikes to fringeBoundaryHeights format: {x, y, value}
-        # (using 'value' rather than 'mm' to mark the semantic difference —
-        # these drive boundary heights, not interior surface bumps)
-        fringe_boundary_heights = [
-            {"x": sp["x"], "y": sp["y"], "value": float(sp["mm"])}
-            for sp in exterior_spikes
-        ]
+        elevation_markers = markers_to_elevation_spikes(raw_markers)
         print(
             f"[detect_boundaries] Golf Intel OCR: "
             f"{len(raw_markers)} raw marker(s) → "
-            f"{len(all_spikes)} valid spike(s): "
-            f"{len(elevation_markers)} interior (elevationMarkers), "
-            f"{len(fringe_boundary_heights)} exterior (fringeBoundaryHeights)"
+            f"{len(elevation_markers)} interior elevationMarkers"
         )
     except Exception as _ocr_err:
         # Non-fatal: log but do not fail the whole detect_boundaries call.
@@ -1842,7 +1813,6 @@ def detect_boundaries():
         "polygons": polygons,
         "contourStep": 0.5,
         "elevationMarkers": elevation_markers,
-        "fringeBoundaryHeights": fringe_boundary_heights,
     })
 
 

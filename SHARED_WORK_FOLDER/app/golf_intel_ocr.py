@@ -6,12 +6,12 @@ across the coloured green surface.  The markers are **decimal numbers** in
 the format "X.X" (e.g. "1.2", "2.8", "4.0"), rendered as near-white text
 on a coloured heat-map gradient background.
 
-Additionally, distance-ring labels (integers 5, 10, 15, 20, 25, 30) appear
-at the left and right edges of the image — these are detected by a separate
-exterior pass.
+Note: The distance-ring labels (integers 5, 10, 15, 20, 25, 30) that appear
+at the edges of the image are distance-from-pin markers, NOT altitude values.
+They are not OCR'd or used by the pipeline.
 
-Pipeline (v4.88)
-----------------
+Pipeline
+--------
 Pass A — interior saturated pass:
   1. Build a **white-on-colored mask** — extract bright pixels (grayscale > 175)
      inside the coloured green region (saturation > 20).
@@ -23,23 +23,11 @@ Pass A — interior saturated pass:
   4. Accept decimal values (X.X / X.XX) AND integer-decoded values (e.g. "22" → 2.2).
   5. Deduplicate nearby detections.
 
-Pass B — exterior window pass:
-  6. Slide a window across LEFT (x=0–200) and RIGHT (x=615+) bands of the image.
-  7. Pre-process each window with CLAHE + invert and run EasyOCR.
-  8. Accept integer values in {5, 10, 15, 20, 25, 30} as distance-ring labels.
-  9. Deduplicate.
-
-10. Union Pass A + Pass B, deduplicate combined set.
-
 Public API
 ----------
 extract_numeric_markers(image_path)
     -> list[tuple[int, int, float]]
-    Interior decimal markers only (backward-compatible).
-
-extract_numeric_markers_with_exterior(image_path)
-    -> list[tuple[int, int, float]]
-    All markers — interior decimals + exterior distance-ring labels.
+    Interior decimal markers.
 
 generate_diagnostic_overlay(image_path, markers, output_path, version)
     -> pathlib.Path
@@ -147,30 +135,6 @@ _PATCH_SCALE_MIN_H = 120  # minimum height in px of the scaled patch
 _EASYOCR_MIN_CONF = 0.35
 _TESS_MIN_CONF = 25
 
-# ── Pass B (exterior) constants ───────────────────────────────────────────
-
-# X boundaries for exterior label bands (left / right).
-_EXT_LEFT_X1 = 0
-_EXT_LEFT_X2 = 200
-_EXT_RIGHT_X1_FRACTION = 0.75  # right band starts at 75% of image width
-
-# Sliding window height (px) and step (px) for exterior scan.
-_EXT_WINDOW_H = 35
-_EXT_WINDOW_STEP = 15
-
-# Y range for exterior scan (the distance rings appear in this vertical band).
-_EXT_SCAN_Y_MIN = 100
-_EXT_SCAN_Y_MAX = 900
-
-# Scale factor for exterior window tiles.
-_EXT_SCALE = 3
-
-# Minimum confidence for exterior label acceptance.
-_EXT_MIN_CONF = 0.35
-
-# Integer values accepted as exterior distance-ring labels.
-_EXTERIOR_VALID_INTS: frozenset[int] = frozenset({5, 10, 15, 20, 25, 30})
-
 # ── Shared dedup ──────────────────────────────────────────────────────────
 
 # Duplicate suppression radius (px)
@@ -224,24 +188,6 @@ def _parse_marker_value(s: str) -> float | None:
         if _OCR_MIN_VALUE <= v_dec <= 9.9:
             return v_dec
 
-    return None
-
-
-def _parse_exterior_value(s: str) -> float | None:
-    """
-    Return float value for an exterior distance-ring label, or None.
-
-    Accepts only integers in _EXTERIOR_VALID_INTS (5, 10, 15, 20, 25, 30).
-    """
-    s = s.strip()
-    int_re = re.compile(r"^\d{1,2}$")
-    if int_re.match(s):
-        try:
-            v = int(s)
-        except ValueError:
-            return None
-        if v in _EXTERIOR_VALID_INTS:
-            return float(v)
     return None
 
 
@@ -438,72 +384,6 @@ def _pass_a_interior(
     return raw_hits
 
 
-# ── Pass B: exterior window pass ─────────────────────────────────────────
-
-def _pass_b_exterior(
-    img_bgr: np.ndarray,
-) -> list[tuple[int, int, float, float]]:
-    """
-    Detect exterior distance-ring labels by sliding-window scan of the
-    left and right bands of the image.
-
-    Returns raw (x, y, value, confidence) hits before deduplication.
-    """
-    if not _EASYOCR_AVAILABLE:
-        return []
-
-    reader = _get_easyocr_reader()
-    ih, iw = img_bgr.shape[:2]
-
-    right_x1 = int(iw * _EXT_RIGHT_X1_FRACTION)
-
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(4, 4))
-    raw_hits: list[tuple[int, int, float, float]] = []
-
-    scan_bands = [
-        (_EXT_LEFT_X1, _EXT_LEFT_X2),      # left
-        (right_x1, iw),                     # right
-    ]
-
-    y_max = min(_EXT_SCAN_Y_MAX, ih)
-
-    for bx1, bx2 in scan_bands:
-        for y_start in range(_EXT_SCAN_Y_MIN, y_max, _EXT_WINDOW_STEP):
-            y_end = min(y_max, y_start + _EXT_WINDOW_H)
-            strip = img_bgr[y_start:y_end, bx1:bx2]
-            if strip.size == 0:
-                continue
-
-            gray = cv2.cvtColor(strip, cv2.COLOR_BGR2GRAY)
-            enhanced = clahe.apply(gray)
-            inv = cv2.cvtColor(cv2.bitwise_not(enhanced), cv2.COLOR_GRAY2BGR)
-
-            ph, pw = inv.shape[:2]
-            if ph == 0 or pw == 0:
-                continue
-            scaled = cv2.resize(
-                inv, (pw * _EXT_SCALE, ph * _EXT_SCALE),
-                interpolation=cv2.INTER_CUBIC,
-            )
-
-            results = reader.readtext(scaled, detail=1, allowlist="0123456789.")
-            for bbox, text, conf in results:
-                if conf < _EXT_MIN_CONF or not text.strip():
-                    continue
-                v = _parse_exterior_value(text.strip())
-                if v is None:
-                    continue
-                # Convert bbox coordinates back to original image space
-                pts = np.array(bbox, dtype=float)
-                cx_scaled = float(pts[:, 0].mean())
-                cy_scaled = float(pts[:, 1].mean())
-                cx_img = int(bx1 + cx_scaled / _EXT_SCALE)
-                cy_img = int(y_start + cy_scaled / _EXT_SCALE)
-                raw_hits.append((cx_img, cy_img, v, float(conf)))
-
-    return raw_hits
-
-
 # ── main public API ────────────────────────────────────────────────────────
 
 def extract_numeric_markers(
@@ -512,9 +392,9 @@ def extract_numeric_markers(
     """
     Detect numeric elevation markers on a Golf Intelligence heat map.
 
-    Returns interior decimal markers only (backward-compatible with v4.79).
-    For all markers including exterior distance-ring labels, use
-    extract_numeric_markers_with_exterior().
+    Returns interior decimal markers (X.X format) only.  The exterior
+    distance-ring labels (5, 10, 15, 20, 25, 30) are distance-from-pin
+    values, not altitudes, and are intentionally excluded.
 
     Parameters
     ----------
@@ -537,49 +417,6 @@ def extract_numeric_markers(
 
     raw_hits = _pass_a_interior(img_bgr)
     return _deduplicate(raw_hits)
-
-
-def extract_numeric_markers_with_exterior(
-    image_path: str | Path,
-) -> list[tuple[int, int, float]]:
-    """
-    Detect ALL numeric markers on a Golf Intelligence heat map.
-
-    Combines Pass A (interior decimal elevation markers) and Pass B
-    (exterior distance-ring labels 5, 10, 15, 20, 25, 30).
-
-    Parameters
-    ----------
-    image_path : str or Path
-
-    Returns
-    -------
-    list of (x, y, value) tuples — interior + exterior markers combined,
-    deduplicated, sorted by (y, x).
-
-    Notes
-    -----
-    Exterior distance labels (5–30) fall within the 0 < v ≤ 50 range and
-    are clamped by the existing EGM gradient surface pipeline.  Pixels at
-    those positions outside the green polygon may create small elevation
-    spikes in the 3MF fringe — this is documented, not filtered here.
-    """
-    if not _EASYOCR_AVAILABLE and not _TESSERACT_AVAILABLE:
-        raise RuntimeError(
-            "No OCR engine available. Install: pip install easyocr  OR  "
-            "brew install tesseract && pip install pytesseract"
-        )
-
-    image_path = Path(image_path)
-    img_bgr = cv2.imread(str(image_path))
-    if img_bgr is None:
-        raise FileNotFoundError(f"Cannot read image: {image_path}")
-
-    raw_interior = _pass_a_interior(img_bgr)
-    raw_exterior = _pass_b_exterior(img_bgr)
-
-    combined = raw_interior + raw_exterior
-    return _deduplicate(combined)
 
 
 def generate_diagnostic_overlay(
@@ -606,22 +443,17 @@ def generate_diagnostic_overlay(
     pil = Image.fromarray(img_rgb)
     draw = ImageDraw.Draw(pil)
 
-    # Separate interior (value <= 9.9) from exterior (value >= 5 integer-like)
-    exterior_vals = {5.0, 10.0, 15.0, 20.0, 25.0, 30.0}
-
     CIRCLE_R = 7
     for mx, my, mv in markers:
-        is_exterior = mv in exterior_vals
-        circle_color = (255, 165, 0) if is_exterior else (255, 0, 220)  # orange vs magenta
         draw.ellipse(
             [mx - CIRCLE_R, my - CIRCLE_R, mx + CIRCLE_R, my + CIRCLE_R],
-            outline=circle_color,
+            outline=(255, 0, 220),  # magenta
             width=2,
         )
-        label = f"{int(mv)}" if is_exterior else f"{mv:.1f}"
+        label = f"{mv:.1f}"
         lx, ly = mx + CIRCLE_R + 2, my - 8
         draw.text((lx + 1, ly + 1), label, fill=(0, 0, 0))
-        draw.text((lx, ly), label, fill=(255, 20, 147) if not is_exterior else (255, 165, 0))
+        draw.text((lx, ly), label, fill=(255, 20, 147))
 
     # ── Version badge upper-left ───────────────────────────────────────────
     badge = f"Golf Intel OCR {version}"
@@ -634,9 +466,7 @@ def generate_diagnostic_overlay(
     )
     draw.text((bx0, by0), badge, fill=(255, 255, 80))
 
-    n_interior = sum(1 for _, _, mv in markers if mv not in exterior_vals)
-    n_exterior = sum(1 for _, _, mv in markers if mv in exterior_vals)
-    count_text = f"{len(markers)} total ({n_interior} interior / {n_exterior} exterior)"
+    count_text = f"{len(markers)} interior markers"
     cy2 = by0 + badge_h + 6
     draw.rectangle(
         [bx0 - 2, cy2 - 2, bx0 + len(count_text) * 7 + 4, cy2 + badge_h + 2],
@@ -658,10 +488,10 @@ def run_overlay(image_path: str, output_path: str | None = None) -> None:
     stem = image_path.stem
     if output_path is None:
         out_dir = Path(__file__).parent.parent / "owner_inbox"
-        output_path = out_dir / f"golf_intel_numeric_ocr_{stem}_2026-09-28.png"
+        output_path = out_dir / f"golf_intel_numeric_ocr_{stem}_2026-10-02.png"
 
     print(f"[golf_intel_ocr] Reading: {image_path}")
-    markers = extract_numeric_markers_with_exterior(image_path)
+    markers = extract_numeric_markers(image_path)
     print(f"[golf_intel_ocr] Detected {len(markers)} markers:")
     for mx, my, mv in markers:
         print(f"  ({mx:4d}, {my:4d})  value={mv}")

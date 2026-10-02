@@ -525,7 +525,7 @@
             @dblclick="onDblClick($event)"
             @contextmenu.prevent="onRightClick($event)"
             class="block w-full"
-            style="cursor: default;">
+            :style="spikeMode ? 'cursor: crosshair;' : 'cursor: default;'">
     </canvas>
     <div x-show="!imgLoaded" class="absolute inset-0 flex items-center justify-center text-notion-muted text-sm">
       <span x-show="!selectedImage">Click <strong>New Project</strong> to begin.</span>
@@ -566,33 +566,45 @@
       </div>
     </div>
 
-    {# ── OCR detection status strip (v4.90) ────────────────────
+    {# ── OCR detection status strip (v4.95) ────────────────────
        Compact read-only strip showing how many G (interior elevation)
-       and F (fringe boundary) markers were detected by OCR.
+       markers were detected by OCR.
        Hidden when no image is loaded or no markers have been found. #}
-    <div x-show="imgLoaded && (elevationSpikes.length > 0 || fringeBoundaryHeights.length > 0)"
+    <div x-show="imgLoaded && elevationSpikes.length > 0 && !spikeMode"
          x-transition
          class="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm border border-gray-200 rounded-md px-2 py-1 shadow-sm pointer-events-none"
          style="z-index:25;">
       <span class="text-[10px] text-gray-500 font-mono"
-            x-text="elevationSpikes.length + ' G · ' + fringeBoundaryHeights.length + ' F detected'">
+            x-text="elevationSpikes.length + ' G detected'">
       </span>
     </div>
 
-    {# ── Elevation-spike overlays (v4.90 — compact G-badge, editable) ──────
+    {# ── Spike placement mode hint (v4.95) ──────────────────────
+       Shown while spikeMode is active.  Disappears automatically once a spike
+       is placed or Esc is pressed.  pointer-events-none so it doesn't block clicks. #}
+    <div x-show="spikeMode"
+         x-transition
+         class="absolute bottom-2 left-2 bg-orange-50 border border-orange-300 rounded-md px-2 py-1 shadow-sm pointer-events-none"
+         style="z-index:26;">
+      <span class="text-[10px] text-orange-700 font-mono font-medium">
+        Click to place a spike · Esc to cancel
+      </span>
+    </div>
+
+    {# ── Elevation-spike overlays (v4.96 — compact G-badge, editable, user-spike delete) ──
        Rendered as absolutely-positioned HTML on top of the canvas.
-       Uses the same compact visual style as fringe anchors (F-badges).
        Outer wrapper is pointer-events-none so drag on the canvas still works;
        the inner badge div captures pointerdown for dragging, and the input
        has pointer-events-auto so it can be clicked/focused for editing.
-       No spinner (▲/▼), no × delete.  Click the number to edit; Enter/blur
-       commits; Esc reverts. #}
+       No spinner (▲/▼).  User-placed spikes (source === 'user') show a small ×
+       delete button; OCR-sourced spikes (source === 'ocr') show NO delete button.
+       Click the number to edit; Enter/blur commits; Esc reverts. #}
     <template x-for="(sp, sIdx) in elevationSpikes" :key="'spike-' + sIdx">
       <div class="absolute select-none pointer-events-none"
            x-show="imgLoaded"
            :style="`left:${sp.x * scale + offsetX}px; top:${sp.y * scale + offsetY}px; transform:translate(-50%,-50%); z-index:20;`">
         <div @pointerdown.stop="spikePointerDown($event, sIdx)"
-             :title="'G-marker ' + (sIdx + 1) + ' — drag to reposition. Click the number to edit the wanted fringe height (mm).'"
+             :title="'G-marker ' + (sIdx + 1) + (sp.source === 'user' ? ' (user-placed)' : '') + ' — drag to reposition. Click the number to edit the wanted fringe height (mm).'"
              class="flex items-stretch gap-0 rounded shadow-sm border cursor-grab active:cursor-grabbing pointer-events-auto"
              style="background:#E8F5E9; border-color:#388E3C; transition: box-shadow 180ms ease-in-out, transform 180ms ease-in-out;">
           <div class="flex items-center justify-center px-1 border-r"
@@ -601,6 +613,7 @@
           </div>
           <input type="text"
                  :value="sp.mm.toFixed(1)"
+                 data-spike-input
                  @pointerdown.stop
                  @focus="spikeEditStart(sIdx)"
                  @blur="spikeEditCommit(sIdx, $event.target.value)"
@@ -609,40 +622,16 @@
                  class="pointer-events-auto"
                  style="width:44px; padding:1px 4px; background:transparent; border:none; outline:none; color:#1B5E20; font-size:11px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-variant-numeric:tabular-nums; text-align:right; cursor:text;"
                  autocomplete="off" spellcheck="false">
-        </div>
-      </div>
-    </template>
-
-    {# ── Fringe boundary anchor badges (v4.90 — compact F-badge, editable) ──
-       One badge per fringeBoundaryHeights entry.  Visually distinct from G-badges:
-         • Blue colour scheme  (#4B7EC8 border, #E0EDFF background)
-         • Letter 'F' (Fringe) vs 'G' (Ground/elevation)
-         • Not draggable (cursor-default) — positions are OCR-derived
-       Click the number to edit; Enter/blur commits; Esc reverts.
-       Outer wrapper is pointer-events-none (canvas drag-through); input has
-       pointer-events-auto so it is focusable. #}
-    <template x-for="(anchor, aIdx) in fringeBoundaryHeights" :key="'anchor-' + aIdx">
-      <div class="absolute select-none pointer-events-none"
-           data-fringe-anchor="true"
-           x-show="imgLoaded"
-           :style="`left:${anchor.x * scale + offsetX}px; top:${anchor.y * scale + offsetY}px; transform:translate(-50%,-50%); z-index:18;`">
-        <div :title="'F-anchor ' + (aIdx + 1) + ' — click number to edit fringe boundary height (mm).'"
-             class="flex items-stretch gap-0 rounded shadow-sm border cursor-default pointer-events-auto"
-             style="background:#E0EDFF; border-color:#4B7EC8;">
-          <div class="flex items-center justify-center px-1 border-r"
-               style="background:#B8D3F0; border-color:#4B7EC8; color:#1A3A6B; font-weight:600; font-size:10px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; line-height:1;">
-            F
-          </div>
-          <input type="text"
-                 :value="anchor.value.toFixed(1)"
-                 @pointerdown.stop
-                 @focus="anchorEditStart(aIdx)"
-                 @blur="anchorEditCommit(aIdx, $event.target.value)"
-                 @keydown.enter.prevent="anchorEditCommit(aIdx, $event.target.value); $event.target.blur()"
-                 @keydown.escape.prevent="anchorEditCancel(aIdx, $event.target)"
-                 class="pointer-events-auto"
-                 style="width:44px; padding:1px 4px; background:transparent; border:none; outline:none; color:#1A3A6B; font-size:11px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-variant-numeric:tabular-nums; text-align:right; cursor:text;"
-                 autocomplete="off" spellcheck="false">
+          {# × delete — only on user-placed spikes; OCR spikes never get this button #}
+          <button x-show="sp.source === 'user'"
+                  @pointerdown.stop
+                  @click.stop="removeElevationSpike(sIdx)"
+                  title="Remove this user-placed spike"
+                  class="pointer-events-auto flex items-center justify-center px-1 border-l transition-colors duration-150"
+                  style="background:transparent; border-color:#388E3C; color:#6B8F6B; font-size:11px; line-height:1; cursor:pointer;"
+                  onmouseover="this.style.color='#B71C1C'; this.style.background='#FFEBEE';"
+                  onmouseout="this.style.color='#6B8F6B'; this.style.background='transparent';"
+                  aria-label="Delete spike">&times;</button>
         </div>
       </div>
     </template>
@@ -704,12 +693,12 @@
       Add Water
     </button>
 
-    <button @click="addElevationSpike()"
+    <button @click="startSpikePlacement()"
             :disabled="!imgLoaded"
-            :class="imgLoaded ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-500/40 cursor-not-allowed'"
+            :class="!imgLoaded ? 'bg-orange-500/40 cursor-not-allowed' : (spikeMode ? 'bg-orange-700 ring-2 ring-orange-400 ring-offset-1 hover:bg-orange-800' : 'bg-orange-500 hover:bg-orange-600')"
             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white transition-default"
-            title="Add an elevation spike — drops a draggable marker on the fringe with the wanted fringe height in mm. Use the ▲/▼ buttons to adjust in 0.1 mm steps.">
-      Add Elevation Spike
+            title="Add Spike — click this button then click anywhere on the canvas to place an elevation spike at that position. Esc cancels.">
+      Add Spike
     </button>
 
     <button @click="toggleTeeHole()"
@@ -855,17 +844,9 @@ function polygonEditor() {
     // location. Rendered as HTML overlays on top of the canvas.
     // Persisted at the top level of the .egm payload as `elevationSpikes`.
     // Geometry pipeline (Topo) applies these as Gaussian bumps on the fringe.
-    elevationSpikes: [],   // [{x, y, mm}] — x,y in image-pixel coords
+    elevationSpikes: [],   // [{x, y, mm, source}] — x,y in image-pixel coords; source: "ocr"|"user"
+    spikeMode: false,      // true while placement mode is active (Add Spike button)
 
-    // Fringe boundary heights (task 658, v4.81) — exterior OCR markers that
-    // sit on the black boundary line surrounding the green.  Their value drives
-    // fringe Z (and green seam Z) at the nearest green/fringe interface point,
-    // creating a continuous fringe/green surface anchored by the exterior number.
-    // Populated by runDetection() from the server's fringeBoundaryHeights field.
-    // Persisted to the EGM as `fringeBoundaryHeights`.
-    // The geometry pipeline (gradient_surface_diagnostic.py) consumes these as
-    // boundary anchors — they are NOT shown in the UI spike list (silent geometry).
-    fringeBoundaryHeights: [],  // [{x, y, value}] — x,y in image-pixel coords
     _spikeDrag: null,      // {idx, startClientX, startClientY, startX, startY, moved} during drag
 
     // Tee-hole marker — a single optional point (in mm from print top-left)
@@ -1042,45 +1023,28 @@ function polygonEditor() {
             this.contourStep = result.contourStep;
           }
 
-          // ── OCR elevation wiring (task 650, v4.79; task 658, v4.81) ────
-          // The server classifies OCR markers into two groups:
-          //
-          //   elevationMarkers   — interior markers (inside the green polygon).
-          //     → populate elevationSpikes (Gaussian bumps on fringe surface).
-          //
-          //   fringeBoundaryHeights — exterior markers (on the black outline).
-          //     → populate fringeBoundaryHeights (boundary anchors driving
-          //       fringe Z and green seam Z at the interface).
-          //     → NOT shown in the UI spike list; consumed silently by geometry.
+          // ── OCR elevation wiring (task 650, v4.79) ──────────────────────
+          // elevationMarkers — interior decimal markers (X.X elevation values).
+          //   → populate elevationSpikes (Gaussian bumps on fringe surface).
+          // Exterior ring numbers (10,15,20,25,30) are distance-from-pin values,
+          // not altitudes — they are excluded from the pipeline.
           if (Array.isArray(result.elevationMarkers) && result.elevationMarkers.length > 0) {
             this.elevationSpikes = result.elevationMarkers.map(m => ({
               x: m.x,
               y: m.y,
               mm: m.mm,
+              source: 'ocr',
             }));
             console.log('[runDetection] OCR elevation spikes:', this.elevationSpikes.length, this.elevationSpikes);
           } else {
             // No interior markers detected — leave elevationSpikes as cleared by startNewProject()
             console.log('[runDetection] No OCR elevation markers returned from server');
           }
-          if (Array.isArray(result.fringeBoundaryHeights) && result.fringeBoundaryHeights.length > 0) {
-            this.fringeBoundaryHeights = result.fringeBoundaryHeights.map(m => ({
-              x: m.x,
-              y: m.y,
-              value: m.value,
-            }));
-            console.log('[runDetection] OCR fringe boundary heights:', this.fringeBoundaryHeights.length, this.fringeBoundaryHeights);
-          } else {
-            // No exterior markers detected — clear any stale anchors from a prior detection
-            this.fringeBoundaryHeights = [];
-            console.log('[runDetection] No OCR fringe boundary heights returned from server');
-          }
 
           this.selectedPoly = 0;
           this.draw();
           const spikeNote = this.elevationSpikes.length > 0 ? ' + ' + this.elevationSpikes.length + ' OCR spike(s)' : '';
-          const anchorNote = this.fringeBoundaryHeights.length > 0 ? ' + ' + this.fringeBoundaryHeights.length + ' fringe anchor(s)' : '';
-          this.flash('Detected ' + this.polygons.length + ' region(s) + ' + this.contours.length + ' contour(s)' + spikeNote + anchorNote + ' — scale=' + this.scale.toFixed(3), true);
+          this.flash('Detected ' + this.polygons.length + ' region(s) + ' + this.contours.length + ' contour(s)' + spikeNote + ' — scale=' + this.scale.toFixed(3), true);
           this.autoSave();
         } else if (result.status === 'error') {
           console.warn('Detection server error:', result.msg);
@@ -1577,6 +1541,42 @@ function polygonEditor() {
       if (e.button !== 0) return; // left click only
       const { x, y } = this.canvasToImg(e);
 
+      // ── Spike placement mode (v4.95) ──────────────────────────────────────
+      // When the user clicked "Add Spike" and spikeMode is active, the next
+      // canvas click places a spike at the image-pixel position.  Works anywhere
+      // on the canvas — inside the green, on the fringe, or exterior — intentional
+      // so users can mark elevated fringe zones that the heat map can't express.
+      if (this.spikeMode) {
+        // Compute default mm: nearest existing spike's mm value, or 0.
+        let defaultMm = 0;
+        if (this.elevationSpikes.length > 0) {
+          let nearestDist = Infinity;
+          for (const sp of this.elevationSpikes) {
+            const dist = Math.hypot(sp.x - x, sp.y - y);
+            if (dist < nearestDist) {
+              nearestDist = dist;
+              defaultMm = sp.mm;
+            }
+          }
+        }
+        this.elevationSpikes.push({
+          x: Math.round(x),
+          y: Math.round(y),
+          mm: defaultMm,
+          source: 'user',
+        });
+        this.spikeMode = false;
+        this.autoSave();
+        this.flash('Spike placed — click the value to edit, Enter to commit', true);
+        // Focus the new spike's input on the next tick
+        const newIdx = this.elevationSpikes.length - 1;
+        this.$nextTick(() => {
+          const inputs = this.$el.querySelectorAll('[data-spike-input]');
+          if (inputs[newIdx]) inputs[newIdx].focus();
+        });
+        return;
+      }
+
       // In contour drawing mode, clicks add points to the draft
       if (this.contourMode) {
         this.contourDraft.push({ x: Math.round(x), y: Math.round(y) });
@@ -2056,6 +2056,16 @@ function polygonEditor() {
     },
 
     // ── Elevation spikes ─────────────────────────────────────
+
+    // startSpikePlacement (v4.95) — enter placement mode.
+    // Button goes active; cursor becomes crosshair via :style binding on canvas;
+    // next canvas left-click places the spike via onMouseDown() above.
+    startSpikePlacement() {
+      if (!this.imgLoaded) return;
+      this.spikeMode = !this.spikeMode; // toggle: click again to cancel
+    },
+
+    // addElevationSpike — legacy programmatic spawn (still used by OCR detection).
     // Spawn a spike on the fringe area (above the image, inside the
     // fringe padding zone the canvas already visualizes). Multiple
     // spikes are staggered so they don't overlap on spawn.
@@ -2187,39 +2197,6 @@ function polygonEditor() {
         if (inputEl) inputEl.value = prev.mm.toFixed(1);
       }
       this._spikeEditPrev = null;
-    },
-
-    // ── Fringe anchor (F-badge) inline edit ─────────────────
-    // Mirror of spikeEdit* for fringeBoundaryHeights[aIdx].value.
-    // anchorEditStart   — store pre-edit value for Esc-revert.
-    // anchorEditCommit  — parse input, clamp, write back, autoSave.
-    // anchorEditCancel  — restore the pre-edit value to the input.
-    _anchorEditPrev: null,  // {idx, value} during an in-progress edit
-
-    anchorEditStart(idx) {
-      const a = this.fringeBoundaryHeights[idx];
-      if (!a) return;
-      this._anchorEditPrev = { idx, value: a.value };
-    },
-
-    anchorEditCommit(idx, raw) {
-      const a = this.fringeBoundaryHeights[idx];
-      if (!a) return;
-      const parsed = parseFloat(raw);
-      if (!isNaN(parsed)) {
-        this.fringeBoundaryHeights[idx].value = Math.round(Math.max(-50, Math.min(50, parsed)) * 10) / 10;
-        this.autoSave();
-      }
-      this._anchorEditPrev = null;
-    },
-
-    anchorEditCancel(idx, inputEl) {
-      const prev = this._anchorEditPrev;
-      if (prev && prev.idx === idx) {
-        this.fringeBoundaryHeights[idx].value = prev.value;
-        if (inputEl) inputEl.value = prev.value.toFixed(1);
-      }
-      this._anchorEditPrev = null;
     },
 
     // ── Tee-hole marker ──────────────────────────────────────
@@ -2420,11 +2397,7 @@ function polygonEditor() {
           x: Math.round(sp.x * 100) / 100,
           y: Math.round(sp.y * 100) / 100,
           mm: Math.round(sp.mm * 10) / 10,
-        })),
-        fringeBoundaryHeights: this.fringeBoundaryHeights.map(a => ({
-          x: Math.round(a.x * 100) / 100,
-          y: Math.round(a.y * 100) / 100,
-          value: Math.round(a.value * 10) / 10,
+          source: sp.source || 'ocr',
         })),
       };
       // Only serialize tee_hole when set — keeps EGMs without a tee hole
@@ -2578,7 +2551,6 @@ function polygonEditor() {
       this.polygons              = [];
       this.contours              = [];
       this.elevationSpikes       = [];
-      this.fringeBoundaryHeights = [];
       this.selectedPoly          = 0;
       this.selectedVerts      = [];
       this._pendingRestore    = null;
@@ -2693,16 +2665,12 @@ function polygonEditor() {
               x: Number(sp.x) || 0,
               y: Number(sp.y) || 0,
               mm: (typeof sp.mm === 'number') ? sp.mm : 0,
+              // source: backward compat — spikes without source field default to "ocr"
+              source: sp.source || 'ocr',
             }))
           : [];
-        // Fringe boundary heights (task 658, v4.81) — restore from EGM on load.
-        this.fringeBoundaryHeights = Array.isArray(data.fringeBoundaryHeights)
-          ? data.fringeBoundaryHeights.map(a => ({
-              x: Number(a.x) || 0,
-              y: Number(a.y) || 0,
-              value: (typeof a.value === 'number') ? a.value : 0,
-            }))
-          : [];
+        // fringeBoundaryHeights field in legacy EGMs is gracefully ignored —
+        // exterior ring numbers are distance-from-pin, not altitude (2026-10-02).
         // Tee-hole: absent field = default-populate at (30, 30) on the left.
         // A saved position (even in an older EGM) always wins over the default.
         // The default is client-side only — it isn't persisted to disk until the
@@ -2783,7 +2751,6 @@ function polygonEditor() {
       this.selectedVerts = [];
       this.polygons = [];
       this.elevationSpikes = [];
-      this.fringeBoundaryHeights = [];
       // Default-populate the tee hole on the left side (30 mm inset) — same
       // convention as loadProject(). User can remove it explicitly.
       this.teeHole = {
@@ -3188,11 +3155,7 @@ function polygonEditor() {
           x: Math.round(sp.x * 100) / 100,
           y: Math.round(sp.y * 100) / 100,
           mm: Math.round(sp.mm * 10) / 10,
-        })),
-        fringeBoundaryHeights: this.fringeBoundaryHeights.map(a => ({
-          x: Math.round(a.x * 100) / 100,
-          y: Math.round(a.y * 100) / 100,
-          value: Math.round(a.value * 10) / 10,
+          source: sp.source || 'ocr',
         })),
         open_in_slicer: this.openInSlicer,
       };
@@ -3287,6 +3250,12 @@ function polygonEditor() {
       if (e.key === 'Enter' && this.contourMode) {
         e.preventDefault();
         this.finishContour();
+        return;
+      }
+      // Escape: cancel spike placement mode (v4.95)
+      if (e.key === 'Escape' && this.spikeMode) {
+        this.spikeMode = false;
+        this.flash('Spike placement cancelled', true);
         return;
       }
       // Escape: cancel contour drawing mode

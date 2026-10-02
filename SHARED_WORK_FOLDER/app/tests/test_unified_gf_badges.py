@@ -1,43 +1,32 @@
 """
 test_unified_gf_badges.py — Bug→TDD for unified G/F badge UI (task 683, v4.90).
+Updated 2026-10-02: F-badge (fringeBoundaryHeights) removed per semantic pivot
+(exterior ring numbers are distance-from-pin, not altitude). G-badge tests intact.
 
-Thomas's request: interior spikes → compact G-badge with editable number input,
-fringe anchors → compact F-badge with editable number input.
-No spinner (▲/▼), no × delete button on either type.
-Both use the compact F-badge visual style as baseline.
-
-Tests (RED first, implemented after, then GREEN):
+Tests still active:
 
   T1  G-badge render:
       elevationSpikes entries render as compact G-badges (not E-badges, not
       spinner, not × button).
-  T2  F-badge render:
-      fringeBoundaryHeights entries render as compact F-badges with a focusable
-      number input (previously non-editable).
   T3  G-badge uses letter 'G':
       The inner badge letter for elevation spikes is 'G', not 'E'.
   T4  No spinner on G-badge:
       The G-badge section must not contain ▲/▼ spinner buttons
       (▲ = &#9650;, ▼ = &#9660;).
-  T5  No spinner on F-badge:
-      The F-badge section must not contain ▲/▼ spinner buttons.
-  T6  No delete (×) on G-badge:
-      The G-badge section must not contain a × delete affordance.
-  T7  No delete (×) on F-badge:
-      The F-badge section must not contain a × delete affordance.
-  T8  Editable input on G-badge:
-      The G-badge template section contains an <input> element for editing.
-  T9  Editable input on F-badge:
-      The F-badge template section contains an <input> element for editing.
-  T10 G-badge edit commits to elevationSpikes[i].mm:
-      The editor JS has a handler that writes back to elevationSpikes[i].mm.
-  T11 F-badge edit commits to fringeBoundaryHeights[i].value:
-      The editor JS has a handler that writes back to fringeBoundaryHeights[i].value.
+  T6  No delete (×) on G-badge.
+  T8  Editable input on G-badge.
+  T10 G-badge edit commits to elevationSpikes[i].mm.
   T12 Esc reverts: editor JS has a keydown handler referencing 'Escape' or 'Esc'.
-  T13 Status strip updated: strip uses 'G' and 'F' badge language.
-  T14 Pointer-events wrapping: outer wrapper has pointer-events-none, input
-      itself has pointer-events-auto (so input is focusable through the overlay).
-  T15 APP_VERSION is v4.90 in app.py.
+  T14 Pointer-events wrapping on G-badge.
+  T15 APP_VERSION is v4.92 in app.py.
+
+Tests retired (F-badge removed 2026-10-02):
+  T2  F-badge render          — fringeBoundaryHeights pipeline deleted
+  T5  No spinner on F-badge   — ditto
+  T7  No delete on F-badge    — ditto
+  T9  Editable input F-badge  — ditto
+  T11 F commit handler        — ditto
+  T13 Status strip G+F labels — strip now shows G only
 
 Run:
     cd /Volumes/GIT/CLAUDE/SHARED_WORK_FOLDER
@@ -114,8 +103,12 @@ def spike_template(editor_html: str) -> str:
 
 @pytest.fixture(scope="module")
 def fringe_template(editor_html: str) -> str:
-    """The x-for template block that renders fringe boundary heights."""
-    return _extract_xfor_template(editor_html, "fringeBoundaryHeights")
+    """
+    RETIRED 2026-10-02: fringeBoundaryHeights template removed (exterior ring
+    numbers are distance-from-pin, not altitude).  Returns empty string so
+    retired tests skip gracefully via their own skip marks.
+    """
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -149,22 +142,15 @@ class TestGBadgeRender:
 # T2  F-badge render: fringeBoundaryHeights has editable input
 # ---------------------------------------------------------------------------
 
+@pytest.mark.skip(reason="F-badge removed 2026-10-02: exterior ring numbers are distance-from-pin, not altitude")
 class TestFBadgeRender:
-    """T2 — fringeBoundaryHeights template has compact F-badge + editable input."""
+    """T2 — RETIRED: fringeBoundaryHeights pipeline deleted 2026-10-02."""
 
     def test_fringe_template_exists(self, fringe_template):
-        """T2a — x-for template over fringeBoundaryHeights is present."""
-        assert fringe_template, (
-            "editor.html: no x-for template found iterating fringeBoundaryHeights"
-        )
+        pass
 
     def test_f_badge_letter_present(self, fringe_template):
-        """T2b — F-badge still uses 'F' letter."""
-        has_f = bool(re.search(r'>\s*F\s*<', fringe_template))
-        assert has_f, (
-            "fringeBoundaryHeights template missing 'F' badge letter.\n"
-            f"Template snippet:\n{fringe_template[:600]}"
-        )
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -200,16 +186,10 @@ class TestNoSpinner:
             "elevationSpikes template still has ▼ (down arrow / &#9660;) spinner button."
         )
 
+    @pytest.mark.skip(reason="F-badge removed 2026-10-02")
     def test_no_spinner_on_f_badge(self, fringe_template):
-        """T5 — fringeBoundaryHeights template has no ▲/▼ spinner buttons."""
-        has_up = "&#9650;" in fringe_template or "▲" in fringe_template
-        has_down = "&#9660;" in fringe_template or "▼" in fringe_template
-        assert not has_up, (
-            "fringeBoundaryHeights template has ▲ (up arrow / &#9650;) spinner button — unexpected."
-        )
-        assert not has_down, (
-            "fringeBoundaryHeights template has ▼ (down arrow / &#9660;) spinner button — unexpected."
-        )
+        """T5 — RETIRED: fringeBoundaryHeights template deleted 2026-10-02."""
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -217,26 +197,42 @@ class TestNoSpinner:
 # ---------------------------------------------------------------------------
 
 class TestNoDelete:
-    """T6, T7 — Neither G nor F badge has a × delete button."""
+    """T6, T7 — G badge × delete button (if present) must be conditional on source === 'user';
+    OCR spikes must never show an unconditional delete affordance."""
 
-    def test_no_delete_on_g_badge(self, spike_template):
-        """T6 — elevationSpikes template has no × delete button."""
+    def test_no_unconditional_delete_on_g_badge(self, spike_template):
+        """T6 — if × / &times; appears in the spike template, it must be guarded
+        by sp.source === 'user' (x-show or x-if). An unconditional delete button
+        would allow OCR spikes to be deleted, which is forbidden.
+
+        Updated 2026-10-02 (v4.96): user-spike delete affordance ships with a
+        source guard, so the × IS in the template — the test now verifies the
+        guard rather than the absence of ×.
+        """
         has_times = "&times;" in spike_template or "×" in spike_template
-        # Also check for removeElevationSpike being called from inside the template
-        has_remove_call = "removeElevationSpike" in spike_template
-        assert not has_times, (
-            "elevationSpikes template still contains '×' / &times; delete button."
+        if not has_times:
+            # No × at all — fully compliant (pre-T4 state)
+            return
+        # × IS present — verify it is guarded by source === 'user'
+        has_source_guard = re.search(
+            r"""(?:x-show|x-if)\s*=\s*["'].*?sp\.source\s*===?\s*['"]user['"].*?["']""",
+            spike_template,
         )
-        assert not has_remove_call, (
-            "elevationSpikes template still contains removeElevationSpike() call — delete affordance remains."
+        assert has_source_guard, (
+            "elevationSpikes template contains × / &times; but it is NOT guarded by "
+            "sp.source === 'user'. OCR spikes must never show a delete button.\n"
+            "Wrap the × button in x-show=\"sp.source === 'user'\"."
         )
 
+    @pytest.mark.skip(reason="F-badge removed 2026-10-02")
     def test_no_delete_on_f_badge(self, fringe_template):
-        """T7 — fringeBoundaryHeights template has no × delete button."""
-        has_times = "&times;" in fringe_template or "×" in fringe_template
-        assert not has_times, (
-            "fringeBoundaryHeights template contains '×' / &times; delete button — unexpected."
-        )
+        """T7 — RETIRED: fringeBoundaryHeights template deleted 2026-10-02."""
+        pass
+
+    @pytest.mark.skip(reason="F-badge removed 2026-10-02")
+    def test_no_delete_on_f_badge(self, fringe_template):
+        """T7 — RETIRED: fringeBoundaryHeights template deleted 2026-10-02."""
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -252,11 +248,10 @@ class TestEditableInput:
             "elevationSpikes template has no <input> element — values are not editable."
         )
 
+    @pytest.mark.skip(reason="F-badge removed 2026-10-02")
     def test_input_on_f_badge(self, fringe_template):
-        """T9 — fringeBoundaryHeights template contains an <input> element."""
-        assert "<input" in fringe_template, (
-            "fringeBoundaryHeights template has no <input> element — values are not editable."
-        )
+        """T9 — RETIRED: fringeBoundaryHeights template deleted 2026-10-02."""
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -278,16 +273,10 @@ class TestEditCommit:
             "G-badge edit commits are not wired."
         )
 
+    @pytest.mark.skip(reason="F-badge removed 2026-10-02")
     def test_f_badge_commit_writes_value(self, editor_html):
-        """T11 — JS handler writes to fringeBoundaryHeights[i].value."""
-        pattern = re.compile(
-            r'fringeBoundaryHeights\s*\[.*?\]\s*\.\s*value\s*=',
-            re.DOTALL,
-        )
-        assert pattern.search(editor_html), (
-            "editor.html: no JS assignment to fringeBoundaryHeights[i].value found — "
-            "F-badge edit commits are not wired."
-        )
+        """T11 — RETIRED: fringeBoundaryHeights pipeline deleted 2026-10-02."""
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -317,44 +306,32 @@ class TestEscReverts:
 # ---------------------------------------------------------------------------
 
 class TestStatusStrip:
-    """T13 — Status strip references G and F, not the old verbose wording."""
+    """T13 — Status strip references G count (F removed 2026-10-02)."""
 
     def test_status_strip_present(self, editor_html):
-        """T13a — status strip div is still in the template."""
-        # It should show spike/anchor counts
+        """T13a — status strip div is still in the template with G spike count."""
         has_spike_count = "elevationSpikes.length" in editor_html
-        has_anchor_count = "fringeBoundaryHeights.length" in editor_html
-        assert has_spike_count and has_anchor_count, (
-            "Status strip missing elevationSpikes.length or fringeBoundaryHeights.length references."
+        assert has_spike_count, (
+            "Status strip missing elevationSpikes.length reference."
         )
 
-    def test_status_strip_uses_g_f_labels(self, editor_html):
-        """T13b — Status strip uses 'G' and 'F' labels (not just the old verbose text)."""
-        # Find the status strip div (has absolute bottom-2 class from original)
-        strip_match = re.search(
-            r'bottom-2.*?</div>',
-            editor_html,
-            re.DOTALL,
-        )
-        # We check the x-text expression for the strip includes G and F
-        # The strip is a span with x-text that includes something like "... G · ... F"
-        # Look for 'G' and 'F' as distinct letter labels in x-text near the strip
+    def test_status_strip_uses_g_label(self, editor_html):
+        """T13b — Status strip uses 'G' label."""
         strip_area = _extract_section(
             editor_html,
             "OCR detection status strip",
             "── Elevation-spike overlays",
         )
-        # The strip area should contain G and F letters in the x-text expression
-        has_g_label = re.search(r"['\"].*\bG\b.*['\"]", strip_area) or "' G '" in strip_area or "G" in strip_area
-        has_f_label = re.search(r"['\"].*\bF\b.*['\"]", strip_area) or "' F '" in strip_area or "F" in strip_area
+        has_g_label = re.search(r"['\"].*\bG\b.*['\"]", strip_area) or "G" in strip_area
         assert has_g_label, (
             "Status strip does not reference 'G' badge letter.\n"
             f"Strip area: {strip_area[:400]}"
         )
-        assert has_f_label, (
-            "Status strip does not reference 'F' badge letter.\n"
-            f"Strip area: {strip_area[:400]}"
-        )
+
+    @pytest.mark.skip(reason="F-badge removed 2026-10-02: strip now shows G count only")
+    def test_status_strip_uses_g_f_labels(self, editor_html):
+        """T13b (orig) — RETIRED: F badge removed 2026-10-02."""
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -385,20 +362,10 @@ class TestPointerEvents:
             "is pointer-events-none, input has pointer-events-auto."
         )
 
+    @pytest.mark.skip(reason="F-badge removed 2026-10-02")
     def test_f_badge_input_is_focusable(self, fringe_template):
-        """T14b — F-badge outer wrapper has pointer-events-none but input is focusable."""
-        outer_has_none = "pointer-events-none" in fringe_template
-        input_match = re.search(r'<input[^>]*>', fringe_template)
-        if input_match:
-            input_tag = input_match.group(0)
-            input_has_none = "pointer-events-none" in input_tag
-            assert not input_has_none, (
-                "F-badge <input> has pointer-events-none directly on it — not focusable."
-            )
-        assert outer_has_none, (
-            "F-badge outer wrapper missing pointer-events-none — spec says outer wrapper "
-            "is pointer-events-none, input has pointer-events-auto."
-        )
+        """T14b — RETIRED: F-badge template deleted 2026-10-02."""
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -406,10 +373,12 @@ class TestPointerEvents:
 # ---------------------------------------------------------------------------
 
 class TestAppVersion:
-    """T15 — APP_VERSION in app.py is v4.90."""
+    """T15 — APP_VERSION in app.py is v4.95+ (updated to v4.96 for user-spike delete affordance)."""
 
-    def test_app_version_is_v490(self, app_py_src):
-        """T15 — app.py APP_VERSION = 'v4.90'."""
-        assert 'APP_VERSION = "v4.90"' in app_py_src or "APP_VERSION = 'v4.90'" in app_py_src, (
-            "app.py APP_VERSION is not v4.90 — bump was not applied."
+    def test_app_version_is_v494(self, app_py_src):
+        """T15 — app.py APP_VERSION = 'v4.95' or later (v4.96 after user-spike delete task)."""
+        has_v495 = 'APP_VERSION = "v4.95"' in app_py_src or "APP_VERSION = 'v4.95'" in app_py_src
+        has_v496 = 'APP_VERSION = "v4.96"' in app_py_src or "APP_VERSION = 'v4.96'" in app_py_src
+        assert has_v495 or has_v496, (
+            "app.py APP_VERSION is not v4.95 or v4.96 — version bump not applied."
         )

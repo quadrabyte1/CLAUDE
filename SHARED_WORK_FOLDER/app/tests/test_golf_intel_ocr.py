@@ -8,6 +8,9 @@ Run:
 Golf Intelligence heat map markers are decimal numbers ("1.2", "2.8", "4.0")
 rendered as near-black text with white outline on the coloured gradient surface.
 
+Note: exterior distance-ring labels (5, 10, 15, 20, 25, 30) are distance-from-pin
+values, NOT altitudes.  The exterior OCR pass was removed 2026-10-02.
+
 Test coverage:
   T0   Unit helpers: _is_valid_marker, _deduplicate
   T1   Synthetic fixture — OCR finds "1.5", "2.8", "4.0" at known positions
@@ -15,12 +18,12 @@ Test coverage:
   T3   Real-image smoke test — DeLaveaga Hole 3 yields N >= 3 markers
   T4   Overlay writer — PNG written, same dims, marker pixels non-white
   T5   Idempotency — same image returns same values twice
-  T6   Stanford H8 interior recall — >= 12 of 14 known markers detected
-  T7   Stanford H8 exterior labels — >= 8 of 12 distance-ring labels detected
+  T6   Stanford H8 interior recall — >= 12 of 15 known markers detected
+  T7   REMOVED — exterior distance-ring labels are not altitudes (2026-10-02)
   T8   No duplicate detections — markers within 10px collapse to one
   T9   DeLaveaga regression — detection count does not drop below v4.79 baseline (9)
   T10  DeLaveaga H5 — interior recall (6.0 and 6.5 must be detected)
-  T11  Stanford H8 regression after v4.85 fix (no new false positives)
+  T11  Stanford H8 regression after v4.85 fix (interior markers only)
   T12  DeLaveaga H5 — bottom-right CC31 marker detected after _PATCH_MAX_H fix
 """
 
@@ -43,7 +46,6 @@ from golf_intel_ocr import (
     generate_diagnostic_overlay,
     _is_valid_marker,
     _deduplicate,
-    extract_numeric_markers_with_exterior,
 )
 
 # ---------------------------------------------------------------------------
@@ -408,24 +410,6 @@ _STANFORD_H8_INTERIOR_KNOWN = [
     (502, 817, 3.8),
 ]
 
-# Known exterior distance-ring label positions for Stanford H8.
-_STANFORD_H8_EXTERIOR_KNOWN = [
-    # (approx_cx, approx_cy, value)
-    (153, 143, 30.0),
-    (716, 144, 30.0),
-    (54,  279, 25.0),
-    (760, 279, 25.0),
-    (41,  415, 20.0),
-    (777, 416, 20.0),
-    (57,  551, 15.0),
-    (771, 551, 15.0),
-    (95,  687, 10.0),
-    (717, 687, 10.0),
-    (149, 820, 5.0),
-    (622, 822, 5.0),
-]
-
-
 def _count_matched_markers(
     detected: list[tuple[int, int, float]],
     known: list[tuple[int, int, float]],
@@ -445,24 +429,21 @@ def _count_matched_markers(
 @pytest.mark.skipif(not _STANFORD_H8.exists(), reason="Stanford Hole 8 image not present")
 class TestStanfordH8InteriorRecall:
     """
-    T6 — >= 12 of 14 known interior decimal markers detected on Stanford H8.
+    T6 — >= 12 of 15 known interior decimal markers detected on Stanford H8.
 
-    Uses extract_numeric_markers_with_exterior which returns ALL detections
-    (interior + exterior combined).  We filter to those with value <= 9.9
-    (interior decimals) for the interior count.
+    Uses extract_numeric_markers (interior pass only — exterior ring labels
+    are distance-from-pin values, not altitudes, and are excluded).
     """
 
     @pytest.fixture(scope="class")
     def all_markers(self):
-        return extract_numeric_markers_with_exterior(_STANFORD_H8)
+        return extract_numeric_markers(_STANFORD_H8)
 
-    def test_interior_recall_at_least_12_of_14(self, all_markers):
-        # Only decimal-range values are interior markers (0.1–9.9 range used by GI)
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
-        matched = _count_matched_markers(interior, _STANFORD_H8_INTERIOR_KNOWN)
+    def test_interior_recall_at_least_12_of_15(self, all_markers):
+        matched = _count_matched_markers(all_markers, _STANFORD_H8_INTERIOR_KNOWN)
         assert matched >= 12, (
-            f"Interior recall: matched {matched}/14 known interior markers. "
-            f"Detected interior markers: {interior}"
+            f"Interior recall: matched {matched}/15 known interior markers. "
+            f"Detected markers: {all_markers}"
         )
 
     def test_interior_values_are_floats_in_range(self, all_markers):
@@ -479,31 +460,9 @@ class TestStanfordH8InteriorRecall:
 
 
 # ===========================================================================
-# T7   Stanford H8 — exterior distance-ring label recall (>= 8/12)
+# T7   REMOVED — exterior distance-ring labels are distance-from-pin, not
+#      altitude values.  Exterior OCR pass removed 2026-10-02.
 # ===========================================================================
-
-@pytest.mark.skipif(not _STANFORD_H8.exists(), reason="Stanford Hole 8 image not present")
-class TestStanfordH8ExteriorRecall:
-    """
-    T7 — >= 8 of 12 exterior distance-ring labels (5,10,15,20,25,30 left+right)
-    detected on Stanford H8.
-    """
-
-    @pytest.fixture(scope="class")
-    def all_markers(self):
-        return extract_numeric_markers_with_exterior(_STANFORD_H8)
-
-    def test_exterior_recall_at_least_8_of_12(self, all_markers):
-        # Exterior labels are integers: 5, 10, 15, 20, 25, 30
-        exterior_vals = {5.0, 10.0, 15.0, 20.0, 25.0, 30.0}
-        exterior = [(x, y, v) for x, y, v in all_markers if v in exterior_vals]
-        matched = _count_matched_markers(
-            exterior, _STANFORD_H8_EXTERIOR_KNOWN, pos_tol=25, val_tol=0.5
-        )
-        assert matched >= 8, (
-            f"Exterior recall: matched {matched}/12 known exterior labels. "
-            f"Detected exterior: {exterior}"
-        )
 
 
 # ===========================================================================
@@ -515,7 +474,7 @@ class TestNoDuplicates:
 
     @pytest.mark.skipif(not _STANFORD_H8.exists(), reason="Stanford Hole 8 image not present")
     def test_no_duplicates_stanford_h8(self):
-        markers = extract_numeric_markers_with_exterior(_STANFORD_H8)
+        markers = extract_numeric_markers(_STANFORD_H8)
         DEDUP_RADIUS = 10
         for i, (ax, ay, av) in enumerate(markers):
             for j, (bx, by, bv) in enumerate(markers):
@@ -531,7 +490,7 @@ class TestNoDuplicates:
         """Deduplicate is applied — identical positions should collapse."""
         labels = [(80, 80, "2.5"), (200, 200, "3.8"), (82, 80, "2.5")]
         img_path = _make_synthetic_image(tmp_path, labels)
-        markers = extract_numeric_markers_with_exterior(img_path)
+        markers = extract_numeric_markers(img_path)
         # Check no two markers are within 10px of each other
         for i, (ax, ay, av) in enumerate(markers):
             for j, (bx, by, bv) in enumerate(markers):
@@ -556,13 +515,10 @@ class TestDeLaveagaH3Regression:
     _BASELINE = 9  # markers found by v4.79
 
     def test_regression_count_not_dropped(self):
-        # Use the combined function so both passes are exercised
-        markers = extract_numeric_markers_with_exterior(_DL_H3)
-        # Only count interior decimal markers for regression (value <= 9.9)
-        interior = [(x, y, v) for x, y, v in markers if v <= 9.9]
-        assert len(interior) >= self._BASELINE, (
+        markers = extract_numeric_markers(_DL_H3)
+        assert len(markers) >= self._BASELINE, (
             f"DeLaveaga H3 regression: expected >= {self._BASELINE} interior markers, "
-            f"got {len(interior)}: {interior}"
+            f"got {len(markers)}: {markers}"
         )
 
 
@@ -589,17 +545,6 @@ _DL_H5_PREVIOUSLY_DETECTED = [
     (524, 923, 3.1),
 ]
 
-# Known DeLaveaga H5 exterior distance-ring labels detected by Pass B.
-_DL_H5_EXTERIOR_KNOWN = [
-    (82,  455, 25.0),
-    (42,  581, 20.0),
-    (78,  708, 15.0),
-    (766, 708, 15.0),
-    (174, 832, 10.0),
-    (773, 831, 10.0),
-]
-
-
 @pytest.mark.skipif(not _DL_H5.exists(), reason="DeLaveaga Hole 5 image not present")
 class TestDeLaveagaH5InteriorRecall:
     """
@@ -610,49 +555,39 @@ class TestDeLaveagaH5InteriorRecall:
     so _scale_patch never upscaled.  At native size, EasyOCR could not resolve
     the ~15 px glyphs.  Raising min_h to 120 forces a 2× upscale and fixes the
     recall without breaking any existing detections.
+
+    T10d (exterior ring labels) removed 2026-10-02 — ring labels are
+    distance-from-pin values, not altitudes.
     """
 
     @pytest.fixture(scope="class")
     def all_markers(self):
-        return extract_numeric_markers_with_exterior(_DL_H5)
+        return extract_numeric_markers(_DL_H5)
 
     def test_interior_6_0_detected(self, all_markers):
         """T10a — 6.0 at approx (191, 747) is detected."""
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
-        matched = _count_matched_markers(interior, [_DL_H5_MISSED_INTERIOR[0]], pos_tol=30)
+        matched = _count_matched_markers(all_markers, [_DL_H5_MISSED_INTERIOR[0]], pos_tol=30)
         assert matched >= 1, (
-            f"6.0 not detected. Interior markers found: {interior}"
+            f"6.0 not detected. Markers found: {all_markers}"
         )
 
     def test_interior_6_5_detected(self, all_markers):
         """T10b — 6.5 at approx (362, 919) is detected."""
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
-        matched = _count_matched_markers(interior, [_DL_H5_MISSED_INTERIOR[1]], pos_tol=30)
+        matched = _count_matched_markers(all_markers, [_DL_H5_MISSED_INTERIOR[1]], pos_tol=30)
         assert matched >= 1, (
-            f"6.5 not detected. Interior markers found: {interior}"
+            f"6.5 not detected. Markers found: {all_markers}"
         )
 
     def test_previously_detected_still_present(self, all_markers):
         """T10c — All 7 previously-detected interior markers still found (regression)."""
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
-        matched = _count_matched_markers(interior, _DL_H5_PREVIOUSLY_DETECTED, pos_tol=30)
+        matched = _count_matched_markers(all_markers, _DL_H5_PREVIOUSLY_DETECTED, pos_tol=30)
         assert matched >= 6, (
             f"Regression: expected >= 6/7 previously-detected markers, "
-            f"got {matched}. Interior: {interior}"
-        )
-
-    def test_exterior_ring_labels_detected(self, all_markers):
-        """T10d — At least 4 of 6 exterior distance-ring labels detected."""
-        exterior_vals = {5.0, 10.0, 15.0, 20.0, 25.0, 30.0}
-        exterior = [(x, y, v) for x, y, v in all_markers if v in exterior_vals]
-        matched = _count_matched_markers(exterior, _DL_H5_EXTERIOR_KNOWN, pos_tol=30)
-        assert matched >= 4, (
-            f"Exterior recall: matched {matched}/6 known exterior labels. "
-            f"Detected exterior: {exterior}"
+            f"got {matched}. Markers: {all_markers}"
         )
 
     def test_all_values_in_range(self, all_markers):
-        """T10e — All detected values are in the valid range."""
+        """T10d — All detected values are in the valid range."""
         for mx, my, mv in all_markers:
             assert isinstance(mv, float)
             assert 0.1 <= mv <= 99.9, f"Value {mv} out of range at ({mx},{my})"
@@ -665,31 +600,19 @@ class TestDeLaveagaH5InteriorRecall:
 @pytest.mark.skipif(not _STANFORD_H8.exists(), reason="Stanford Hole 8 image not present")
 class TestStanfordH8RegressionV485:
     """
-    T11 — Stanford H8 must still pass all v4.84 thresholds after the min_h fix.
-    Specifically: >= 12/15 interior markers and >= 8/12 exterior labels.
+    T11 — Stanford H8 must still pass interior recall threshold after the min_h fix.
+    Exterior pass removed 2026-10-02 (ring labels are distance-from-pin, not altitude).
     """
 
     @pytest.fixture(scope="class")
     def all_markers(self):
-        return extract_numeric_markers_with_exterior(_STANFORD_H8)
+        return extract_numeric_markers(_STANFORD_H8)
 
     def test_interior_recall_still_passes(self, all_markers):
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
-        matched = _count_matched_markers(interior, _STANFORD_H8_INTERIOR_KNOWN)
+        matched = _count_matched_markers(all_markers, _STANFORD_H8_INTERIOR_KNOWN)
         assert matched >= 12, (
             f"Stanford H8 interior regression: matched {matched}/15. "
-            f"Detected interior: {interior}"
-        )
-
-    def test_exterior_recall_still_passes(self, all_markers):
-        exterior_vals = {5.0, 10.0, 15.0, 20.0, 25.0, 30.0}
-        exterior = [(x, y, v) for x, y, v in all_markers if v in exterior_vals]
-        matched = _count_matched_markers(
-            exterior, _STANFORD_H8_EXTERIOR_KNOWN, pos_tol=25, val_tol=0.5
-        )
-        assert matched >= 8, (
-            f"Stanford H8 exterior regression: matched {matched}/12. "
-            f"Detected exterior: {exterior}"
+            f"Detected: {all_markers}"
         )
 
 
@@ -734,21 +657,20 @@ class TestDeLaveagaH5CC31Marker:
 
     @pytest.fixture(scope="class")
     def all_markers(self):
-        return extract_numeric_markers_with_exterior(_DL_H5)
+        return extract_numeric_markers(_DL_H5)
 
     def test_cc31_bottom_right_marker_detected(self, all_markers):
         """T12a — 3.6 at approx (709, 904) detected after height-filter fix."""
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
         kx, ky, kv = _DL_H5_CC31_MARKER
         matched = _count_matched_markers(
-            interior,
+            all_markers,
             [_DL_H5_CC31_MARKER],
             pos_tol=30,
             val_tol=0.2,
         )
         assert matched >= 1, (
             f"CC31 bottom-right marker ({kv} at ~({kx},{ky})) not detected. "
-            f"Interior markers found: {interior}"
+            f"Markers found: {all_markers}"
         )
 
     def test_no_grey_grid_false_positives(self, all_markers):
@@ -762,9 +684,8 @@ class TestDeLaveagaH5CC31Marker:
         img = cv2.imread(str(_DL_H5))
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         ih, iw = img.shape[:2]
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
         false_positives = []
-        for mx, my, mv in interior:
+        for mx, my, mv in all_markers:
             if 0 <= my < ih and 0 <= mx < iw:
                 sat = int(hsv[my, mx, 1])
                 if sat == 0:
@@ -776,16 +697,14 @@ class TestDeLaveagaH5CC31Marker:
 
     def test_previously_detected_still_present(self, all_markers):
         """T12c — All previously detected interior markers still found (regression)."""
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
-        matched = _count_matched_markers(interior, _DL_H5_PREVIOUSLY_DETECTED, pos_tol=30)
+        matched = _count_matched_markers(all_markers, _DL_H5_PREVIOUSLY_DETECTED, pos_tol=30)
         assert matched >= 6, (
             f"Regression: expected >= 6/7 previously-detected markers, "
-            f"got {matched}. Interior: {interior}"
+            f"got {matched}. Markers: {all_markers}"
         )
 
     def test_total_interior_count_increased(self, all_markers):
         """T12d — Total interior count is >= 13 (was 12 before CC31 fix)."""
-        interior = [(x, y, v) for x, y, v in all_markers if v <= 9.9]
-        assert len(interior) >= 13, (
-            f"Expected >= 13 interior markers after CC31 fix, got {len(interior)}: {interior}"
+        assert len(all_markers) >= 13, (
+            f"Expected >= 13 interior markers after CC31 fix, got {len(all_markers)}: {all_markers}"
         )

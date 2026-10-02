@@ -174,8 +174,11 @@ class TestClassifyOcrMarkers:
 
 class TestApiResponseShape:
     """
-    T2: /api/detect_boundaries response includes both
-        'elevationMarkers' and 'fringeBoundaryHeights' arrays.
+    T2: /api/detect_boundaries response shape.
+
+    Updated 2026-10-02: fringeBoundaryHeights removed from API response.
+    Exterior ring numbers are distance-from-pin, not altitude values.
+    T2a/T2b updated; T2c (monkeypatched fringeBoundaryHeights) retired.
     """
 
     def _make_plain_image(self, path: Path, size=(400, 400)):
@@ -183,8 +186,8 @@ class TestApiResponseShape:
         img = Image.new("RGB", size, color=(100, 150, 80))
         img.save(str(path))
 
-    def test_both_fields_present(self, app_client, tmp_path, monkeypatch):
-        """T2a: response has both elevationMarkers and fringeBoundaryHeights keys."""
+    def test_elevation_markers_field_present(self, app_client, tmp_path, monkeypatch):
+        """T2a (updated): response has elevationMarkers key (fringeBoundaryHeights removed)."""
         import app as _app_module
         img_dir = tmp_path / "imgs"
         img_dir.mkdir()
@@ -203,12 +206,13 @@ class TestApiResponseShape:
         assert "elevationMarkers" in data, (
             f"Missing 'elevationMarkers'. Keys: {list(data.keys())}"
         )
-        assert "fringeBoundaryHeights" in data, (
-            f"Missing 'fringeBoundaryHeights'. Keys: {list(data.keys())}"
+        assert "fringeBoundaryHeights" not in data or data.get("fringeBoundaryHeights", None) is None or data["fringeBoundaryHeights"] == [], (
+            f"fringeBoundaryHeights was removed from the API but is still present: "
+            f"{data.get('fringeBoundaryHeights')}"
         )
 
-    def test_both_fields_are_lists(self, app_client, tmp_path, monkeypatch):
-        """T2b: both fields are lists (may be empty on plain-colour image)."""
+    def test_elevation_markers_is_list(self, app_client, tmp_path, monkeypatch):
+        """T2b (updated): elevationMarkers is a list (may be empty on plain image)."""
         import app as _app_module
         img_dir = tmp_path / "imgs"
         img_dir.mkdir()
@@ -224,35 +228,14 @@ class TestApiResponseShape:
         )
         data = resp.get_json()
         assert isinstance(data["elevationMarkers"], list)
-        assert isinstance(data["fringeBoundaryHeights"], list)
 
+    @pytest.mark.skip(
+        reason="T2c retired 2026-10-02: fringeBoundaryHeights removed from API. "
+               "Exterior ring labels are distance-from-pin, not altitude."
+    )
     def test_fringe_boundary_heights_shape(self, app_client, tmp_path, monkeypatch):
-        """T2c: each fringeBoundaryHeights entry has {x, y, value} with float value."""
-        import app as _app_module
-        # We inject a fake classifier result by monkeypatching classify_ocr_markers
-        img_dir = tmp_path / "imgs"
-        img_dir.mkdir()
-        self._make_plain_image(img_dir / "test.png")
-        monkeypatch.setattr(
-            _app_module, "_find_image_path",
-            lambda name, preferred_course="": str(img_dir / name),
-        )
-        # Monkeypatch classify_ocr_markers to return a known exterior marker
-        _orig = _app_module.classify_ocr_markers
-        def _fake_classify(markers, green_pts):
-            return [], [{"x": 50, "y": 50, "mm": 5.5}]
-        monkeypatch.setattr(_app_module, "classify_ocr_markers", _fake_classify)
-        resp = app_client.post(
-            "/api/detect_boundaries",
-            data=json.dumps({"image": "test.png", "course": "TestCourse"}),
-            content_type="application/json",
-        )
-        data = resp.get_json()
-        fbh = data.get("fringeBoundaryHeights", [])
-        assert len(fbh) == 1
-        entry = fbh[0]
-        assert "x" in entry and "y" in entry and "value" in entry, f"Bad shape: {entry}"
-        assert isinstance(entry["value"], float), f"value should be float: {entry}"
+        """T2c: RETIRED — fringeBoundaryHeights no longer in API response."""
+        pass
 
 
 # ===========================================================================

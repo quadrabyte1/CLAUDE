@@ -1,3 +1,17 @@
+# v0.13 — 2026-10-02 Topo — TPS global height field (task 684).
+#         Replaces fragmented IDW/griddata patchwork base surface with a single
+#         thin-plate-spline fit over all constraints:
+#           • fringe-boundary anchors (snapped to nearest green-boundary vertex)
+#           • interior elevation spikes
+#           • 16 outer-frame anchors at BASE_THICKNESS_MM (prevent blow-up)
+#         TPS is C²-smooth everywhere → no undefined derivative at fringe/green
+#         seam.  Solver: scipy.interpolate.RBFInterpolator(kernel="thin_plate_spline",
+#         smoothing=0.0).  Fallback to flat BASE_THICKNESS_MM when < 5 constraints.
+#         Co-located constraints with conflicting Z are averaged.
+#         All downstream pipelines preserved: trap (curved per-point), rake,
+#         sand chunks, water (flat slab), dip-floor guard, seam-reseat.
+#         Added _build_tps_base() public helper for unit testing.
+#         APP_VERSION bumped to v4.91.
 # v0.12 — 2026-09-30 Topo — curved per-point trap surface is the new default (task 666).
 #         Flip TRAP_SURFACE_CURVED: False → True.
 #         Fix curved path: was using max(fringe Z within band) per ring sample —
@@ -2931,6 +2945,148 @@ def _replace_fringe_with_watertight_extrusion(
     return new_mesh
 
 
+# ---------------------------------------------------------------------------
+# TPS global height field (task 684, Topo 2026-10-02)
+# ---------------------------------------------------------------------------
+
+def _build_tps_base(
+    egm_data: dict,
+    green_bnd_mm: np.ndarray,
+    elevation_spikes_mm: list[dict],
+    fringe_boundary_heights_mm: list[dict],
+    grid_x: np.ndarray,
+    grid_y: np.ndarray,
+) -> np.ndarray:
+    """Build a C²-smooth global height field via thin-plate spline (TPS).
+
+    Collects all constraints — fringe-boundary anchors, interior elevation
+    spikes, and a ring of outer-frame anchors at BASE_THICKNESS_MM — then
+    fits a single ``scipy.interpolate.RBFInterpolator`` with
+    ``kernel="thin_plate_spline"`` and evaluates it on ``(grid_x, grid_y)``.
+
+    The TPS minimises bending energy subject to exact interpolation through
+    each constraint, so it is globally C² (no undefined derivatives anywhere)
+    and passes through every anchor/spike exactly.
+
+    Parameters
+    ----------
+    egm_data : dict
+        EGM data dict — used for ``elevationRange``.
+    green_bnd_mm : (N, 2) array
+        Green boundary polyline in mm-space (used for snapping).
+    elevation_spikes_mm : list of {"xy_mm": array(2,), "z_mm": float}
+        Interior elevation spikes (already converted to mm-space).
+    fringe_boundary_heights_mm : list of {"xy_mm": array(2,), "z_mm": float}
+        Fringe boundary anchors, each already snapped to the nearest
+        green-boundary polyline vertex (mm-space).
+    grid_x, grid_y : (R, C) arrays
+        Meshgrid at which the surface is evaluated.
+
+    Returns
+    -------
+    (R, C) float array of Z values in mm.
+
+    Fallback
+    --------
+    If fewer than 5 *unique* constraints exist after deduplication (TPS
+    would be underdetermined), returns a flat surface at BASE_THICKNESS_MM.
+    Co-located constraints with conflicting Z are averaged before fitting.
+    """
+    from scipy.interpolate import RBFInterpolator
+
+    _elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
+    half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+
+    # ── Collect constraints ──────────────────────────────────────────────────
+    # Use a dict (xy_key → z_sum, count) so co-located duplicates are averaged.
+    _SNAP = 0.05  # mm — grid cell below which two XY are "co-located"
+
+    def _key(xy):
+        return (round(float(xy[0]) / _SNAP), round(float(xy[1]) / _SNAP))
+
+    xy_dict: dict = {}  # key → [z_sum, count]
+
+    def _add(xy, z):
+        k = _key(xy)
+        if k in xy_dict:
+            xy_dict[k][0] += float(z)
+            xy_dict[k][1] += 1
+        else:
+            xy_dict[k] = [float(z), 1, float(xy[0]), float(xy[1])]
+
+    # Interior spikes
+    for sp in elevation_spikes_mm:
+        xy = np.asarray(sp["xy_mm"], dtype=np.float64)
+        z = float(sp["z_mm"])
+        z = max(BASE_THICKNESS_MM, min(z, BASE_THICKNESS_MM + _elevation_range_mm))
+        _add(xy, z)
+
+    # Fringe boundary anchors (already snapped by caller)
+    for fa in fringe_boundary_heights_mm:
+        xy = np.asarray(fa["xy_mm"], dtype=np.float64)
+        z = float(fa["z_mm"])
+        z = max(BASE_THICKNESS_MM, min(z, BASE_THICKNESS_MM + _elevation_range_mm))
+        _add(xy, z)
+
+    # Outer frame anchors — 16 evenly spaced around a circle at 1.1× half
+    r_frame = half * 1.1
+    for angle in np.linspace(0, 2 * np.pi, 16, endpoint=False):
+        fxy = np.array([r_frame * np.cos(angle), r_frame * np.sin(angle)])
+        _add(fxy, BASE_THICKNESS_MM)
+
+    # ── Build constraint arrays ──────────────────────────────────────────────
+    constraints_xy = []
+    constraints_z = []
+    for k, (z_sum, count, ox, oy) in xy_dict.items():
+        if count > 1:
+            print(f"  [TPS] co-located {count} constraints at ({ox:.2f},{oy:.2f}) "
+                  f"→ averaged Z={z_sum/count:.3f} mm")
+        constraints_xy.append([ox, oy])
+        constraints_z.append(z_sum / count)
+
+    n_constraints = len(constraints_xy)
+    if n_constraints < 5:
+        print(f"  [TPS] only {n_constraints} unique constraints — "
+              f"falling back to flat BASE_THICKNESS_MM={BASE_THICKNESS_MM:.3f} mm")
+        return np.full(grid_x.shape, BASE_THICKNESS_MM)
+
+    c_xy = np.array(constraints_xy, dtype=np.float64)  # (N, 2)
+    c_z = np.array(constraints_z, dtype=np.float64)    # (N,)
+
+    # ── Fit TPS ─────────────────────────────────────────────────────────────
+    # smoothing=0 → exact interpolation through all constraints.
+    # epsilon is unused for thin_plate_spline but required; default is fine.
+    try:
+        rbf = RBFInterpolator(
+            c_xy, c_z,
+            kernel="thin_plate_spline",
+            smoothing=0.0,
+        )
+    except Exception as exc:
+        print(f"  [TPS] RBFInterpolator fit failed ({exc}) — "
+              f"falling back to flat BASE_THICKNESS_MM")
+        return np.full(grid_x.shape, BASE_THICKNESS_MM)
+
+    # ── Evaluate on grid ─────────────────────────────────────────────────────
+    query_xy = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+    try:
+        z_flat = rbf(query_xy)
+    except Exception as exc:
+        print(f"  [TPS] RBFInterpolator eval failed ({exc}) — "
+              f"falling back to flat BASE_THICKNESS_MM")
+        return np.full(grid_x.shape, BASE_THICKNESS_MM)
+
+    z_base = z_flat.reshape(grid_x.shape)
+
+    # Clamp to printable range — TPS can overshoot above/below with extreme
+    # constraints. Hard clamp keeps the mesh inside the printer envelope.
+    z_base = np.clip(z_base, 0.0, BASE_THICKNESS_MM + _elevation_range_mm + 2.0)
+
+    print(f"  [TPS] fit N={n_constraints} constraints, "
+          f"Z range [{float(z_base.min()):.3f}, {float(z_base.max()):.3f}] mm")
+    return z_base
+
+
 def build_fringe_mesh(
     Z_mm: np.ndarray,
     xs_grid: np.ndarray,
@@ -3319,6 +3475,66 @@ def build_fringe_mesh(
     # scripts that want to inspect the old behaviour.
     K_LERP_NEIGHBOURS = min(4, len(green_cell_z))
 
+    # ── TPS global height field (task 684, Topo 2026-10-02) ─────────────────
+    # Build a C²-smooth surface over ALL constraints:
+    #   • Every fringe-boundary anchor (already snapped to gbnd above in bnd_z)
+    #   • Every interior elevation spike (raw; converted to mm)
+    #   • 16 outer-frame anchors at BASE_THICKNESS_MM
+    #
+    # The TPS replaces the per-cell IDW call (task #509 path) as the source
+    # of `green_edge_h`.  The IDW is still kept as a fallback and is still
+    # used by seam-reseat (below) which operates independently on g_bdry_arr.
+    # Plateau-taper and fringe-floor clamps are preserved.
+
+    # Collect fringe-boundary anchors in the format _build_tps_base expects.
+    _tps_fbh: list[dict] = []
+    if _raw_fbh:
+        _gbnd_kd_tps = cKDTree(gbnd)
+        for _fbh_item in _raw_fbh:
+            try:
+                _ax_px = float(_fbh_item["x"])
+                _ay_px = float(_fbh_item["y"])
+                _av_mm = float(_fbh_item["value"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not (0.0 < _av_mm <= 50.0):
+                continue
+            _a_mm_tps = _px_to_mm_2d(
+                np.array([[_ax_px, _ay_px]], dtype=np.float64), scale, centroid_px
+            )[0]
+            # Snap to nearest green boundary point (matches bnd_z override logic)
+            _k_tps = min(1, len(gbnd))
+            _, _snap_idx = _gbnd_kd_tps.query(_a_mm_tps[:2], k=_k_tps)
+            _snapped_xy = gbnd[int(np.atleast_1d(_snap_idx)[0])]
+            _tps_fbh.append({"xy_mm": _snapped_xy, "z_mm": _av_mm})
+
+    # Collect interior elevation spikes (same parse as post-TPS spike loop).
+    _tps_spikes: list[dict] = []
+    _raw_spikes_early = egm_data.get("elevationSpikes") or egm_data.get("elevation_spikes") or []
+    for _sp_item in _raw_spikes_early:
+        try:
+            _spx = float(_sp_item["x"]); _spy = float(_sp_item["y"])
+            _spmm = float(_sp_item["mm"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        _sp_xy_mm = _px_to_mm_2d(
+            np.array([[_spx, _spy]], dtype=np.float64), scale, centroid_px
+        )[0]
+        _spmm = max(0.0, min(_spmm, 50.0))
+        _spmm = max(_spmm, BASE_THICKNESS_MM)
+        _tps_spikes.append({"xy_mm": _sp_xy_mm, "z_mm": _spmm})
+
+    # Build the TPS surface on the fringe grid.
+    GX_tps, GY_tps = np.meshgrid(xs_mm, ys_mm)   # (fringe_grid_res, fringe_grid_res)
+    _z_tps_grid = _build_tps_base(
+        egm_data=egm_data,
+        green_bnd_mm=gbnd,
+        elevation_spikes_mm=_tps_spikes,
+        fringe_boundary_heights_mm=_tps_fbh,
+        grid_x=GX_tps,
+        grid_y=GY_tps,
+    )
+
     # Task 726 (Topo, 2026-09-04): compute fringe cell half-step for footprint
     # overlap tests below.  The grid is uniform (linspace), so the step is
     # constant across the entire grid.
@@ -3368,28 +3584,32 @@ def build_fringe_mesh(
 
             # Nearest point on the green boundary — used to derive
             # d_to_green (horizontal distance from the green polygon), which
-            # drives the plateau-taper (task #506). We no longer sample
-            # green_edge_h at (nx, ny) — see below for the continuous field
-            # sampling that replaces it (task #509).
+            # drives the plateau-taper (task #506).
             d_to_green, nx, ny = _min_dist_to_polyline(x, y, gbnd)
 
-            # Task #509: continuous-field green_edge_h sampling. Take the
-            # K_BND_IDW nearest boundary-polyline points to (x, y) itself,
-            # and IDW-blend their pre-computed Z. When K spans multiple edge
-            # segments (which is what happens deep inside a concave notch),
-            # the sampled Z is a smooth blend of both — no cliff on the
-            # medial axis where the SINGLE-nearest projection would flip.
-            dists_b, idxs_b = gbnd_kd_lerp.query([x, y], k=K_BND_IDW)
-            dists_b = np.atleast_1d(np.asarray(dists_b, dtype=np.float64))
-            idxs_b = np.atleast_1d(np.asarray(idxs_b, dtype=np.int64))
-            if float(dists_b.min()) < 1e-9:
-                # On top of a boundary point — snap to its Z exactly to
-                # preserve the seam-match property (task #483).
-                green_edge_h = float(bnd_z[idxs_b[int(np.argmin(dists_b))]])
-            else:
-                w = 1.0 / (dists_b ** 2)
-                w /= w.sum()
-                green_edge_h = float(np.dot(w, bnd_z[idxs_b]))
+            # Task 684 (Topo 2026-10-02): TPS-based green_edge_h.
+            # The TPS surface is pre-built on the same grid; just look up
+            # the cell value.  This replaces the per-cell K=24 IDW query
+            # (task #509) as the height source, giving a globally C²-smooth
+            # surface with no crease at the fringe/green seam.
+            # Seam-reseat (below) is preserved — it still overrides the Z
+            # of the innermost fringe ring from g_bdry_arr, so the printed
+            # seam still matches the green mesh exactly.
+            green_edge_h = float(_z_tps_grid[r, c])
+
+            # ── IDW fallback (kept for edge-case robustness) ──────────────
+            # If the TPS lookup is NaN or zero (should not happen but guards
+            # against a future solver change), fall back to the legacy IDW.
+            if not math.isfinite(green_edge_h) or green_edge_h == 0.0:
+                dists_b, idxs_b = gbnd_kd_lerp.query([x, y], k=K_BND_IDW)
+                dists_b = np.atleast_1d(np.asarray(dists_b, dtype=np.float64))
+                idxs_b = np.atleast_1d(np.asarray(idxs_b, dtype=np.int64))
+                if float(dists_b.min()) < 1e-9:
+                    green_edge_h = float(bnd_z[idxs_b[int(np.argmin(dists_b))]])
+                else:
+                    w = 1.0 / (dists_b ** 2)
+                    w /= w.sum()
+                    green_edge_h = float(np.dot(w, bnd_z[idxs_b]))
 
             # Task #506: plateau-taper. When green_edge_h exceeds the boundary
             # cap, project a decaying blend of green_edge_h → BOUNDARY_HEIGHT_CAP_MM

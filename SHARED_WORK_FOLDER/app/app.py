@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.86"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.91"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── detect_boundaries: classifier knobs ────────────────────────────────────
 # When True the green polygon interior is excluded from trap/water detection.
@@ -1805,7 +1805,7 @@ def detect_boundaries():
     elevation_markers: list[dict] = []       # interior → elevationSpikes
     fringe_boundary_heights: list[dict] = [] # exterior → boundary anchors
     try:
-        from golf_intel_ocr import extract_numeric_markers as _extract_ocr
+        from golf_intel_ocr import extract_numeric_markers_with_exterior as _extract_ocr
         raw_markers = _extract_ocr(img_path)
         all_spikes = markers_to_elevation_spikes(raw_markers)
 

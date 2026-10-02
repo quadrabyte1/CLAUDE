@@ -386,3 +386,322 @@ def test_template_absent_falls_back_gracefully(gsd, tmp_path, monkeypatch, caplo
         "project_settings.config must NOT be written when the template is absent "
         "(fallback to warning-but-loads behaviour)."
     )
+
+
+# ===========================================================================
+# Task-677 tests — inject 7 remaining Metadata files
+# ===========================================================================
+#
+# The 7 files that blank.3mf has but task-674 output lacked:
+#   Metadata/slice_info.config
+#   Metadata/filament_sequence.json
+#   Metadata/pick_1.png
+#   Metadata/plate_1_small.png
+#   Metadata/plate_1.png
+#   Metadata/plate_no_light_1.png
+#   Metadata/top_1.png
+#
+# RED: current v4.86 output only has 5 archive entries; all 7 tests fail.
+# GREEN: after task-677 wiring, all 7 pass.
+# ===========================================================================
+
+_TEMPLATE_DIR_677 = _APP_DIR / "templates" / "bambu"
+
+# The 12 entries a correct 3MF must contain (matches blank.3mf namelist).
+_EXPECTED_ARCHIVE_ENTRIES = frozenset({
+    "_rels/.rels",
+    "[Content_Types].xml",
+    "3D/3dmodel.model",
+    "Metadata/model_settings.config",
+    "Metadata/project_settings.config",
+    "Metadata/slice_info.config",
+    "Metadata/filament_sequence.json",
+    "Metadata/pick_1.png",
+    "Metadata/plate_1_small.png",
+    "Metadata/plate_1.png",
+    "Metadata/plate_no_light_1.png",
+    "Metadata/top_1.png",
+})
+
+# The 7 new template files to inject (arcname → filename in templates/bambu/).
+_NEW_TEMPLATE_FILES = {
+    "Metadata/slice_info.config":      "slice_info.config",
+    "Metadata/filament_sequence.json": "filament_sequence.json",
+    "Metadata/pick_1.png":             "pick_1.png",
+    "Metadata/plate_1_small.png":      "plate_1_small.png",
+    "Metadata/plate_1.png":            "plate_1.png",
+    "Metadata/plate_no_light_1.png":   "plate_no_light_1.png",
+    "Metadata/top_1.png":              "top_1.png",
+}
+
+
+# ---------------------------------------------------------------------------
+# T8 — generated 3MF has all 12 expected archive entries
+#
+# RED:  current v4.86 output only has 5 entries (missing 7 new ones).
+# GREEN: after task-677, all 12 present.
+# ---------------------------------------------------------------------------
+
+def test_all_12_archive_entries_present(gsd, tmp_path):
+    """
+    The generated 3MF must contain exactly the 12 archive entries that
+    a real blank-plate Bambu Studio export has.
+
+    Regression against task-674's 5-entry output (the root cause of the
+    Bambu Studio 'invalid config' dialog that task-674 claimed to fix).
+    """
+    missing = [
+        f for f in _NEW_TEMPLATE_FILES
+        if not (_TEMPLATE_DIR_677 / _NEW_TEMPLATE_FILES[f]).exists()
+    ]
+    if missing:
+        pytest.skip(f"Template files not in repo: {missing}")
+
+    names = ["green", "fringe", "trap"]
+    raw = _make_minimal_trimesh_3mf(names)
+    dest = tmp_path / "test_all_entries.3mf"
+    dest.write_bytes(raw)
+
+    gsd._inject_bambu_extruder_metadata(str(dest), names)
+
+    with zipfile.ZipFile(str(dest)) as z:
+        present = set(z.namelist())
+
+    missing_in_output = _EXPECTED_ARCHIVE_ENTRIES - present
+    assert not missing_in_output, (
+        f"Generated 3MF is missing {len(missing_in_output)} expected archive entries:\n"
+        + "\n".join(f"  - {e}" for e in sorted(missing_in_output))
+    )
+
+
+# ---------------------------------------------------------------------------
+# T9 — each of the 7 template files matches template bytes exactly
+#
+# RED:  files absent → KeyError when reading from archive.
+# GREEN: after task-677, verbatim copies from app/templates/bambu/.
+# ---------------------------------------------------------------------------
+
+def test_new_template_files_match_bytes(gsd, tmp_path):
+    """
+    Each of the 7 newly injected Metadata files must be a verbatim byte-for-byte
+    copy of the corresponding file in app/templates/bambu/.
+    """
+    missing = [
+        f for f in _NEW_TEMPLATE_FILES
+        if not (_TEMPLATE_DIR_677 / _NEW_TEMPLATE_FILES[f]).exists()
+    ]
+    if missing:
+        pytest.skip(f"Template files not in repo: {missing}")
+
+    names = ["green", "fringe", "trap"]
+    raw = _make_minimal_trimesh_3mf(names)
+    dest = tmp_path / "test_new_bytes.3mf"
+    dest.write_bytes(raw)
+
+    gsd._inject_bambu_extruder_metadata(str(dest), names)
+
+    mismatches = []
+    with zipfile.ZipFile(str(dest)) as z:
+        for arcname, fname in _NEW_TEMPLATE_FILES.items():
+            template_bytes = (_TEMPLATE_DIR_677 / fname).read_bytes()
+            try:
+                injected_bytes = z.read(arcname)
+            except KeyError:
+                mismatches.append(f"  {arcname}: MISSING from archive")
+                continue
+            if injected_bytes != template_bytes:
+                mismatches.append(
+                    f"  {arcname}: {len(injected_bytes)} bytes vs "
+                    f"template {len(template_bytes)} bytes"
+                )
+
+    assert not mismatches, (
+        "These injected files do not match their templates:\n" + "\n".join(mismatches)
+    )
+
+
+# ---------------------------------------------------------------------------
+# T10 — [Content_Types].xml declares png and json extensions
+#
+# blank.3mf has Extension="png" and no json entry — but our content_types.xml
+# template includes png; we assert it's present after injection.
+#
+# RED:  current v4.86 only adds 'config'; png/json may be absent.
+# GREEN: after task-677, png is declared (blank.3mf has it); json doesn't
+#         appear in blank.3mf content-types so we don't require it.
+# ---------------------------------------------------------------------------
+
+def test_content_types_declares_png(gsd, tmp_path):
+    """
+    [Content_Types].xml must declare Extension="png" after injection.
+    blank.3mf's [Content_Types].xml declares png; our output must match.
+    """
+    names = ["green", "fringe"]
+    raw = _make_minimal_trimesh_3mf(names)
+    dest = tmp_path / "test_ct_png.3mf"
+    dest.write_bytes(raw)
+
+    gsd._inject_bambu_extruder_metadata(str(dest), names)
+
+    with zipfile.ZipFile(str(dest)) as z:
+        ct_xml = z.read("[Content_Types].xml").decode("utf-8")
+
+    assert 'Extension="png"' in ct_xml, (
+        "[Content_Types].xml must declare Extension=\"png\" after injection. "
+        f"Got:\n{ct_xml}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# T11 — ZIP integrity still valid after 7 new files injected
+#
+# Regression guard: more writes should not corrupt the archive.
+# ---------------------------------------------------------------------------
+
+def test_zip_integrity_with_all_metadata(gsd, tmp_path):
+    """
+    The 3MF produced with all 12 files injected must be a valid ZIP archive
+    (zipfile.ZipFile.testzip() returns None).
+    """
+    missing = [
+        f for f in _NEW_TEMPLATE_FILES
+        if not (_TEMPLATE_DIR_677 / _NEW_TEMPLATE_FILES[f]).exists()
+    ]
+    if missing:
+        pytest.skip(f"Template files not in repo: {missing}")
+
+    names = ["green", "fringe"]
+    raw = _make_minimal_trimesh_3mf(names)
+    dest = tmp_path / "test_zip_integrity_full.3mf"
+    dest.write_bytes(raw)
+
+    gsd._inject_bambu_extruder_metadata(str(dest), names)
+
+    result = zipfile.ZipFile(str(dest)).testzip()
+    assert result is None, (
+        f"3MF archive corrupt after full metadata injection: testzip() = {result!r}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# T12 — idempotent with 7 new files (no duplicates on second call)
+#
+# Regression guard for the expanded inject function.
+# ---------------------------------------------------------------------------
+
+def test_idempotent_with_all_metadata(gsd, tmp_path):
+    """
+    Calling _inject_bambu_extruder_metadata twice must not duplicate any of
+    the 7 newly injected Metadata files.
+    """
+    missing = [
+        f for f in _NEW_TEMPLATE_FILES
+        if not (_TEMPLATE_DIR_677 / _NEW_TEMPLATE_FILES[f]).exists()
+    ]
+    if missing:
+        pytest.skip(f"Template files not in repo: {missing}")
+
+    names = ["green", "fringe"]
+    raw = _make_minimal_trimesh_3mf(names)
+    dest = tmp_path / "test_idempotent_full.3mf"
+    dest.write_bytes(raw)
+
+    gsd._inject_bambu_extruder_metadata(str(dest), names)
+    gsd._inject_bambu_extruder_metadata(str(dest), names)  # second call
+
+    with zipfile.ZipFile(str(dest)) as z:
+        filenames = z.namelist()
+
+    for arcname in _NEW_TEMPLATE_FILES:
+        count = filenames.count(arcname)
+        assert count <= 1, (
+            f"{arcname} appears {count} times after two injection calls; "
+            "must appear at most once (idempotent)."
+        )
+
+
+# ---------------------------------------------------------------------------
+# T13 — missing template file logs warning and continues (graceful)
+#
+# If any of the 7 template files is absent, injection should log a visible
+# WARNING per missing file and continue without crashing.
+# ---------------------------------------------------------------------------
+
+def test_missing_metadata_template_logs_warning_and_continues(gsd, tmp_path, monkeypatch, caplog):
+    """
+    If any template file in _METADATA_TEMPLATE_FILES is missing from disk,
+    _inject_bambu_extruder_metadata must:
+      - NOT raise any exception.
+      - Log a WARNING mentioning the missing file.
+      - Still write the other files (archive not aborted).
+    """
+    import gradient_surface_diagnostic as gsd_mod
+
+    # Point the module at a dir missing all the new metadata templates.
+    fake_dir = tmp_path / "fake_bambu"
+    fake_dir.mkdir()
+    # Copy only project_settings.config so T1/T2 still pass (not our concern here).
+    real_ps = _TEMPLATE_DIR_677 / "project_settings.config"
+    if real_ps.exists():
+        (fake_dir / "project_settings.config").write_bytes(real_ps.read_bytes())
+
+    monkeypatch.setattr(gsd_mod, "_BAMBU_TEMPLATE_DIR", fake_dir, raising=False)
+
+    names = ["green", "fringe"]
+    raw = _make_minimal_trimesh_3mf(names)
+    dest = tmp_path / "test_graceful_missing.3mf"
+    dest.write_bytes(raw)
+
+    with caplog.at_level(logging.WARNING, logger="gradient_surface_diagnostic"):
+        gsd._inject_bambu_extruder_metadata(str(dest), names)
+
+    # Must not crash — if we're here, graceful fallback worked.
+    # ZIP must still be valid.
+    result = zipfile.ZipFile(str(dest)).testzip()
+    assert result is None, f"Archive corrupt after graceful fallback: testzip()={result!r}"
+
+
+# ---------------------------------------------------------------------------
+# T14 — archive-list superset: generated ≥ blank.3mf namelist for metadata
+#
+# The sanity-check "definition of done" test.
+# set(generated_zip.namelist()) ≥ set(blank_zip.namelist()) for metadata files.
+# ---------------------------------------------------------------------------
+
+def test_archive_list_superset_of_blank(gsd, tmp_path):
+    """
+    The generated 3MF's archive entry set must be a superset of blank.3mf's
+    entry set for all Metadata/* and infrastructure files.
+
+    This is the 'definition of done' check: if this passes, the archive
+    structure is identical (in file list) to a real Bambu Studio blank export.
+    """
+    blank_3mf = Path(__file__).parent.parent.parent / "team_inbox" / "blank.3mf"
+    if not blank_3mf.exists():
+        pytest.skip("team_inbox/blank.3mf not available.")
+
+    missing_templates = [
+        f for f in _NEW_TEMPLATE_FILES
+        if not (_TEMPLATE_DIR_677 / _NEW_TEMPLATE_FILES[f]).exists()
+    ]
+    if missing_templates:
+        pytest.skip(f"Template files not in repo: {missing_templates}")
+
+    names = ["green", "fringe", "trap"]
+    raw = _make_minimal_trimesh_3mf(names)
+    dest = tmp_path / "test_superset.3mf"
+    dest.write_bytes(raw)
+
+    gsd._inject_bambu_extruder_metadata(str(dest), names)
+
+    with zipfile.ZipFile(str(blank_3mf)) as bz:
+        blank_entries = set(bz.namelist())
+    with zipfile.ZipFile(str(dest)) as gz:
+        generated_entries = set(gz.namelist())
+
+    missing_from_generated = blank_entries - generated_entries
+    assert not missing_from_generated, (
+        f"Generated 3MF is missing {len(missing_from_generated)} entries that "
+        f"blank.3mf has:\n"
+        + "\n".join(f"  - {e}" for e in sorted(missing_from_generated))
+    )

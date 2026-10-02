@@ -10,7 +10,7 @@ Additionally, distance-ring labels (integers 5, 10, 15, 20, 25, 30) appear
 at the left and right edges of the image — these are detected by a separate
 exterior pass.
 
-Pipeline (v4.85)
+Pipeline (v4.88)
 ----------------
 Pass A — interior saturated pass:
   1. Build a **white-on-colored mask** — extract bright pixels (grayscale > 175)
@@ -122,7 +122,12 @@ _PATCH_MAX_AREA = 5000
 _PATCH_MIN_W = 8
 _PATCH_MAX_W = 100
 _PATCH_MIN_H = 6
-_PATCH_MAX_H = 50
+# Raised from 50 → 80 (v4.88) so that CC31-class blobs (height ~72 px) pass.
+# CC31 on DeLaveaga H5 was a 66×72 component: the dilation kernel merged the
+# ~40 px text glyph with adjacent zero-sat exterior grey-grid pixels, bloating
+# height to 72 px.  Raising the ceiling to 80 catches these without admitting
+# wide contour-line segments (those are blocked by _PATCH_MAX_ASPECT=6.0 first).
+_PATCH_MAX_H = 80
 
 # Aspect ratio guard: width/height must be < this (avoids thin contour lines)
 _PATCH_MAX_ASPECT = 6.0

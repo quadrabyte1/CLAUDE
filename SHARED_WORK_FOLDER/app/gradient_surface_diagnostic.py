@@ -1,3 +1,17 @@
+# v0.15 — 2026-10-02 Topo — Strip Gaussian spike-application code; keep TPS (task 698).
+#         Thomas pivot: drop the entire OCR→elevationSpikes→Gaussian-bump pipeline.
+#         Removed:  _raw_spikes loop, SPIKE_SIGMA_MM / SPIKE_INFLUENCE_MM /
+#           SPIKE_HARD_MAX_MM constants, _skipped_in_green counter, Gaussian MAX-blend
+#           loop, post-filter FINAL spike-scan with spike-exclusion mask.
+#         Kept:  _build_tps_base() and its 16-point outer-frame base ring.  With both
+#           fringeBoundaryHeights and elevationSpikes now ignored, the TPS is driven
+#           solely by the 16 frame anchors → flat surface at BASE_THICKNESS_MM.
+#           Thomas's future slope-arrow Poisson green surface + manual fringe-height
+#           mechanism will supply new height constraints via a new argument or source.
+#         elevation_spikes_mm in _build_tps_base is now DEPRECATED / ignored
+#           (same pattern as fringe_boundary_heights_mm in task 690).
+#           Callers that still pass it will see a log notice but no error.
+#         APP_VERSION bumped to v4.98.
 # v0.14 — 2026-10-02 Topo — Strip fringeBoundaryHeights from TPS constraints (task 690).
 #         Thomas's revelation: exterior fringe numbers (10/15/20/25/30) are
 #         *distance-from-pin markers*, NOT altitudes.  The fringeBoundaryHeights
@@ -2959,6 +2973,14 @@ def _replace_fringe_with_watertight_extrusion(
 # ---------------------------------------------------------------------------
 # TPS global height field (task 684, Topo 2026-10-02)
 # ---------------------------------------------------------------------------
+# Current state (task 698, 2026-10-02):
+#   Currently only outer-frame base points feed the TPS fit → surface is flat
+#   at BASE_THICKNESS_MM.  The spike_application + fringe_boundary_heights
+#   pipelines were removed on 2026-10-02 (Thomas pivot — slope-arrow Poisson
+#   green surface + manual fringe-height mechanism coming).
+#   Future mechanism will feed additional height constraints via a NEW argument
+#   or a NEW source — keep the TPS primitive ready for that work.
+# ---------------------------------------------------------------------------
 
 def _build_tps_base(
     egm_data: dict,
@@ -2970,14 +2992,14 @@ def _build_tps_base(
 ) -> np.ndarray:
     """Build a C²-smooth global height field via thin-plate spline (TPS).
 
-    Collects all constraints — interior elevation spikes and a ring of
-    outer-frame anchors at BASE_THICKNESS_MM — then fits a single
-    ``scipy.interpolate.RBFInterpolator`` with
-    ``kernel="thin_plate_spline"`` and evaluates it on ``(grid_x, grid_y)``.
+    Fits a single ``scipy.interpolate.RBFInterpolator`` with
+    ``kernel="thin_plate_spline"`` over the 16 outer-frame anchors at
+    BASE_THICKNESS_MM, then evaluates it on ``(grid_x, grid_y)``.
 
     The TPS minimises bending energy subject to exact interpolation through
-    each constraint, so it is globally C² (no undefined derivatives anywhere)
-    and passes through every spike exactly.
+    each constraint.  With only the 16 frame anchors active the surface is
+    flat at BASE_THICKNESS_MM everywhere.  Thomas's future mechanism will
+    supply additional height constraints via a new argument or source.
 
     .. note::
         ``fringe_boundary_heights_mm`` is **deprecated** (task 690, 2026-10-02).
@@ -2987,6 +3009,13 @@ def _build_tps_base(
         updated to pass ``fringe_boundary_heights_mm=[]``; the parameter will
         be removed in a future version.
 
+    .. note::
+        ``elevation_spikes_mm`` is **deprecated** (task 698, 2026-10-02).
+        The OCR→elevationSpikes Gaussian-bump pipeline was dropped (Thomas
+        pivot to slope-arrow Poisson green + manual fringe-height mechanism).
+        The parameter is accepted for API stability but its contents are
+        **ignored**.  Pass ``[]`` to suppress the deprecation log line.
+
     Parameters
     ----------
     egm_data : dict
@@ -2994,7 +3023,8 @@ def _build_tps_base(
     green_bnd_mm : (N, 2) array
         Green boundary polyline in mm-space (retained for API compatibility).
     elevation_spikes_mm : list of {"xy_mm": array(2,), "z_mm": float}
-        Interior elevation spikes (already converted to mm-space).
+        **DEPRECATED — ignored.**  Formerly interior elevation spikes; now a
+        no-op.  Pass ``[]`` to suppress the deprecation log line.
     fringe_boundary_heights_mm : list of {"xy_mm": array(2,), "z_mm": float}
         **DEPRECATED — ignored.**  Formerly fringe boundary anchors; now a
         no-op.  Pass ``[]`` to suppress the deprecation log line.
@@ -3016,6 +3046,31 @@ def _build_tps_base(
     _elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
     half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
 
+    # ── Deprecated parameters — accepted but ignored ─────────────────────────
+    # elevation_spikes_mm — DEPRECATED (task 698, Topo 2026-10-02).
+    # The OCR→elevationSpikes Gaussian-bump pipeline was dropped on 2026-10-02
+    # (Thomas pivot).  Interior spikes no longer shape the TPS surface.
+    if elevation_spikes_mm:
+        print(
+            f"  [TPS] DEPRECATED: elevation_spikes_mm passed "
+            f"({len(elevation_spikes_mm)} item(s)) but ignored — "
+            f"spike-application pipeline removed in task 698. "
+            f"Remove callers; this parameter will be deleted in a future version."
+        )
+
+    # fringe_boundary_heights_mm — DEPRECATED (task 690, Topo 2026-10-02).
+    # Thomas's revelation: the exterior fringe numbers (10/15/20/25/30) are
+    # *distance-from-pin markers*, NOT altitudes.  Adding them as height
+    # constraints was semantically wrong.  The parameter is kept for API
+    # stability (Sienna removes callers in T2); its contents are now ignored.
+    if fringe_boundary_heights_mm:
+        print(
+            f"  [TPS] DEPRECATED: fringe_boundary_heights_mm passed "
+            f"({len(fringe_boundary_heights_mm)} item(s)) but ignored — "
+            f"strip fringeBoundaryHeights from TPS constraints (task 690). "
+            f"Remove callers; this parameter will be deleted in a future version."
+        )
+
     # ── Collect constraints ──────────────────────────────────────────────────
     # Use a dict (xy_key → z_sum, count) so co-located duplicates are averaged.
     _SNAP = 0.05  # mm — grid cell below which two XY are "co-located"
@@ -3033,25 +3088,8 @@ def _build_tps_base(
         else:
             xy_dict[k] = [float(z), 1, float(xy[0]), float(xy[1])]
 
-    # Interior spikes
-    for sp in elevation_spikes_mm:
-        xy = np.asarray(sp["xy_mm"], dtype=np.float64)
-        z = float(sp["z_mm"])
-        z = max(BASE_THICKNESS_MM, min(z, BASE_THICKNESS_MM + _elevation_range_mm))
-        _add(xy, z)
-
-    # Fringe boundary anchors — DEPRECATED (task 690, Topo 2026-10-02).
-    # Thomas's revelation: the exterior fringe numbers (10/15/20/25/30) are
-    # *distance-from-pin markers*, NOT altitudes.  Adding them as height
-    # constraints was semantically wrong.  The parameter is kept for API
-    # stability (Sienna removes callers in T2); its contents are now ignored.
-    if fringe_boundary_heights_mm:
-        print(
-            f"  [TPS] DEPRECATED: fringe_boundary_heights_mm passed "
-            f"({len(fringe_boundary_heights_mm)} item(s)) but ignored — "
-            f"strip fringeBoundaryHeights from TPS constraints (task 690). "
-            f"Remove callers; this parameter will be deleted in a future version."
-        )
+    # NOTE: elevation_spikes_mm and fringe_boundary_heights_mm are intentionally
+    # NOT added here — both are deprecated/ignored as of task 698.
 
     # Outer frame anchors — 16 evenly spaced around a circle at 1.1× half
     r_frame = half * 1.1
@@ -8392,38 +8430,82 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     cfg_lines.append('')
     cfg_xml = "\n".join(cfg_lines)
 
-    # --- 3b. project_settings.config from template (task-674) ---
-    # Load the full ~62 KB Bambu Studio blank-plate export template.
-    # If the template is absent, fall back to pre-task-674 behaviour (no
-    # project_settings.config, Bambu shows its warning dialog but geometry loads).
+    # --- 3b. Load all template files from app/templates/bambu/ (task-674/677) ---
+    # project_settings.config: full ~62 KB Bambu Studio blank-plate export template.
+    # slice_info.config, filament_sequence.json, and 5 thumbnail PNGs: verbatim copies
+    # from the same template directory.
+    # If any template is absent, log a WARNING and skip that file only.
+    import os as _os
+    import logging as _logging
+    _bambu_tmpl_dir = _os.path.join(_os.path.dirname(__file__), "templates", "bambu")
+
+    def _load_tmpl(filename: str) -> bytes | None:
+        p = _os.path.join(_bambu_tmpl_dir, filename)
+        if not _os.path.isfile(p):
+            _logging.getLogger("gradient_surface_diagnostic").warning(
+                "Bambu template %r not found at %r; skipping.", filename, p
+            )
+            return None
+        with open(p, "rb") as _f:
+            return _f.read()
+
     project_settings_bytes = _load_bambu_project_settings_template()
 
+    # 7 additional template files introduced in task-677.
+    # arcname → template filename
+    _NEW_TMPL_FILES: dict[str, str] = {
+        "Metadata/slice_info.config":      "slice_info.config",
+        "Metadata/filament_sequence.json": "filament_sequence.json",
+        "Metadata/pick_1.png":             "pick_1.png",
+        "Metadata/plate_1_small.png":      "plate_1_small.png",
+        "Metadata/plate_1.png":            "plate_1.png",
+        "Metadata/plate_no_light_1.png":   "plate_no_light_1.png",
+        "Metadata/top_1.png":              "top_1.png",
+    }
+    new_tmpl_bytes: dict[str, bytes] = {}
+    for arcname, fname in _NEW_TMPL_FILES.items():
+        data = _load_tmpl(fname)
+        if data is not None:
+            new_tmpl_bytes[arcname] = data
+
     # --- 4. Rewrite zip with new Metadata/model_settings.config,
-    #        project_settings.config (if template present), and patched
-    #        [Content_Types].xml with config extension declared.
+    #        project_settings.config, 7 additional template files, and patched
+    #        [Content_Types].xml with config+png extensions declared.
     # zipfile cannot edit in place; copy entries to a sibling temp file then
     # atomically replace the original.
     tmp_path = path_3mf + ".tmp"
-    _SKIP_FILES = {
-        "Metadata/model_settings.config",
-        "Metadata/project_settings.config",
-        "[Content_Types].xml",
-    }
+    # All files we are replacing/adding — skip their originals in the copy loop.
+    _SKIP_FILES = (
+        {
+            "Metadata/model_settings.config",
+            "Metadata/project_settings.config",
+            "[Content_Types].xml",
+        }
+        | set(new_tmpl_bytes.keys())
+    )
     with zipfile.ZipFile(path_3mf, "r") as zin, \
          zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
-        # Read and patch [Content_Types].xml to ensure config extension declared.
-        try:
-            ct_xml = zin.read("[Content_Types].xml").decode("utf-8")
-        except KeyError:
-            ct_xml = (
-                '<?xml version=\'1.0\' encoding=\'utf-8\'?>\n'
-                '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
-                ' <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n'
-                ' <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n'
-                '</Types>'
-            )
+        # Build [Content_Types].xml: start from the template (which already
+        # declares rels, model, png, gcode), then ensure config is present.
+        ct_template_path = _os.path.join(_bambu_tmpl_dir, "content_types.xml")
+        if _os.path.isfile(ct_template_path):
+            with open(ct_template_path, "rb") as _f:
+                ct_xml = _f.read().decode("utf-8")
+        else:
+            # Fallback: read from input zip (trimesh provides rels+model only).
+            try:
+                ct_xml = zin.read("[Content_Types].xml").decode("utf-8")
+            except KeyError:
+                ct_xml = (
+                    '<?xml version=\'1.0\' encoding=\'utf-8\'?>\n'
+                    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
+                    ' <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n'
+                    ' <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n'
+                    '</Types>'
+                )
+        # Ensure config extension is declared (blank.3mf omits it but Bambu
+        # Studio requires it to accept .config files from non-Studio sources).
         if 'Extension="config"' not in ct_xml:
-            # Insert the config extension declaration before the closing </Types> tag.
             ct_xml = ct_xml.replace(
                 "</Types>",
                 ' <Default Extension="config" ContentType="text/xml"/>\n</Types>',
@@ -8431,8 +8513,7 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
 
         for item in zin.infolist():
             if item.filename in _SKIP_FILES:
-                # Skip files we're replacing (model_settings, project_settings,
-                # Content_Types) so we write fresh copies below.
+                # Skip files we're replacing so we write fresh copies below.
                 continue
             zout.writestr(item, zin.read(item.filename))
 
@@ -8443,6 +8524,9 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
         # Write project_settings.config from template (if available).
         if project_settings_bytes is not None:
             zout.writestr("Metadata/project_settings.config", project_settings_bytes)
+        # Write the 7 additional template files (slice_info, filament_sequence, PNGs).
+        for arcname, data in new_tmpl_bytes.items():
+            zout.writestr(arcname, data)
 
     shutil.move(tmp_path, path_3mf)
 

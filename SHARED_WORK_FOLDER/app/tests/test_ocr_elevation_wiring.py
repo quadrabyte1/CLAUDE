@@ -44,6 +44,11 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+import pytest
+
+# T5 (2026-10-03): OCR pipeline stripped. clamp_ocr_value, markers_to_elevation_spikes removed.
+# All tests in this file are tombstoned until a replacement mechanism ships.
+pytestmark = pytest.mark.skip(reason="T5: OCR elevation wiring stripped from app.py")
 
 import numpy as np
 import pytest

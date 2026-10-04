@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-11-07-1400-wallace-stevens",
+  "schedule": [
+    {
+      "event_id": "2026-11-07-1400-wallace-stevens",
+      "kind": "heads_up_30",
+      "fire_at": "2026-11-07T13:30:00-05:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: Wallace Stevens at 2:00 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-11-07-1400-wallace-stevens",
+      "kind": "pre_5",
+      "fire_at": "2026-11-07T13:55:00-05:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: Wallace Stevens at 2:00 PM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-11-07-1400-wallace-stevens",
+      "kind": "strike_0",
+      "fire_at": "2026-11-07T14:00:00-05:00",
+      "tz": "America/New_York",
+      "body": "Wallace Stevens is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-11-07-1400-wallace-stevens",
+      "kind": "strike_5",
+      "fire_at": "2026-11-07T14:05:00-05:00",
+      "tz": "America/New_York",
+      "body": "Still on? Wallace Stevens started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-11-07-1400-wallace-stevens",
+      "kind": "strike_10",
+      "fire_at": "2026-11-07T14:10:00-05:00",
+      "tz": "America/New_York",
+      "body": "Reminder: Wallace Stevens \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-11-07-1400-wallace-stevens",
+      "kind": "strike_15",
+      "fire_at": "2026-11-07T14:15:00-05:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. Wallace Stevens. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

@@ -48,6 +48,10 @@ from pathlib import Path
 
 import pytest
 
+# T5 (2026-10-03): removeElevationSpike() and user-spike delete affordance stripped from editor.html.
+# All tests in this file are tombstoned until a replacement mechanism ships.
+pytestmark = pytest.mark.skip(reason="T5: removeElevationSpike/user-spike delete stripped from editor.html")
+
 # ---------------------------------------------------------------------------
 # Path setup
 # ---------------------------------------------------------------------------

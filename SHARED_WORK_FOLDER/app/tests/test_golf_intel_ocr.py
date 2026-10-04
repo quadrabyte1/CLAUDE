@@ -31,6 +31,11 @@ from __future__ import annotations
 
 import os
 import sys
+import pytest
+
+# T5 (2026-10-03): OCR pipeline stripped. golf_intel_ocr.py deleted.
+# All tests in this file are tombstoned until a replacement mechanism ships.
+pytestmark = pytest.mark.skip(reason="T5: golf_intel_ocr.py deleted — OCR pipeline stripped")
 from pathlib import Path
 
 import numpy as np
@@ -41,12 +46,16 @@ from PIL import Image, ImageDraw, ImageFont
 # Path setup
 # ---------------------------------------------------------------------------
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from golf_intel_ocr import (
-    extract_numeric_markers,
-    generate_diagnostic_overlay,
-    _is_valid_marker,
-    _deduplicate,
-)
+# T5: golf_intel_ocr.py deleted — guard import so collection doesn't fail
+try:
+    from golf_intel_ocr import (
+        extract_numeric_markers,
+        generate_diagnostic_overlay,
+        _is_valid_marker,
+        _deduplicate,
+    )
+except ModuleNotFoundError:
+    extract_numeric_markers = generate_diagnostic_overlay = _is_valid_marker = _deduplicate = None
 
 # ---------------------------------------------------------------------------
 # Shared font for synthetic images

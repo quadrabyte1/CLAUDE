@@ -40,6 +40,10 @@ from pathlib import Path
 
 import pytest
 
+# T5 (2026-10-03): G-badge (elevationSpikes) and Add Spike stripped from editor.html.
+# All tests in this file are tombstoned until a replacement mechanism ships.
+pytestmark = pytest.mark.skip(reason="T5: G-badge/elevationSpikes/spikeMode stripped from editor.html")
+
 # ---------------------------------------------------------------------------
 # Path setup
 # ---------------------------------------------------------------------------

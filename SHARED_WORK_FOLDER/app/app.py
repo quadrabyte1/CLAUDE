@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v4.97"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v4.98"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── detect_boundaries: classifier knobs ────────────────────────────────────
 # When True the green polygon interior is excluded from trap/water detection.
@@ -1169,162 +1169,6 @@ def print_constants():
     })
 
 
-# ── OCR elevation wiring helpers ─────────────────────────────────────────────
-# These functions bridge golf_intel_ocr.extract_numeric_markers() output into
-# the elevationSpikes format expected by gradient_surface_diagnostic.py and the
-# editor's Alpine.js state.  Task 650 (Sienna) — initial mm=value mapping.
-#
-# Reasonable elevation range for a golf putting-green plaque:
-#   0 < mm <= 50  (sub-millimetre values are implausible; >50 mm would be taller
-#   than the plaque itself)
-_OCR_SPIKE_MIN_MM = 0.0          # exclusive lower bound (0 is meaningless)
-_OCR_SPIKE_MAX_MM = 50.0         # inclusive upper bound
-
-
-def clamp_ocr_value(v: float) -> "float | None":
-    """
-    Validate and clamp a raw OCR decimal value to a plausible mm elevation.
-
-    Returns the float unchanged if 0 < v <= 50, or None if the value is
-    outside the realistic range for a golf-plate elevation spike.  Also
-    rejects NaN and Infinity.
-
-    This is intentionally strict: OCR mis-reads (e.g. "100" from a label
-    artefact) are silently dropped rather than being clamped to 50 mm,
-    because a mis-read should not silently produce a tall spike.
-    """
-    import math as _math
-    if not isinstance(v, (int, float)):
-        return None
-    if _math.isnan(v) or _math.isinf(v):
-        return None
-    if v <= _OCR_SPIKE_MIN_MM or v > _OCR_SPIKE_MAX_MM:
-        return None
-    return float(v)
-
-
-def markers_to_elevation_spikes(
-    markers: "list[tuple]",
-) -> "list[dict]":
-    """
-    Convert OCR marker triples to elevation spike dicts suitable for the EGM
-    elevationSpikes field and the editor's Alpine.js state.
-
-    Parameters
-    ----------
-    markers : list of (x, y, value) tuples
-        Output of golf_intel_ocr.extract_numeric_markers().
-        x, y are pixel coordinates (int or float); value is a float mm elevation.
-
-    Returns
-    -------
-    list of {"x": int, "y": int, "mm": float}
-        Out-of-range values (clamped → None) are silently dropped.
-        Dropped markers are printed to stdout for diagnostic purposes.
-
-    Wiring diagram (task 650):
-        extract_numeric_markers(image)        (golf_intel_ocr.py)
-          → [(x_px, y_px, value_mm), ...]
-          → markers_to_elevation_spikes()     (this function, app.py)
-          → [{"x", "y", "mm"}, ...]
-          → detect_boundaries response field "elevationMarkers"
-          → runDetection() in editor.html
-          → this.elevationSpikes              (Alpine.js state)
-          → autoSave() → .egm persisted
-          → generate_models → run_pipeline → gradient_surface_diagnostic.py
-          → Gaussian spike applied to Z_fringe array
-          → build_fringe_mesh → 3MF vertices have height ≈ mm at spike position
-    """
-    spikes = []
-    for entry in markers:
-        try:
-            x_raw, y_raw, v_raw = entry[0], entry[1], entry[2]
-        except (IndexError, TypeError):
-            continue
-        clamped = clamp_ocr_value(v_raw)
-        if clamped is None:
-            print(
-                f"[ocr_elevation] Dropped out-of-range marker: "
-                f"({x_raw}, {y_raw}) value={v_raw!r} — "
-                f"acceptable range: (0, {_OCR_SPIKE_MAX_MM}]"
-            )
-            continue
-        spikes.append({
-            "x": int(round(float(x_raw))),
-            "y": int(round(float(y_raw))),
-            "mm": clamped,
-        })
-    return spikes
-
-
-def classify_ocr_markers(
-    markers: "list[dict]",
-    green_polygon_points: "list[dict]",
-) -> "tuple[list[dict], list[dict]]":
-    """
-    Split OCR marker dicts into interior (green surface) and exterior (fringe
-    boundary) lists using a point-in-polygon test against the detected green
-    polygon.
-
-    Parameters
-    ----------
-    markers : list of {"x": int, "y": int, "mm": float}
-        Spike dicts from markers_to_elevation_spikes().
-    green_polygon_points : list of {"x": ..., "y": ...}
-        Pixel-space control points of the green polygon (from detect_boundaries).
-        Empty list → all markers treated as interior (safe fallback).
-
-    Returns
-    -------
-    (interior, exterior)
-        interior  — markers whose pixel position is INSIDE the green polygon.
-                    These become elevationMarkers (Gaussian spikes on the fringe).
-        exterior  — markers whose pixel position is OUTSIDE the green polygon.
-                    These become fringeBoundaryHeights (boundary anchors driving
-                    fringe Z and green seam Z at the interface).
-
-    Interior / exterior classification rule:
-        Use shapely.geometry.Polygon.contains(Point(x, y)).  Markers on the
-        boundary itself (contains returns False) are treated as exterior — they
-        sit on the black outline, which is the exterior definition.
-
-    Fallback:
-        When green_polygon_points has fewer than 3 points (degenerate polygon),
-        all markers are returned as interior to preserve pre-classification
-        behaviour (all markers become elevation spikes).
-    """
-    if not markers:
-        return [], []
-
-    if len(green_polygon_points) < 3:
-        # Degenerate / absent green — cannot classify; treat all as interior
-        return list(markers), []
-
-    from shapely.geometry import Point as _ShapelyPoint, Polygon as _ShapelyPolygon
-    try:
-        coords = [(float(p["x"]), float(p["y"])) for p in green_polygon_points]
-        green_shapely = _ShapelyPolygon(coords)
-    except Exception:
-        # If Shapely fails to build the polygon, fall back to all-interior
-        return list(markers), []
-
-    if not green_shapely.is_valid or green_shapely.is_empty:
-        return list(markers), []
-
-    interior: list[dict] = []
-    exterior: list[dict] = []
-    for m in markers:
-        try:
-            pt = _ShapelyPoint(float(m["x"]), float(m["y"]))
-        except (KeyError, TypeError, ValueError):
-            continue
-        if green_shapely.contains(pt):
-            interior.append(m)
-        else:
-            exterior.append(m)
-    return interior, exterior
-
-
 # ── Point-clamping helpers ────────────────────────────────────────────────────
 
 def _clamp_point_to_image(x: float, y: float, w: int, h: int) -> tuple:
@@ -1784,35 +1628,11 @@ def detect_boundaries():
         print(f"[detect_boundaries] Clamped {total_clamped} point(s) to image frame "
               f"({w}x{h})")
 
-    # ── Golf Intelligence OCR — elevation markers + fringe boundary heights ──────
-    # Run numeric-marker OCR on the same image used for boundary detection.
-    # All detected decimal values are first converted to spike dicts, then
-    # OCR: interior elevation markers only.
-    # Note: exterior ring numbers (10,15,20,25,30) are distance-from-pin markers,
-    # NOT altitude values — they are intentionally excluded from the pipeline.
-    #
-    # OCR is wrapped in a broad try/except so a missing EasyOCR install or an
-    # unexpected image format never crashes the boundary detection response.
-    elevation_markers: list[dict] = []
-    try:
-        from golf_intel_ocr import extract_numeric_markers as _extract_ocr
-        raw_markers = _extract_ocr(img_path)
-        elevation_markers = markers_to_elevation_spikes(raw_markers)
-        print(
-            f"[detect_boundaries] Golf Intel OCR: "
-            f"{len(raw_markers)} raw marker(s) → "
-            f"{len(elevation_markers)} interior elevationMarkers"
-        )
-    except Exception as _ocr_err:
-        # Non-fatal: log but do not fail the whole detect_boundaries call.
-        print(f"[detect_boundaries] OCR skipped ({type(_ocr_err).__name__}: {_ocr_err})")
-
     return jsonify({
         "status": "ok",
         "imageSize": {"width": w, "height": h},
         "polygons": polygons,
         "contourStep": 0.5,
-        "elevationMarkers": elevation_markers,
     })
 
 

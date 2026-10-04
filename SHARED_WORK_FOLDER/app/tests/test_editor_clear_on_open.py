@@ -155,8 +155,9 @@ class TestClearEditorStateHelper:
         assert "gpsEnabled" in body, "clearEditorState() must reset gpsEnabled"
         assert "gpsFile" in body, "clearEditorState() must reset gpsFile"
 
+    @pytest.mark.skip(reason="T5: elevationSpikes field removed from editor.html (OCR pipeline stripped)")
     def test_clearEditorState_clears_elevation_spikes(self):
-        """T1e: clearEditorState() must reset elevationSpikes."""
+        """T1e: clearEditorState() must reset elevationSpikes — TOMBSTONED by T5."""
         src = _read_editor_js()
         m = re.search(r'clearEditorState\s*\(\s*\)\s*\{(.+?)^\s*\},', src,
                       re.DOTALL | re.MULTILINE)

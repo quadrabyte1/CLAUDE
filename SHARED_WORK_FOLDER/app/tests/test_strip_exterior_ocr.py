@@ -20,6 +20,11 @@ from pathlib import Path
 
 import pytest
 
+# T5 (2026-10-03): Full OCR pipeline stripped — golf_intel_ocr.py deleted, G-badge removed.
+# T2's regression assertions (extract_numeric_markers still importable, G-badge present) are
+# now superseded by T5's full strip. Tombstone this entire file.
+pytestmark = pytest.mark.skip(reason="T5 supersedes T2: full OCR strip completed, exterior+interior pipeline gone")
+
 # ---------------------------------------------------------------------------
 # Path setup
 # ---------------------------------------------------------------------------

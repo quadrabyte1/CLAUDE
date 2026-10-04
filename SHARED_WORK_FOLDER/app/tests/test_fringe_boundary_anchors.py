@@ -39,6 +39,11 @@ import json
 import math
 import sys
 from pathlib import Path
+import pytest
+
+# T5 (2026-10-03): classify_ocr_markers() removed; fringe boundary anchor pipeline stripped.
+# All tests in this file are tombstoned until a replacement mechanism ships.
+pytestmark = pytest.mark.skip(reason="T5: classify_ocr_markers and fringe boundary anchor pipeline stripped")
 
 import numpy as np
 import pytest

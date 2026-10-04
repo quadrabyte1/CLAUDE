@@ -318,10 +318,11 @@ class TestEgmRoundTrip:
         """D3 — Loading an old EGM with elevationSpikes field does not crash the app."""
         import app as _app_module
 
-        # Create a minimal EGM with elevationSpikes field (old format)
-        course_dir = tmp_path / "GolfCourses" / "TestCourse"
-        course_dir.mkdir(parents=True)
-        egm_path = course_dir / "TestCourse (Hole 1, 99999).egm"
+        # Create a minimal EGM with elevationSpikes field (old format).
+        # The load route searches <course>/EGMs/<filename>, so we must create the EGMs subdir.
+        egms_dir = tmp_path / "GolfCourses" / "TestCourse" / "EGMs"
+        egms_dir.mkdir(parents=True)
+        egm_path = egms_dir / "TestCourse (Hole 1, 99999).egm"
         old_egm = {
             "course": "TestCourse",
             "hole": "1",

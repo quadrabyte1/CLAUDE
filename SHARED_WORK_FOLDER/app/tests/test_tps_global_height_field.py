@@ -206,6 +206,7 @@ class TestTPSFringeAnchorHonored:
 class TestTPSInteriorSpikeHonored:
     """T2: Interior elevation spike → TPS Z at that point ≈ spike value."""
 
+    @pytest.mark.skip(reason="T5/T6: elevation_spikes_mm removed from TPS pipeline by task 698 — awaits Topo T6 completion")
     def test_single_interior_spike_honored(self):
         """T2: TPS Z at interior spike location ≈ spike value (within 0.1 mm)."""
         gsd = _load_gsd()
@@ -608,6 +609,7 @@ class TestTPSConflictingConstraints:
     The averaging logic applies to any co-located spike pair.
     """
 
+    @pytest.mark.skip(reason="T5/T6: elevation_spikes_mm removed from TPS pipeline by task 698 — awaits Topo T6 completion")
     def test_collocated_constraints_averaged(self):
         """T9: Co-located interior spikes (xy) with conflicting Z → no exception, Z = avg."""
         gsd = _load_gsd()

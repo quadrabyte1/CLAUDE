@@ -216,6 +216,7 @@ class TestStripFringeAnchorsIgnored:
 class TestStripSpikeHonoredUnchanged:
     """StripT2: Interior spike must still be honored after stripping fbh."""
 
+    @pytest.mark.skip(reason="T5/T6: elevation_spikes_mm removed from TPS pipeline by task 698 — awaits Topo T6 completion")
     def test_interior_spike_honored(self):
         """StripT2: spike at (cx,cy,8) → TPS Z at that point ≈ 8 within 0.1 mm."""
         gsd = _load_gsd()

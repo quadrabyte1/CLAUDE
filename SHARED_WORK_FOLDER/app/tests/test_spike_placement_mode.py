@@ -39,6 +39,11 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+import pytest
+
+# T5 (2026-10-03): Add Spike / spikeMode / startSpikePlacement stripped from editor.html.
+# All tests in this file are tombstoned until a replacement mechanism ships.
+pytestmark = pytest.mark.skip(reason="T5: spikeMode/Add Spike/startSpikePlacement stripped from editor.html")
 
 import pytest
 

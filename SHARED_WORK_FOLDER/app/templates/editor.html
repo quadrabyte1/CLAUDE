@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{# Boundary Editor v4.98 — T5: OCR / G-badge / spike placement pipeline stripped #}
+{# Boundary Editor v5.00 — grid cell elevation overlay (phase 1: UI + EGM schema) #}
 {% block title %}Boundary Editor — AI Team Workspace{% endblock %}
 {% block content_width %}max-w-6xl{% endblock %}
 {% block content %}
@@ -584,6 +584,41 @@
         </svg>
       </div>
     </template>
+
+    {# ── Grid cell elevation input overlay (v5.00) ─────────────────────────
+       Shown over the canvas when a grid cell is active (_gridActiveCell != null).
+       Positioned in CSS px from the canvas container top-left edge, matching
+       the cell's canvas position computed in _gridCellCanvasPx(). #}
+    <template x-if="_gridActiveCell !== null">
+      <div class="absolute pointer-events-none"
+           :style="`left:0;top:0;width:100%;height:100%;z-index:30;`">
+        <div class="absolute pointer-events-auto"
+             :style="`left:${_gridActiveCell.canvasPx.x}px;
+                      top:${_gridActiveCell.canvasPx.y}px;
+                      width:${Math.max(36, _gridActiveCell.canvasPx.w)}px;
+                      transform: translateY(-100%);
+                      z-index:31;`">
+          <input
+            x-ref="gridCellInput"
+            type="number"
+            min="0"
+            max="50"
+            step="0.5"
+            x-model="_gridInputValue"
+            @keydown.enter.prevent="commitGridCell()"
+            @keydown.escape.prevent="cancelGridCell()"
+            @keydown.delete.stop
+            @keydown.backspace.stop
+            @blur="commitGridCell()"
+            autofocus
+            class="w-full text-xs font-mono text-center rounded border border-indigo-400 bg-white shadow-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            style="min-width:36px; max-width:60px;"
+            placeholder="mm"
+            title="Enter height in mm (0–50). Enter to commit, Esc to cancel, Delete to clear."
+          />
+        </div>
+      </div>
+    </template>
   </div>
 
   {# ── Below-canvas action row ─────────────────────────────── #}
@@ -658,6 +693,13 @@
           title="A change is queued and will save automatically once the image finishes loading."
           class="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
       unsaved
+    </span>
+
+    {# ── Grid cell elevation status strip (v5.00) — hidden when 0 set ── #}
+    <span x-show="Object.keys(gridCellHeights).length > 0"
+          x-text="Object.keys(gridCellHeights).length + ' cell' + (Object.keys(gridCellHeights).length === 1 ? '' : 's') + ' set'"
+          class="text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded"
+          title="Grid cell heights stored in this EGM. Values will drive TPS surface in phase 2.">
     </span>
 
     <div class="ml-auto flex items-center gap-1.5">
@@ -742,6 +784,13 @@ function polygonEditor() {
     statusFilename: '',
     statusSticky: false,
     _pendingAutoSave: false,   // v4.48 — set when autoSave() skips due to unmet prereqs; re-fires once they clear
+
+    // ── Grid cell elevation overlay (v5.00) ──────────────────────────────────
+    // 20×20 sparse dict keyed by cell_index = row*20+col. Values in mm (0–50).
+    gridCellHeights: {},
+    _gridActiveCell: null,   // {col, row, idx, canvasPx:{x,y}} or null
+    _gridInputValue: '',     // staging area while input is open
+
     generating: false,
     generatingElapsed: 0,      // seconds since Generate was clicked (updated every 1s)
     _generatingTimer: null,    // interval handle for the elapsed counter
@@ -1305,6 +1354,88 @@ function polygonEditor() {
         ctx.fillRect(rx, ry, rw, rh);
         ctx.setLineDash([]);
       }
+
+      // ── Grid cell elevation overlay (v5.00) ──────────────────────────────
+      // Draw 20×20 cell boundaries over the print area only when an image is
+      // loaded (grid origin = lower-left of print frame, axis-aligned).
+      if (this.imgLoaded) {
+        const GRID_COLS = 20;
+        const GRID_ROWS = 20;
+        const tl = this._printTopLeftPx();
+        const k  = this._pxPerMm();
+        const psm = this.printSizeMm || 171.45;
+        const cellWpx = (psm / GRID_COLS) * k;
+        const cellHpx = (psm / GRID_ROWS) * k;
+
+        ctx.save();
+
+        // Faint cell boundary lines
+        ctx.strokeStyle = 'rgba(90,90,160,0.20)';
+        ctx.lineWidth = 0.75 * dpr;
+        ctx.setLineDash([]);
+
+        // Vertical lines (col boundaries)
+        for (let c = 0; c <= GRID_COLS; c++) {
+          const xImg = tl.x + c * cellWpx;
+          const yTop = tl.y;
+          const yBot = tl.y + GRID_ROWS * cellHpx;
+          const p0 = this.imgToCanvas(xImg, yTop);
+          const p1 = this.imgToCanvas(xImg, yBot);
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.stroke();
+        }
+        // Horizontal lines (row boundaries)
+        for (let r = 0; r <= GRID_ROWS; r++) {
+          // Grid origin is lower-left, row 0 is at the bottom of the print area
+          const yImg = tl.y + r * cellHpx;
+          const xLeft  = tl.x;
+          const xRight = tl.x + GRID_COLS * cellWpx;
+          const p0 = this.imgToCanvas(xLeft,  yImg);
+          const p1 = this.imgToCanvas(xRight, yImg);
+          ctx.beginPath();
+          ctx.moveTo(p0.x, p0.y);
+          ctx.lineTo(p1.x, p1.y);
+          ctx.stroke();
+        }
+
+        // Coloured dots for set cells
+        for (const [idxStr, mm] of Object.entries(this.gridCellHeights)) {
+          const idx = Number(idxStr);
+          const col = idx % GRID_COLS;
+          const row = Math.floor(idx / GRID_COLS);
+          // Cell centre in image-pixel coords (lower-left origin: row 0 = bottom)
+          const cxImg = tl.x + (col + 0.5) * cellWpx;
+          const cyImg = tl.y + (GRID_ROWS - 1 - row + 0.5) * cellHpx;
+          const cp = this.imgToCanvas(cxImg, cyImg);
+          const dotR = Math.max(2.5, Math.min(cellWpx * this.scale, 5)) * dpr;
+
+          ctx.beginPath();
+          ctx.arc(cp.x, cp.y, dotR, 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(99,102,241,0.85)';  // indigo dot
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+          ctx.lineWidth = 1 * dpr;
+          ctx.stroke();
+        }
+
+        // Highlight the active cell (if any)
+        if (this._gridActiveCell) {
+          const { col, row } = this._gridActiveCell;
+          const cxImg = tl.x + col * cellWpx;
+          const cyImg = tl.y + (GRID_ROWS - 1 - row) * cellHpx;
+          const p0 = this.imgToCanvas(cxImg, cyImg);
+          const p1 = this.imgToCanvas(cxImg + cellWpx, cyImg + cellHpx);
+          ctx.fillStyle = 'rgba(99,102,241,0.12)';
+          ctx.fillRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+          ctx.strokeStyle = 'rgba(99,102,241,0.70)';
+          ctx.lineWidth = 2 * dpr;
+          ctx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+        }
+
+        ctx.restore();
+      }
     },
 
     // Find which point (if any) is under the mouse
@@ -1487,6 +1618,16 @@ function polygonEditor() {
         this.$refs.canvas.style.cursor = 'grabbing';
         this.draw();
       } else {
+        // Check if the click lands inside a grid cell — if so, open the input.
+        // This only activates when no polygon/contour vertex was hit.
+        const gridCell = this._gridCellFromImgPx(x, y);
+        if (gridCell) {
+          this.selectedContour = -1;
+          this.selectedVerts = [];
+          this.openGridCell(gridCell.col, gridCell.row, gridCell.idx);
+          return;
+        }
+
         // Click on empty space — start rubber band selection
         this.selectedContour = -1;
         this.rubberBand = true;
@@ -2036,6 +2177,93 @@ function polygonEditor() {
       window.addEventListener('pointerup', onUp);
     },
 
+    // ── Grid cell elevation helpers (v5.00) ──────────────────────────────────
+
+    // Convert an image-pixel coordinate to a grid (col, row) or null if outside.
+    // Row 0 is at the BOTTOM of the print area (lower-left origin per spec).
+    _gridCellFromImgPx(imgX, imgY) {
+      const GRID_COLS = 20;
+      const GRID_ROWS = 20;
+      const tl  = this._printTopLeftPx();
+      const k   = this._pxPerMm();
+      const psm = this.printSizeMm || 171.45;
+      const cellWpx = (psm / GRID_COLS) * k;
+      const cellHpx = (psm / GRID_ROWS) * k;
+      // Offset from print top-left in pixel space
+      const relX = imgX - tl.x;
+      const relY = imgY - tl.y;
+      if (relX < 0 || relX >= GRID_COLS * cellWpx) return null;
+      if (relY < 0 || relY >= GRID_ROWS * cellHpx) return null;
+      const col = Math.floor(relX / cellWpx);
+      // row 0 = bottom row; relY=0 is the TOP of the print area image
+      const row = (GRID_ROWS - 1) - Math.floor(relY / cellHpx);
+      return { col, row, idx: row * GRID_COLS + col };
+    },
+
+    // Return canvas CSS-px position (top-left) of a grid cell for positioning
+    // the input overlay. (Canvas CSS px = image-px * scale + offset.)
+    _gridCellCanvasPx(col, row) {
+      const GRID_COLS = 20;
+      const GRID_ROWS = 20;
+      const tl  = this._printTopLeftPx();
+      const k   = this._pxPerMm();
+      const psm = this.printSizeMm || 171.45;
+      const cellWpx = (psm / GRID_COLS) * k;
+      const cellHpx = (psm / GRID_ROWS) * k;
+      // Row 0 = bottom; row GRID_ROWS-1 = top of print area image
+      const imgX = tl.x + col * cellWpx;
+      const imgY = tl.y + (GRID_ROWS - 1 - row) * cellHpx;
+      return {
+        x: imgX * this.scale + this.offsetX,
+        y: imgY * this.scale + this.offsetY,
+        w: cellWpx * this.scale,
+        h: cellHpx * this.scale,
+      };
+    },
+
+    // Open the inline input for a grid cell.
+    openGridCell(col, row, idx) {
+      const existing = this.gridCellHeights[idx];
+      this._gridInputValue = (existing !== undefined) ? String(existing) : '';
+      const pos = this._gridCellCanvasPx(col, row);
+      this._gridActiveCell = { col, row, idx, canvasPx: pos };
+      this.draw();
+      this.$nextTick(() => {
+        const inp = this.$refs.gridCellInput;
+        if (inp) { inp.select(); inp.focus(); }
+      });
+    },
+
+    // Commit the current input value to gridCellHeights.
+    commitGridCell() {
+      if (!this._gridActiveCell) return;
+      const raw = parseFloat(this._gridInputValue);
+      if (!isNaN(raw)) {
+        const clamped = Math.max(0, Math.min(50, raw));
+        this.gridCellHeights[this._gridActiveCell.idx] = clamped;
+      }
+      this._gridActiveCell  = null;
+      this._gridInputValue  = '';
+      this.draw();
+      this.autoSave();
+    },
+
+    // Cancel the current input without updating state.
+    cancelGridCell() {
+      this._gridActiveCell = null;
+      this._gridInputValue = '';
+      this.draw();
+    },
+
+    // Delete a grid cell's stored value (called from handleKey on Delete).
+    deleteGridCell(idx) {
+      delete this.gridCellHeights[idx];
+      this._gridActiveCell = null;
+      this._gridInputValue = '';
+      this.draw();
+      this.autoSave();
+    },
+
     removePoly(idx) {
       if (this.polygons[idx].type !== 'trap' && this.polygons[idx].type !== 'water' && this.polygons[idx].type !== 'boulders') return;
       this.pushUndo();
@@ -2127,6 +2355,11 @@ function polygonEditor() {
       // courseGeoRef — stored once per course, survives round-trips
       if (this.courseGeoRef) {
         data.courseGeoRef = this.courseGeoRef;
+      }
+      // gridCellHeights — only written when at least one cell is set so that
+      // legacy EGMs without this field are not unnecessarily enlarged.
+      if (Object.keys(this.gridCellHeights).length > 0) {
+        data.gridCellHeights = Object.assign({}, this.gridCellHeights);
       }
       try {
         await fetch('/api/boundaries', {
@@ -2287,6 +2520,10 @@ function polygonEditor() {
       this.gpsPreviewDataUrl  = '';
       this.gpsPreviewError    = '';
       this.gpsPreviewNotes    = [];
+      // Grid cell elevation (v5.00)
+      this.gridCellHeights    = {};
+      this._gridActiveCell    = null;
+      this._gridInputValue    = '';
       // Unsaved-changes guard
       this._pendingAutoSave   = false;
       // Clear the canvas so no stale image is visible while the fetch is in flight
@@ -2378,6 +2615,10 @@ function polygonEditor() {
             y_mm: this.TEE_HOLE_DEFAULT_MM,
           };
         }
+        // gridCellHeights — v5.00. Absent in legacy EGMs → default to empty dict.
+        this.gridCellHeights = data.gridCellHeights || {};
+        this._gridActiveCell = null;
+        this._gridInputValue = '';
         // v4.83 — off-frame points are intentional (users can drag control
         // points outside the image frame deliberately). Polygon coords are
         // loaded as-is; no clamping, no dirty-flag, no toast.
@@ -2445,6 +2686,10 @@ function polygonEditor() {
       this.redoStack = [];
       this.selectedVerts = [];
       this.polygons = [];
+      // Grid cell elevation — reset on new project
+      this.gridCellHeights  = {};
+      this._gridActiveCell  = null;
+      this._gridInputValue  = '';
       // Default-populate the tee hole on the left side (30 mm inset) — same
       // convention as loadProject(). User can remove it explicitly.
       this.teeHole = {
@@ -2921,6 +3166,25 @@ function polygonEditor() {
     },
 
     handleKey(e) {
+      // ── Grid cell input intercepts — must run before polygon key handlers ──
+      if (this._gridActiveCell) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          this.cancelGridCell();
+          return;
+        }
+        // Delete on an active cell clears it (even while the HTML input is focused
+        // the window keydown fires first on some browsers; guard with _gridActiveCell).
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) {
+            // Let the browser handle normal text deletion inside the input
+          } else {
+            e.preventDefault();
+            this.deleteGridCell(this._gridActiveCell.idx);
+            return;
+          }
+        }
+      }
       // Undo: Cmd+Z / Ctrl+Z
       if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();

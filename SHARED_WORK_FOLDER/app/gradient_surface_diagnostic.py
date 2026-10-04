@@ -1,3 +1,39 @@
+# v0.18 — 2026-10-04 Topo — 20×20 grid-cell TPS height field (task 704).
+#         Wires gridCellHeights EGM field into the fringe surface via TPS.
+#         New function _build_tps_grid_height_field():
+#           1. Computes default Z for each of 400 cell centres via nearest-
+#              boundary KDTree lookup on bnd_z (Poisson green boundary Z).
+#           2. Merges user-set values from egm["gridCellHeights"] over defaults.
+#           3. Fits TPS (RBFInterpolator, thin_plate_spline, smoothing=0) over
+#              all 400 (cell_cx, cell_cy, cell_z) constraints.
+#         build_fringe_mesh: replaces task-700 _z_nn_grid (nearest-boundary
+#         extension) with _z_tps_grid from _build_tps_grid_height_field().
+#         Degenerate case (no gridCellHeights): all 400 cells = Poisson default
+#         → TPS is a C²-smooth approximation of the old NN extension.
+#         User-set cells propagate via TPS blend; seam-reseat still overrides
+#         the innermost ring from g_bdry_arr.
+#         _build_tps_base() preserved intact (unused on this path).
+#         APP_VERSION bumped to v5.01.
+# v0.17 — 2026-10-04 Topo — Default fringe Z = nearest green boundary Z (task 700).
+#         Thomas's spec: "the elevation of the fringe should be the same as the
+#         corresponding elevation in the green across that interface and all the
+#         way out to the edge of the frame."
+#         For each fringe cell (x, y), find the nearest point on the green polygon
+#         boundary (gbnd KDTree), look up the Poisson green surface Z at that
+#         boundary point (bnd_z array), and hold that Z constant all the way out
+#         to the frame edge.  No decay toward BASE_THICKNESS_MM.
+#         Result: the fringe becomes a radial "extension" of the green rim.
+#         Tilted green (5 mm one side, 10 mm opposite) → fringe mirrors the tilt
+#         as a pair of plateaus with a smooth Voronoi-split transition at corners.
+#         Replaced: the TPS global-height-field path (_z_tps_grid driven by 16
+#         outer-frame anchors at BASE_THICKNESS_MM) is no longer the source of
+#         green_edge_h.  The TPS primitive _build_tps_base() is KEPT INTACT for
+#         the future grid-cell mechanism (user-set cells override the default
+#         nearest-boundary Z locally via TPS).
+#         _raw_fbh anchors are already embedded in bnd_z (task 658 Approach A),
+#         so user-set fringe boundary heights propagate through the new path
+#         automatically — no change to the anchor override logic.
+#         APP_VERSION bumped to v4.99.
 # v0.16 — 2026-10-03 Topo — Complete strip of Gaussian spike-application code (task 698).
 #         Continued from v0.15 partial: actually deleted _raw_spikes loop,
 #         SPIKE_SIGMA_MM / SPIKE_INFLUENCE_MM / SPIKE_HARD_MAX_MM constants,
@@ -3160,6 +3196,150 @@ def _build_tps_base(
     return z_base
 
 
+# ---------------------------------------------------------------------------
+# 20 × 20 grid-cell TPS height field (task 704, Topo 2026-10-04)
+# ---------------------------------------------------------------------------
+
+def _build_tps_grid_height_field(
+    egm_data: dict,
+    green_bnd_mm: np.ndarray,
+    bnd_z: np.ndarray,
+    grid_x: np.ndarray,
+    grid_y: np.ndarray,
+) -> np.ndarray:
+    """Build a C²-smooth global height field driven by a 20×20 grid of cell constraints.
+
+    For each of the 400 grid cells:
+      - **Default Z**: sampled from ``bnd_z`` via nearest-neighbour KDTree lookup on
+        the green boundary polyline ``green_bnd_mm``.  This gives each cell the
+        Poisson-derived green-rim elevation at its centre, so the surface smoothly
+        extends the green boundary elevation into the fringe everywhere.
+      - **User override**: if ``egm_data["gridCellHeights"]`` contains an entry for
+        the cell's index (``row * 20 + col``), the user-set mm value replaces the
+        Poisson default.
+
+    All 400 ``(cell_center_x_mm, cell_center_y_mm, cell_z)`` triples are fed into
+    ``scipy.interpolate.RBFInterpolator`` with ``kernel="thin_plate_spline"``
+    (inherited from :func:`_build_tps_base`).  The result is a single C²-smooth
+    surface everywhere — no kinks at cell boundaries.
+
+    Grid geometry (axis-aligned, origin lower-left of frame):
+      - Frame side = ``2 * half`` where ``half = PRINT_SIZE_MM/2 + FRINGE_XY_EXPANSION_MM/2``.
+      - Cell ``(col, row)`` centre in world mm: ``(-half + (col+0.5)*cell_side,
+        -half + (row+0.5)*cell_side)``.
+      - ``cell_index = row * 20 + col``; ``row 0`` = bottom, ``col 0`` = left.
+
+    Parameters
+    ----------
+    egm_data : dict
+        EGM data dict.  ``gridCellHeights`` key (optional) is read as a sparse dict
+        ``{cell_index: mm}``; both int and string keys are accepted.
+    green_bnd_mm : (N, 2) float array
+        Green boundary polyline in mm-space (origin at green centroid).
+    bnd_z : (N,) float array
+        Poisson-derived Z values at each ``green_bnd_mm`` point.  Typically built by
+        looking up ``green_cell_z`` at the nearest green grid cell for each boundary
+        vertex; ``fringeBoundaryHeight`` anchors may already be injected.
+    grid_x, grid_y : (R, C) float arrays
+        Meshgrid at which the TPS surface is evaluated.
+
+    Returns
+    -------
+    (R, C) float array of Z values in mm.
+
+    Notes
+    -----
+    Degenerate case (empty or absent ``gridCellHeights``): all 400 cells carry
+    Poisson-nearest defaults.  TPS fits a smooth surface that approximates the
+    task-700 nearest-boundary extension but is C²-smooth across cell boundaries
+    instead of piecewise-constant.
+
+    The 16 outer-frame anchors at ``BASE_THICKNESS_MM`` from :func:`_build_tps_base`
+    are NOT added here — the 400 cell constraints already cover the full frame,
+    so no extra anchors are needed to prevent blow-up.
+    """
+    from scipy.interpolate import RBFInterpolator
+    from scipy.spatial import cKDTree
+
+    GRID_SIZE = 20  # 20 × 20 cells
+    _elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
+    half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+    cell_side = (2.0 * half) / GRID_SIZE  # square cells
+
+    # ── Step 1: Compute default Z for every cell centre via nearest bnd_z ──────
+    # Build KDTree once over the green boundary for vectorised lookup.
+    gbnd_kd = cKDTree(green_bnd_mm)
+    n_cells = GRID_SIZE * GRID_SIZE  # 400
+
+    cell_cx = np.empty(n_cells, dtype=np.float64)  # world x-coord of cell centre
+    cell_cy = np.empty(n_cells, dtype=np.float64)  # world y-coord of cell centre
+
+    for row in range(GRID_SIZE):
+        for col in range(GRID_SIZE):
+            idx = row * GRID_SIZE + col
+            cell_cx[idx] = -half + (col + 0.5) * cell_side
+            cell_cy[idx] = -half + (row + 0.5) * cell_side
+
+    cell_centres = np.column_stack([cell_cx, cell_cy])  # (400, 2)
+
+    # Vectorised NN lookup: for each cell centre find nearest green boundary point.
+    _, nn_idx = gbnd_kd.query(cell_centres, k=1)  # (400,)
+    nn_idx = np.atleast_1d(nn_idx)
+    cell_defaults = bnd_z[nn_idx].copy()  # (400,) — mutable; user values go here
+
+    # ── Step 2: Merge user-set values over defaults ───────────────────────────
+    grid_cell_heights = egm_data.get("gridCellHeights") or {}
+    n_overrides = 0
+    for key, val_mm in grid_cell_heights.items():
+        try:
+            ci = int(key)
+            val = float(val_mm)
+        except (TypeError, ValueError):
+            continue
+        if ci < 0 or ci >= n_cells:
+            continue
+        # Clamp to sane elevation range (same guard as fringeBoundaryHeights)
+        val = max(BASE_THICKNESS_MM, min(val, BASE_THICKNESS_MM + _elevation_range_mm))
+        cell_defaults[ci] = val
+        n_overrides += 1
+
+    print(f"  [TPS-grid] 400 cells: {n_overrides} user-set, "
+          f"{n_cells - n_overrides} Poisson-default; "
+          f"Z range [{float(cell_defaults.min()):.3f}, {float(cell_defaults.max()):.3f}] mm")
+
+    # ── Step 3: Fit TPS over all 400 cell-centre constraints ─────────────────
+    # smoothing=0 → exact interpolation through all 400 constraints.
+    try:
+        rbf = RBFInterpolator(
+            cell_centres,      # (400, 2) — XY of cell centres
+            cell_defaults,     # (400,)   — Z values (Poisson default or user override)
+            kernel="thin_plate_spline",
+            smoothing=0.0,
+        )
+    except Exception as exc:
+        print(f"  [TPS-grid] RBFInterpolator fit failed ({exc}) — "
+              f"falling back to _build_tps_base (flat BASE_THICKNESS_MM)")
+        return np.full(grid_x.shape, BASE_THICKNESS_MM)
+
+    # ── Step 4: Evaluate on the fringe query grid ─────────────────────────────
+    query_xy = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+    try:
+        z_flat = rbf(query_xy)
+    except Exception as exc:
+        print(f"  [TPS-grid] RBFInterpolator eval failed ({exc}) — "
+              f"falling back to flat BASE_THICKNESS_MM")
+        return np.full(grid_x.shape, BASE_THICKNESS_MM)
+
+    z_grid = z_flat.reshape(grid_x.shape)
+
+    # Clamp to printable range — TPS can overshoot with extreme constraints.
+    z_grid = np.clip(z_grid, 0.0, BASE_THICKNESS_MM + _elevation_range_mm + 2.0)
+
+    print(f"  [TPS-grid] surface Z range [{float(z_grid.min()):.3f}, "
+          f"{float(z_grid.max()):.3f}] mm")
+    return z_grid
+
+
 def build_fringe_mesh(
     Z_mm: np.ndarray,
     xs_grid: np.ndarray,
@@ -3548,59 +3728,41 @@ def build_fringe_mesh(
     # scripts that want to inspect the old behaviour.
     K_LERP_NEIGHBOURS = min(4, len(green_cell_z))
 
-    # ── TPS global height field (task 684, Topo 2026-10-02) ─────────────────
-    # Build a C²-smooth surface over ALL constraints:
-    #   • Every fringe-boundary anchor (already snapped to gbnd above in bnd_z)
-    #   • Every interior elevation spike (raw; converted to mm)
-    #   • 16 outer-frame anchors at BASE_THICKNESS_MM
+    # ── TPS grid-cell height field (task 704, Topo 2026-10-04) ─────────────────
+    # Phase 2 of the 20×20 grid-cell elevation mechanism.  Replaces the task-700
+    # nearest-boundary extension (_z_nn_grid) with a full TPS fit over all 400
+    # cell centres.  Each cell's default Z is still the Poisson-nearest bnd_z
+    # value (same source as the old NN extension), but user-set cells in
+    # gridCellHeights override their local Z → the TPS propagates the override
+    # smoothly across the fringe.  When gridCellHeights is absent or empty the
+    # TPS is driven entirely by the 400 Poisson defaults, producing a C²-smooth
+    # approximation of the old NN extension.
     #
-    # The TPS replaces the per-cell IDW call (task #509 path) as the source
-    # of `green_edge_h`.  The IDW is still kept as a fallback and is still
-    # used by seam-reseat (below) which operates independently on g_bdry_arr.
-    # Plateau-taper and fringe-floor clamps are preserved.
-
-    # Collect fringe-boundary anchors in the format _build_tps_base expects.
-    _tps_fbh: list[dict] = []
-    if _raw_fbh:
-        _gbnd_kd_tps = cKDTree(gbnd)
-        for _fbh_item in _raw_fbh:
-            try:
-                _ax_px = float(_fbh_item["x"])
-                _ay_px = float(_fbh_item["y"])
-                _av_mm = float(_fbh_item["value"])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if not (0.0 < _av_mm <= 50.0):
-                continue
-            _a_mm_tps = _px_to_mm_2d(
-                np.array([[_ax_px, _ay_px]], dtype=np.float64), scale, centroid_px
-            )[0]
-            # Snap to nearest green boundary point (matches bnd_z override logic)
-            _k_tps = min(1, len(gbnd))
-            _, _snap_idx = _gbnd_kd_tps.query(_a_mm_tps[:2], k=_k_tps)
-            _snapped_xy = gbnd[int(np.atleast_1d(_snap_idx)[0])]
-            _tps_fbh.append({"xy_mm": _snapped_xy, "z_mm": _av_mm})
-
-    # elevation_spikes_mm feed to TPS removed (task 698, 2026-10-02 Thomas pivot).
-    # Spike-application pipeline stripped entirely; TPS now driven only by 16-point
-    # outer-frame base ring.  Pass empty list to satisfy _build_tps_base signature
-    # (deprecated parameter; see deprecation notice inside that function).
+    # elevationSpikes deprecation notice (task 698) is kept for EGMs that still
+    # carry the field; the field is otherwise ignored.
     _egm_spikes_raw = egm_data.get("elevationSpikes") or egm_data.get("elevation_spikes") or []
     if _egm_spikes_raw:
         print(f"  [fringe] DEPRECATED: EGM contains {len(_egm_spikes_raw)} elevationSpikes "
               f"item(s) — spike-application pipeline removed in task 698. "
               f"Spikes are ignored; elevation_spikes field will be removed in a future version.")
 
-    # Build the TPS surface on the fringe grid.
-    GX_tps, GY_tps = np.meshgrid(xs_mm, ys_mm)   # (fringe_grid_res, fringe_grid_res)
-    _z_tps_grid = _build_tps_base(
+    # Build the fringe meshgrid once (reused both for TPS query and per-cell loop).
+    GX_fringe, GY_fringe = np.meshgrid(xs_mm, ys_mm)  # (R, C) mm coords
+
+    # Call the 400-cell TPS builder.  It reads bnd_z for Poisson defaults and
+    # egm_data["gridCellHeights"] for user overrides.
+    _z_tps_grid = _build_tps_grid_height_field(
         egm_data=egm_data,
         green_bnd_mm=gbnd,
-        elevation_spikes_mm=[],
-        fringe_boundary_heights_mm=_tps_fbh,
-        grid_x=GX_tps,
-        grid_y=GY_tps,
-    )
+        bnd_z=bnd_z,
+        grid_x=GX_fringe,
+        grid_y=GY_fringe,
+    )  # (R, C)
+
+    print(f"  [fringe TPS-grid] Z range: "
+          f"[{float(_z_tps_grid.min()):.3f}, {float(_z_tps_grid.max()):.3f}] mm "
+          f"({len(gbnd)} boundary vertices, bnd_z range "
+          f"[{float(bnd_z.min()):.3f}, {float(bnd_z.max()):.3f}] mm)")
 
     # Task 726 (Topo, 2026-09-04): compute fringe cell half-step for footprint
     # overlap tests below.  The grid is uniform (linspace), so the step is
@@ -3654,19 +3816,19 @@ def build_fringe_mesh(
             # drives the plateau-taper (task #506).
             d_to_green, nx, ny = _min_dist_to_polyline(x, y, gbnd)
 
-            # Task 684 (Topo 2026-10-02): TPS-based green_edge_h.
-            # The TPS surface is pre-built on the same grid; just look up
-            # the cell value.  This replaces the per-cell K=24 IDW query
-            # (task #509) as the height source, giving a globally C²-smooth
-            # surface with no crease at the fringe/green seam.
-            # Seam-reseat (below) is preserved — it still overrides the Z
-            # of the innermost fringe ring from g_bdry_arr, so the printed
-            # seam still matches the green mesh exactly.
+            # Task 704 (Topo 2026-10-04): TPS grid-cell height field.
+            # Look up the pre-computed TPS grid (_z_tps_grid): for this fringe cell,
+            # green_edge_h is the TPS surface value at (x, y).  The TPS fits over
+            # 400 cell centres with Poisson-derived defaults (and user-set overrides
+            # from gridCellHeights), so it naturally matches the green boundary Z
+            # at unset cells and locally reflects user overrides at set cells.
+            # Seam-reseat (below) still overrides the innermost ring from g_bdry_arr.
             green_edge_h = float(_z_tps_grid[r, c])
 
-            # ── IDW fallback (kept for edge-case robustness) ──────────────
-            # If the TPS lookup is NaN or zero (should not happen but guards
-            # against a future solver change), fall back to the legacy IDW.
+            # ── TPS fallback (edge-case robustness) ──────────────────────────
+            # _z_tps_grid should always be finite (it is clamped in
+            # _build_tps_grid_height_field).  Guard against rare degenerate
+            # surfaces by falling back to the IDW path.
             if not math.isfinite(green_edge_h) or green_edge_h == 0.0:
                 dists_b, idxs_b = gbnd_kd_lerp.query([x, y], k=K_BND_IDW)
                 dists_b = np.atleast_1d(np.asarray(dists_b, dtype=np.float64))

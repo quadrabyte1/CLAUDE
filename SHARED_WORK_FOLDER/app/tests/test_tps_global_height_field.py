@@ -522,24 +522,43 @@ class TestTPSFringeMeshRoundTrip:
 # ===========================================================================
 
 class TestTPSTrapRegression:
-    """T7: build_fringe_mesh still produces a fringe with varying Z (trap still curves)."""
+    """T7: build_fringe_mesh still produces a fringe with varying Z (trap still curves).
+
+    Updated for task 700: fringe Z now inherits green boundary Z (nearest-boundary
+    extension).  elevationSpikes are deprecated/ignored (task 698) and no longer
+    drive Z variation.  Instead the test uses a tilted green (left=3 mm, right=7 mm)
+    to verify that the fringe mirrors the tilt and that a trap polygon is carved
+    out correctly — the core trap-regression invariant (trap mesh still builds and
+    fringe Z is not flat when the green is tilted).
+    """
 
     def test_trap_not_flattened(self, tmp_path):
-        """T7: Fringe mesh has non-trivial Z variation (> 0.5 mm range) — trap still active."""
+        """T7: fringe+trap with tilted green — fringe Z varies (mirrors tilt, > 2 mm range)."""
         gsd = _load_gsd()
         cx_px, cy_px, r_px = 300.0, 300.0, 105.0
-        # Add a trap polygon slightly outside the green
+        # Add a trap polygon slightly outside the green (right side).
         trap_r_px = 120.0
         trap_pts = _make_circular_green_pts(cx_px + 20, cy_px, trap_r_px * 0.4, n=16)
         egm = _base_egm(cx_px, cy_px, r_px)
         egm["polygons"].append({"name": "Trap1", "type": "trap", "points": trap_pts})
         egm["fringeBoundaryHeights"] = []
-        egm["elevationSpikes"] = [
-            {"x": cx_px + r_px * 1.5, "y": cy_px, "mm": 9.0}
-        ]
+        egm["elevationSpikes"] = []  # deprecated/ignored since task 698
 
         green_bnd_px = gsd.interpolate_catmull_rom(egm["polygons"][0]["points"])
-        Z_mm, xs_g, ys_g, inside_mask = _flat_green_arrays(cx_px, cy_px, r_px)
+
+        # Tilted green: left edge = 3 mm, right edge = 7 mm.
+        # With the task-700 nearest-boundary Z extension, the fringe mirrors
+        # this tilt, giving a Z range of ≈ 4 mm across the fringe rectangle.
+        xs_g = np.linspace(0, 599, 200)
+        ys_g = np.linspace(0, 599, 200)
+        inside_mask = np.zeros((200, 200), dtype=bool)
+        Z_mm = np.zeros((200, 200), dtype=float)
+        for ri, py in enumerate(ys_g):
+            for ci, px in enumerate(xs_g):
+                if math.hypot(px - cx_px, py - cy_px) < r_px:
+                    inside_mask[ri, ci] = True
+                    t = (px - cx_px + r_px) / (2.0 * r_px)  # 0 at left, 1 at right
+                    Z_mm[ri, ci] = 3.0 + 4.0 * t  # 3..7 mm
 
         fringe_mesh = gsd.build_fringe_mesh(
             Z_mm, xs_g, ys_g, inside_mask,
@@ -547,13 +566,15 @@ class TestTPSTrapRegression:
             fringe_grid_res=80,
         )
         verts = np.asarray(fringe_mesh.vertices)
+        # Top-surface vertices only (exclude bottom face at Z=0).
         top_verts = verts[verts[:, 2] > gsd.BASE_THICKNESS_MM * 0.5]
         assert len(top_verts) > 10, "Too few top fringe vertices — mesh may be degenerate"
 
+        # Task 700: fringe mirrors the green tilt → Z range should be > 2 mm.
         z_range = float(top_verts[:, 2].max() - top_verts[:, 2].min())
-        assert z_range > 0.5, (
-            f"Fringe top Z range = {z_range:.4f} mm — should have > 0.5 mm variation "
-            f"from elevation spike (TPS may have flattened the surface)"
+        assert z_range > 2.0, (
+            f"Fringe top Z range = {z_range:.4f} mm — should have > 2 mm variation "
+            f"mirroring the tilted green surface (nearest-boundary extension, task 700)"
         )
 
 

@@ -438,17 +438,26 @@ class TestRegressionPolygonDetection:
         )
 
     def test_app_version_bumped(self):
-        """F2 — APP_VERSION bumped to v4.98 in app.py."""
+        """F2 — APP_VERSION bumped at or beyond v4.99 in app.py (task 700+).
+        Updated: task 702 bumped to v5.00; accept any version ≥ v4.99."""
         src = APP_PY_PATH.read_text(encoding="utf-8")
-        assert 'APP_VERSION = "v4.98"' in src, (
-            f"APP_VERSION not bumped to v4.98 in app.py. "
-            f"Found: {re.search(r'APP_VERSION = \"v[^\"]+\"', src)}"
+        m = re.search(r'APP_VERSION\s*=\s*["\']v(\d+)\.(\d+)["\']', src)
+        assert m is not None, "APP_VERSION not found in app.py"
+        major, minor = int(m.group(1)), int(m.group(2))
+        version_ok = (major > 4) or (major == 4 and minor >= 99)
+        assert version_ok, (
+            f"APP_VERSION v{major}.{minor} not at or beyond v4.99"
         )
 
     def test_editor_version_string_bumped(self, html):
-        """F3 — On-page version string in editor.html contains 4.98."""
-        assert "4.98" in html, (
-            "editor.html on-page version string does not contain 4.98 — version not bumped."
+        """F3 — On-page version string in editor.html ≥ v4.98.
+        Updated: task 702 set v5.00; accept any version beyond v4.97."""
+        m = re.search(r'Boundary Editor v(\d+)\.(\d+)', html)
+        assert m is not None, "No 'Boundary Editor vX.XX' version string in editor.html"
+        major, minor = int(m.group(1)), int(m.group(2))
+        version_ok = (major > 4) or (major == 4 and minor >= 98)
+        assert version_ok, (
+            f"editor.html version v{major}.{minor} not at or beyond v4.98"
         )
 
     def test_autosave_still_has_polygons(self, html):

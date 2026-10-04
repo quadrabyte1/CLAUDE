@@ -1,3 +1,14 @@
+# v0.19 — 2026-10-04 Topo — Strip sand chunks + floor guard; revert trap to flat+rake (task 708).
+#         TRAP_SURFACE_CURVED flipped back to False (default was True since task 666).
+#         Flat rule: trap_Z = min(fringe boundary Z) + TRAP_FRINGE_OFFSET_MM (-2 mm).
+#         Removed: SAND_CHUNK_HEIGHT_MM, SAND_CHUNK_SIGMA_MM, SAND_CHUNK_DENSITY_PER_100_MM2,
+#           SAND_CHUNK_MAX, SAND_CHUNK_MIN, SAND_CHUNK_UP_FRACTION, SAND_CHUNK_FLOOR_THICKNESS_MM.
+#         Removed: _scatter_sand_chunks() helper function.
+#         Removed: chunk-scatter pass + floor guard from apply_sand_texture().
+#         Kept: TRAP_SURFACE_CURVED flag (False default, True path still reachable).
+#         Kept: rake lines (cosine wave, fixed Y-axis, SAND_RAKE_ALIGN_TO_MAJOR_AXIS=False).
+#         Kept: base_z_map param in apply_sand_texture (API stable for curved path).
+#         APP_VERSION bumped to v5.03.
 # v0.18 — 2026-10-04 Topo — 20×20 grid-cell TPS height field (task 704).
 #         Wires gridCellHeights EGM field into the fringe surface via TPS.
 #         New function _build_tps_grid_height_field():
@@ -5319,26 +5330,11 @@ TRAP_FRINGE_OFFSET_MM:        float = -2.0  # mm offset applied to fringe bounda
 #   Each boundary point tracks its local fringe Z; interior via griddata cubic.
 # When False: reverts to v0.11 flat scalar = min(fringe boundary Z) + offset.
 # Same flag pattern as SAND_RAKE_ALIGN_TO_MAJOR_AXIS — cheap insurance.
-TRAP_SURFACE_CURVED: bool = True  # True = per-point curved (default v0.12); False = flat min (task 662)
-# Task #608 (Topo, 2026-09-26): discrete Gaussian mound "chunks" scattered
-# across the trap top after the rake pass.  Replaces the sinusoidal jitter
-# (SAND_JITTER_AMPLITUDE_MM, removed) which was imperceptible at 0.08 mm next
-# to 0.35 mm rake ridges.  Chunks are visible discrete mounds (~0.6 mm peak),
-# placed at reproducible random positions inside the trap polygon.
-# Task #610 (Topo, 2026-09-26): sigma widened 1.5 → 3.0 mm (same count/height,
-# ~4× footprint area).
-# Task #614 (Topo, 2026-09-27): mixed up/down chunks (50/50 by default) + more
-# chunks overall (density 0.3→0.5, max 20→30, min 3→4).  Each chunk's sign is
-# determined by seeded RNG so the same trap always gets the same pattern.
-# Floor guard prevents dimples from pushing any top vertex below
-# trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM.
-SAND_CHUNK_HEIGHT_MM:           float = 0.6   # Gaussian mound peak height in mm
-SAND_CHUNK_SIGMA_MM:            float = 3.0   # Gaussian sigma in mm (footprint ~6 mm at 2σ); task #610: 1.5→3.0
-SAND_CHUNK_DENSITY_PER_100_MM2: float = 0.5   # chunks per 100 mm² of trap area; task #614: 0.3→0.5
-SAND_CHUNK_MAX:                 int   = 30    # cap: no more than this many chunks per trap; task #614: 20→30
-SAND_CHUNK_MIN:                 int   = 4     # floor: even tiny traps get this many chunks; task #614: 3→4
-SAND_CHUNK_UP_FRACTION:         float = 0.5   # task #614: fraction of chunks that are up-mounds (1.0=all up, 0.0=all dimples)
-SAND_CHUNK_FLOOR_THICKNESS_MM:  float = 0.5   # task #614: floor guard — dimples may not push top below trap_base_z + this value
+TRAP_SURFACE_CURVED: bool = False  # False = flat min (default v0.19/task 708); True = per-point curved (task 662 path, preserved)
+# Task 708 (Topo, 2026-10-04): sand chunks (SAND_CHUNK_*), floor guard
+# (SAND_CHUNK_FLOOR_THICKNESS_MM), and the curved-surface path are all stripped
+# from the active trap pipeline.  Only rake lines + flat slab remain.
+# SAND_CHUNK_* constants removed; _scatter_sand_chunks() removed.
 # Task #610 (Topo, 2026-09-26): rake direction reverted to fixed Y-axis.  When
 # False (default), rake ridges run parallel to Y for every trap regardless of
 # shape.  Set True to re-enable PCA major-axis orientation from task #606.
@@ -5879,102 +5875,6 @@ def _compute_trap_surface_from_fringe(
         trap_scalar_z = max(fringe_boundary_min + offset_mm, 1.0)
         return np.full(n_query, trap_scalar_z, dtype=np.float64)
 
-
-def _scatter_sand_chunks(
-    trap_poly: "ShapelyPolygon",
-    trap_index: int = 0,
-    height_mm: "float | None" = None,
-    sigma_mm: "float | None" = None,
-    density: "float | None" = None,
-    max_chunks: "int | None" = None,
-    min_chunks: "int | None" = None,
-) -> list:
-    """
-    Return a list of ``(cx, cy, h, sigma)`` tuples describing Gaussian bump
-    displacements to scatter across ``trap_poly``.  ``h`` is signed: positive
-    values are up-mounds, negative values are down-dimples (task #614).
-
-    Task #608 rule
-    --------------
-    count = clamp(round(area / 100 * density), min_chunks, max_chunks)
-
-    Each bump is placed at a uniform-random point strictly inside the polygon
-    (rejection sampling).  h magnitude and sigma are jittered ±30% and ±20%
-    respectively around the defaults so bumps look organic.
-
-    Task #614 sign rule
-    -------------------
-    After sampling position/magnitude, each chunk draws a sign from the seeded
-    RNG: ``sign = +1`` with probability ``SAND_CHUNK_UP_FRACTION``, else ``-1``.
-    The sign is applied to ``h`` so the returned value is already signed.  The
-    same seed guarantees the same up/down pattern for any given trap + trap_index.
-
-    Seed
-    ----
-    Derived from ``(round(centroid.x, 1), round(centroid.y, 1), trap_index)``
-    — same pattern as the retired jitter seed — so the same EGM + trap always
-    produces identical chunks.
-
-    Parameters
-    ----------
-    trap_poly  : Shapely polygon of the trap footprint (mm coords).
-    trap_index : integer used to vary the seed between traps.
-    height_mm  : nominal Gaussian peak height magnitude in mm (None → SAND_CHUNK_HEIGHT_MM).
-    sigma_mm   : nominal Gaussian sigma in mm (None → SAND_CHUNK_SIGMA_MM).
-    density    : chunks per 100 mm² (None → SAND_CHUNK_DENSITY_PER_100_MM2).
-    max_chunks : upper cap on chunk count (None → SAND_CHUNK_MAX).
-    min_chunks : lower floor on chunk count (None → SAND_CHUNK_MIN).
-
-    Returns
-    -------
-    List of (cx, cy, h, sigma) tuples (one per chunk).  h is signed.
-    """
-    from shapely.geometry import Point as _ShapelyPoint
-
-    # Resolve defaults at call time so monkey-patching the module constants
-    # (for testing) is respected.
-    if height_mm  is None: height_mm  = SAND_CHUNK_HEIGHT_MM
-    if sigma_mm   is None: sigma_mm   = SAND_CHUNK_SIGMA_MM
-    if density    is None: density    = SAND_CHUNK_DENSITY_PER_100_MM2
-    if max_chunks is None: max_chunks = SAND_CHUNK_MAX
-    if min_chunks is None: min_chunks = SAND_CHUNK_MIN
-    up_fraction = SAND_CHUNK_UP_FRACTION   # read at call time for monkey-patchability
-
-    area = float(trap_poly.area)
-    raw_count = round(area / 100.0 * density)
-    n_chunks = int(max(min_chunks, min(max_chunks, raw_count)))
-
-    # Reproducible seed from centroid + trap_index.
-    cx_c = round(float(trap_poly.centroid.x), 1)
-    cy_c = round(float(trap_poly.centroid.y), 1)
-    seed_val = int(abs(cx_c * 1000.0) * 137 + abs(cy_c * 1000.0) * 31
-                   + trap_index * 997) % (2 ** 31)
-    rng = np.random.default_rng(seed_val)
-
-    # Bounding box for candidate generation.
-    minx, miny, maxx, maxy = trap_poly.bounds
-    bx, by = maxx - minx, maxy - miny
-
-    chunks = []
-    max_attempts = n_chunks * 200  # rejection-sampling budget
-    attempts = 0
-    while len(chunks) < n_chunks and attempts < max_attempts:
-        attempts += 1
-        px = minx + float(rng.uniform(0.0, bx))
-        py = miny + float(rng.uniform(0.0, by))
-        if not trap_poly.contains(_ShapelyPoint(px, py)):
-            continue
-        h_mag = height_mm * float(rng.uniform(0.7, 1.3))
-        sig_i = sigma_mm  * float(rng.uniform(0.8, 1.2))
-        # Task #614: assign sign — up-mound (+1) or dimple (−1).
-        sign  = 1.0 if float(rng.random()) < up_fraction else -1.0
-        chunks.append((px, py, h_mag * sign, sig_i))
-
-    if len(chunks) < n_chunks:
-        print(f"    _scatter_sand_chunks: only placed {len(chunks)}/{n_chunks} chunks "
-              f"after {max_attempts} rejection-sampling attempts (trap area={area:.0f} mm²)")
-
-    return chunks
 
 
 def export_trap_stls(
@@ -6946,22 +6846,18 @@ def apply_sand_texture(
       minor axis projection drives the cosine; major axis projection is constant
       within each ridge.
 
-    * **Sand chunks** (Task #608 — replaces sinusoidal jitter from Task #606).
-      After the rake pass, :func:`_scatter_sand_chunks` places a sparse set of
-      Gaussian mound bumps on the top surface.  Each bump is
-      ``h * exp(-((x-cx)²+(y-cy)²) / (2σ²))`` with h≈0.6 mm, σ≈1.5 mm.
-      Count is proportional to trap area (density 0.3 per 100 mm², floor 3,
-      cap 20).  Centres and heights are reproducible: seeded from centroid +
-      trap_index hash.
-
     Task #610 changes
     -----------------
     * **Rake direction reverted to fixed Y-axis** (SAND_RAKE_ALIGN_TO_MAJOR_AXIS
       = False).  Ridges run parallel to Y for every trap regardless of shape.
       The PCA path is preserved behind the flag for future re-enablement.
 
-    * **Chunk sigma widened**: SAND_CHUNK_SIGMA_MM 1.5 → 3.0 mm (~4× footprint
-      area).  Count and height unchanged.
+    Task 708 changes (2026-10-04)
+    -----------------------------
+    * **Sand chunks stripped** — _scatter_sand_chunks removed; step 7 is gone.
+      Trap top is now flat base + cosine rake only.  No Gaussian bumps, no floor guard.
+    * **base_z_map** still accepted (API stable) for the curved-surface code path
+      (TRAP_SURFACE_CURVED=True), but the chunk floor guard that used it is gone.
 
     Algorithm
     ---------
@@ -6970,22 +6866,11 @@ def apply_sand_texture(
        inside the polygon.
     3. Determine rake axis: fixed Y (default) or PCA major axis (flag).
     4. Project grid/ring points onto minor axis → cosine displacement dz.
-       Z = z_max + dz.
+       Z = base_Z + dz.
     5. Delaunay-triangulate the grid points; discard triangles whose centroid
        falls outside the polygon.
     6. Reassemble: new grid top + original wall/base faces; merge boundary
        vertices with trimesh process=True to restore watertightness.
-    7. Apply sand-chunk Gaussian bumps to top-surface vertices (additive).
-
-    Task (2026-09-28) changes
-    -------------------------
-    * **base_z_map** — optional curved base surface.  Pass a tuple
-      ``(grid_xy, grid_base_z)`` where ``grid_xy`` is (N,2) and
-      ``grid_base_z`` is (N,) — the per-point trap surface Z computed by
-      ``_compute_trap_surface_from_fringe``.  When supplied, every grid point
-      and boundary ring vertex uses its own local base Z (interpolated by
-      nearest-neighbor from the supplied map) instead of the global ``z_max``.
-      The floor guard is also per-vertex: ``local_base_z + 0.5 mm``.
 
     Parameters
     ----------
@@ -6993,9 +6878,7 @@ def apply_sand_texture(
     amplitude    : peak-to-trough height of rake ridges in mm (default 0.35 mm).
     grain_spacing: centre-to-centre distance between rake-line peaks in mm
                    (default 1.5 mm).
-    trap_index   : integer used to seed the per-trap chunk RNG (different
-                   values produce different chunk patterns on otherwise identical
-                   trap shapes).
+    trap_index   : integer — reserved; chunk RNG removed (task 708).
     base_z_map   : tuple (base_xy, base_z) or None.  When provided, supplies
                    a curved base surface; grid points sample from it via
                    nearest-neighbor lookup.  When None, the flat z_max is used
@@ -7362,60 +7245,8 @@ def apply_sand_texture(
           f"{len(new_mesh.vertices)} verts, {len(new_mesh.faces)} faces, "
           f"watertight={new_mesh.is_watertight}")
 
-    # ------------------------------------------------------------------
-    # 7. Sand-chunk scatter pass (Tasks #608, #614)
-    # ------------------------------------------------------------------
-    # Apply Gaussian bump displacements on top of the rake-textured top surface.
-    # Each bump: dz = h * exp(-((x-cx)² + (y-cy)²) / (2σ²))
-    # h is signed: positive → up-mound, negative → down-dimple (task #614).
-    # Applied AFTER rake (and after the trap-height-lock adjustment that
-    # happens outside this function) so chunks sit on top of everything.
-    # Boundary-height cap is NOT applied here (BOUNDARY_HEIGHT_CAP_ENABLED
-    # is False per task #606; chunks are allowed to poke above the cap).
-    #
-    # Floor guard (task #614): after summing, clamp so that
-    #   top_z + chunk_delta >= trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM
-    # This prevents dimples from punching through the trap slab.
-
-    trap_base_z = float(new_mesh.vertices[:, 2].min())   # slab bottom face Z (global min)
-    # Task (2026-09-28): when base_z_map is provided the trap surface is curved,
-    # so the floor guard must use the per-vertex local base Z rather than the
-    # global slab minimum.  Per-vertex floor = local_base_z + 0.5 mm.
-    # When base_z_map is None (flat slab), fall back to the original scalar floor.
-    _use_per_vertex_floor = base_z_map is not None
-
-    chunks = _scatter_sand_chunks(shapely_poly, trap_index=trap_index)
-    if chunks:
-        top_mask_new = new_mesh.vertices[:, 2] > (z_max - amplitude - 0.5)
-        top_indices  = np.where(top_mask_new)[0]
-        top_xy       = new_mesh.vertices[top_indices, :2]
-
-        # Accumulate signed Gaussian contributions from all bumps.
-        dz_chunks = np.zeros(len(top_indices), dtype=np.float64)
-        for cx_b, cy_b, h_b, sig_b in chunks:
-            dx = top_xy[:, 0] - cx_b
-            dy = top_xy[:, 1] - cy_b
-            dz_chunks += h_b * np.exp(-(dx ** 2 + dy ** 2) / (2.0 * sig_b ** 2))
-
-        # Apply displacement then enforce floor guard (per-vertex on curved base,
-        # global scalar on flat base).
-        new_z = new_mesh.vertices[top_indices, 2] + dz_chunks
-        if _use_per_vertex_floor:
-            # Compute local base Z for each top vertex via nearest-neighbor lookup.
-            local_base_v = _base_z_at(top_xy)   # (T,) per-vertex base Z
-            floor_v      = local_base_v + SAND_CHUNK_FLOOR_THICKNESS_MM
-            new_z = np.maximum(new_z, floor_v)
-        else:
-            floor_z = trap_base_z + SAND_CHUNK_FLOOR_THICKNESS_MM
-            new_z   = np.maximum(new_z, floor_z)
-        new_mesh.vertices[top_indices, 2] = new_z
-
-        n_up   = sum(1 for _, _, h, _ in chunks if h > 0)
-        n_down = sum(1 for _, _, h, _ in chunks if h < 0)
-        dz_range = f"[{dz_chunks.min():.3f}, {dz_chunks.max():.3f}]"
-        print(f"    Sand texture: {len(chunks)} chunk bumps applied "
-              f"({n_up} up / {n_down} down), dz range {dz_range} mm "
-              f"on {len(top_indices)} top verts")
+    # Task 708 (Topo, 2026-10-04): sand-chunk scatter pass removed.
+    # Trap top is now flat base + rake lines only.  No Gaussian bumps, no floor guard.
 
     # Copy rebuilt geometry back into the caller's mesh object.
     mesh.vertices = new_mesh.vertices

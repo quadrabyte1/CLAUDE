@@ -1100,8 +1100,11 @@ class TestRakeJitter:
             "results for the same trap geometry and trap_index."
         )
 
+    @pytest.mark.skip(reason="Sand chunks removed in task 708 — different trap_index no longer produces different Z (rake is deterministic).")
     def test_jitter_differs_between_traps(self):
         """
+        RETIRED task 708 (2026-10-04): chunk scatter removed; rake is deterministic.
+
         Two slabs with different trap_index values must produce different
         top-surface Z arrays.
 
@@ -1133,8 +1136,11 @@ class TestRakeJitter:
             "produce different noise patterns."
         )
 
+    @pytest.mark.skip(reason="Sand chunks removed in task 708 — SAND_CHUNK_HEIGHT_MM deleted; Z range is now rake-only.")
     def test_chunk_z_range_bounded(self):
         """
+        RETIRED task 708 (2026-10-04): chunk scatter removed; Z range is rake-only.
+
         Task #608 / #614: with default constants (amplitude=0.35 mm rake, chunk
         height up to 0.6*1.3*K mm), the top-surface Z range must be bounded.
 
@@ -1403,8 +1409,11 @@ class TestTrapFringeOffsetUpdated:
 # I.  Sand-chunk scatter pass  (Task #608)
 # ===========================================================================
 
+@pytest.mark.skip(reason="Sand chunks removed in task 708 — SAND_CHUNK_* constants and _scatter_sand_chunks deleted.")
 class TestSandChunkScatter:
     """
+    RETIRED task 708 (2026-10-04): sand chunk scatter stripped entirely.
+
     apply_sand_texture must scatter discrete Gaussian mound 'chunks' across
     the trap top surface, replacing the old sinusoidal jitter.
 
@@ -1855,10 +1864,13 @@ class TestRakeYAxisFixed:
         )
 
 
+@pytest.mark.skip(reason="Sand chunks removed in task 708 — SAND_CHUNK_SIGMA_MM and _scatter_sand_chunks deleted.")
 class TestChunkSigmaWidened:
     """
     Task #610: SAND_CHUNK_SIGMA_MM widened from 1.5 to 3.0 mm.
     Height and density unchanged.
+
+    RETIRED task 708 (2026-10-04): sand chunks stripped entirely.
 
     RED before fix (v0.06 code): SAND_CHUNK_SIGMA_MM = 1.5.
     GREEN after fix (v0.07 code): SAND_CHUNK_SIGMA_MM = 3.0.
@@ -1991,10 +2003,13 @@ class TestChunkSigmaWidened:
 # K.  Task #614: mixed up/down chunks + count bump
 # ===========================================================================
 
+@pytest.mark.skip(reason="Sand chunks removed in task 708 — SAND_CHUNK_UP_FRACTION and _scatter_sand_chunks deleted.")
 class TestChunkUpDown:
     """
     Task #614: each sand chunk gets a random sign (mound or dimple), and density/
     count limits increase (density 0.3→0.5, max 20→30, min 3→4).
+
+    RETIRED task 708 (2026-10-04): sand chunks stripped entirely.
 
     RED before fix (v0.07 code):
       - SAND_CHUNK_UP_FRACTION constant does not exist.
@@ -2667,8 +2682,11 @@ class TestCurvedTrapSurface:
     # L-5  Per-vertex floor guard on curved base
     # -----------------------------------------------------------------------
 
+    @pytest.mark.skip(reason="Sand chunks + floor guard removed in task 708 — SAND_CHUNK_UP_FRACTION deleted.")
     def test_per_vertex_floor_guard_on_curved_base(self):
         """
+        RETIRED task 708 (2026-10-04): floor guard and sand chunks stripped.
+
         The floor guard (dimples cannot push vertex below local_base_z + 0.5mm)
         must use the per-vertex base Z, not the global slab minimum.
 
@@ -2862,8 +2880,11 @@ class TestTrapSurfaceFlatMin:
     # M-1  TRAP_SURFACE_CURVED constant exists and defaults to False
     # -----------------------------------------------------------------------
 
+    @pytest.mark.skip(reason="Task 708: TRAP_SURFACE_CURVED reverted to False. TR5 in test_trap_flat_plus_rake.py covers the new assertion.")
     def test_trap_surface_curved_constant_exists_and_is_false(self):
         """
+        RETIRED task 708 (2026-10-04): TRAP_SURFACE_CURVED is now False again.
+
         TRAP_SURFACE_CURVED must exist and default to True (v0.12).
 
         RED before fix (v0.11): TRAP_SURFACE_CURVED = False.
@@ -2871,6 +2892,8 @@ class TestTrapSurfaceFlatMin:
 
         Note: this test was previously named "...is_false" and checked for False.
         Task v0.12 flipped the default to True; test updated accordingly.
+        Task v0.19 flipped it back to False — TR5/TR10 in test_trap_flat_plus_rake.py
+        now cover the correct assertion.
         """
         gsd = _load_gsd()
         assert hasattr(gsd, "TRAP_SURFACE_CURVED"), (
@@ -3088,8 +3111,11 @@ class TestTrapSurfaceFlatMin:
     # M-7  Dip-floor guard scalar on flat surface
     # -----------------------------------------------------------------------
 
+    @pytest.mark.skip(reason="Sand chunks + floor guard removed in task 708 — SAND_CHUNK_UP_FRACTION deleted.")
     def test_floor_guard_scalar_on_flat_surface(self):
         """
+        RETIRED task 708 (2026-10-04): floor guard and sand chunks stripped.
+
         With TRAP_SURFACE_CURVED=False and a flat 6mm base, dimples cannot
         push any top vertex below trap_base_z + 0.5mm = 0.5mm (global scalar).
 
@@ -3344,8 +3370,11 @@ class TestCurvedTrapSurfacePerPoint:
     # N-1  Default is True
     # -----------------------------------------------------------------------
 
+    @pytest.mark.skip(reason="Task 708: TRAP_SURFACE_CURVED reverted to False. TR5/TR10 in test_trap_flat_plus_rake.py cover the new assertion.")
     def test_trap_surface_curved_default_is_true(self):
         """
+        RETIRED task 708 (2026-10-04): TRAP_SURFACE_CURVED is now False again.
+
         TRAP_SURFACE_CURVED must default to True (v0.12).
 
         RED before fix: TRAP_SURFACE_CURVED = False (v0.11 default).
@@ -3595,8 +3624,11 @@ class TestCurvedTrapSurfacePerPoint:
     # N-5  Per-vertex floor guard on curved base
     # -----------------------------------------------------------------------
 
+    @pytest.mark.skip(reason="Sand chunks + floor guard removed in task 708 — SAND_CHUNK_UP_FRACTION deleted.")
     def test_per_vertex_floor_guard_curved_base(self):
         """
+        RETIRED task 708 (2026-10-04): floor guard and sand chunks stripped.
+
         With a curved base (6 → 10 mm slope) and all-down sand chunks,
         no vertex may fall below local_base_z + 0.5 mm (per-vertex floor).
 

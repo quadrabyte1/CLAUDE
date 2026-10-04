@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{# Boundary Editor v5.00 — grid cell elevation overlay (phase 1: UI + EGM schema) #}
+{# Boundary Editor v5.04 — wider grid cell input; hover tooltip on set-cell dots #}
 {% block title %}Boundary Editor — AI Team Workspace{% endblock %}
 {% block content_width %}max-w-6xl{% endblock %}
 {% block content %}
@@ -553,10 +553,6 @@
           <span class="text-[11px] text-gray-600 leading-none">Boulders</span>
         </div>
         <div class="flex items-center gap-1.5">
-          <span class="inline-block w-3 h-3 rounded-sm flex-shrink-0" style="background:#FFE600;"></span>
-          <span class="text-[11px] text-gray-600 leading-none">Contour</span>
-        </div>
-        <div class="flex items-center gap-1.5">
           <span class="inline-block w-3 h-3 rounded-sm flex-shrink-0" style="background:#E0EDFF; border:1px solid #4B7EC8;"></span>
           <span class="text-[11px] text-gray-600 leading-none">Fringe anchor</span>
         </div>
@@ -595,7 +591,7 @@
         <div class="absolute pointer-events-auto"
              :style="`left:${_gridActiveCell.canvasPx.x}px;
                       top:${_gridActiveCell.canvasPx.y}px;
-                      width:${Math.max(36, _gridActiveCell.canvasPx.w)}px;
+                      width:${Math.max(80, _gridActiveCell.canvasPx.w)}px;
                       transform: translateY(-100%);
                       z-index:31;`">
           <input
@@ -611,14 +607,25 @@
             @keydown.backspace.stop
             @blur="commitGridCell()"
             autofocus
-            class="w-full text-xs font-mono text-center rounded border border-indigo-400 bg-white shadow-md px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            style="min-width:36px; max-width:60px;"
+            class="w-full text-xs font-mono text-center rounded border border-indigo-400 bg-white shadow-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            style="min-width:80px;"
             placeholder="mm"
             title="Enter height in mm (0–50). Enter to commit, Esc to cancel, Delete to clear."
           />
         </div>
       </div>
     </template>
+
+    {# ── Grid dot hover tooltip (v5.04) ───────────────────────────────────────
+       Floats above the canvas near a set-cell dot when the mouse hovers over it.
+       Hidden while the cell input is open (_gridActiveCell is set).
+       Positioned at the dot's canvas coordinates; shifts up+right via transform. #}
+    <div x-show="_gridHoveredCell !== null && _gridActiveCell === null"
+         x-cloak
+         class="absolute pointer-events-none z-40 px-2 py-0.5 rounded bg-gray-800 text-white text-xs font-mono shadow-lg whitespace-nowrap"
+         :style="_gridHoveredCell ? `left:${_gridHoveredCell.canvasPx.x + _gridHoveredCell.canvasPx.w * 0.5}px; top:${_gridHoveredCell.canvasPx.y}px; transform:translate(-50%, -110%);` : ''"
+         x-text="_gridHoveredCell ? (gridCellHeights[_gridHoveredCell.idx] + ' mm') : ''">
+    </div>
   </div>
 
   {# ── Below-canvas action row ─────────────────────────────── #}
@@ -790,6 +797,7 @@ function polygonEditor() {
     gridCellHeights: {},
     _gridActiveCell: null,   // {col, row, idx, canvasPx:{x,y}} or null
     _gridInputValue: '',     // staging area while input is open
+    _gridHoveredCell: null,  // {idx, canvasPx:{x,y,w,h}} or null — drives dot tooltip (v5.04)
 
     generating: false,
     generatingElapsed: 0,      // seconds since Generate was clicked (updated every 1s)
@@ -1369,8 +1377,8 @@ function polygonEditor() {
 
         ctx.save();
 
-        // Faint cell boundary lines
-        ctx.strokeStyle = 'rgba(90,90,160,0.20)';
+        // Faint cell boundary lines (lemon yellow)
+        ctx.strokeStyle = 'rgba(255,244,79,0.50)';  // #FFF44F @ 0.50 alpha
         ctx.lineWidth = 0.75 * dpr;
         ctx.setLineDash([]);
 
@@ -1723,6 +1731,39 @@ function polygonEditor() {
       // Cursor hint — no visual highlight until clicked
       const hit = this.hitTestPoint(x, y);
       this.$refs.canvas.style.cursor = hit ? 'grab' : 'default';
+
+      // ── Grid dot hover detection (v5.04) ─────────────────────────────────
+      // Check whether the mouse is over a set-cell dot so we can show a tooltip.
+      // Done only when no cell input is currently open.
+      if (!this._gridActiveCell && Object.keys(this.gridCellHeights).length > 0) {
+        const GRID_COLS = 20;
+        const GRID_ROWS = 20;
+        const canvas = this.$refs.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;   // CSS px from canvas left
+        const my = e.clientY - rect.top;    // CSS px from canvas top
+        let foundHover = null;
+        for (const idxStr of Object.keys(this.gridCellHeights)) {
+          const idx = Number(idxStr);
+          if (this.gridCellHeights[idx] === undefined) continue;
+          const col = idx % GRID_COLS;
+          const row = Math.floor(idx / GRID_COLS);
+          const pos = this._gridCellCanvasPx(col, row);
+          // Centre of the dot in CSS px (top-left of cell + half width/height)
+          const dotCx = pos.x + pos.w * 0.5;
+          const dotCy = pos.y + pos.h * 0.5;
+          const dotR = Math.max(5, Math.min(pos.w, 10));  // hit radius in CSS px
+          const dx = mx - dotCx;
+          const dy = my - dotCy;
+          if (dx * dx + dy * dy <= dotR * dotR) {
+            foundHover = { idx, canvasPx: pos };
+            break;
+          }
+        }
+        this._gridHoveredCell = foundHover;
+      } else if (!this._gridActiveCell) {
+        this._gridHoveredCell = null;
+      }
     },
 
     onMouseUp(e) {
@@ -2227,6 +2268,7 @@ function polygonEditor() {
       this._gridInputValue = (existing !== undefined) ? String(existing) : '';
       const pos = this._gridCellCanvasPx(col, row);
       this._gridActiveCell = { col, row, idx, canvasPx: pos };
+      this._gridHoveredCell = null;  // hide tooltip while input is open (v5.04)
       this.draw();
       this.$nextTick(() => {
         const inp = this.$refs.gridCellInput;

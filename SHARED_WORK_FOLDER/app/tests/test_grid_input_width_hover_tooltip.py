@@ -315,15 +315,15 @@ class TestGridPersistenceRegression:
 # ---------------------------------------------------------------------------
 
 class TestAppVersionBump:
-    """T13 — APP_VERSION is v5.04 (Topo set v5.03; this task goes to v5.04)."""
+    """T13 — APP_VERSION is v5.04 or higher (task 710 set v5.04; later tasks may advance it)."""
 
-    def test_app_version_is_v5_04(self):
+    def test_app_version_is_v5_04_or_higher(self):
         src = _app_py()
         m = re.search(r'APP_VERSION\s*=\s*["\']v(\d+)\.(\d+)["\']', src)
         assert m is not None, "APP_VERSION not found in app.py"
         major, minor = int(m.group(1)), int(m.group(2))
-        assert (major, minor) == (5, 4), (
-            f"APP_VERSION is v{major}.{minor} — expected v5.04 after this task's bump"
+        assert (major, minor) >= (5, 4), (
+            f"APP_VERSION is v{major}.{minor} — expected v5.04 or higher after task 710"
         )
 
 
@@ -332,13 +332,13 @@ class TestAppVersionBump:
 # ---------------------------------------------------------------------------
 
 class TestEditorHtmlVersionBump:
-    """T14 — editor.html on-page version comment is v5.04."""
+    """T14 — editor.html on-page version comment is v5.04 or higher."""
 
-    def test_editor_version_is_v5_04(self):
+    def test_editor_version_is_v5_04_or_higher(self):
         html = _html()
         m = re.search(r'Boundary Editor v(\d+)\.(\d+)', html)
         assert m is not None, "No 'Boundary Editor vX.XX' version string in editor.html"
         major, minor = int(m.group(1)), int(m.group(2))
-        assert (major, minor) == (5, 4), (
-            f"editor.html version is v{major}.{minor} — expected v5.04"
+        assert (major, minor) >= (5, 4), (
+            f"editor.html version is v{major}.{minor} — expected v5.04 or higher"
         )

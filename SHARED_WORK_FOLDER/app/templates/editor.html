@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{# Boundary Editor v5.04 — wider grid cell input; hover tooltip on set-cell dots #}
+{# Boundary Editor v5.05 — right-click dot=delete; click-vs-drag discrimination for grid cells #}
 {% block title %}Boundary Editor — AI Team Workspace{% endblock %}
 {% block content_width %}max-w-6xl{% endblock %}
 {% block content %}
@@ -798,6 +798,7 @@ function polygonEditor() {
     _gridActiveCell: null,   // {col, row, idx, canvasPx:{x,y}} or null
     _gridInputValue: '',     // staging area while input is open
     _gridHoveredCell: null,  // {idx, canvasPx:{x,y,w,h}} or null — drives dot tooltip (v5.04)
+    _gridMouseDownAt: null,  // {x, y, col, row, idx, time} — pending click until drag threshold resolved (v5.05)
 
     generating: false,
     generatingElapsed: 0,      // seconds since Generate was clicked (updated every 1s)
@@ -806,6 +807,7 @@ function polygonEditor() {
 
     POINT_RADIUS: 8,
     EDGE_HIT_DIST: 10,
+    GRID_DRAG_THRESHOLD_PX: 5,  // px moved before a grid mousedown is treated as a drag, not a click (v5.05)
 
     // Fringe-expansion constants (fetched from server; set after load)
     printSizeMm: 171.45,
@@ -1626,14 +1628,21 @@ function polygonEditor() {
         this.$refs.canvas.style.cursor = 'grabbing';
         this.draw();
       } else {
-        // Check if the click lands inside a grid cell — if so, open the input.
-        // This only activates when no polygon/contour vertex was hit.
+        // Check if the click lands inside a grid cell — record a pending click but
+        // don't open the input yet.  We wait until mouseup to confirm it wasn't a drag.
+        // This restores rubber-band selection drag on the grid (v5.05).
         const gridCell = this._gridCellFromImgPx(x, y);
         if (gridCell) {
-          this.selectedContour = -1;
-          this.selectedVerts = [];
-          this.openGridCell(gridCell.col, gridCell.row, gridCell.idx);
-          return;
+          const canvas2 = this.$refs.canvas;
+          const rect2 = canvas2.getBoundingClientRect();
+          this._gridMouseDownAt = {
+            clientX: e.clientX - rect2.left,
+            clientY: e.clientY - rect2.top,
+            col: gridCell.col,
+            row: gridCell.row,
+            idx: gridCell.idx,
+          };
+          // Fall through — don't return; let the rubber-band / global-mouseup path proceed.
         }
 
         // Click on empty space — start rubber band selection
@@ -1662,6 +1671,22 @@ function polygonEditor() {
 
     onMouseMove(e) {
       const { x, y } = this.canvasToImg(e);
+
+      // ── Grid click-vs-drag discrimination (v5.05) ─────────────────────────
+      // If a pending grid-cell click was recorded and the cursor has moved more
+      // than GRID_DRAG_THRESHOLD_PX, abandon the pending click so the rubber-band
+      // drag path takes over unobstructed.
+      if (this._gridMouseDownAt) {
+        const canvas0 = this.$refs.canvas;
+        const rect0 = canvas0.getBoundingClientRect();
+        const mx0 = e.clientX - rect0.left;
+        const my0 = e.clientY - rect0.top;
+        const dx0 = mx0 - this._gridMouseDownAt.clientX;
+        const dy0 = my0 - this._gridMouseDownAt.clientY;
+        if (dx0 * dx0 + dy0 * dy0 > this.GRID_DRAG_THRESHOLD_PX * this.GRID_DRAG_THRESHOLD_PX) {
+          this._gridMouseDownAt = null;  // drag detected — abandon pending grid cell add
+        }
+      }
 
       // Soft clamp: allow vertices to reach the fringe-zone boundary (fringePadPx beyond image edge)
       const clampX = (v) => Math.max(-this.fringePadPx, Math.min(this.imgW + this.fringePadPx, Math.round(v)));
@@ -1787,6 +1812,20 @@ function polygonEditor() {
         this.$refs.canvas.style.cursor = 'default';
         this.draw();
       }
+
+      // ── Grid click-vs-drag resolution (v5.05) ─────────────────────────────
+      // If a pending grid mousedown was never abandoned by the drag threshold,
+      // this is a bare click — open the cell input now.
+      if (this._gridMouseDownAt) {
+        const pending = this._gridMouseDownAt;
+        this._gridMouseDownAt = null;  // consume the pending state
+        // Only fire if the button released is left button
+        if (e.button === 0) {
+          this.selectedContour = -1;
+          this.selectedVerts = [];
+          this.openGridCell(pending.col, pending.row, pending.idx);
+        }
+      }
     },
 
     onDblClick(e) {
@@ -1814,6 +1853,37 @@ function polygonEditor() {
 
     onRightClick(e) {
       const { x, y } = this.canvasToImg(e);
+
+      // ── Grid dot right-click → delete (v5.05) ────────────────────────────
+      // Mirror the contour-vertex right-click convention: right-click a set-cell
+      // dot to delete it.  Uses the same CSS-px hit detection as the hover tooltip.
+      if (Object.keys(this.gridCellHeights).length > 0) {
+        const GRID_COLS = 20;
+        const canvas = this.$refs.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        for (const idxStr of Object.keys(this.gridCellHeights)) {
+          const idx = Number(idxStr);
+          const col = idx % GRID_COLS;
+          const row = Math.floor(idx / GRID_COLS);
+          const pos = this._gridCellCanvasPx(col, row);
+          const dotCx = pos.x + pos.w * 0.5;
+          const dotCy = pos.y + pos.h * 0.5;
+          const dotR = Math.max(5, Math.min(pos.w, 10));
+          const dx = mx - dotCx;
+          const dy = my - dotCy;
+          if (dx * dx + dy * dy <= dotR * dotR) {
+            delete this.gridCellHeights[idx];
+            this._gridHoveredCell = null;
+            this.draw();
+            this.flash('Grid cell cleared', true);
+            this.autoSave();
+            return;
+          }
+        }
+      }
+      // Right-click missed all grid dots — fall through to contour/polygon checks.
 
       // Check contour vertex right-click (delete vertex)
       const chit = this.hitTestContourPoint(x, y);
@@ -2566,6 +2636,8 @@ function polygonEditor() {
       this.gridCellHeights    = {};
       this._gridActiveCell    = null;
       this._gridInputValue    = '';
+      this._gridHoveredCell   = null;
+      this._gridMouseDownAt   = null;  // v5.05
       // Unsaved-changes guard
       this._pendingAutoSave   = false;
       // Clear the canvas so no stale image is visible while the fetch is in flight
@@ -2732,6 +2804,8 @@ function polygonEditor() {
       this.gridCellHeights  = {};
       this._gridActiveCell  = null;
       this._gridInputValue  = '';
+      this._gridHoveredCell = null;
+      this._gridMouseDownAt = null;  // v5.05
       // Default-populate the tee hole on the left side (30 mm inset) — same
       // convention as loadProject(). User can remove it explicitly.
       this.teeHole = {

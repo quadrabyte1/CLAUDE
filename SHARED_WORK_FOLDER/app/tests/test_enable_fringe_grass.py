@@ -359,7 +359,18 @@ def egm_file_true(tmp_path):
 class TestGeometryGrassGating:
 
     def test_grass_not_called_when_disabled(self, egm_file_false, monkeypatch):
-        """T10: When enableFringeGrass=False, neither grass function is called."""
+        """T10: When enableFringeGrass=False, grass is NOT applied to the plate-1 fringe.
+
+        Task 718 update: a plate-2 fringe grass sample is ALWAYS built with
+        grass=True regardless of the checkbox — so the grass function IS called
+        once (for plate 2). The assertion is updated to:
+          - Exactly 1 call (plate-2 sample only) when enableFringeGrass=False.
+          - NOT 0 calls (plate 2 unconditionally fires grass).
+          - NOT 2+ calls (plate 1 was correctly skipped).
+
+        The spirit of T10 — that unchecking the box suppresses grass on the main
+        plaque fringe — is preserved; only the plate-2 sample always has grass.
+        """
         import gradient_surface_diagnostic as gsd
         call_log: list[str] = []
 
@@ -377,9 +388,14 @@ class TestGeometryGrassGating:
         except Exception:
             pass  # pipeline may fail on mock data; we only care about call counts
 
-        assert len(call_log) == 0, (
-            f"Grass functions were called {call_log} but enableFringeGrass=False — "
-            "expected zero calls."
+        # Task 718: plate-2 fringe sample always has grass → exactly 1 call.
+        # If 0 calls: plate-2 sample was not built (regression).
+        # If 2+ calls: plate-1 fringe was also grassed (enableFringeGrass=False ignored).
+        assert len(call_log) == 1, (
+            f"Expected exactly 1 grass call when enableFringeGrass=False "
+            f"(plate-2 sample only); got {len(call_log)}: {call_log}. "
+            "0 calls = plate-2 sample not built (regression). "
+            "2+ calls = plate-1 fringe was also grassed (checkbox ignored)."
         )
 
     def test_grass_called_when_enabled(self, egm_file_true, monkeypatch):

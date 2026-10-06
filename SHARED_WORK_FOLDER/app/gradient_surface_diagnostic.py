@@ -1,3 +1,16 @@
+# v0.21 — 2026-10-06 Finn — Two-plate 3MF output (task 718).
+#         Plate 1: unchanged full plaque (green + fringe[checkbox] + traps + water + boulders).
+#         Plate 2: fringe grass sample — fringe mesh with grass UNCONDITIONALLY enabled,
+#           named "fringe_grass_sample" in the scene → extruder 2 (same as fringe).
+#         run_pipeline: builds fringe_grass_sample after main fringe in step 7a-ii;
+#           adds it to scene AFTER all plate-1 objects so its objectid is highest.
+#         _inject_bambu_extruder_metadata: when fringe_grass_sample is in scene_names,
+#           generates TWO <plate> blocks with <model_instance> mappings; injects
+#           plate_2.png / plate_no_light_2.png / top_2.png / pick_2.png (copied from
+#           plate-1 templates as placeholders — Bambu regenerates on first slice).
+#         test_enable_fringe_grass.py T10 updated: with plate-2 always building grass,
+#           enableFringeGrass=False yields exactly 1 grass call (plate-2 only), not 0.
+#         APP_VERSION bumped to v5.08.
 # v0.20 — 2026-10-05 Topo — Trap altitude grid-cell override (task 716).
 #         New rule: if one or more user-set gridCellHeights entries have their
 #         cell CENTRE inside a trap polygon, use mean(values) as the flat trap Z
@@ -8353,10 +8366,15 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
         print(f"  WARNING: 3dmodel.model has {len(object_entries)} objects but "
               f"scene_names has {len(scene_names)}; falling back to extruder=1 "
               f"for every object.")
-        mapping = [(oid, oname, 1) for (oid, oname) in object_entries]
+        # 4-tuple: (oid, oname, extruder, scene_name); scene_name="" in fallback
+        mapping = [(oid, oname, 1, "") for (oid, oname) in object_entries]
     else:
+        # 4-tuple: (oid, oname, extruder, scene_name)
+        # scene_name is the ORIGINAL name used when adding to the trimesh.Scene
+        # (e.g. "fringe_grass_sample") — NOT oname which is trimesh's "geometry_N"
+        # generic label.  The plate-split logic below must use scene_name, not oname.
         mapping = [
-            (oid, oname, _filament_for_scene_name(scene_names[i]))
+            (oid, oname, _filament_for_scene_name(scene_names[i]), scene_names[i])
             for i, (oid, oname) in enumerate(object_entries)
         ]
 
@@ -8365,8 +8383,18 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     # allocate a part id per object using object_id + a fixed offset so the
     # part ids do not collide with object ids. (This matches the layout
     # observed in Bambu-Studio-saved 3MFs.)
+    #
+    # Two-plate support (task 718): when "fringe_grass_sample" is one of the
+    # scene names, generate two <plate> sections:
+    #   - plate 1: all objects except fringe_grass_sample, with <model_instance>
+    #   - plate 2: fringe_grass_sample only
+    # When fringe_grass_sample is absent, we emit a single <plate> block for
+    # backward compatibility (matching blank.3mf's structure).
+    _PLATE2_SCENE_NAME = "fringe_grass_sample"
+    _has_plate2 = _PLATE2_SCENE_NAME in (scene_names or [])
+
     cfg_lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<config>']
-    for oid, oname, extruder in mapping:
+    for oid, oname, extruder, _sn in mapping:
         try:
             part_id = int(oid) + 1000
         except ValueError:
@@ -8381,6 +8409,60 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
         cfg_lines.append(f'      <metadata key="extruder" value="{extruder}"/>')
         cfg_lines.append(f'    </part>')
         cfg_lines.append(f'  </object>')
+
+    # --- 3a. Build <plate> sections ---
+    # Build the plate-1 instance list: all objects NOT named fringe_grass_sample.
+    # Build the plate-2 instance list: fringe_grass_sample object only (if present).
+    # IMPORTANT: use scene_name (4th element), NOT oname (2nd element) for matching.
+    # trimesh exports objects as "geometry_N" so oname is never "fringe_grass_sample".
+    _plate1_items: list[tuple[str, str]] = []  # (oid, oname)
+    _plate2_items: list[tuple[str, str]] = []
+    for oid, oname, _ext, _scene_name in mapping:
+        _sname = (_scene_name or "").lower()
+        if _sname == _PLATE2_SCENE_NAME:
+            _plate2_items.append((oid, oname))
+        else:
+            _plate1_items.append((oid, oname))
+
+    # Plate 1 block — always emitted; includes all non-sample objects.
+    cfg_lines.append('  <plate>')
+    cfg_lines.append('    <metadata key="plater_id" value="1"/>')
+    cfg_lines.append('    <metadata key="plater_name" value=""/>')
+    cfg_lines.append('    <metadata key="locked" value="false"/>')
+    cfg_lines.append('    <metadata key="filament_map_mode" value="Auto For Flush"/>')
+    cfg_lines.append('    <metadata key="thumbnail_file" value="Metadata/plate_1.png"/>')
+    cfg_lines.append('    <metadata key="thumbnail_no_light_file" value="Metadata/plate_no_light_1.png"/>')
+    cfg_lines.append('    <metadata key="top_file" value="Metadata/top_1.png"/>')
+    cfg_lines.append('    <metadata key="pick_file" value="Metadata/pick_1.png"/>')
+    for oid, _oname in _plate1_items:
+        cfg_lines.append('    <model_instance>')
+        cfg_lines.append(f'      <metadata key="object_id" value="{oid}"/>')
+        cfg_lines.append('      <metadata key="instance_id" value="0"/>')
+        cfg_lines.append(f'      <metadata key="identify_id" value="{oid}00"/>')
+        cfg_lines.append('    </model_instance>')
+    cfg_lines.append('  </plate>')
+
+    # Plate 2 block — only emitted when fringe_grass_sample is present.
+    if _has_plate2:
+        cfg_lines.append('  <plate>')
+        cfg_lines.append('    <metadata key="plater_id" value="2"/>')
+        cfg_lines.append('    <metadata key="plater_name" value="Fringe Grass Sample"/>')
+        cfg_lines.append('    <metadata key="locked" value="false"/>')
+        cfg_lines.append('    <metadata key="filament_map_mode" value="Auto For Flush"/>')
+        cfg_lines.append('    <metadata key="thumbnail_file" value="Metadata/plate_2.png"/>')
+        cfg_lines.append('    <metadata key="thumbnail_no_light_file" value="Metadata/plate_no_light_2.png"/>')
+        cfg_lines.append('    <metadata key="top_file" value="Metadata/top_2.png"/>')
+        cfg_lines.append('    <metadata key="pick_file" value="Metadata/pick_2.png"/>')
+        for oid, _oname in _plate2_items:
+            cfg_lines.append('    <model_instance>')
+            cfg_lines.append(f'      <metadata key="object_id" value="{oid}"/>')
+            cfg_lines.append('      <metadata key="instance_id" value="0"/>')
+            cfg_lines.append(f'      <metadata key="identify_id" value="{oid}00"/>')
+            cfg_lines.append('    </model_instance>')
+        cfg_lines.append('  </plate>')
+
+    cfg_lines.append('  <assemble>')
+    cfg_lines.append('  </assemble>')
     cfg_lines.append('</config>')
     cfg_lines.append('')
     cfg_xml = "\n".join(cfg_lines)
@@ -8423,6 +8505,25 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
         if data is not None:
             new_tmpl_bytes[arcname] = data
 
+    # Plate-2 thumbnails (task 718): when fringe_grass_sample is present, inject
+    # 5 plate-2 thumbnail files by copying the plate-1 thumbnail bytes under the
+    # plate_2 names. Bambu Studio will regenerate them on first slice; these
+    # placeholders prevent the missing-file warning on load.
+    # plate_2_small.png mirrors the Double Plate Blank template structure.
+    # arcname → source template filename (re-using plate-1 thumbnails as placeholders)
+    _PLATE2_TMPL_FILES: dict[str, str] = {
+        "Metadata/pick_2.png":             "pick_1.png",
+        "Metadata/plate_2.png":            "plate_1.png",
+        "Metadata/plate_2_small.png":      "plate_1_small.png",
+        "Metadata/plate_no_light_2.png":   "plate_no_light_1.png",
+        "Metadata/top_2.png":              "top_1.png",
+    }
+    if _has_plate2:
+        for arcname, fname in _PLATE2_TMPL_FILES.items():
+            data = _load_tmpl(fname)
+            if data is not None:
+                new_tmpl_bytes[arcname] = data
+
     # --- 4. Rewrite zip with new Metadata/model_settings.config,
     #        project_settings.config, 7 additional template files, and patched
     #        [Content_Types].xml with config+png extensions declared.
@@ -8430,6 +8531,8 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     # atomically replace the original.
     tmp_path = path_3mf + ".tmp"
     # All files we are replacing/adding — skip their originals in the copy loop.
+    # Include plate-2 thumbnail arcnames so a second injection call does not
+    # accumulate duplicates (idempotency).
     _SKIP_FILES = (
         {
             "Metadata/model_settings.config",
@@ -8437,6 +8540,7 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
             "[Content_Types].xml",
         }
         | set(new_tmpl_bytes.keys())
+        | set(_PLATE2_TMPL_FILES.keys())
     )
     with zipfile.ZipFile(path_3mf, "r") as zin, \
          zipfile.ZipFile(tmp_path, "w", zipfile.ZIP_DEFLATED) as zout:
@@ -8486,7 +8590,7 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     shutil.move(tmp_path, path_3mf)
 
     summary = ", ".join(
-        f"{oname or oid}=ext{ext}" for oid, oname, ext in mapping
+        f"{oname or oid}=ext{ext}" for oid, oname, ext, _sn in mapping
     )
     print(f"  Extruder metadata injected → {summary}")
 
@@ -8969,6 +9073,9 @@ def run_pipeline(
         fringe_holes = []
         print("  Mount pipe: DISABLED (ENABLE_MOUNT_BORE = False) — "
               "no fringe hole, no pipe mesh, no trap/water/boulders pipe-subtraction.")
+    # Plate-2 grass sample mesh — initialised to None; set inside the fringe try-block
+    # if the sample builds successfully.  Checked later when assembling the 3MF scene.
+    fringe_grass_sample: trimesh.Trimesh | None = None
     try:
         fringe_mesh = build_fringe_mesh(
             Z_mm_for_fringe,
@@ -9070,6 +9177,54 @@ def run_pipeline(
                 )
         else:
             print("  Skipping grass texture (enableFringeGrass=False) — fringe will be smooth.")
+
+        # ── 7a-ii. Build plate-2 fringe grass sample (task 718) ──────────────
+        # Plate 2 is a standalone fringe mesh with grass UNCONDITIONALLY enabled
+        # regardless of the enableFringeGrass checkbox — it exists so Thomas can
+        # inspect grass texture quality separately from a full plaque print.
+        # The sample is named "fringe_grass_sample" which routes to extruder 2
+        # (same as the main fringe) via _filament_for_scene_name.
+        # No mount pipe is attached — this is a sample annulus only.
+        # fringe_grass_sample is initialised to None before the outer try block.
+        try:
+            print("\n  [7a-ii] Building plate-2 fringe grass sample…")
+            _sample_fringe = build_fringe_mesh(
+                Z_mm_for_fringe,
+                xs_grid, ys_grid,
+                inside_mask,
+                green_boundary_px,
+                _egm_data,
+                fringe_grid_res=200,
+                holes=fringe_holes,
+            )
+            # Apply grass unconditionally — this is the purpose of plate 2.
+            print(f"  [plate-2] Applying grass texture "
+                  f"(algorithm={GRASS_ALGORITHM}, "
+                  f"amplitude={grass_amplitude} mm, "
+                  f"spacing={_grass_spacing_eff} mm)…")
+            if GRASS_ALGORITHM == "v2":
+                apply_grass_texture_v2(
+                    _sample_fringe,
+                    amplitude=grass_amplitude,
+                    bump_spacing=_grass_spacing_eff,
+                    exclude_polyline_xy=_grass_exclude_polyline,
+                    freeze_radius_mm=_seam_exclude_radius_mm,
+                )
+            else:
+                apply_grass_texture(
+                    _sample_fringe,
+                    amplitude=grass_amplitude,
+                    bump_spacing=_grass_spacing_eff,
+                    exclude_polyline_xy=_grass_exclude_polyline,
+                    exclude_radius_mm=_seam_exclude_radius_mm,
+                )
+            fringe_grass_sample = _sample_fringe
+            print(f"  [plate-2] Sample fringe: "
+                  f"{len(fringe_grass_sample.vertices)} vertices, "
+                  f"{len(fringe_grass_sample.faces)} faces")
+        except Exception as _exc_sample:
+            print(f"  [plate-2] ERROR building fringe grass sample: {_exc_sample}")
+            import traceback; traceback.print_exc()
 
         # ── 7b. Build the upper-left mounting-bore PIPE (task #335) ──────────
         # The fringe was already hollowed out at (_bore_cx, _bore_cy) with
@@ -9317,6 +9472,16 @@ def run_pipeline(
     for boulders_node, boulders_mesh in boulders_meshes:
         scene.add_geometry(boulders_mesh, node_name=boulders_node)
         scene_names.append(boulders_node)
+
+    # Plate-2 fringe grass sample (task 718) — added AFTER all plate-1 objects so
+    # its object ID (N+1) is highest, and the injection function maps it to plate 2.
+    # The name "fringe_grass_sample" routes to extruder 2 via _filament_for_scene_name
+    # ("fringe" prefix).  Serial engraving is NOT applied to the sample (it's a
+    # texture-quality reference piece, not a serialised plaque).
+    if isinstance(fringe_grass_sample, trimesh.Trimesh):
+        scene.add_geometry(fringe_grass_sample, node_name="fringe_grass_sample")
+        scene_names.append("fringe_grass_sample")
+        print(f"  Plate-2 fringe grass sample added to scene.")
 
     print(f"\n[10b] Engraving serial s/n: {serial_number} on {len(scene_names)} item(s)…")
     _engrave_scene(scene, serial_number)

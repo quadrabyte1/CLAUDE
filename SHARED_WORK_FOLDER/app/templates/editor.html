@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{# Boundary Editor v5.06 — Enable Fringe Grass checkbox; right-click dot=delete; click-vs-drag discrimination for grid cells #}
+{# Boundary Editor v5.07 — Grid cell marker: numeric value text replaces blue dot (task 720) #}
 {% block title %}Boundary Editor — AI Team Workspace{% endblock %}
 {% block content_width %}max-w-6xl{% endblock %}
 {% block content %}
@@ -1423,7 +1423,11 @@ function polygonEditor() {
           ctx.stroke();
         }
 
-        // Coloured dots for set cells
+        // Numeric value text for set cells (task 720: replaced blue dot)
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `${11 * dpr}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+        ctx.fillStyle = 'rgba(99,102,241,0.92)';  // indigo text accent
         for (const [idxStr, mm] of Object.entries(this.gridCellHeights)) {
           const idx = Number(idxStr);
           const col = idx % GRID_COLS;
@@ -1432,15 +1436,7 @@ function polygonEditor() {
           const cxImg = tl.x + (col + 0.5) * cellWpx;
           const cyImg = tl.y + (GRID_ROWS - 1 - row + 0.5) * cellHpx;
           const cp = this.imgToCanvas(cxImg, cyImg);
-          const dotR = Math.max(2.5, Math.min(cellWpx * this.scale, 5)) * dpr;
-
-          ctx.beginPath();
-          ctx.arc(cp.x, cp.y, dotR, 0, Math.PI * 2);
-          ctx.fillStyle = 'rgba(99,102,241,0.85)';  // indigo dot
-          ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-          ctx.lineWidth = 1 * dpr;
-          ctx.stroke();
+          ctx.fillText(Number(mm).toFixed(1), cp.x, cp.y);
         }
 
         // Highlight the active cell (if any)

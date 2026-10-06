@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-10-06-0900-appa-quell-for-the-dog",
+  "schedule": [
+    {
+      "event_id": "2026-10-06-0900-appa-quell-for-the-dog",
+      "kind": "heads_up_30",
+      "fire_at": "2026-10-06T08:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: Appa quell for the dog at 9:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-06-0900-appa-quell-for-the-dog",
+      "kind": "pre_5",
+      "fire_at": "2026-10-06T08:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: Appa quell for the dog at 9:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-06-0900-appa-quell-for-the-dog",
+      "kind": "strike_0",
+      "fire_at": "2026-10-06T09:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "Appa quell for the dog is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-06-0900-appa-quell-for-the-dog",
+      "kind": "strike_5",
+      "fire_at": "2026-10-06T09:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? Appa quell for the dog started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-06-0900-appa-quell-for-the-dog",
+      "kind": "strike_10",
+      "fire_at": "2026-10-06T09:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: Appa quell for the dog \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-06-0900-appa-quell-for-the-dog",
+      "kind": "strike_15",
+      "fire_at": "2026-10-06T09:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. Appa quell for the dog. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

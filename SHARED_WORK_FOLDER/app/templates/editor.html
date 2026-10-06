@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{# Boundary Editor v5.05 — right-click dot=delete; click-vs-drag discrimination for grid cells #}
+{# Boundary Editor v5.06 — Enable Fringe Grass checkbox; right-click dot=delete; click-vs-drag discrimination for grid cells #}
 {% block title %}Boundary Editor — AI Team Workspace{% endblock %}
 {% block content_width %}max-w-6xl{% endblock %}
 {% block content %}
@@ -130,6 +130,18 @@
           <span>Cap fringe at frame height</span>
         </label>
         <span class="text-xs text-notion-muted">Prevents the fringe from rising above the plaque frame near the edges (water holes only).</span>
+      </div>
+
+      {# Enable fringe grass — when unchecked the fringe prints smooth (no grass blades), saving print time #}
+      <div class="flex flex-col gap-1 min-w-[200px]"
+           title="When checked, the grass bump texture is applied to the fringe surface (default, existing behavior). Uncheck to produce a smooth fringe — faster to print, no grass blades.">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Fringe grass</label>
+        <label class="inline-flex items-center gap-2 text-sm text-notion-text cursor-pointer select-none">
+          <input type="checkbox" x-model="enableFringeGrass" @change="autoSave()"
+                 class="h-4 w-4 rounded border-notion-border text-notion-accent focus:ring-2 focus:ring-notion-accent/30">
+          <span>Enable Fringe Grass</span>
+        </label>
+        <span class="text-xs text-notion-muted">Uncheck for a smooth fringe (no grass texture — faster print).</span>
       </div>
 
       {# Divider #}
@@ -842,6 +854,7 @@ function polygonEditor() {
     baseThicknessMm: 1.5,     // flat filament base below the surface topology (mm)
     includeBoundaryRegion: false,  // auto-derive a 5 mm boulders ring from each water polygon
     applyFringeFrameCap: true,     // clip fringe top vertices near the frame perimeter (water-hole rule); default ON preserves legacy behavior
+    enableFringeGrass: true,       // apply grass bump texture to fringe; default ON (unchecked = smooth fringe, faster print)
     flagOffsetXMm: 0.0,    // mm: move flag right (+) or left (-)
     flagOffsetYMm: 0.0,    // mm: move flag up (+) or down (-)
 
@@ -2440,6 +2453,7 @@ function polygonEditor() {
         baseThicknessMm: this.baseThicknessMm,
         includeBoundaryRegion: this.includeBoundaryRegion,
         applyFringeFrameCap: this.applyFringeFrameCap,
+        enableFringeGrass: this.enableFringeGrass,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
@@ -2616,6 +2630,7 @@ function polygonEditor() {
       this.baseThicknessMm    = 1.5;
       this.includeBoundaryRegion = false;
       this.applyFringeFrameCap   = true;
+      this.enableFringeGrass     = true;
       this.flagOffsetXMm      = 0.0;
       this.flagOffsetYMm      = 0.0;
       // Tee-hole
@@ -2694,6 +2709,9 @@ function polygonEditor() {
         // Legacy .egm files without applyFringeFrameCap must default to true
         // (preserves the historical always-on behavior).
         this.applyFringeFrameCap = data.applyFringeFrameCap !== false;
+        // Legacy .egm files without enableFringeGrass must default to true
+        // (preserves the historical always-apply behavior).
+        this.enableFringeGrass = data.enableFringeGrass !== false;
         this.flagOffsetXMm = data.flagOffsetXMm != null ? data.flagOffsetXMm : 0.0;
         this.flagOffsetYMm = data.flagOffsetYMm != null ? data.flagOffsetYMm : 0.0;
         // Absorb print constants from server (avoids hardcoding in JS)
@@ -2772,6 +2790,7 @@ function polygonEditor() {
       this.baseThicknessMm = 1.5;
       this.includeBoundaryRegion = false;
       this.applyFringeFrameCap = true;
+      this.enableFringeGrass = true;
       this.flagOffsetXMm = 0.0;
       this.flagOffsetYMm = 0.0;
       // GPS backend — reset to defaults on new project
@@ -3203,6 +3222,7 @@ function polygonEditor() {
         baseThicknessMm: this.baseThicknessMm,
         includeBoundaryRegion: this.includeBoundaryRegion,
         applyFringeFrameCap: this.applyFringeFrameCap,
+        enableFringeGrass: this.enableFringeGrass,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,

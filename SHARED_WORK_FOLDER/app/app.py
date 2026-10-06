@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v5.05"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v5.07"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── detect_boundaries: classifier knobs ────────────────────────────────────
 # When True the green polygon interior is excluded from trap/water detection.
@@ -1743,6 +1743,11 @@ def generate_models():
     # rise to its natural height even where it exceeds the plaque frame.
     # Missing key → True (legacy .egm files never persisted this flag).
     apply_fringe_frame_cap = bool(data.get("applyFringeFrameCap", True))
+    # Fringe grass toggle (task 714): default True preserves legacy behavior.
+    # When False, the grass bump texture is skipped for the fringe, producing
+    # a smooth surface — faster to print with identical geometry otherwise.
+    # Missing key → True (legacy .egm files never persisted this flag).
+    enable_fringe_grass = bool(data.get("enableFringeGrass", True))
     open_in_slicer = bool(data.get("open_in_slicer", False))
 
     hole_label = hole.zfill(2) if hole.isdigit() else hole
@@ -1794,6 +1799,7 @@ def generate_models():
             egm_path,
             include_boundary_region=include_boundary_region,
             apply_fringe_frame_cap=apply_fringe_frame_cap,
+            enable_fringe_grass=enable_fringe_grass,
             serial=_serial,
         )
     except Exception as exc:

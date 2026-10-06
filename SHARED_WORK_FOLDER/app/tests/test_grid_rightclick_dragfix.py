@@ -405,34 +405,34 @@ class TestDeleteKeyRegression:
 
 
 # ---------------------------------------------------------------------------
-# T17 — APP_VERSION bumped to v5.05
+# T17 — APP_VERSION bumped to at least v5.05
 # ---------------------------------------------------------------------------
 
 class TestAppVersionBump:
-    """T17 — APP_VERSION is v5.05."""
+    """T17 — APP_VERSION is at least v5.05 (originally v5.05; subsequent tasks may bump further)."""
 
     def test_app_version_is_v5_05(self):
         src = _app_py()
         m = re.search(r'APP_VERSION\s*=\s*["\']v(\d+)\.(\d+)["\']', src)
         assert m is not None, "APP_VERSION not found in app.py"
         major, minor = int(m.group(1)), int(m.group(2))
-        assert (major, minor) == (5, 5), (
-            f"APP_VERSION is v{major}.{minor:02d} — expected v5.05"
+        assert (major, minor) >= (5, 5), (
+            f"APP_VERSION is v{major}.{minor:02d} — expected at least v5.05"
         )
 
 
 # ---------------------------------------------------------------------------
-# T18 — editor.html on-page version is v5.05
+# T18 — editor.html on-page version is at least v5.05
 # ---------------------------------------------------------------------------
 
 class TestEditorHtmlVersionBump:
-    """T18 — editor.html on-page version comment is v5.05."""
+    """T18 — editor.html on-page version comment is at least v5.05."""
 
     def test_editor_version_is_v5_05(self):
         html = _html()
         m = re.search(r'Boundary Editor v(\d+)\.(\d+)', html)
         assert m is not None, "No 'Boundary Editor vX.XX' version string in editor.html"
         major, minor = int(m.group(1)), int(m.group(2))
-        assert (major, minor) == (5, 5), (
-            f"editor.html version is v{major}.{minor:02d} — expected v5.05"
+        assert (major, minor) >= (5, 5), (
+            f"editor.html version is v{major}.{minor:02d} — expected at least v5.05"
         )

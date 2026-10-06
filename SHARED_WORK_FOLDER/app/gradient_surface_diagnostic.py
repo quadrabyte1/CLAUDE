@@ -1,3 +1,19 @@
+# v0.20 — 2026-10-05 Topo — Trap altitude grid-cell override (task 716).
+#         New rule: if one or more user-set gridCellHeights entries have their
+#         cell CENTRE inside a trap polygon, use mean(values) as the flat trap Z
+#         instead of the default min(fringe boundary Z) - 2 mm rule.
+#         New helper: _trap_grid_override(trap_poly_mm, grid_cell_heights,
+#           cell_side, half) — returns float mean or None (no override).
+#         Only SET cells (entries in gridCellHeights) are tested; absent cells
+#         carry Poisson defaults and must NOT trigger the override.
+#         Shapely .contains() strict interior: cell centres on the polygon
+#         boundary are excluded.
+#         Multiple contained cells → np.mean([values]) (mean policy).
+#         Wired into export_trap_stls flat-mode path immediately after the
+#         fringe-min default is computed; override replaces it when not None.
+#         Curved-mode path (TRAP_SURFACE_CURVED=True) is unchanged.
+#         All other pipelines (rake, fringe, green, water) unchanged.
+#         APP_VERSION bumped to v5.07.
 # v0.19 — 2026-10-04 Topo — Strip sand chunks + floor guard; revert trap to flat+rake (task 708).
 #         TRAP_SURFACE_CURVED flipped back to False (default was True since task 666).
 #         Flat rule: trap_Z = min(fringe boundary Z) + TRAP_FRINGE_OFFSET_MM (-2 mm).
@@ -5614,6 +5630,75 @@ def _apply_lift_and_cap(
     }
 
 
+def _trap_grid_override(
+    trap_poly_mm: "ShapelyPolygon",
+    grid_cell_heights: dict,
+    cell_side: float,
+    half: float,
+    grid_size: int = 20,
+) -> "float | None":
+    """Return mean of user-set grid-cell values whose centre is inside the trap
+    polygon, or ``None`` if no user-set cells fall inside the polygon.
+
+    Only cells explicitly listed in ``grid_cell_heights`` (the user-set sparse
+    dict from ``egm["gridCellHeights"]``) are tested.  Cells that are absent
+    carry Poisson-default Z values and must **not** trigger the override —
+    otherwise every trap would always be overridden.
+
+    Cell-centre coordinates (world mm, origin at centre of frame):
+
+        cx = -half + (col + 0.5) * cell_side
+        cy = -half + (row + 0.5) * cell_side
+
+    where ``half = PRINT_SIZE_MM/2 + FRINGE_XY_EXPANSION_MM/2`` and
+    ``cell_side = (2 * half) / grid_size``.
+
+    Containment uses Shapely's ``Polygon.contains(Point)`` which is strict
+    interior — cell centres exactly on the polygon boundary are excluded.
+
+    Parameters
+    ----------
+    trap_poly_mm : ShapelyPolygon
+        Trap footprint in world mm coords (may be pre-inset or raw; caller
+        decides; export_trap_stls passes the raw shapely_trap so that the
+        geometric test is on the full footprint, consistent with the editor).
+    grid_cell_heights : dict
+        Sparse dict of ``{str(cell_index): mm_value}`` from
+        ``egm["gridCellHeights"]``.  Empty dict → returns None immediately.
+    cell_side : float
+        Side length (mm) of each square grid cell.
+    half : float
+        Half-frame size in mm: ``PRINT_SIZE_MM/2 + FRINGE_XY_EXPANSION_MM/2``.
+    grid_size : int
+        Number of cells per axis (default 20 → 20×20 = 400 cells).
+
+    Returns
+    -------
+    float or None
+        Mean of the contained cell values (mm), or None when no user-set cell
+        falls inside the trap polygon.
+    """
+    if not grid_cell_heights:
+        return None
+    from shapely.geometry import Point as _ShapelyPoint
+    hits: list[float] = []
+    for cell_idx_str, mm in grid_cell_heights.items():
+        try:
+            cell_idx = int(cell_idx_str)
+            val = float(mm)
+        except (TypeError, ValueError):
+            continue
+        row = cell_idx // grid_size
+        col = cell_idx % grid_size
+        cx = -half + (col + 0.5) * cell_side
+        cy = -half + (row + 0.5) * cell_side
+        if trap_poly_mm.contains(_ShapelyPoint(cx, cy)):
+            hits.append(val)
+    if hits:
+        return float(np.mean(hits))
+    return None
+
+
 def _compute_trap_height_from_fringe(
     trap_poly_mm: "ShapelyPolygon",
     fringe_mesh: "trimesh.Trimesh | None",
@@ -6046,6 +6131,25 @@ def export_trap_stls(
                           f"(fringe_boundary_min + {TRAP_FRINGE_OFFSET_MM:.1f} mm offset)")
                 else:
                     print(f"  Trap {i}: no fringe mesh — using fixed height {trap_height:.2f} mm")
+
+            # Task v0.20 (Topo, 2026-10-05): grid-cell altitude override.
+            # If any user-set gridCellHeights entry has its cell centre inside
+            # this trap polygon, use mean(values) as the flat trap Z.
+            # Only applies on the flat path (TRAP_SURFACE_CURVED=False).
+            # The curved path sets trap_height per-point above; override not applied.
+            if not TRAP_SURFACE_CURVED:
+                _gch = egm_data.get("gridCellHeights") or {}
+                _grid_half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+                _grid_cell_side = (2.0 * _grid_half) / 20
+                _grid_override = _trap_grid_override(
+                    shapely_trap, _gch, _grid_cell_side, _grid_half
+                )
+                if _grid_override is not None:
+                    print(f"  Trap {i}: grid-cell override active — "
+                          f"height {trap_height:.2f} mm → {_grid_override:.2f} mm "
+                          f"(mean of user-set cells inside trap polygon)")
+                    trap_height = _grid_override
+                    _trap_base_z_map = None  # override is flat scalar; discard curved map
 
             # Build slab at the (possibly curved) maximum height.
             mesh = _build_slab_from_shapely(shapely_inset, trap_height)
@@ -8469,6 +8573,7 @@ def run_pipeline(
     egm_path: str,
     include_boundary_region: bool | None = None,
     apply_fringe_frame_cap: bool | None = None,
+    enable_fringe_grass: bool | None = None,
     serial: int | None = None,
 ) -> str:
     """Run the full gradient surface pipeline for a given EGM file path.
@@ -8491,6 +8596,13 @@ def run_pipeline(
         where it exceeds the frame. Green/trap/water caps are unaffected.
         When None, fall back to the ``applyFringeFrameCap`` flag persisted
         inside the EGM file (missing → True).
+    enable_fringe_grass : bool | None, optional
+        When True (default), the grass bump texture is applied to the fringe
+        top surface (existing behavior).  When False, the fringe is left
+        smooth — ``apply_grass_texture`` / ``apply_grass_texture_v2`` are
+        NOT called, producing a faster-to-print smooth fringe.  When None,
+        fall back to the ``enableFringeGrass`` flag persisted inside the EGM
+        file (missing → True preserves legacy behavior).
     serial : int | None, optional
         Global serial number for this generate run.  Obtained by the caller
         via ``commit_global_serial()`` BEFORE calling run_pipeline.  When
@@ -8577,6 +8689,16 @@ def run_pipeline(
     else:
         _egm_data["applyFringeFrameCap"] = bool(apply_fringe_frame_cap)
     print(f"    Apply fringe frame cap: {apply_fringe_frame_cap}")
+
+    # Resolve enableFringeGrass (task 714). Default True on missing key
+    # preserves the legacy always-grass behavior; explicit False from either
+    # the caller or the EGM skips both grass-texture functions in step 7a,
+    # leaving the fringe top surface smooth (faster print, identical geometry).
+    if enable_fringe_grass is None:
+        enable_fringe_grass = bool(_egm_data.get("enableFringeGrass", True))
+    else:
+        _egm_data["enableFringeGrass"] = bool(enable_fringe_grass)
+    print(f"    Enable fringe grass: {enable_fringe_grass}")
 
     img = cv2.imread(image_path)
     if img is None:
@@ -8925,26 +9047,29 @@ def run_pipeline(
                   f"clamping UP to {FRINGE_GRASS_MIN_SPACING_MM} mm.")
             _grass_spacing_eff = FRINGE_GRASS_MIN_SPACING_MM
 
-        print(f"  Applying grass texture to fringe (algorithm={GRASS_ALGORITHM}, "
-              f"amplitude={grass_amplitude} mm, spacing={_grass_spacing_eff} mm)…")
-        print(f"  Grass seam exclusion: {len(_cutout_polylines_mm)} polyline(s) "
-              f"({len(_grass_exclude_polyline)} points total)")
-        if GRASS_ALGORITHM == "v2":
-            apply_grass_texture_v2(
-                fringe_mesh,
-                amplitude=grass_amplitude,
-                bump_spacing=_grass_spacing_eff,
-                exclude_polyline_xy=_grass_exclude_polyline,
-                freeze_radius_mm=_seam_exclude_radius_mm,
-            )
+        if enable_fringe_grass:
+            print(f"  Applying grass texture to fringe (algorithm={GRASS_ALGORITHM}, "
+                  f"amplitude={grass_amplitude} mm, spacing={_grass_spacing_eff} mm)…")
+            print(f"  Grass seam exclusion: {len(_cutout_polylines_mm)} polyline(s) "
+                  f"({len(_grass_exclude_polyline)} points total)")
+            if GRASS_ALGORITHM == "v2":
+                apply_grass_texture_v2(
+                    fringe_mesh,
+                    amplitude=grass_amplitude,
+                    bump_spacing=_grass_spacing_eff,
+                    exclude_polyline_xy=_grass_exclude_polyline,
+                    freeze_radius_mm=_seam_exclude_radius_mm,
+                )
+            else:
+                apply_grass_texture(
+                    fringe_mesh,
+                    amplitude=grass_amplitude,
+                    bump_spacing=_grass_spacing_eff,
+                    exclude_polyline_xy=_grass_exclude_polyline,
+                    exclude_radius_mm=_seam_exclude_radius_mm,
+                )
         else:
-            apply_grass_texture(
-                fringe_mesh,
-                amplitude=grass_amplitude,
-                bump_spacing=_grass_spacing_eff,
-                exclude_polyline_xy=_grass_exclude_polyline,
-                exclude_radius_mm=_seam_exclude_radius_mm,
-            )
+            print("  Skipping grass texture (enableFringeGrass=False) — fringe will be smooth.")
 
         # ── 7b. Build the upper-left mounting-bore PIPE (task #335) ──────────
         # The fringe was already hollowed out at (_bore_cx, _bore_cy) with

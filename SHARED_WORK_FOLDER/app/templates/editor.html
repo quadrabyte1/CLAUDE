@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{# Boundary Editor v5.07 — Grid cell marker: numeric value text replaces blue dot (task 720) #}
+{# Boundary Editor v5.09 — Grid lines recolored to indigo; Cmd+drag multi-cell selection with shared-value edit (task 726) #}
 {% block title %}Boundary Editor — AI Team Workspace{% endblock %}
 {% block content_width %}max-w-6xl{% endblock %}
 {% block content %}
@@ -132,16 +132,16 @@
         <span class="text-xs text-notion-muted">Prevents the fringe from rising above the plaque frame near the edges (water holes only).</span>
       </div>
 
-      {# Enable fringe grass — when unchecked the fringe prints smooth (no grass blades), saving print time #}
+      {# Include fringe without grass — when checked, a second plate is generated holding a smooth (grass-less) fringe sample #}
       <div class="flex flex-col gap-1 min-w-[200px]"
-           title="When checked, the grass bump texture is applied to the fringe surface (default, existing behavior). Uncheck to produce a smooth fringe — faster to print, no grass blades.">
-        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Fringe grass</label>
+           title="When checked, a second plate is added to the 3MF containing a smooth fringe sample (no grass texture) — useful for comparing grass vs. smooth in the same file. Plate 1 always has grass regardless of this setting.">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Fringe comparison</label>
         <label class="inline-flex items-center gap-2 text-sm text-notion-text cursor-pointer select-none">
-          <input type="checkbox" x-model="enableFringeGrass" @change="autoSave()"
+          <input type="checkbox" x-model="includeFringeWithoutGrass" @change="autoSave()"
                  class="h-4 w-4 rounded border-notion-border text-notion-accent focus:ring-2 focus:ring-notion-accent/30">
-          <span>Enable Fringe Grass</span>
+          <span>Include Fringe Without Grass</span>
         </label>
-        <span class="text-xs text-notion-muted">Uncheck for a smooth fringe (no grass texture — faster print).</span>
+        <span class="text-xs text-notion-muted">Adds a plate 2 smooth fringe sample. Plate 1 always has grass.</span>
       </div>
 
       {# Divider #}
@@ -811,6 +811,8 @@ function polygonEditor() {
     _gridInputValue: '',     // staging area while input is open
     _gridHoveredCell: null,  // {idx, canvasPx:{x,y,w,h}} or null — drives dot tooltip (v5.04)
     _gridMouseDownAt: null,  // {x, y, col, row, idx, time} — pending click until drag threshold resolved (v5.05)
+    _gridMultiSelect: null,  // Set of cell indices selected via Cmd/Ctrl+drag (v5.09); null when inactive
+    _gridMultiSelectAnchor: null, // {col, row, idx} of the first cell in the multi-select drag (v5.09)
 
     generating: false,
     generatingElapsed: 0,      // seconds since Generate was clicked (updated every 1s)
@@ -854,7 +856,7 @@ function polygonEditor() {
     baseThicknessMm: 1.5,     // flat filament base below the surface topology (mm)
     includeBoundaryRegion: false,  // auto-derive a 5 mm boulders ring from each water polygon
     applyFringeFrameCap: true,     // clip fringe top vertices near the frame perimeter (water-hole rule); default ON preserves legacy behavior
-    enableFringeGrass: true,       // apply grass bump texture to fringe; default ON (unchecked = smooth fringe, faster print)
+    includeFringeWithoutGrass: false, // when true, generate a second plate with a smooth (grass-less) fringe sample; plate 1 always has grass
     flagOffsetXMm: 0.0,    // mm: move flag right (+) or left (-)
     flagOffsetYMm: 0.0,    // mm: move flag up (+) or down (-)
 
@@ -1392,8 +1394,8 @@ function polygonEditor() {
 
         ctx.save();
 
-        // Faint cell boundary lines (lemon yellow)
-        ctx.strokeStyle = 'rgba(255,244,79,0.50)';  // #FFF44F @ 0.50 alpha
+        // Faint cell boundary lines — indigo accent, matching value text (v5.09)
+        ctx.strokeStyle = 'rgba(99,102,241,0.40)';  // indigo @ 0.40 alpha (softer than value text @ 0.92)
         ctx.lineWidth = 0.75 * dpr;
         ctx.setLineDash([]);
 
@@ -1451,6 +1453,24 @@ function polygonEditor() {
           ctx.strokeStyle = 'rgba(99,102,241,0.70)';
           ctx.lineWidth = 2 * dpr;
           ctx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+        }
+
+        // ── Multi-select highlight (v5.09) — Cmd/Ctrl+drag selection ─────────
+        // Draw thicker indigo borders around cells in _gridMultiSelect.
+        if (this._gridMultiSelect && this._gridMultiSelect.size > 0) {
+          ctx.strokeStyle = 'rgba(99,102,241,0.90)';  // strong indigo for selected border
+          ctx.lineWidth = 3.5 * dpr;                   // thicker than normal 0.75px grid lines
+          ctx.fillStyle = 'rgba(99,102,241,0.10)';     // subtle fill tint
+          for (const idx of this._gridMultiSelect) {
+            const col = idx % GRID_COLS;
+            const row = Math.floor(idx / GRID_COLS);
+            const cxImg = tl.x + col * cellWpx;
+            const cyImg = tl.y + (GRID_ROWS - 1 - row) * cellHpx;
+            const p0 = this.imgToCanvas(cxImg, cyImg);
+            const p1 = this.imgToCanvas(cxImg + cellWpx, cyImg + cellHpx);
+            ctx.fillRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+            ctx.strokeRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y);
+          }
         }
 
         ctx.restore();
@@ -1637,37 +1657,51 @@ function polygonEditor() {
         this.$refs.canvas.style.cursor = 'grabbing';
         this.draw();
       } else {
-        // Check if the click lands inside a grid cell — record a pending click but
-        // don't open the input yet.  We wait until mouseup to confirm it wasn't a drag.
-        // This restores rubber-band selection drag on the grid (v5.05).
+        // ── Cmd/Ctrl+click on grid cell → enter multi-select mode (v5.09) ────
         const gridCell = this._gridCellFromImgPx(x, y);
-        if (gridCell) {
-          const canvas2 = this.$refs.canvas;
-          const rect2 = canvas2.getBoundingClientRect();
-          this._gridMouseDownAt = {
-            clientX: e.clientX - rect2.left,
-            clientY: e.clientY - rect2.top,
-            col: gridCell.col,
-            row: gridCell.row,
-            idx: gridCell.idx,
-          };
-          // Fall through — don't return; let the rubber-band / global-mouseup path proceed.
-        }
+        if (gridCell && (e.metaKey || e.ctrlKey)) {
+          // Cancel any active single-cell input first
+          this._gridActiveCell = null;
+          this._gridInputValue = '';
+          // Start (or extend) a multi-select with this first cell
+          this._gridMultiSelect = new Set([gridCell.idx]);
+          this._gridMultiSelectAnchor = { col: gridCell.col, row: gridCell.row, idx: gridCell.idx };
+          this._gridHoveredCell = null;
+          this.$refs.canvas.style.cursor = 'crosshair';
+          this.draw();
+          // Attach global mouseup listener — will be added below for all paths
+        } else {
+          // Check if the click lands inside a grid cell — record a pending click but
+          // don't open the input yet.  We wait until mouseup to confirm it wasn't a drag.
+          // This restores rubber-band selection drag on the grid (v5.05).
+          if (gridCell) {
+            const canvas2 = this.$refs.canvas;
+            const rect2 = canvas2.getBoundingClientRect();
+            this._gridMouseDownAt = {
+              clientX: e.clientX - rect2.left,
+              clientY: e.clientY - rect2.top,
+              col: gridCell.col,
+              row: gridCell.row,
+              idx: gridCell.idx,
+            };
+            // Fall through — don't return; let the rubber-band / global-mouseup path proceed.
+          }
 
-        // Click on empty space — start rubber band selection
-        this.selectedContour = -1;
-        this.rubberBand = true;
-        this.rbStartX = x;
-        this.rbStartY = y;
-        this.rbCurX = x;
-        this.rbCurY = y;
-        this.rbShift = e.shiftKey;
-        this.preRbSelection = e.shiftKey ? [...this.selectedVerts] : [];
-        if (!e.shiftKey) {
-          this.selectedVerts = [];
+          // Click on empty space — start rubber band selection
+          this.selectedContour = -1;
+          this.rubberBand = true;
+          this.rbStartX = x;
+          this.rbStartY = y;
+          this.rbCurX = x;
+          this.rbCurY = y;
+          this.rbShift = e.shiftKey;
+          this.preRbSelection = e.shiftKey ? [...this.selectedVerts] : [];
+          if (!e.shiftKey) {
+            this.selectedVerts = [];
+          }
+          this.$refs.canvas.style.cursor = 'crosshair';
+          this.draw();
         }
-        this.$refs.canvas.style.cursor = 'crosshair';
-        this.draw();
       }
 
       // Attach a global mouseup listener so releasing outside the canvas still commits the drag.
@@ -1695,6 +1729,18 @@ function polygonEditor() {
         if (dx0 * dx0 + dy0 * dy0 > this.GRID_DRAG_THRESHOLD_PX * this.GRID_DRAG_THRESHOLD_PX) {
           this._gridMouseDownAt = null;  // drag detected — abandon pending grid cell add
         }
+      }
+
+      // ── Cmd/Ctrl multi-select drag accumulation (v5.09) ──────────────────
+      // If multi-select mode is active (mousedown with metaKey/ctrlKey), add each
+      // cell the pointer enters to the selection set.  Button 1 (left) must be down.
+      if (this._gridMultiSelect !== null && (e.buttons & 1)) {
+        const dragCell = this._gridCellFromImgPx(x, y);
+        if (dragCell && !this._gridMultiSelect.has(dragCell.idx)) {
+          this._gridMultiSelect.add(dragCell.idx);
+          this.draw();
+        }
+        return;  // skip rubber-band and hover logic while multi-selecting
       }
 
       // Soft clamp: allow vertices to reach the fringe-zone boundary (fringePadPx beyond image edge)
@@ -1820,6 +1866,21 @@ function polygonEditor() {
         this.rubberBand = false;
         this.$refs.canvas.style.cursor = 'default';
         this.draw();
+      }
+
+      // ── Grid multi-select finalization (v5.09) ────────────────────────────
+      // If a Cmd/Ctrl+drag was in progress, release opens the shared-value input.
+      if (this._gridMultiSelect !== null && e.button === 0) {
+        // If it's a right-click release or multi-select was cancelled, skip.
+        // Open the single shared input to commit one value to all selected cells.
+        this.$refs.canvas.style.cursor = 'default';
+        const anchor = this._gridMultiSelectAnchor;
+        if (anchor) {
+          // Re-use openGridCell which positions the input near the anchor cell.
+          // openGridCell sets _gridActiveCell; multi-select set stays in _gridMultiSelect.
+          this.openGridCell(anchor.col, anchor.row, anchor.idx);
+        }
+        return;  // don't fall through to bare-click path
       }
 
       // ── Grid click-vs-drag resolution (v5.05) ─────────────────────────────
@@ -2361,18 +2422,30 @@ function polygonEditor() {
       const raw = parseFloat(this._gridInputValue);
       if (!isNaN(raw)) {
         const clamped = Math.max(0, Math.min(50, raw));
-        this.gridCellHeights[this._gridActiveCell.idx] = clamped;
+        // Multi-select commit: apply value to EVERY cell in _gridMultiSelect.
+        // Single-select commit: apply to just the active cell.
+        if (this._gridMultiSelect && this._gridMultiSelect.size > 0) {
+          for (const idx of this._gridMultiSelect) {
+            this.gridCellHeights[idx] = clamped;
+          }
+        } else {
+          this.gridCellHeights[this._gridActiveCell.idx] = clamped;
+        }
       }
-      this._gridActiveCell  = null;
-      this._gridInputValue  = '';
+      this._gridActiveCell       = null;
+      this._gridInputValue       = '';
+      this._gridMultiSelect      = null;
+      this._gridMultiSelectAnchor = null;
       this.draw();
       this.autoSave();
     },
 
     // Cancel the current input without updating state.
     cancelGridCell() {
-      this._gridActiveCell = null;
-      this._gridInputValue = '';
+      this._gridActiveCell       = null;
+      this._gridInputValue       = '';
+      this._gridMultiSelect      = null;
+      this._gridMultiSelectAnchor = null;
       this.draw();
     },
 
@@ -2449,7 +2522,7 @@ function polygonEditor() {
         baseThicknessMm: this.baseThicknessMm,
         includeBoundaryRegion: this.includeBoundaryRegion,
         applyFringeFrameCap: this.applyFringeFrameCap,
-        enableFringeGrass: this.enableFringeGrass,
+        includeFringeWithoutGrass: this.includeFringeWithoutGrass,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,
@@ -2624,9 +2697,9 @@ function polygonEditor() {
       this.greenScale         = 1.0065;
       this.fringeEdgeHeight   = 10.0;
       this.baseThicknessMm    = 1.5;
-      this.includeBoundaryRegion = false;
-      this.applyFringeFrameCap   = true;
-      this.enableFringeGrass     = true;
+      this.includeBoundaryRegion    = false;
+      this.applyFringeFrameCap      = true;
+      this.includeFringeWithoutGrass = false;
       this.flagOffsetXMm      = 0.0;
       this.flagOffsetYMm      = 0.0;
       // Tee-hole
@@ -2649,6 +2722,8 @@ function polygonEditor() {
       this._gridInputValue    = '';
       this._gridHoveredCell   = null;
       this._gridMouseDownAt   = null;  // v5.05
+      this._gridMultiSelect   = null;  // v5.09
+      this._gridMultiSelectAnchor = null;  // v5.09
       // Unsaved-changes guard
       this._pendingAutoSave   = false;
       // Clear the canvas so no stale image is visible while the fetch is in flight
@@ -2705,9 +2780,10 @@ function polygonEditor() {
         // Legacy .egm files without applyFringeFrameCap must default to true
         // (preserves the historical always-on behavior).
         this.applyFringeFrameCap = data.applyFringeFrameCap !== false;
-        // Legacy .egm files without enableFringeGrass must default to true
-        // (preserves the historical always-apply behavior).
-        this.enableFringeGrass = data.enableFringeGrass !== false;
+        // New field (task 724): default false (single plate). Legacy field is
+        // ignored — semantics are inverted. Use strict truthy check so missing
+        // key defaults to false (single plate, no comparison sample).
+        this.includeFringeWithoutGrass = !!data.includeFringeWithoutGrass;
         this.flagOffsetXMm = data.flagOffsetXMm != null ? data.flagOffsetXMm : 0.0;
         this.flagOffsetYMm = data.flagOffsetYMm != null ? data.flagOffsetYMm : 0.0;
         // Absorb print constants from server (avoids hardcoding in JS)
@@ -2784,9 +2860,9 @@ function polygonEditor() {
       this.greenScale = 1.0065;
       this.fringeEdgeHeight = 10.0;
       this.baseThicknessMm = 1.5;
-      this.includeBoundaryRegion = false;
-      this.applyFringeFrameCap = true;
-      this.enableFringeGrass = true;
+      this.includeBoundaryRegion    = false;
+      this.applyFringeFrameCap      = true;
+      this.includeFringeWithoutGrass = false;
       this.flagOffsetXMm = 0.0;
       this.flagOffsetYMm = 0.0;
       // GPS backend — reset to defaults on new project
@@ -3218,7 +3294,7 @@ function polygonEditor() {
         baseThicknessMm: this.baseThicknessMm,
         includeBoundaryRegion: this.includeBoundaryRegion,
         applyFringeFrameCap: this.applyFringeFrameCap,
-        enableFringeGrass: this.enableFringeGrass,
+        includeFringeWithoutGrass: this.includeFringeWithoutGrass,
         flagOffsetXMm: this.flagOffsetXMm,
         flagOffsetYMm: this.flagOffsetYMm,
         polygons: allPolygons,

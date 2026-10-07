@@ -1435,3 +1435,15 @@ Config:
   include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
   exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
 ========================================
+========================================
+Scan run_id=12 — 2026-10-07T07:00:03Z → 2026-10-07T07:00:34Z
+Status: done
+Scanned: 1,221,623 rows | New titles: 240 | Matches: 0
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
+  exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
+========================================

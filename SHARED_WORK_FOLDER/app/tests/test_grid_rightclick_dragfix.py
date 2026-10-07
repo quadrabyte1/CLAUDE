@@ -61,14 +61,14 @@ def _right_click_body() -> str:
     html = _html()
     start = html.find("    onRightClick(e) {")
     assert start != -1, "onRightClick not found in editor.html"
-    return html[start: start + 3000]
+    return html[start: start + 6000]
 
 
 def _mouse_down_body() -> str:
     html = _html()
     start = html.find("    onMouseDown(e) {")
     assert start != -1, "onMouseDown not found"
-    return html[start: start + 3000]
+    return html[start: start + 6000]
 
 
 def _mouse_move_body() -> str:
@@ -82,7 +82,7 @@ def _mouse_up_body() -> str:
     html = _html()
     start = html.find("    onMouseUp(e) {")
     assert start != -1, "onMouseUp not found"
-    return html[start: start + 3000]
+    return html[start: start + 6000]
 
 
 # ---------------------------------------------------------------------------

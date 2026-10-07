@@ -244,7 +244,7 @@ class TestMouseMoveWiring:
         html = _html()
         move_start = html.find("    onMouseMove(e) {")
         assert move_start != -1, "onMouseMove not found"
-        move_body = html[move_start: move_start + 5000]  # scan enough to cover the added block
+        move_body = html[move_start: move_start + 8000]  # scan enough to cover the added block
         assert "_gridHoveredCell" in move_body, (
             "onMouseMove does not update _gridHoveredCell — tooltip won't respond to mouse"
         )

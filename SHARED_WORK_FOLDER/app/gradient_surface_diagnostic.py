@@ -1,3 +1,14 @@
+# v0.22 — 2026-10-06 Sienna — Include Fringe Without Grass flip (task 724).
+#         Plate 1: ALWAYS grassy — removed if enable_fringe_grass: guard; grass
+#           is unconditional on the main fringe regardless of checkbox.
+#         Plate 2: smooth (grass-LESS) fringe sample — only built when
+#           include_fringe_without_grass=True. Named "fringe_no_grass_sample"
+#           (renamed from "fringe_grass_sample") → still extruder 2.
+#         run_pipeline parameter: enable_fringe_grass → include_fringe_without_grass
+#           (new semantics: controls plate-2 presence, not plate-1 grass).
+#         _inject_bambu_extruder_metadata: _PLATE2_SCENE_NAME updated to
+#           "fringe_no_grass_sample"; plater_name updated to "Fringe No Grass Sample".
+#         APP_VERSION bumped to v5.13.
 # v0.21 — 2026-10-06 Finn — Two-plate 3MF output (task 718).
 #         Plate 1: unchanged full plaque (green + fringe[checkbox] + traps + water + boulders).
 #         Plate 2: fringe grass sample — fringe mesh with grass UNCONDITIONALLY enabled,
@@ -8371,7 +8382,7 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     else:
         # 4-tuple: (oid, oname, extruder, scene_name)
         # scene_name is the ORIGINAL name used when adding to the trimesh.Scene
-        # (e.g. "fringe_grass_sample") — NOT oname which is trimesh's "geometry_N"
+        # (e.g. "fringe_no_grass_sample") — NOT oname which is trimesh's "geometry_N"
         # generic label.  The plate-split logic below must use scene_name, not oname.
         mapping = [
             (oid, oname, _filament_for_scene_name(scene_names[i]), scene_names[i])
@@ -8384,13 +8395,13 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     # part ids do not collide with object ids. (This matches the layout
     # observed in Bambu-Studio-saved 3MFs.)
     #
-    # Two-plate support (task 718): when "fringe_grass_sample" is one of the
-    # scene names, generate two <plate> sections:
-    #   - plate 1: all objects except fringe_grass_sample, with <model_instance>
-    #   - plate 2: fringe_grass_sample only
-    # When fringe_grass_sample is absent, we emit a single <plate> block for
-    # backward compatibility (matching blank.3mf's structure).
-    _PLATE2_SCENE_NAME = "fringe_grass_sample"
+    # Two-plate support (task 718, updated task 724): when "fringe_no_grass_sample"
+    # is one of the scene names, generate two <plate> sections:
+    #   - plate 1: all objects except fringe_no_grass_sample, with <model_instance>
+    #   - plate 2: fringe_no_grass_sample only (smooth/grass-less fringe sample)
+    # When fringe_no_grass_sample is absent (include_fringe_without_grass=False),
+    # we emit a single <plate> block for backward compatibility.
+    _PLATE2_SCENE_NAME = "fringe_no_grass_sample"
     _has_plate2 = _PLATE2_SCENE_NAME in (scene_names or [])
 
     cfg_lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<config>']
@@ -8411,10 +8422,10 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
         cfg_lines.append(f'  </object>')
 
     # --- 3a. Build <plate> sections ---
-    # Build the plate-1 instance list: all objects NOT named fringe_grass_sample.
-    # Build the plate-2 instance list: fringe_grass_sample object only (if present).
+    # Build the plate-1 instance list: all objects NOT named fringe_no_grass_sample.
+    # Build the plate-2 instance list: fringe_no_grass_sample object only (if present).
     # IMPORTANT: use scene_name (4th element), NOT oname (2nd element) for matching.
-    # trimesh exports objects as "geometry_N" so oname is never "fringe_grass_sample".
+    # trimesh exports objects as "geometry_N" so oname is never "fringe_no_grass_sample".
     _plate1_items: list[tuple[str, str]] = []  # (oid, oname)
     _plate2_items: list[tuple[str, str]] = []
     for oid, oname, _ext, _scene_name in mapping:
@@ -8442,11 +8453,11 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
         cfg_lines.append('    </model_instance>')
     cfg_lines.append('  </plate>')
 
-    # Plate 2 block — only emitted when fringe_grass_sample is present.
+    # Plate 2 block — only emitted when fringe_no_grass_sample is present.
     if _has_plate2:
         cfg_lines.append('  <plate>')
         cfg_lines.append('    <metadata key="plater_id" value="2"/>')
-        cfg_lines.append('    <metadata key="plater_name" value="Fringe Grass Sample"/>')
+        cfg_lines.append('    <metadata key="plater_name" value="Fringe No Grass Sample"/>')
         cfg_lines.append('    <metadata key="locked" value="false"/>')
         cfg_lines.append('    <metadata key="filament_map_mode" value="Auto For Flush"/>')
         cfg_lines.append('    <metadata key="thumbnail_file" value="Metadata/plate_2.png"/>')
@@ -8505,9 +8516,9 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
         if data is not None:
             new_tmpl_bytes[arcname] = data
 
-    # Plate-2 thumbnails (task 718): when fringe_grass_sample is present, inject
-    # 5 plate-2 thumbnail files by copying the plate-1 thumbnail bytes under the
-    # plate_2 names. Bambu Studio will regenerate them on first slice; these
+    # Plate-2 thumbnails (task 718, updated task 724): when fringe_no_grass_sample is
+    # present, inject 5 plate-2 thumbnail files by copying the plate-1 thumbnail bytes
+    # under the plate_2 names. Bambu Studio will regenerate them on first slice; these
     # placeholders prevent the missing-file warning on load.
     # plate_2_small.png mirrors the Double Plate Blank template structure.
     # arcname → source template filename (re-using plate-1 thumbnails as placeholders)
@@ -8677,7 +8688,7 @@ def run_pipeline(
     egm_path: str,
     include_boundary_region: bool | None = None,
     apply_fringe_frame_cap: bool | None = None,
-    enable_fringe_grass: bool | None = None,
+    include_fringe_without_grass: bool | None = None,
     serial: int | None = None,
 ) -> str:
     """Run the full gradient surface pipeline for a given EGM file path.
@@ -8700,13 +8711,14 @@ def run_pipeline(
         where it exceeds the frame. Green/trap/water caps are unaffected.
         When None, fall back to the ``applyFringeFrameCap`` flag persisted
         inside the EGM file (missing → True).
-    enable_fringe_grass : bool | None, optional
-        When True (default), the grass bump texture is applied to the fringe
-        top surface (existing behavior).  When False, the fringe is left
-        smooth — ``apply_grass_texture`` / ``apply_grass_texture_v2`` are
-        NOT called, producing a faster-to-print smooth fringe.  When None,
-        fall back to the ``enableFringeGrass`` flag persisted inside the EGM
-        file (missing → True preserves legacy behavior).
+    include_fringe_without_grass : bool | None, optional
+        When True, a second plate is generated holding a smooth (grass-less)
+        fringe sample named "fringe_no_grass_sample".  Plate 1 ALWAYS has
+        grass applied unconditionally — this flag only controls whether a
+        second plate is produced.  When False (default), a single plate is
+        generated with the grassy fringe.  When None, fall back to the
+        ``includeFringeWithoutGrass`` flag persisted inside the EGM file
+        (missing → False).
     serial : int | None, optional
         Global serial number for this generate run.  Obtained by the caller
         via ``commit_global_serial()`` BEFORE calling run_pipeline.  When
@@ -8794,15 +8806,15 @@ def run_pipeline(
         _egm_data["applyFringeFrameCap"] = bool(apply_fringe_frame_cap)
     print(f"    Apply fringe frame cap: {apply_fringe_frame_cap}")
 
-    # Resolve enableFringeGrass (task 714). Default True on missing key
-    # preserves the legacy always-grass behavior; explicit False from either
-    # the caller or the EGM skips both grass-texture functions in step 7a,
-    # leaving the fringe top surface smooth (faster print, identical geometry).
-    if enable_fringe_grass is None:
-        enable_fringe_grass = bool(_egm_data.get("enableFringeGrass", True))
+    # Resolve includeFringeWithoutGrass (task 724). Default False on missing key
+    # preserves the legacy single-plate behavior. When True, a second plate is
+    # generated holding a smooth (grass-less) fringe sample. Plate 1 is always
+    # grassy regardless of this flag.
+    if include_fringe_without_grass is None:
+        include_fringe_without_grass = bool(_egm_data.get("includeFringeWithoutGrass", False))
     else:
-        _egm_data["enableFringeGrass"] = bool(enable_fringe_grass)
-    print(f"    Enable fringe grass: {enable_fringe_grass}")
+        _egm_data["includeFringeWithoutGrass"] = bool(include_fringe_without_grass)
+    print(f"    Include fringe without grass: {include_fringe_without_grass}")
 
     img = cv2.imread(image_path)
     if img is None:
@@ -9073,9 +9085,10 @@ def run_pipeline(
         fringe_holes = []
         print("  Mount pipe: DISABLED (ENABLE_MOUNT_BORE = False) — "
               "no fringe hole, no pipe mesh, no trap/water/boulders pipe-subtraction.")
-    # Plate-2 grass sample mesh — initialised to None; set inside the fringe try-block
-    # if the sample builds successfully.  Checked later when assembling the 3MF scene.
-    fringe_grass_sample: trimesh.Trimesh | None = None
+    # Plate-2 smooth fringe sample mesh — initialised to None; set inside the fringe
+    # try-block if include_fringe_without_grass=True and the sample builds successfully.
+    # Named "fringe_no_grass_sample" in the scene; checked when assembling the 3MF scene.
+    fringe_no_grass_sample: trimesh.Trimesh | None = None
     try:
         fringe_mesh = build_fringe_mesh(
             Z_mm_for_fringe,
@@ -9154,77 +9167,59 @@ def run_pipeline(
                   f"clamping UP to {FRINGE_GRASS_MIN_SPACING_MM} mm.")
             _grass_spacing_eff = FRINGE_GRASS_MIN_SPACING_MM
 
-        if enable_fringe_grass:
-            print(f"  Applying grass texture to fringe (algorithm={GRASS_ALGORITHM}, "
-                  f"amplitude={grass_amplitude} mm, spacing={_grass_spacing_eff} mm)…")
-            print(f"  Grass seam exclusion: {len(_cutout_polylines_mm)} polyline(s) "
-                  f"({len(_grass_exclude_polyline)} points total)")
-            if GRASS_ALGORITHM == "v2":
-                apply_grass_texture_v2(
-                    fringe_mesh,
-                    amplitude=grass_amplitude,
-                    bump_spacing=_grass_spacing_eff,
-                    exclude_polyline_xy=_grass_exclude_polyline,
-                    freeze_radius_mm=_seam_exclude_radius_mm,
-                )
-            else:
-                apply_grass_texture(
-                    fringe_mesh,
-                    amplitude=grass_amplitude,
-                    bump_spacing=_grass_spacing_eff,
-                    exclude_polyline_xy=_grass_exclude_polyline,
-                    exclude_radius_mm=_seam_exclude_radius_mm,
-                )
-        else:
-            print("  Skipping grass texture (enableFringeGrass=False) — fringe will be smooth.")
-
-        # ── 7a-ii. Build plate-2 fringe grass sample (task 718) ──────────────
-        # Plate 2 is a standalone fringe mesh with grass UNCONDITIONALLY enabled
-        # regardless of the enableFringeGrass checkbox — it exists so Thomas can
-        # inspect grass texture quality separately from a full plaque print.
-        # The sample is named "fringe_grass_sample" which routes to extruder 2
-        # (same as the main fringe) via _filament_for_scene_name.
-        # No mount pipe is attached — this is a sample annulus only.
-        # fringe_grass_sample is initialised to None before the outer try block.
-        try:
-            print("\n  [7a-ii] Building plate-2 fringe grass sample…")
-            _sample_fringe = build_fringe_mesh(
-                Z_mm_for_fringe,
-                xs_grid, ys_grid,
-                inside_mask,
-                green_boundary_px,
-                _egm_data,
-                fringe_grid_res=200,
-                holes=fringe_holes,
+        # Plate 1 grass is UNCONDITIONAL (task 724): the grass bump is always applied
+        # to the main fringe regardless of the includeFringeWithoutGrass checkbox.
+        # The checkbox only controls whether a second plate (smooth sample) is built.
+        print(f"  Applying grass texture to fringe (algorithm={GRASS_ALGORITHM}, "
+              f"amplitude={grass_amplitude} mm, spacing={_grass_spacing_eff} mm)…")
+        print(f"  Grass seam exclusion: {len(_cutout_polylines_mm)} polyline(s) "
+              f"({len(_grass_exclude_polyline)} points total)")
+        if GRASS_ALGORITHM == "v2":
+            apply_grass_texture_v2(
+                fringe_mesh,
+                amplitude=grass_amplitude,
+                bump_spacing=_grass_spacing_eff,
+                exclude_polyline_xy=_grass_exclude_polyline,
+                freeze_radius_mm=_seam_exclude_radius_mm,
             )
-            # Apply grass unconditionally — this is the purpose of plate 2.
-            print(f"  [plate-2] Applying grass texture "
-                  f"(algorithm={GRASS_ALGORITHM}, "
-                  f"amplitude={grass_amplitude} mm, "
-                  f"spacing={_grass_spacing_eff} mm)…")
-            if GRASS_ALGORITHM == "v2":
-                apply_grass_texture_v2(
-                    _sample_fringe,
-                    amplitude=grass_amplitude,
-                    bump_spacing=_grass_spacing_eff,
-                    exclude_polyline_xy=_grass_exclude_polyline,
-                    freeze_radius_mm=_seam_exclude_radius_mm,
+        else:
+            apply_grass_texture(
+                fringe_mesh,
+                amplitude=grass_amplitude,
+                bump_spacing=_grass_spacing_eff,
+                exclude_polyline_xy=_grass_exclude_polyline,
+                exclude_radius_mm=_seam_exclude_radius_mm,
+            )
+
+        # ── 7a-ii. Build plate-2 smooth (grass-less) fringe sample (task 724) ──
+        # Plate 2 is a standalone fringe mesh WITHOUT grass — a smooth surface
+        # sample named "fringe_no_grass_sample" → extruder 2.  Only built when
+        # include_fringe_without_grass=True (checkbox checked).
+        # No grass texture is applied — this is the smooth reference print.
+        # No mount pipe is attached — sample annulus only.
+        # fringe_no_grass_sample is initialised to None before the outer try block.
+        if include_fringe_without_grass:
+            try:
+                print("\n  [7a-ii] Building plate-2 smooth fringe sample (no grass)…")
+                _sample_fringe = build_fringe_mesh(
+                    Z_mm_for_fringe,
+                    xs_grid, ys_grid,
+                    inside_mask,
+                    green_boundary_px,
+                    _egm_data,
+                    fringe_grid_res=200,
+                    holes=fringe_holes,
                 )
-            else:
-                apply_grass_texture(
-                    _sample_fringe,
-                    amplitude=grass_amplitude,
-                    bump_spacing=_grass_spacing_eff,
-                    exclude_polyline_xy=_grass_exclude_polyline,
-                    exclude_radius_mm=_seam_exclude_radius_mm,
-                )
-            fringe_grass_sample = _sample_fringe
-            print(f"  [plate-2] Sample fringe: "
-                  f"{len(fringe_grass_sample.vertices)} vertices, "
-                  f"{len(fringe_grass_sample.faces)} faces")
-        except Exception as _exc_sample:
-            print(f"  [plate-2] ERROR building fringe grass sample: {_exc_sample}")
-            import traceback; traceback.print_exc()
+                # Grass is intentionally NOT applied — plate 2 is the smooth sample.
+                print(f"  [plate-2] Smooth fringe sample built (no grass). "
+                      f"{len(_sample_fringe.vertices)} vertices, "
+                      f"{len(_sample_fringe.faces)} faces")
+                fringe_no_grass_sample = _sample_fringe
+            except Exception as _exc_sample:
+                print(f"  [plate-2] ERROR building smooth fringe sample: {_exc_sample}")
+                import traceback; traceback.print_exc()
+        else:
+            print("  [7a-ii] Skipping plate-2 sample (includeFringeWithoutGrass=False).")
 
         # ── 7b. Build the upper-left mounting-bore PIPE (task #335) ──────────
         # The fringe was already hollowed out at (_bore_cx, _bore_cy) with
@@ -9473,15 +9468,16 @@ def run_pipeline(
         scene.add_geometry(boulders_mesh, node_name=boulders_node)
         scene_names.append(boulders_node)
 
-    # Plate-2 fringe grass sample (task 718) — added AFTER all plate-1 objects so
+    # Plate-2 smooth fringe sample (task 724) — added AFTER all plate-1 objects so
     # its object ID (N+1) is highest, and the injection function maps it to plate 2.
-    # The name "fringe_grass_sample" routes to extruder 2 via _filament_for_scene_name
+    # The name "fringe_no_grass_sample" routes to extruder 2 via _filament_for_scene_name
     # ("fringe" prefix).  Serial engraving is NOT applied to the sample (it's a
-    # texture-quality reference piece, not a serialised plaque).
-    if isinstance(fringe_grass_sample, trimesh.Trimesh):
-        scene.add_geometry(fringe_grass_sample, node_name="fringe_grass_sample")
-        scene_names.append("fringe_grass_sample")
-        print(f"  Plate-2 fringe grass sample added to scene.")
+    # smooth-surface reference piece, not a serialised plaque).
+    # Only present when include_fringe_without_grass=True.
+    if isinstance(fringe_no_grass_sample, trimesh.Trimesh):
+        scene.add_geometry(fringe_no_grass_sample, node_name="fringe_no_grass_sample")
+        scene_names.append("fringe_no_grass_sample")
+        print(f"  Plate-2 smooth fringe sample (no grass) added to scene.")
 
     print(f"\n[10b] Engraving serial s/n: {serial_number} on {len(scene_names)} item(s)…")
     _engrave_scene(scene, serial_number)

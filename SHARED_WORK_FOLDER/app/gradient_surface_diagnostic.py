@@ -3349,8 +3349,12 @@ def _build_tps_grid_height_field(
             continue
         if ci < 0 or ci >= n_cells:
             continue
-        # Clamp to sane elevation range (same guard as fringeBoundaryHeights)
-        val = max(BASE_THICKNESS_MM, min(val, BASE_THICKNESS_MM + _elevation_range_mm))
+        # User override is sacred — they typed the value explicitly in the editor
+        # (which already clamps to 0..50 mm). Clamping again against the hole's
+        # Poisson-derived _elevation_range_mm silently caps user intent (e.g.
+        # a 20 mm override gets reduced to ~8 mm on a hole with modest Poisson
+        # range). Only floor at BASE_THICKNESS_MM — never below the base plate.
+        val = max(BASE_THICKNESS_MM, val)
         cell_defaults[ci] = val
         n_overrides += 1
 
@@ -3384,7 +3388,22 @@ def _build_tps_grid_height_field(
     z_grid = z_flat.reshape(grid_x.shape)
 
     # Clamp to printable range — TPS can overshoot with extreme constraints.
-    z_grid = np.clip(z_grid, 0.0, BASE_THICKNESS_MM + _elevation_range_mm + 2.0)
+    # Ceiling must honour the LARGER of (Poisson-driven elevation range) and
+    # (user grid-cell max), otherwise a user-set spike at e.g. 20 mm gets
+    # clipped back to the Poisson range (~8-10 mm) and the printed surface
+    # looks flattened. Headroom of +2 mm absorbs TPS overshoot at the peak.
+    _user_max_mm = 0.0
+    _grid_cell_heights = (egm_data or {}).get("gridCellHeights") or {}
+    if _grid_cell_heights:
+        try:
+            _user_max_mm = max(float(v) for v in _grid_cell_heights.values())
+        except (TypeError, ValueError):
+            _user_max_mm = 0.0
+    _z_ceiling = max(
+        BASE_THICKNESS_MM + _elevation_range_mm + 2.0,
+        _user_max_mm + 2.0,
+    )
+    z_grid = np.clip(z_grid, 0.0, _z_ceiling)
 
     print(f"  [TPS-grid] surface Z range [{float(z_grid.min()):.3f}, "
           f"{float(z_grid.max()):.3f}] mm")
@@ -3423,6 +3442,22 @@ def build_fringe_mesh(
     from collections import defaultdict
 
     _elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
+
+    # Effective Z ceiling for mesh clamps: honour user-set grid cells above the
+    # Poisson-driven elevation range. Without this, a 20 mm user cell gets
+    # silently clipped back to BASE + Poisson range (~8-10 mm) at per-cell
+    # mesh-write time, flattening the TPS peak the user explicitly asked for.
+    _user_cell_max_mm = 0.0
+    _grid_heights = (egm_data or {}).get("gridCellHeights") or {}
+    if _grid_heights:
+        try:
+            _user_cell_max_mm = max(float(v) for v in _grid_heights.values())
+        except (TypeError, ValueError):
+            _user_cell_max_mm = 0.0
+    _effective_z_ceiling_mm = max(
+        BASE_THICKNESS_MM + _elevation_range_mm,
+        _user_cell_max_mm,
+    )
 
     scale, centroid_px = _compute_px_to_mm(green_boundary_px, egm_data)
 
@@ -3755,9 +3790,9 @@ def build_fringe_mesh(
             _aidxs = np.atleast_1d(_aidxs)
             _adists = np.atleast_1d(_adists)
             _nearest_dist = float(_adists[0]) if len(_adists) > 0 else 0.0
-            # Clamp to sane elevation range
+            # Clamp to sane elevation range (honours user grid cells above Poisson range)
             _z_anchor = max(BASE_THICKNESS_MM,
-                            min(_av_mm, BASE_THICKNESS_MM + _elevation_range_mm))
+                            min(_av_mm, _effective_z_ceiling_mm))
             for _ai in _aidxs:
                 bnd_z[int(_ai)] = _z_anchor
             _fbh_anchor_count += 1
@@ -3898,7 +3933,14 @@ def build_fringe_mesh(
             # and 1 once we are FRINGE_GREEN_EDGE_TAPER_MM or more away. For
             # gentle greens (green_edge_h <= cap) the target equals the source,
             # so this reduces to the pre-#506 behaviour: no change.
-            _cap_target = min(green_edge_h, BOUNDARY_HEIGHT_CAP_MM)
+            # v5.17 clipping fix: when the user has explicitly set a grid cell
+            # above BOUNDARY_HEIGHT_CAP_MM (9 mm), the taper must not pull that
+            # TPS-propagated peak back down toward the cap as d_to_green grows.
+            # Raise the effective cap to the user's own ceiling; natural low
+            # fringe (green_edge_h <= 9) is unaffected because the branch is
+            # gated on green_edge_h > _cap_target.
+            _effective_boundary_cap_mm = max(BOUNDARY_HEIGHT_CAP_MM, _user_cell_max_mm)
+            _cap_target = min(green_edge_h, _effective_boundary_cap_mm)
             if FRINGE_GREEN_EDGE_TAPER_MM > 0 and green_edge_h > _cap_target:
                 _weight = min(1.0, max(0.0, d_to_green / FRINGE_GREEN_EDGE_TAPER_MM))
                 green_edge_h = (1.0 - _weight) * green_edge_h + _weight * _cap_target
@@ -3929,7 +3971,7 @@ def build_fringe_mesh(
             FRINGE_PLATEAU_TILT_MM = 0.10    # 0.10 mm peak-to-peak XY ramp
             _tilt = FRINGE_PLATEAU_TILT_MM * (r + c) / (2 * (fringe_grid_res - 1))
             _floor = BASE_THICKNESS_MM + FRINGE_PLATEAU_MARGIN_MM + _tilt
-            z_fringe = max(_floor, min(green_edge_h, BASE_THICKNESS_MM + _elevation_range_mm))
+            z_fringe = max(_floor, min(green_edge_h, _effective_z_ceiling_mm))
 
             fringe_mask[r, c] = True
             Z_fringe[r, c] = z_fringe
@@ -4009,7 +4051,7 @@ def build_fringe_mesh(
                     np.array([[_ax_px, _ay_px]], dtype=np.float64), scale, centroid_px
                 )[0]
                 _gz_anchor = max(BASE_THICKNESS_MM,
-                                 min(_av_mm, BASE_THICKNESS_MM + _elevation_range_mm))
+                                 min(_av_mm, _effective_z_ceiling_mm))
                 # Override K_SEAM_NEIGHBOURS nearest green boundary ring vertices
                 _k_s = min(_k_seam, len(g_bdry_arr))
                 _sa_dists, _sa_idxs = _g_bdry_kd_anchor.query(_a_mm[:2], k=_k_s)
@@ -9337,7 +9379,21 @@ def run_pipeline(
         # skipped, allowing fringe verts near the frame to keep their
         # natural terrain height.
         if isinstance(fringe_mesh, trimesh.Trimesh):
-            _fringe_cap = BOUNDARY_HEIGHT_CAP_MM if apply_fringe_frame_cap else None
+            # v5.17 clipping fix: honour user-set grid cells above
+            # BOUNDARY_HEIGHT_CAP_MM. Otherwise the per-vertex edge-band cap in
+            # _apply_lift_and_cap silently clips a 20 mm user cell within
+            # BAND+TAPER of the frame back to 9 mm, flattening the TPS peak.
+            # The cap still protects natural fringe near the frame (vertices
+            # with z <= effective cap are never touched by the above_cap gate).
+            _user_grid_max_mm = 0.0
+            _user_grid_heights = (_egm_data or {}).get("gridCellHeights") or {}
+            if _user_grid_heights:
+                try:
+                    _user_grid_max_mm = max(float(v) for v in _user_grid_heights.values())
+                except (TypeError, ValueError):
+                    _user_grid_max_mm = 0.0
+            _effective_fringe_cap_mm = max(BOUNDARY_HEIGHT_CAP_MM, _user_grid_max_mm)
+            _fringe_cap = _effective_fringe_cap_mm if apply_fringe_frame_cap else None
             _fringe_label = "fringe" if apply_fringe_frame_cap else "fringe (cap disabled)"
             _apply_lift_and_cap(
                 fringe_mesh, lift_mm=WATER_HOLE_LIFT_MM,

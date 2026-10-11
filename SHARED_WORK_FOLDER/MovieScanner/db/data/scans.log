@@ -1447,3 +1447,39 @@ Config:
   include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
   exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
 ========================================
+========================================
+Scan run_id=13 — 2026-10-08T07:00:06Z → 2026-10-08T07:08:11Z
+Status: error — download stalled for title.basics.tsv.gz: no forward progress after 8 consecutive attempts (last position 0 bytes). Wait a few minutes and hit 'Run scan now' again — IMDB's CDN throttles residential IPs sporadically.
+Scanned: 0 rows | New titles: 0 | Matches: 0
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
+  exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
+========================================
+========================================
+Scan run_id=14 — 2026-10-10T07:00:06Z → 2026-10-10T07:00:37Z
+Status: done
+Scanned: 1,222,166 rows | New titles: 599 | Matches: 0
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
+  exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
+========================================
+========================================
+Scan run_id=15 — 2026-10-11T07:00:08Z → 2026-10-11T07:03:11Z
+Status: done
+Scanned: 1,222,345 rows | New titles: 193 | Matches: 0
+Config:
+  min_rating: 7.5
+  min_votes: 100
+  min_year: 2026
+  title_types: movie, tvMovie, tvSeries
+  include_genres: Action, Adventure, Comedy, Crime, Drama, Romance, Thriller
+  exclude_genres: Animation, Documentary, Fantasy, Game-Show, Horror, Music, Musical, News, Reality-TV, Short, Sport, Talk-Show, Tamil, Western
+========================================

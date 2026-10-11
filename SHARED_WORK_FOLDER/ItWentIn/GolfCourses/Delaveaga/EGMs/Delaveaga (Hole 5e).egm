@@ -1,0 +1,83 @@
+{
+  "course": "Delaveaga",
+  "hole": "5e",
+  "image": "Delaveaga (Hole 5, 55169).png",
+  "imageCourse": "Delaveaga",
+  "imageSize": {
+    "width": 817,
+    "height": 1221
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 0.05,
+  "greenStyle": "terraced",
+  "elevationRange": 14.5,
+  "greenScale": 1.0065,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "applyFringeFrameCap": true,
+  "includeFringeWithoutGrass": false,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 231,
+          "y": 352
+        },
+        {
+          "x": 72,
+          "y": 560
+        },
+        {
+          "x": 204,
+          "y": 833
+        },
+        {
+          "x": 428,
+          "y": 1078
+        },
+        {
+          "x": 636,
+          "y": 1015
+        },
+        {
+          "x": 749,
+          "y": 812
+        },
+        {
+          "x": 675,
+          "y": 617
+        },
+        {
+          "x": 539,
+          "y": 528
+        },
+        {
+          "x": 408,
+          "y": 397
+        }
+      ]
+    }
+  ],
+  "tee_hole": {
+    "x_mm": 30,
+    "y_mm": 30
+  },
+  "gridCellHeights": {
+    "332": 15,
+    "333": 15,
+    "334": 15,
+    "352": 15,
+    "353": 15,
+    "354": 15,
+    "372": 15,
+    "373": 15,
+    "374": 15
+  }
+}

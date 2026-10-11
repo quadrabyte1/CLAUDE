@@ -81,6 +81,15 @@
                class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
       </div>
 
+      {# Z scale — vertical amplitude multiplier for green and fringe relief #}
+      <div class="flex flex-col gap-1 min-w-[120px]"
+           title="Vertical amplitude multiplier applied to green and fringe relief above the base plate. 1.0 = no change (default), 1.5 = 50% taller, 2.0 = twice as tall. Does not affect the base plate thickness or XY dimensions.">
+        <label class="text-xs font-medium text-notion-muted uppercase tracking-wide">Z scale ×</label>
+        <input type="number" x-model.number="zScale" @change="autoSave()"
+               step="0.1" min="0.5" max="5.0"
+               class="text-sm border border-notion-border rounded-md px-2.5 py-1.5 bg-white w-full focus:outline-none focus:ring-2 focus:ring-notion-accent/30 focus:border-notion-accent">
+      </div>
+
       {# Green scale — XY-only multiplier applied to the green polygon (1.0065 = default, ~0.65% larger) #}
       <div class="flex flex-col gap-1 min-w-[120px]"
            title="XY-only multiplier applied to the green polygon around its center (default 1.0065 = ~0.65% larger; 1.0 = no change; 1.05 = 5% larger). Fringe, traps, water, and boulders are unaffected.">
@@ -582,8 +591,8 @@
           <input
             x-ref="gridCellInput"
             type="number"
-            min="0"
-            max="50"
+            min="-20"
+            max="20"
             step="0.5"
             x-model="_gridInputValue"
             @keydown.enter.prevent="commitGridCell()"
@@ -595,7 +604,7 @@
             class="w-full text-xs font-mono text-center rounded border border-indigo-400 bg-white shadow-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             style="min-width:80px;"
             placeholder="mm"
-            title="Enter height in mm (0–50). Enter to commit, Esc to cancel, Delete to clear."
+            title="Enter offset from algorithm in mm (±20). Enter to commit, Esc to cancel, Delete to clear."
           />
         </div>
       </div>
@@ -609,7 +618,7 @@
          x-cloak
          class="absolute pointer-events-none z-40 px-2 py-0.5 rounded bg-gray-800 text-white text-xs font-mono shadow-lg whitespace-nowrap"
          :style="_gridHoveredCell ? `left:${_gridHoveredCell.canvasPx.x + _gridHoveredCell.canvasPx.w * 0.5}px; top:${_gridHoveredCell.canvasPx.y}px; transform:translate(-50%, -110%);` : ''"
-         x-text="_gridHoveredCell ? (gridCellHeights[_gridHoveredCell.idx] + ' mm') : ''">
+         x-text="_gridHoveredCell ? ((gridCellHeights[_gridHoveredCell.idx] > 0 ? '+' : '') + gridCellHeights[_gridHoveredCell.idx] + ' mm offset') : ''">
     </div>
   </div>
 
@@ -691,7 +700,7 @@
     <span x-show="Object.keys(gridCellHeights).length > 0"
           x-text="Object.keys(gridCellHeights).length + ' cell' + (Object.keys(gridCellHeights).length === 1 ? '' : 's') + ' set'"
           class="text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded"
-          title="Grid cell heights stored in this EGM. Values will drive TPS surface in phase 2.">
+          title="Grid cell offsets stored in this EGM. Values are additive deltas (±20 mm) over the algorithm's natural surface.">
     </span>
 
     <div class="ml-auto flex items-center gap-1.5">
@@ -823,6 +832,7 @@ function polygonEditor() {
     grassSpacing: 0.05,       // distance between bump centers in mm
     greenStyle: 'terraced',   // 'smooth' or 'terraced'
     elevationRange: 14.5,     // total Z amplitude of the green's slope (mm)
+    zScale: 1.0,              // vertical amplitude multiplier for green and fringe relief (1.0 = no change)
     openInSlicer: true,       // open generated 3MF in the default slicer after generation
     greenScale: 1.0065,       // XY multiplier applied to the green polygon only (fringe/traps/water unaffected)
     fringeEdgeHeight: 10.0,   // outer wall height of the fringe (mm)
@@ -978,6 +988,7 @@ function polygonEditor() {
           if (result.contourStep != null) {
             this.contourStep = result.contourStep;
           }
+          if (result.zScale != null) { this.zScale = result.zScale; }
 
           this.selectedPoly = 0;
           this.draw();
@@ -1411,7 +1422,9 @@ function polygonEditor() {
           const cxImg = tl.x + (col + 0.5) * cellWpx;
           const cyImg = tl.y + (GRID_ROWS - 1 - row + 0.5) * cellHpx;
           const cp = this.imgToCanvas(cxImg, cyImg);
-          ctx.fillText(Number(mm).toFixed(1), cp.x, cp.y);
+          const mmVal = Number(mm);
+          const mmLabel = mmVal > 0 ? '+' + mmVal.toFixed(1) : mmVal.toFixed(1);
+          ctx.fillText(mmLabel, cp.x, cp.y);
         }
 
         // Highlight the active cell (if any)
@@ -2394,7 +2407,7 @@ function polygonEditor() {
       if (!this._gridActiveCell) return;
       const raw = parseFloat(this._gridInputValue);
       if (!isNaN(raw)) {
-        const clamped = Math.max(0, Math.min(50, raw));
+        const clamped = Math.max(-20, Math.min(20, raw));
         // Multi-select commit: apply value to EVERY cell in _gridMultiSelect.
         // Single-select commit: apply to just the active cell.
         if (this._gridMultiSelect && this._gridMultiSelect.size > 0) {
@@ -2490,6 +2503,7 @@ function polygonEditor() {
         grassSpacing: this.grassSpacing,
         greenStyle: this.greenStyle,
         elevationRange: this.elevationRange,
+        zScale: this.zScale,
         greenScale: this.greenScale,
         fringeEdgeHeight: this.fringeEdgeHeight,
         baseThicknessMm: this.baseThicknessMm,
@@ -2667,6 +2681,7 @@ function polygonEditor() {
       this.grassSpacing       = 0.05;
       this.greenStyle         = 'terraced';
       this.elevationRange     = 14.5;
+      this.zScale             = 1.0;
       this.greenScale         = 1.0065;
       this.fringeEdgeHeight   = 10.0;
       this.baseThicknessMm    = 1.5;
@@ -2759,6 +2774,7 @@ function polygonEditor() {
         this.includeFringeWithoutGrass = !!data.includeFringeWithoutGrass;
         this.flagOffsetXMm = data.flagOffsetXMm != null ? data.flagOffsetXMm : 0.0;
         this.flagOffsetYMm = data.flagOffsetYMm != null ? data.flagOffsetYMm : 0.0;
+        if (data.zScale != null) { this.zScale = data.zScale; }
         // Absorb print constants from server (avoids hardcoding in JS)
         if (data.print_size_mm != null) this.printSizeMm = data.print_size_mm;
         if (data.fringe_xy_expansion_mm != null) this.fringeXyExpansionMm = data.fringe_xy_expansion_mm;
@@ -2830,6 +2846,7 @@ function polygonEditor() {
       this.grassSpacing = 0.05;
       this.greenStyle = 'terraced';
       this.elevationRange = 14.5;
+      this.zScale = 1.0;
       this.greenScale = 1.0065;
       this.fringeEdgeHeight = 10.0;
       this.baseThicknessMm = 1.5;
@@ -3262,6 +3279,7 @@ function polygonEditor() {
         grassSpacing: this.grassSpacing,
         greenStyle: this.greenStyle,
         elevationRange: this.elevationRange,
+        zScale: this.zScale,
         greenScale: this.greenScale,
         fringeEdgeHeight: this.fringeEdgeHeight,
         baseThicknessMm: this.baseThicknessMm,

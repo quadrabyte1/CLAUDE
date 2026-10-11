@@ -527,7 +527,13 @@ def soften_extremes(
 # cluster of high cells that the max-neighbor variant refused to touch.
 # ---------------------------------------------------------------------------
 
-_MAX_SLOPE_DELTA_MM: float = 0.10  # max mm rise between two adjacent grid cells
+_MAX_SLOPE_DELTA_MM: float = 0.20
+# 0.20 mm/cell rise budget. On the 200×200 / ±90 mm fringe grid each cell is
+# ~0.9 mm wide, so 0.20 mm/cell ≈ 22% grade — enough to let natural golf-green
+# undulation show through while still blocking single-cell spike artefacts.
+# The previous value of 0.10 (~11% grade) was too strict: on Delaveaga H5 it
+# crushed a legitimate 14.5 mm elevation range down to ~7.7 mm.  Doubling to
+# 0.20 restores the ~15–16 mm output Thomas expects.
 _MAX_SLOPE_ITERS:    int   = 400   # safety cap on iteration count
 
 
@@ -2753,6 +2759,34 @@ def save_stl_meshes(
         )
         print(f"  Z_mm range post-limit: {valid_mm.min():.3f} .. {valid_mm.max():.3f} mm")
 
+    # zScale: user-dialed vertical amplitude multiplier (default 1.0 = unchanged).
+    # Applied after limit_max_slope so artifact rejection stays strict. Scales
+    # relief above BASE_THICKNESS_MM so the base plate itself is unaffected.
+    # Clamped to [0.5, 5.0]: below 0.5 the plaque is too shallow to read as 3D;
+    # above 5.0 the geometry pushes toward unprintable overhangs on the Bambu A1.
+    # 2026-10-09, replaces the rescale-after-limiter (reverted this same turn).
+    _z_scale_raw = egm_data.get("zScale")
+    if _z_scale_raw is None:
+        _z_scale = 1.0
+    else:
+        try:
+            _z_scale = max(0.5, min(5.0, float(_z_scale_raw)))
+        except (TypeError, ValueError):
+            _z_scale = 1.0
+    if abs(_z_scale - 1.0) > 1e-6:
+        Z_mm = np.where(
+            inside_mask,
+            BASE_THICKNESS_MM + (Z_mm - BASE_THICKNESS_MM) * _z_scale,
+            Z_mm,
+        )
+        valid_mm = Z_mm[inside_mask]
+        print(
+            f"  Z_mm range post-zScale: {valid_mm.min():.3f} .. {valid_mm.max():.3f} mm "
+            f"(zScale={_z_scale:.2f}×, applied over BASE_THICKNESS_MM={BASE_THICKNESS_MM:.2f})"
+        )
+    else:
+        print(f"  zScale: {_z_scale:.2f} (default, no-op)")
+
     contour_step_mm = float(egm_data.get("contourStep") or 0.0)
     print(f"  Contour step from EGM: {contour_step_mm} mm "
           f"({'user-specified' if contour_step_mm > 0 else 'fallback to N_CONTOUR_LEVELS=' + str(N_CONTOUR_LEVELS)})")
@@ -3266,8 +3300,12 @@ def _build_tps_grid_height_field(
         Poisson-derived green-rim elevation at its centre, so the surface smoothly
         extends the green boundary elevation into the fringe everywhere.
       - **User override**: if ``egm_data["gridCellHeights"]`` contains an entry for
-        the cell's index (``row * 20 + col``), the user-set mm value replaces the
-        Poisson default.
+        the cell's index (``row * 20 + col``), the value is an **additive mm offset**
+        applied on top of the Poisson-nearest default for that cell.  Zero / unset →
+        offset of 0 → cell uses the algorithm's natural value unchanged.  Positive
+        raises the cell; negative lowers it.  Range ±20 mm, clamped defensively.
+        Floored at ``BASE_THICKNESS_MM`` so a negative delta cannot push a cell below
+        the base plate (invalid geometry).
 
     All 400 ``(cell_center_x_mm, cell_center_y_mm, cell_z)`` triples are fed into
     ``scipy.interpolate.RBFInterpolator`` with ``kernel="thin_plate_spline"``
@@ -3284,7 +3322,8 @@ def _build_tps_grid_height_field(
     ----------
     egm_data : dict
         EGM data dict.  ``gridCellHeights`` key (optional) is read as a sparse dict
-        ``{cell_index: mm}``; both int and string keys are accepted.
+        ``{cell_index: delta_mm}`` where each value is an additive offset (±20 mm)
+        over the cell's Poisson-nearest default.  Both int and string keys are accepted.
     green_bnd_mm : (N, 2) float array
         Green boundary polyline in mm-space (origin at green centroid).
     bnd_z : (N,) float array
@@ -3301,9 +3340,9 @@ def _build_tps_grid_height_field(
     Notes
     -----
     Degenerate case (empty or absent ``gridCellHeights``): all 400 cells carry
-    Poisson-nearest defaults.  TPS fits a smooth surface that approximates the
-    task-700 nearest-boundary extension but is C²-smooth across cell boundaries
-    instead of piecewise-constant.
+    Poisson-nearest defaults (offsets of 0).  TPS fits a smooth surface that
+    approximates the task-700 nearest-boundary extension but is C²-smooth across
+    cell boundaries instead of piecewise-constant.
 
     The 16 outer-frame anchors at ``BASE_THICKNESS_MM`` from :func:`_build_tps_base`
     are NOT added here — the 400 cell constraints already cover the full frame,
@@ -3349,18 +3388,18 @@ def _build_tps_grid_height_field(
             continue
         if ci < 0 or ci >= n_cells:
             continue
-        # User override is sacred — they typed the value explicitly in the editor
-        # (which already clamps to 0..50 mm). Clamping again against the hole's
-        # Poisson-derived _elevation_range_mm silently caps user intent (e.g.
-        # a 20 mm override gets reduced to ~8 mm on a hole with modest Poisson
-        # range). Only floor at BASE_THICKNESS_MM — never below the base plate.
-        val = max(BASE_THICKNESS_MM, val)
-        cell_defaults[ci] = val
+        # User value is an ADDITIVE OFFSET in mm over the Poisson-nearest default.
+        # Zero / unset → no change.  Range ±20 mm, clamped defensively here even
+        # though the UI already enforces the same bounds.  Floor the resolved
+        # absolute Z at BASE_THICKNESS_MM so a large negative delta cannot push a
+        # cell below the base plate (invalid geometry).
+        val = max(-20.0, min(20.0, val))  # clamp delta to ±20 mm
+        cell_defaults[ci] = max(BASE_THICKNESS_MM, cell_defaults[ci] + val)
         n_overrides += 1
 
-    print(f"  [TPS-grid] 400 cells: {n_overrides} user-set, "
+    print(f"  [TPS-grid] 400 cells: {n_overrides} user-set (additive offsets), "
           f"{n_cells - n_overrides} Poisson-default; "
-          f"Z range [{float(cell_defaults.min()):.3f}, {float(cell_defaults.max()):.3f}] mm")
+          f"resolved Z range [{float(cell_defaults.min()):.3f}, {float(cell_defaults.max()):.3f}] mm")
 
     # ── Step 3: Fit TPS over all 400 cell-centre constraints ─────────────────
     # smoothing=0 → exact interpolation through all 400 constraints.
@@ -3388,17 +3427,12 @@ def _build_tps_grid_height_field(
     z_grid = z_flat.reshape(grid_x.shape)
 
     # Clamp to printable range — TPS can overshoot with extreme constraints.
-    # Ceiling must honour the LARGER of (Poisson-driven elevation range) and
-    # (user grid-cell max), otherwise a user-set spike at e.g. 20 mm gets
-    # clipped back to the Poisson range (~8-10 mm) and the printed surface
-    # looks flattened. Headroom of +2 mm absorbs TPS overshoot at the peak.
-    _user_max_mm = 0.0
-    _grid_cell_heights = (egm_data or {}).get("gridCellHeights") or {}
-    if _grid_cell_heights:
-        try:
-            _user_max_mm = max(float(v) for v in _grid_cell_heights.values())
-        except (TypeError, ValueError):
-            _user_max_mm = 0.0
+    # Ceiling is derived from the true max absolute Z across all 400 cells
+    # (after delta-apply), so a user-set positive offset raises the ceiling
+    # correctly. gridCellHeights values are now additive offsets, NOT absolute
+    # Z values — never use raw delta values as a ceiling here.
+    # Headroom of +2 mm absorbs TPS overshoot at the peak.
+    _user_max_mm = float(cell_defaults.max())  # true max absolute Z after delta-merge
     _z_ceiling = max(
         BASE_THICKNESS_MM + _elevation_range_mm + 2.0,
         _user_max_mm + 2.0,
@@ -3443,19 +3477,29 @@ def build_fringe_mesh(
 
     _elevation_range_mm = float(egm_data.get("elevationRange") or ELEVATION_RANGE_MM)
 
-    # Effective Z ceiling for mesh clamps: honour user-set grid cells above the
-    # Poisson-driven elevation range. Without this, a 20 mm user cell gets
-    # silently clipped back to BASE + Poisson range (~8-10 mm) at per-cell
-    # mesh-write time, flattening the TPS peak the user explicitly asked for.
-    _user_cell_max_mm = 0.0
+    # zScale applied in the main pipeline — ceiling must account for vertical stretch.
+    _z_scale_raw_fringe = (egm_data or {}).get("zScale")
+    try:
+        _z_scale_fringe = max(0.5, min(5.0, float(_z_scale_raw_fringe))) if _z_scale_raw_fringe is not None else 1.0
+    except (TypeError, ValueError):
+        _z_scale_fringe = 1.0
+
+    # Effective Z ceiling for mesh clamps: honour user-set grid cells that
+    # push above the Poisson-driven elevation range.  gridCellHeights values
+    # are now ADDITIVE OFFSETS, not absolute Z values, so we cannot use the
+    # raw values as a ceiling.  Overshoot is harmless — the ceiling only
+    # prevents false clipping; a too-high ceiling costs nothing.
     _grid_heights = (egm_data or {}).get("gridCellHeights") or {}
+    _max_positive_delta = 0.0
     if _grid_heights:
         try:
-            _user_cell_max_mm = max(float(v) for v in _grid_heights.values())
+            _max_positive_delta = max(0.0, max(float(v) for v in _grid_heights.values()))
         except (TypeError, ValueError):
-            _user_cell_max_mm = 0.0
+            _max_positive_delta = 0.0
+    _user_cell_max_mm = (BASE_THICKNESS_MM + _elevation_range_mm) + _max_positive_delta
+    # Ceiling = scaled Poisson max OR user-cell max (grid-cell deltas are literal mm, not scaled).
     _effective_z_ceiling_mm = max(
-        BASE_THICKNESS_MM + _elevation_range_mm,
+        BASE_THICKNESS_MM + _elevation_range_mm * _z_scale_fringe,
         _user_cell_max_mm,
     )
 
@@ -3939,7 +3983,7 @@ def build_fringe_mesh(
             # Raise the effective cap to the user's own ceiling; natural low
             # fringe (green_edge_h <= 9) is unaffected because the branch is
             # gated on green_edge_h > _cap_target.
-            _effective_boundary_cap_mm = max(BOUNDARY_HEIGHT_CAP_MM, _user_cell_max_mm)
+            _effective_boundary_cap_mm = max(BOUNDARY_HEIGHT_CAP_MM, _effective_z_ceiling_mm)
             _cap_target = min(green_edge_h, _effective_boundary_cap_mm)
             if FRINGE_GREEN_EDGE_TAPER_MM > 0 and green_edge_h > _cap_target:
                 _weight = min(1.0, max(0.0, d_to_green / FRINGE_GREEN_EDGE_TAPER_MM))
@@ -5741,8 +5785,10 @@ def _trap_grid_override(
     Returns
     -------
     float or None
-        Mean of the contained cell values (mm), or None when no user-set cell
-        falls inside the trap polygon.
+        Mean of the contained cell values, or None when no user-set cell falls
+        inside the trap polygon.  As of v5.19 (project-grid-cell-elevation-
+        mechanism), ``gridCellHeights`` values are **signed delta offsets** (mm)
+        relative to the fringe-based default trap height — not absolute Z values.
     """
     if not grid_cell_heights:
         return None
@@ -6207,14 +6253,19 @@ def export_trap_stls(
                 _gch = egm_data.get("gridCellHeights") or {}
                 _grid_half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
                 _grid_cell_side = (2.0 * _grid_half) / 20
-                _grid_override = _trap_grid_override(
+                _grid_override_delta = _trap_grid_override(
                     shapely_trap, _gch, _grid_cell_side, _grid_half
                 )
-                if _grid_override is not None:
-                    print(f"  Trap {i}: grid-cell override active — "
-                          f"height {trap_height:.2f} mm → {_grid_override:.2f} mm "
-                          f"(mean of user-set cells inside trap polygon)")
-                    trap_height = _grid_override
+                if _grid_override_delta is not None:
+                    _new_height = trap_height + _grid_override_delta
+                    # Floor at BASE_THICKNESS_MM so a strong negative delta can't push
+                    # the trap below the base plate (unprintable geometry).
+                    _new_height = max(BASE_THICKNESS_MM, _new_height)
+                    print(f"  Trap {i}: grid-cell delta override active — "
+                          f"height {trap_height:.2f} mm + mean delta "
+                          f"{_grid_override_delta:+.2f} mm → {_new_height:.2f} mm "
+                          f"(mean of user-set delta cells inside trap polygon)")
+                    trap_height = _new_height
                     _trap_base_z_map = None  # override is flat scalar; discard curved map
 
             # Build slab at the (possibly curved) maximum height.
@@ -8582,12 +8633,40 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
     #        [Content_Types].xml with config+png extensions declared.
     # zipfile cannot edit in place; copy entries to a sibling temp file then
     # atomically replace the original.
+    # --- 3b. Patch 3D/3dmodel.model: inject BambuStudio version metadata ---
+    # BambuStudio checks for a <metadata name="BambuStudio:3mfVersion"> element
+    # inside the <model> root of 3dmodel.model to set m_bambuslicer_generator_version.
+    # Without it the importer falls into the else-branch (dont_load_config=true) and
+    # shows "The 3mf file has invalid config, load geometry data only" on every open.
+    # We insert the metadata element immediately after the opening <model ...> tag,
+    # before <resources>, using the same version string already in slice_info.config.
+    _BBL_VERSION_STRING = "02.08.02.61"
+    _BBL_VERSION_META = (
+        f'<metadata name="BambuStudio:3mfVersion">{_BBL_VERSION_STRING}</metadata>'
+    )
+
+    def _patch_model_xml_version(xml_str: str) -> str:
+        """Insert BambuStudio:3mfVersion metadata after the <model ...> opening tag
+        if it is not already present (idempotent)."""
+        if "BambuStudio:3mfVersion" in xml_str:
+            return xml_str  # already patched
+        # Find end of the <model ...> opening tag (skip past '>').
+        import re as _re2
+        m = _re2.search(r"<model\b[^>]*>", xml_str)
+        if not m:
+            return xml_str  # unexpected structure; leave unchanged
+        insert_pos = m.end()
+        return xml_str[:insert_pos] + _BBL_VERSION_META + xml_str[insert_pos:]
+
+    patched_model_xml = _patch_model_xml_version(model_xml)
+
     tmp_path = path_3mf + ".tmp"
     # All files we are replacing/adding — skip their originals in the copy loop.
     # Include plate-2 thumbnail arcnames so a second injection call does not
     # accumulate duplicates (idempotency).
     _SKIP_FILES = (
         {
+            "3D/3dmodel.model",
             "Metadata/model_settings.config",
             "Metadata/project_settings.config",
             "[Content_Types].xml",
@@ -8629,6 +8708,8 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
                 continue
             zout.writestr(item, zin.read(item.filename))
 
+        # Write patched 3D/3dmodel.model (with BambuStudio:3mfVersion metadata).
+        zout.writestr("3D/3dmodel.model", patched_model_xml.encode("utf-8"))
         # Write patched [Content_Types].xml.
         zout.writestr("[Content_Types].xml", ct_xml.encode("utf-8"))
         # Write extruder assignments.

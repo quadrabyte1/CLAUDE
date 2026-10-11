@@ -539,8 +539,13 @@ class TestIntegrationOverrideApplied:
                 f"is not inside trap polygon — adjust geometry to make this test meaningful"
             )
 
-        override_z = 12.0
-        egm["gridCellHeights"] = {idx_tg: override_z}
+        # v5.19+: gridCellHeights values are deltas relative to the fringe-based
+        # default trap height (fringe_ref + TRAP_FRINGE_OFFSET_MM).  The flat green
+        # is at z=6 mm, TRAP_FRINGE_OFFSET_MM=-2, so default trap_height ≈ 4 mm.
+        # A +2.0 delta → expected trap_height ≈ 6 mm.
+        override_delta = 2.0
+        expected_trap_height = 6.0  # fringe default ≈ 4 mm + delta 2 mm
+        egm["gridCellHeights"] = {idx_tg: override_delta}
 
         Z_mm, xs_g, ys_g, inside_mask = _flat_green_arrays(cx_px, cy_px, gr_px)
         fringe_mesh = gsd.build_fringe_mesh(
@@ -555,16 +560,15 @@ class TestIntegrationOverrideApplied:
         assert trap_results, "No trap meshes generated"
         _node, trap_mesh = trap_results[0]
         verts = np.asarray(trap_mesh.vertices)
-        # Top surface median Z should be very close to override_z (12 mm).
+        # Top surface median Z should be close to fringe_default + override_delta.
         z_slab_base = float(verts[:, 2].min())
         z_slab_top = float(verts[:, 2].max())
         slab_mid = z_slab_base + (z_slab_top - z_slab_base) * 0.5
         top_verts = verts[verts[:, 2] > slab_mid]
         assert len(top_verts) > 0, "No top-face vertices found"
         z_top_median = float(np.median(top_verts[:, 2]))
-        # The override sets the HEIGHT (= top surface Z when BASE_THICKNESS_MM = 0 base).
-        # Expect slab height ≈ override_z — allow 1.5 mm tolerance for rake amplitude.
-        assert abs(z_top_median - override_z) <= 1.5, (
-            f"Top Z median = {z_top_median:.2f} mm; expected ≈ {override_z} mm "
-            f"(grid override should set trap height to 12 mm)"
+        # Allow 1.5 mm tolerance for rake amplitude and fringe variation.
+        assert abs(z_top_median - expected_trap_height) <= 1.5, (
+            f"Top Z median = {z_top_median:.2f} mm; expected ≈ {expected_trap_height} mm "
+            f"(grid delta override: fringe_default + {override_delta:+.1f} mm)"
         )

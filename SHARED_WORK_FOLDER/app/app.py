@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v5.25"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v5.28"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── detect_boundaries: classifier knobs ────────────────────────────────────
 # When True the green polygon interior is excluded from trap/water detection.
@@ -715,6 +715,21 @@ def update_team_member_model(member_id):
         pass
 
     return jsonify({"id": member_id, "model": tier})
+
+
+@app.route("/api/tasks/running_count")
+def api_tasks_running_count():
+    import sqlite3
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    try:
+        row = con.execute(
+            "SELECT COUNT(*) AS n FROM tasks "
+            "WHERE status = 'in_progress' AND assigned_to != 1"
+        ).fetchone()
+        return jsonify({"count": int(row["n"])})
+    finally:
+        con.close()
 
 
 @app.route("/tasks")

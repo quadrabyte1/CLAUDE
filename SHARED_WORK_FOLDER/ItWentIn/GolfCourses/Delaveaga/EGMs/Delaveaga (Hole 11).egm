@@ -12,11 +12,13 @@
   "grassSpacing": 0.05,
   "greenStyle": "terraced",
   "elevationRange": 14.5,
+  "zScale": 1,
   "greenScale": 1.0065,
   "fringeEdgeHeight": 10,
   "baseThicknessMm": 1.5,
   "includeBoundaryRegion": false,
   "applyFringeFrameCap": true,
+  "includeFringeWithoutGrass": false,
   "flagOffsetXMm": 0,
   "flagOffsetYMm": 0,
   "polygons": [
@@ -200,75 +202,6 @@
           "y": 380
         }
       ]
-    }
-  ],
-  "elevationSpikes": [
-    {
-      "x": 309,
-      "y": 148,
-      "mm": 1.8
-    },
-    {
-      "x": 292,
-      "y": 317,
-      "mm": 2.1
-    },
-    {
-      "x": 499,
-      "y": 367,
-      "mm": 1.8
-    },
-    {
-      "x": 490,
-      "y": 501,
-      "mm": 2.6
-    },
-    {
-      "x": 318,
-      "y": 503,
-      "mm": 2.3
-    },
-    {
-      "x": 316,
-      "y": 680,
-      "mm": 2.6
-    },
-    {
-      "x": 681,
-      "y": 680,
-      "mm": 5.4
-    },
-    {
-      "x": 132,
-      "y": 689,
-      "mm": 3.7
-    },
-    {
-      "x": 498,
-      "y": 690,
-      "mm": 3.7
-    },
-    {
-      "x": 312,
-      "y": 864,
-      "mm": 5.6
-    },
-    {
-      "x": 499,
-      "y": 870,
-      "mm": 6.2
-    },
-    {
-      "x": 127,
-      "y": 881,
-      "mm": 3.4
-    }
-  ],
-  "fringeBoundaryHeights": [
-    {
-      "x": 749,
-      "y": 714,
-      "value": 1
     }
   ],
   "tee_hole": {

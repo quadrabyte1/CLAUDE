@@ -1,3 +1,16 @@
+# v0.23 — 2026-10-11 Topo — Fix StrackaLine arrow detection (task 760).
+#         build_dark_mask_inside_green: add second detection branch (b) for
+#           StrackaLine's dark-navy arrows (HSV≈(104,255,90), RGB≈(0,50,90)).
+#           Old branch (a) V<50 is kept for legacy GolfLogix near-black arrows.
+#           New branch (b): H=90-135 AND S>150 AND V<105 — catches the saturated
+#           navy that StrackaLine uses without pulling in the blue-green turf
+#           (which has V≈150-190 and is safely above the V<105 ceiling).
+#         detect_arrows: raise max_arrow_area default 600→1200 to cover
+#           StrackaLine arrow blobs measured at 400-1108 px.
+#         save_arrow_vs_output_overlay: new helper — two-panel PNG (arrows on
+#           source image + reconstructed height map) used by verification scripts
+#           and owner_inbox/gen_arrow_overlay.py.
+#         APP_VERSION bumped to v5.27.
 # v0.22 — 2026-10-06 Sienna — Include Fringe Without Grass flip (task 724).
 #         Plate 1: ALWAYS grassy — removed if enable_fringe_grass: guard; grass
 #           is unconditional on the main fringe regardless of checkbox.
@@ -942,16 +955,33 @@ def build_dark_mask_inside_green(
     green_boundary_px: np.ndarray,
     dark_threshold: int = 50,
 ) -> np.ndarray:
-    """Return a uint8 binary mask: 255 where dark pixels lie inside the green."""
+    """Return a uint8 binary mask: 255 where dark pixels lie inside the green.
+
+    Two-branch detector (task 760, Topo 2026-10-11):
+    (a) V < dark_threshold  — catches legacy GolfLogix near-black arrows and any
+        other dark ink regardless of hue.
+    (b) H ∈ [90, 135] AND S > 150 AND V < 105  — catches StrackaLine's dark-navy
+        arrows (empirical: RGB≈(0,50,90), HSV≈(104,255,90)).  The blue-green
+        turf on StrackaLine images has V≈150-190 so it is NOT captured by (b).
+    The two conditions are OR'd together and then masked to the green polygon.
+    """
     h, w = img.shape[:2]
     boundary_i = green_boundary_px.astype(np.int32)
     green_mask = np.zeros((h, w), dtype=np.uint8)
     cv2.fillPoly(green_mask, [boundary_i], 255)
 
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    value = hsv[:, :, 2]
+    h_ch = hsv[:, :, 0]
+    s_ch = hsv[:, :, 1]
+    v_ch = hsv[:, :, 2]
+
+    # (a) generic dark pixels (covers legacy sources)
+    dark_any = v_ch < dark_threshold
+    # (b) StrackaLine navy: saturated dark blue (arrows are V≈90, S≈255, H≈103-105)
+    dark_navy = (h_ch >= 90) & (h_ch <= 135) & (s_ch > 150) & (v_ch < 105)
+
     dark_mask = np.zeros((h, w), dtype=np.uint8)
-    dark_mask[(value < dark_threshold) & (green_mask == 255)] = 255
+    dark_mask[((dark_any | dark_navy) & (green_mask == 255))] = 255
     return dark_mask
 
 
@@ -1021,7 +1051,7 @@ def detect_arrows(
     img: np.ndarray,
     green_boundary_px: np.ndarray,
     dark_threshold: int = 50,
-    max_arrow_area: int = 600,
+    max_arrow_area: int = 1200,
 ) -> list[dict]:
     """
     Find all arrow blobs, determine centroid and downhill gradient direction.
@@ -1151,8 +1181,17 @@ def build_gradient_field(
             w_sum = weights.sum()
             if w_sum < 1e-12:
                 continue
-            Gx[row, col] = (weights * arrow_dx).sum() / w_sum
-            Gy[row, col] = (weights * arrow_dy).sum() / w_sum
+            # Sign convention fix (Topo-754):
+            # resolve_arrow_direction() returns the DOWNHILL direction (toward
+            # the low side of the slope) because the chevron tip = head = the
+            # end the arrow points toward = the downhill end.  But
+            # solve_poisson_height() integrates G as the elevation gradient
+            # ∇Z, which must point UPHILL (Z increases in G's direction).
+            # Without negation the solver produces an inverted surface — a bowl
+            # becomes a hill and vice versa.  Negate here so Gx/Gy = -arrow =
+            # uphill direction = true ∇Z.
+            Gx[row, col] = -(weights * arrow_dx).sum() / w_sum
+            Gy[row, col] = -(weights * arrow_dy).sum() / w_sum
 
     return xs_grid, ys_grid, inside_mask, Gx, Gy
 
@@ -1350,6 +1389,83 @@ def save_height_map(
     ax.set_ylabel("Image Y (px)")
     ax.legend(loc="upper right", fontsize=9)
 
+    plt.tight_layout()
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    plt.savefig(out_path, dpi=150)
+    plt.close(fig)
+    print(f"  Saved: {out_path}")
+
+
+def save_arrow_vs_output_overlay(
+    img: np.ndarray,
+    arrows: list[dict],
+    Z: np.ndarray,
+    xs_grid: np.ndarray,
+    ys_grid: np.ndarray,
+    green_boundary_px: np.ndarray,
+    out_path: str,
+) -> None:
+    """Save a two-panel PNG: left = arrows on source image, right = height map.
+
+    Used by owner_inbox/gen_arrow_overlay.py and verification scripts to
+    visually confirm arrow detection quality after threshold changes.
+    """
+    import matplotlib.gridspec as gridspec
+
+    fig = plt.figure(figsize=(18, 9))
+    gs = gridspec.GridSpec(1, 2, figure=fig)
+
+    # ── Left panel: arrow directions on source image ─────────────────────────
+    ax_img = fig.add_subplot(gs[0, 0])
+    vis = cv2.cvtColor(img.copy(), cv2.COLOR_BGR2RGB)
+    ax_img.imshow(vis)
+
+    boundary_i = green_boundary_px.astype(np.int32)
+    bx = np.append(green_boundary_px[:, 0], green_boundary_px[0, 0])
+    by = np.append(green_boundary_px[:, 1], green_boundary_px[0, 1])
+    ax_img.plot(bx, by, "g-", linewidth=2, label="Green boundary")
+
+    for a in arrows:
+        cx, cy = a["cx"], a["cy"]
+        dx, dy = a["dx"], a["dy"]
+        angle = math.atan2(dy, dx)
+        hue = int(((angle + math.pi) / (2 * math.pi)) * 179)
+        hsv_pixel = np.array([[[hue, 255, 255]]], dtype=np.uint8)
+        rgb = cv2.cvtColor(hsv_pixel, cv2.COLOR_HSV2RGB)[0, 0] / 255.0
+        length = 15
+        ax_img.annotate(
+            "",
+            xy=(cx + dx * length, cy + dy * length),
+            xytext=(cx, cy),
+            arrowprops=dict(arrowstyle="->", color=rgb, lw=1.5),
+        )
+
+    ax_img.set_title(f"Detected arrows: {len(arrows)}", fontsize=12)
+    ax_img.set_xlim(0, img.shape[1])
+    ax_img.set_ylim(img.shape[0], 0)
+    ax_img.axis("off")
+
+    # ── Right panel: reconstructed height map ────────────────────────────────
+    ax_hm = fig.add_subplot(gs[0, 1])
+    valid = Z[~np.isnan(Z)]
+    z_min = valid.min() if valid.size > 0 else 0.0
+    z_max = valid.max() if valid.size > 0 else 1.0
+    extent = [xs_grid[0], xs_grid[-1], ys_grid[-1], ys_grid[0]]
+    im = ax_hm.imshow(
+        Z, cmap="terrain", extent=extent, origin="upper",
+        vmin=z_min, vmax=z_max, aspect="equal",
+    )
+    plt.colorbar(im, ax=ax_hm, label="Relative height (arb.)", fraction=0.046, pad=0.04)
+    ax_hm.plot(bx, by, "g-", linewidth=2)
+    if valid.size > 0:
+        min_pos = np.unravel_index(np.nanargmin(Z), Z.shape)
+        max_pos = np.unravel_index(np.nanargmax(Z), Z.shape)
+        ax_hm.plot(xs_grid[min_pos[1]], ys_grid[min_pos[0]], "bv", markersize=10, label=f"Min={z_min:.3f}")
+        ax_hm.plot(xs_grid[max_pos[1]], ys_grid[max_pos[0]], "r^", markersize=10, label=f"Max={z_max:.3f}")
+        ax_hm.legend(loc="upper right", fontsize=9)
+    ax_hm.set_title("Reconstructed height map (Poisson)", fontsize=12)
+
+    plt.suptitle(os.path.basename(out_path), fontsize=10)
     plt.tight_layout()
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     plt.savefig(out_path, dpi=150)

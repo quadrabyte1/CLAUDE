@@ -250,6 +250,22 @@
 <footer class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-[50px] py-3 flex items-center justify-center gap-3 z-30 shadow-sm">
   <span class="text-xs text-gray-900">© Copyright 2026, <a href="https://fourierflight.com" target="_blank" class="hover:underline">IWI Enterprise</a></span>
   <span class="text-xs text-gray-400 font-mono">{{ app_version }}</span>
+  <div x-data="{ count: 0 }"
+       x-init="(async function poll(){
+         try { const r = await fetch('/api/tasks/running_count'); const d = await r.json(); count = d.count; }
+         catch(e) {}
+         setTimeout(poll, 5000);
+       })()"
+       x-show="count > 0"
+       x-cloak
+       class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200"
+       :title="count + ' task' + (count === 1 ? '' : 's') + ' currently running'">
+    <span class="relative flex h-2 w-2">
+      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+      <span class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+    </span>
+    <span x-text="count + (count === 1 ? ' task' : ' tasks')"></span>
+  </div>
 </footer>
 
 {% endblock %}

@@ -1,0 +1,53 @@
+{
+  "event_id": "2026-10-13-0800-big-power-drill-wire-ac-outlet-plate-and-exterior-protective",
+  "schedule": [
+    {
+      "event_id": "2026-10-13-0800-big-power-drill-wire-ac-outlet-plate-and-exterior-protective",
+      "kind": "heads_up_30",
+      "fire_at": "2026-10-13T07:30:00-04:00",
+      "tz": "America/New_York",
+      "body": "In 30 minutes: big power drill, wire, AC outlet plate, and exterior protective cover at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-13-0800-big-power-drill-wire-ac-outlet-plate-and-exterior-protective",
+      "kind": "pre_5",
+      "fire_at": "2026-10-13T07:55:00-04:00",
+      "tz": "America/New_York",
+      "body": "5 minutes: big power drill, wire, AC outlet plate, and exterior protective cover at 8:00 AM.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-13-0800-big-power-drill-wire-ac-outlet-plate-and-exterior-protective",
+      "kind": "strike_0",
+      "fire_at": "2026-10-13T08:00:00-04:00",
+      "tz": "America/New_York",
+      "body": "big power drill, wire, AC outlet plate, and exterior protective cover is starting now. Tap OK when you see this.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-13-0800-big-power-drill-wire-ac-outlet-plate-and-exterior-protective",
+      "kind": "strike_5",
+      "fire_at": "2026-10-13T08:05:00-04:00",
+      "tz": "America/New_York",
+      "body": "Still on? big power drill, wire, AC outlet plate, and exterior protective cover started 5 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-13-0800-big-power-drill-wire-ac-outlet-plate-and-exterior-protective",
+      "kind": "strike_10",
+      "fire_at": "2026-10-13T08:10:00-04:00",
+      "tz": "America/New_York",
+      "body": "Reminder: big power drill, wire, AC outlet plate, and exterior protective cover \u2014 10 minutes ago. Tap OK.",
+      "status": "pending"
+    },
+    {
+      "event_id": "2026-10-13-0800-big-power-drill-wire-ac-outlet-plate-and-exterior-protective",
+      "kind": "strike_15",
+      "fire_at": "2026-10-13T08:15:00-04:00",
+      "tz": "America/New_York",
+      "body": "Final reminder. big power drill, wire, AC outlet plate, and exterior protective cover. Tap OK or I'll log it as missed.",
+      "status": "pending"
+    }
+  ]
+}

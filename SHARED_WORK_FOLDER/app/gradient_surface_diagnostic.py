@@ -1069,16 +1069,65 @@ def detect_arrows(
     # distance: > 0 inside, == 0 on edge, < 0 outside.
     boundary_i = green_boundary_px.astype(np.int32)
 
+    # ── Pre-pass: find decimal-dot centroids ─────────────────────────────────
+    # StrackaLine's interior slope-grade labels ("1.8", "2.9", "0.5"…) all
+    # include a decimal separator rendered as a tiny isolated round blob
+    # (~5–15 px, roughly circular). Arrows never have such a nearby companion.
+    # Thomas's observation 2026-10-12: this is a reliable StrackaLine-only
+    # discriminator because the convention holds across holes/courses.
+    # Any arrow candidate within DOT_PROXIMITY_PX of a dot is almost certainly
+    # a numeric-label digit and gets rejected.
+    DOT_AREA_MIN = 3
+    DOT_AREA_MAX = 20
+    DOT_MAX_BBOX = 6
+    DOT_PROXIMITY_PX = 30.0
+    dot_centroids: list[tuple[float, float]] = []
+    for lbl in range(1, n_labels):
+        area = int(stats[lbl, cv2.CC_STAT_AREA])
+        if area < DOT_AREA_MIN or area > DOT_AREA_MAX:
+            continue
+        w = int(stats[lbl, cv2.CC_STAT_WIDTH])
+        h = int(stats[lbl, cv2.CC_STAT_HEIGHT])
+        if max(w, h) > DOT_MAX_BBOX:
+            continue
+        if max(w, h) / max(min(w, h), 1) > 2:
+            continue  # not round enough — likely a short line fragment
+        dcx = float(stats[lbl, cv2.CC_STAT_LEFT]) + w / 2.0
+        dcy = float(stats[lbl, cv2.CC_STAT_TOP]) + h / 2.0
+        dot_centroids.append((dcx, dcy))
+    if dot_centroids:
+        print(f"  detect_arrows: found {len(dot_centroids)} decimal-dot "
+              f"candidate(s); will reject arrow candidates within "
+              f"{DOT_PROXIMITY_PX:g} px of any of them")
+
     arrows = []
     n_rejected_boundary = 0
+    n_rejected_decimal = 0
     for lbl in range(1, n_labels):
         area = int(stats[lbl, cv2.CC_STAT_AREA])
         if area > max_arrow_area:
             continue  # skip large blobs (contour lines)
-        if area < 5:
-            continue  # skip noise
+        if area < 25:
+            continue  # skip noise + the decimal-dot blobs themselves (≤ 20 px)
 
         ys, xs = np.where(labels == lbl)
+
+        # Cheap centroid first — needed for the decimal-dot proximity test.
+        cx_cent = float(xs.mean())
+        cy_cent = float(ys.mean())
+
+        # Decimal-dot reject: candidate is near a tiny isolated dot → it's a
+        # digit of a slope-grade number label on a StrackaLine image, not an
+        # arrow.
+        if dot_centroids:
+            near_dot = False
+            for (dcx, dcy) in dot_centroids:
+                if (cx_cent - dcx) ** 2 + (cy_cent - dcy) ** 2 < DOT_PROXIMITY_PX ** 2:
+                    near_dot = True
+                    break
+            if near_dot:
+                n_rejected_decimal += 1
+                continue
 
         # PCA for orientation
         cx, cy, dx, dy = pca_orientation(ys, xs)
@@ -1113,6 +1162,12 @@ def detect_arrows(
             f"  detect_arrows: rejected {n_rejected_boundary} blob(s) within "
             f"{BOUNDARY_PROXIMITY_PX:g} px of green boundary "
             f"(yardage-label / edge-glyph false-positive class)"
+        )
+    if n_rejected_decimal > 0:
+        print(
+            f"  detect_arrows: rejected {n_rejected_decimal} blob(s) within "
+            f"{DOT_PROXIMITY_PX:g} px of a decimal-dot companion "
+            f"(StrackaLine slope-grade label false-positive class)"
         )
 
     return arrows
@@ -1446,24 +1501,41 @@ def save_arrow_vs_output_overlay(
     ax_img.axis("off")
 
     # ── Right panel: reconstructed height map ────────────────────────────────
+    # Shift Z so the min is 0 and the max is positive. The Poisson solver pins
+    # one cell to Z=0 (Dirichlet BC); without the shift the range reads as
+    # e.g. −178..0, which is confusing — Thomas misread blue=low as blue=high
+    # on the earlier output. After the shift, 0=lowest, positive=higher, which
+    # matches homeowner intuition for elevation.
     ax_hm = fig.add_subplot(gs[0, 1])
-    valid = Z[~np.isnan(Z)]
-    z_min = valid.min() if valid.size > 0 else 0.0
-    z_max = valid.max() if valid.size > 0 else 1.0
+    valid_raw = Z[~np.isnan(Z)]
+    z_raw_min = float(valid_raw.min()) if valid_raw.size > 0 else 0.0
+    z_raw_max = float(valid_raw.max()) if valid_raw.size > 0 else 1.0
+    Z_disp = Z - z_raw_min  # low points → 0; high points → positive
+    valid = Z_disp[~np.isnan(Z_disp)]
+    z_min = 0.0
+    z_max = (z_raw_max - z_raw_min) if valid.size > 0 else 1.0
     extent = [xs_grid[0], xs_grid[-1], ys_grid[-1], ys_grid[0]]
     im = ax_hm.imshow(
-        Z, cmap="terrain", extent=extent, origin="upper",
+        Z_disp, cmap="terrain", extent=extent, origin="upper",
         vmin=z_min, vmax=z_max, aspect="equal",
     )
-    plt.colorbar(im, ax=ax_hm, label="Relative height (arb.)", fraction=0.046, pad=0.04)
+    cbar = plt.colorbar(im, ax=ax_hm, label="Relative elevation (0 = lowest point)",
+                        fraction=0.046, pad=0.04)
+    cbar.ax.text(0.5, 1.02, "HIGH", transform=cbar.ax.transAxes,
+                 ha="center", va="bottom", fontsize=9, fontweight="bold")
+    cbar.ax.text(0.5, -0.02, "LOW", transform=cbar.ax.transAxes,
+                 ha="center", va="top", fontsize=9, fontweight="bold")
     ax_hm.plot(bx, by, "g-", linewidth=2)
     if valid.size > 0:
-        min_pos = np.unravel_index(np.nanargmin(Z), Z.shape)
-        max_pos = np.unravel_index(np.nanargmax(Z), Z.shape)
-        ax_hm.plot(xs_grid[min_pos[1]], ys_grid[min_pos[0]], "bv", markersize=10, label=f"Min={z_min:.3f}")
-        ax_hm.plot(xs_grid[max_pos[1]], ys_grid[max_pos[0]], "r^", markersize=10, label=f"Max={z_max:.3f}")
+        min_pos = np.unravel_index(np.nanargmin(Z_disp), Z_disp.shape)
+        max_pos = np.unravel_index(np.nanargmax(Z_disp), Z_disp.shape)
+        ax_hm.plot(xs_grid[min_pos[1]], ys_grid[min_pos[0]], "bv",
+                   markersize=10, label=f"LOW (shifted 0.000)")
+        ax_hm.plot(xs_grid[max_pos[1]], ys_grid[max_pos[0]], "r^",
+                   markersize=10, label=f"HIGH ({z_max:.3f})")
         ax_hm.legend(loc="upper right", fontsize=9)
-    ax_hm.set_title("Reconstructed height map (Poisson)", fontsize=12)
+    ax_hm.set_title("Reconstructed height map (Poisson, blue=low, brown=high)",
+                    fontsize=11)
 
     plt.suptitle(os.path.basename(out_path), fontsize=10)
     plt.tight_layout()

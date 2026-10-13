@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v5.34"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v5.36"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── detect_boundaries: classifier knobs ────────────────────────────────────
 # When True the green polygon interior is excluded from trap/water detection.
@@ -2821,5 +2821,8 @@ def api_generate_plate():
 # ── Run ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    # use_reloader explicit so edits pick up regardless of how the process is launched
-    app.run(debug=True, host="0.0.0.0", port=5051, use_reloader=True)
+    # use_reloader explicit so edits pick up regardless of how the process is launched.
+    # debug=False avoids Werkzeug's DebuggedApplication wrapper, which creates a
+    # multiprocessing.Value POSIX semaphore that leaked after ~16h and deadlocked
+    # the worker on _PySemaphore_Wait (see owner_inbox/dashboard_deadlock_rca_2026-10-13.md).
+    app.run(debug=False, host="0.0.0.0", port=5051, use_reloader=True)

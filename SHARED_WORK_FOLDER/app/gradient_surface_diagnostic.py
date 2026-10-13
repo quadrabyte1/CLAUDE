@@ -1,3 +1,10 @@
+# v0.24 — 2026-10-13 Sienna — Green/fringe interface normalisation (task 780).
+#         New constant: FRINGE_BLEND_CELLS = 3 (tune the blend band width).
+#         New function: _normalize_green_fringe_interface — cosine-weighted blend
+#           of the TPS fringe surface toward green boundary Z within the blend band.
+#           Called once in build_fringe_mesh after _build_tps_grid_height_field,
+#           before the per-cell Z assignment loop.
+#         APP_VERSION bumped to v5.35.
 # v0.23 — 2026-10-11 Topo — Fix StrackaLine arrow detection (task 760).
 #         build_dark_mask_inside_green: add second detection branch (b) for
 #           StrackaLine's dark-navy arrows (HSV≈(104,255,90), RGB≈(0,50,90)).
@@ -1844,6 +1851,11 @@ WATER_FRINGE_GAP_MM:                float = 0.125  # bumped 0.5 → 1.0 on 2026-
 #      verts than r=2.0.
 FRINGE_TOP_MAX_TRIANGLE_AREA_MM2: float = 1.0   # was 25 (~5mm triangles); 1 → ~1.5mm triangles
 FRINGE_GRASS_SEAM_EXCLUDE_MM:     float = 0.325  # was 1.2; matches *_FRINGE_GAP_MM (0.125) + 0.2 safety (halved 2026-09-11 alongside gap halving; halved again 2026-09-12 task 508 alongside 0.5→0.25 gap tightening; scaled again 2026-09-13 task 513 to 0.325 = 0.125 + 0.2 preserving same relative margin alongside 0.25→0.125 gap tightening)
+# Width of the green/fringe interface blend band, in 20×20 TPS grid cells.
+# W_mm = FRINGE_BLEND_CELLS × (2×half/20).  At half≈89.1 mm, 3 cells ≈ 26.7 mm.
+# Set to 3 so the blend reaches ~3 cell-widths into the fringe; increase to
+# widen the blend, decrease to tighten it toward the seam.
+FRINGE_BLEND_CELLS: int = 3
 
 # ── Grass v2 knobs (Topo 2026-09-09) ─────────────────────────────────────────
 # GRASS_ALGORITHM picks the fringe grass implementation:
@@ -3670,6 +3682,64 @@ def _build_tps_grid_height_field(
     return z_grid
 
 
+def _normalize_green_fringe_interface(
+    z_tps: np.ndarray,
+    grid_x: np.ndarray,
+    grid_y: np.ndarray,
+    green_bnd_mm: np.ndarray,
+    bnd_z: np.ndarray,
+    blend_cells: int = FRINGE_BLEND_CELLS,
+) -> np.ndarray:
+    """Blend the TPS fringe surface toward green boundary Z near the green edge.
+
+    For each point on the fringe grid whose perpendicular distance to the green
+    boundary is within the blend band (W_mm), the TPS value is pulled toward the
+    nearest boundary Z using a cosine falloff:
+
+        weight(d) = 0.5 * (1 + cos(pi * d / W_mm))   for d < W_mm
+        weight(d) = 0                                  for d >= W_mm
+
+    weight=1.0 at d=0 (boundary cell takes exact green Z), weight=0 at d=W_mm
+    (prior TPS value is preserved exactly).  Cells beyond W_mm are untouched.
+
+    Parameters
+    ----------
+    z_tps     : (R, C) TPS height field in mm (modified in place and returned).
+    grid_x    : (R, C) X coordinates of the fringe grid in mm.
+    grid_y    : (R, C) Y coordinates of the fringe grid in mm.
+    green_bnd_mm : (N, 2) green boundary polyline points in mm.
+    bnd_z     : (N,) Z value at each boundary point in mm.
+    blend_cells : blend band width in 20×20 TPS grid cells; converted to mm
+                  using the actual half-extent so it scales with print size.
+    """
+    from scipy.spatial import cKDTree as _KDT
+
+    half = PRINT_SIZE_MM / 2.0 + FRINGE_XY_EXPANSION_MM / 2.0
+    cell_side_mm = (2.0 * half) / 20.0
+    W_mm = blend_cells * cell_side_mm
+
+    bnd_kd = _KDT(green_bnd_mm)
+    pts = np.column_stack([grid_x.ravel(), grid_y.ravel()])
+    dists, idxs = bnd_kd.query(pts, k=1)
+    dists = dists.reshape(grid_x.shape)
+    idxs = idxs.reshape(grid_x.shape)
+
+    in_band = dists < W_mm
+    if not in_band.any():
+        return z_tps
+
+    # Cosine weight: 1 at boundary, 0 at W_mm.
+    w = np.where(in_band, 0.5 * (1.0 + np.cos(np.pi * dists / W_mm)), 0.0)
+    target_z = bnd_z[idxs]  # nearest boundary Z for every grid point
+
+    z_out = z_tps.copy()
+    z_out = np.where(in_band, (1.0 - w) * z_tps + w * target_z, z_tps)
+    n_blended = int(in_band.sum())
+    print(f"  [fringe-normalise] blend band {W_mm:.1f} mm ({blend_cells} cells); "
+          f"{n_blended} grid points blended toward green boundary Z")
+    return z_out
+
+
 def build_fringe_mesh(
     Z_mm: np.ndarray,
     xs_grid: np.ndarray,
@@ -4119,6 +4189,20 @@ def build_fringe_mesh(
           f"[{float(_z_tps_grid.min()):.3f}, {float(_z_tps_grid.max()):.3f}] mm "
           f"({len(gbnd)} boundary vertices, bnd_z range "
           f"[{float(bnd_z.min()):.3f}, {float(bnd_z.max()):.3f}] mm)")
+
+    # Task 780 (Sienna, 2026-10-13): normalise the green/fringe interface.
+    # Pull the TPS surface toward the green boundary Z in a cosine-weighted band
+    # of FRINGE_BLEND_CELLS cells.  Grid-cell overrides are already baked into
+    # _z_tps_grid (via _build_tps_grid_height_field), so this step blends both
+    # Poisson defaults and user overrides toward the boundary — no separate
+    # treatment needed.  Beyond the band, values are untouched.
+    _z_tps_grid = _normalize_green_fringe_interface(
+        z_tps=_z_tps_grid,
+        grid_x=GX_fringe,
+        grid_y=GY_fringe,
+        green_bnd_mm=gbnd,
+        bnd_z=bnd_z,
+    )
 
     # Task 726 (Topo, 2026-09-04): compute fringe cell half-step for footprint
     # overlap tests below.  The grid is uniform (linspace), so the step is

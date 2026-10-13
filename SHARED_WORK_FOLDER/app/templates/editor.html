@@ -591,8 +591,9 @@
           <input
             x-ref="gridCellInput"
             type="number"
-            min="-20"
-            max="20"
+            style="min-width:80px;"
+            :min="gridMode === 'absolute' ? 0 : -20"
+            :max="gridMode === 'absolute' ? 30 : 20"
             step="0.5"
             x-model="_gridInputValue"
             @keydown.enter.prevent="commitGridCell()"
@@ -601,10 +602,10 @@
             @keydown.backspace.stop
             @blur="commitGridCell()"
             autofocus
-            class="w-full text-xs font-mono text-center rounded border border-indigo-400 bg-white shadow-md px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            style="min-width:80px;"
+            class="w-full text-xs font-mono text-center rounded bg-white shadow-md px-2 py-0.5 focus:outline-none focus:ring-1"
+            :class="gridMode === 'absolute' ? 'border border-orange-400 focus:ring-orange-500' : 'border border-indigo-400 focus:ring-indigo-500'"
             placeholder="mm"
-            title="Enter offset from algorithm in mm (±20). Enter to commit, Esc to cancel, Delete to clear."
+            :title="gridMode === 'absolute' ? 'Enter absolute fringe height in mm (0 to 30). Enter to commit, Esc to cancel, Delete to clear.' : 'Enter offset from algorithm in mm (±20). Enter to commit, Esc to cancel, Delete to clear.'"
           />
         </div>
       </div>
@@ -614,11 +615,12 @@
        Floats above the canvas near a set-cell dot when the mouse hovers over it.
        Hidden while the cell input is open (_gridActiveCell is set).
        Positioned at the dot's canvas coordinates; shifts up+right via transform. #}
-    <div x-show="_gridHoveredCell !== null && _gridActiveCell === null"
+    <div x-show="_gridHoveredCell !== null && _gridActiveCell === null && gridMode !== 'off'"
          x-cloak
-         class="absolute pointer-events-none z-40 px-2 py-0.5 rounded bg-gray-800 text-white text-xs font-mono shadow-lg whitespace-nowrap"
+         class="absolute pointer-events-none z-40 px-2 py-0.5 rounded text-white text-xs font-mono shadow-lg whitespace-nowrap"
+         :class="gridMode === 'absolute' ? 'bg-orange-600' : 'bg-gray-800'"
          :style="_gridHoveredCell ? `left:${_gridHoveredCell.canvasPx.x + _gridHoveredCell.canvasPx.w * 0.5}px; top:${_gridHoveredCell.canvasPx.y}px; transform:translate(-50%, -110%);` : ''"
-         x-text="_gridHoveredCell ? ((gridCellHeights[_gridHoveredCell.idx] > 0 ? '+' : '') + gridCellHeights[_gridHoveredCell.idx] + ' mm offset') : ''">
+         x-text="_gridHoveredCell ? (gridMode === 'absolute' ? (gridCellHeights[_gridHoveredCell.idx] + ' mm absolute') : ((gridCellHeights[_gridHoveredCell.idx] > 0 ? '+' : '') + gridCellHeights[_gridHoveredCell.idx] + ' mm offset')) : ''">
     </div>
   </div>
 
@@ -699,9 +701,38 @@
     {# ── Grid cell elevation status strip (v5.00) — hidden when 0 set ── #}
     <span x-show="Object.keys(gridCellHeights).length > 0"
           x-text="Object.keys(gridCellHeights).length + ' cell' + (Object.keys(gridCellHeights).length === 1 ? '' : 's') + ' set'"
-          class="text-[11px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded"
-          title="Grid cell offsets stored in this EGM. Values are additive deltas (±20 mm) over the algorithm's natural surface.">
+          class="text-[11px] font-medium px-1.5 py-0.5 rounded border"
+          :class="gridMode === 'absolute' ? 'text-orange-700 bg-orange-50 border-orange-200'
+                 : gridMode === 'off'      ? 'text-gray-600 bg-gray-100 border-gray-300'
+                 :                           'text-indigo-700 bg-indigo-50 border-indigo-200'"
+          :title="gridMode === 'absolute' ? 'Grid cell values stored in this EGM. In Absolute mode each value REPLACES the Poisson-nearest default (0–30 mm).'
+                 : gridMode === 'off'      ? 'Grid cell values stored in this EGM. In Off mode overrides are not applied; values are preserved so you can toggle back on.'
+                 :                           'Grid cell offsets stored in this EGM. Values are additive deltas (±20 mm) over the algorithm\'s natural surface.'">
     </span>
+
+    {# ── Grid-mode 3-position switch (v5.34, task 774) ───────────────────────
+       Delta  = legacy behavior (additive ±20 mm; indigo UI).
+       Absolute = value REPLACES Poisson default (0–30 mm; orange UI).
+       Off    = overlays hidden, overrides not applied; stored values preserved. #}
+    <div class="inline-flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-md border border-notion-border bg-stone-50/70"
+         title="How grid cell values are interpreted. Delta=additive offset (default). Absolute=replace Poisson default. Off=hide and ignore (values preserved).">
+      <span class="text-[10px] text-notion-muted font-semibold tracking-wide uppercase pr-0.5">Grid</span>
+      <button type="button"
+              @click="gridMode = 'delta'; autoSave(); draw();"
+              :class="gridMode === 'delta' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-notion-text border-notion-border hover:bg-indigo-50'"
+              class="text-[11px] font-medium px-1.5 py-0.5 rounded border transition-default"
+              title="Delta: value is added to the algorithm's natural surface (±20 mm).">Delta</button>
+      <button type="button"
+              @click="gridMode = 'absolute'; autoSave(); draw();"
+              :class="gridMode === 'absolute' ? 'bg-orange-500 text-white border-orange-500 shadow-sm' : 'bg-white text-notion-text border-notion-border hover:bg-orange-50'"
+              class="text-[11px] font-medium px-1.5 py-0.5 rounded border transition-default"
+              title="Absolute: value REPLACES the algorithm's value at that cell (0 to 30 mm).">Absolute</button>
+      <button type="button"
+              @click="gridMode = 'off'; autoSave(); draw();"
+              :class="gridMode === 'off' ? 'bg-gray-600 text-white border-gray-600 shadow-sm' : 'bg-white text-notion-text border-notion-border hover:bg-gray-100'"
+              class="text-[11px] font-medium px-1.5 py-0.5 rounded border transition-default"
+              title="Off: hide cell overlays and ignore all values. Stored values are preserved.">Off</button>
+    </div>
 
     <div class="ml-auto flex items-center gap-1.5">
       <span x-show="statusMsg" x-text="statusMsg" x-transition
@@ -789,6 +820,11 @@ function polygonEditor() {
     // ── Grid cell elevation overlay (v5.00) ──────────────────────────────────
     // 20×20 sparse dict keyed by cell_index = row*20+col. Values in mm (0–50).
     gridCellHeights: {},
+    // Grid interpretation mode (task 774, v5.34):
+    //   'delta'    — values are additive offsets to Poisson default (±20 mm). Blue/indigo UI.
+    //   'absolute' — values REPLACE the Poisson default (0 to 30 mm). Orange UI.
+    //   'off'      — overlays hidden, no overrides applied; stored values are preserved for A/B toggling.
+    gridMode: 'delta',
     _gridActiveCell: null,   // {col, row, idx, canvasPx:{x,y}} or null
     _gridInputValue: '',     // staging area while input is open
     _gridHoveredCell: null,  // {idx, canvasPx:{x,y,w,h}} or null — drives dot tooltip (v5.04)
@@ -1410,21 +1446,31 @@ function polygonEditor() {
         }
 
         // Numeric value text for set cells (task 720: replaced blue dot)
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `${11 * dpr}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-        ctx.fillStyle = 'rgba(99,102,241,0.92)';  // indigo text accent
-        for (const [idxStr, mm] of Object.entries(this.gridCellHeights)) {
-          const idx = Number(idxStr);
-          const col = idx % GRID_COLS;
-          const row = Math.floor(idx / GRID_COLS);
-          // Cell centre in image-pixel coords (lower-left origin: row 0 = bottom)
-          const cxImg = tl.x + (col + 0.5) * cellWpx;
-          const cyImg = tl.y + (GRID_ROWS - 1 - row + 0.5) * cellHpx;
-          const cp = this.imgToCanvas(cxImg, cyImg);
-          const mmVal = Number(mm);
-          const mmLabel = mmVal > 0 ? '+' + mmVal.toFixed(1) : mmVal.toFixed(1);
-          ctx.fillText(mmLabel, cp.x, cp.y);
+        // Task 774 (v5.34): color/visibility depends on gridMode.
+        //   delta    → indigo text, '+N.N' / '-N.N' label
+        //   absolute → orange text, 'N.N' label (no leading '+')
+        //   off      → skip rendering entirely (values preserved on disk)
+        if (this.gridMode !== 'off') {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.font = `${11 * dpr}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+          ctx.fillStyle = (this.gridMode === 'absolute')
+            ? 'rgba(249,115,22,0.95)'   // tailwind orange-500
+            : 'rgba(99,102,241,0.92)';  // indigo text accent (delta)
+          for (const [idxStr, mm] of Object.entries(this.gridCellHeights)) {
+            const idx = Number(idxStr);
+            const col = idx % GRID_COLS;
+            const row = Math.floor(idx / GRID_COLS);
+            // Cell centre in image-pixel coords (lower-left origin: row 0 = bottom)
+            const cxImg = tl.x + (col + 0.5) * cellWpx;
+            const cyImg = tl.y + (GRID_ROWS - 1 - row + 0.5) * cellHpx;
+            const cp = this.imgToCanvas(cxImg, cyImg);
+            const mmVal = Number(mm);
+            const mmLabel = (this.gridMode === 'absolute')
+              ? mmVal.toFixed(1)
+              : (mmVal > 0 ? '+' + mmVal.toFixed(1) : mmVal.toFixed(1));
+            ctx.fillText(mmLabel, cp.x, cp.y);
+          }
         }
 
         // Highlight the active cell (if any)
@@ -1801,7 +1847,8 @@ function polygonEditor() {
       // ── Grid dot hover detection (v5.04) ─────────────────────────────────
       // Check whether the mouse is over a set-cell dot so we can show a tooltip.
       // Done only when no cell input is currently open.
-      if (!this._gridActiveCell && Object.keys(this.gridCellHeights).length > 0) {
+      // Task 774: in 'off' mode, overlays are hidden — don't register hovers either.
+      if (!this._gridActiveCell && this.gridMode !== 'off' && Object.keys(this.gridCellHeights).length > 0) {
         const GRID_COLS = 20;
         const GRID_ROWS = 20;
         const canvas = this.$refs.canvas;
@@ -1913,7 +1960,8 @@ function polygonEditor() {
       // ── Grid dot right-click → delete (v5.05) ────────────────────────────
       // Mirror the contour-vertex right-click convention: right-click a set-cell
       // dot to delete it.  Uses the same CSS-px hit detection as the hover tooltip.
-      if (Object.keys(this.gridCellHeights).length > 0) {
+      // Task 774: skip in 'off' mode — overlays are hidden and values are preserved.
+      if (this.gridMode !== 'off' && Object.keys(this.gridCellHeights).length > 0) {
         const GRID_COLS = 20;
         const canvas = this.$refs.canvas;
         const rect = canvas.getBoundingClientRect();
@@ -2389,7 +2437,12 @@ function polygonEditor() {
     },
 
     // Open the inline input for a grid cell.
+    // Task 774 (v5.34): in 'off' mode editing is disabled — show a hint toast and bail.
     openGridCell(col, row, idx) {
+      if (this.gridMode === 'off') {
+        this.flash('Grid mode is Off — switch to Delta or Absolute to edit cells', false);
+        return;
+      }
       const existing = this.gridCellHeights[idx];
       this._gridInputValue = (existing !== undefined) ? String(existing) : '';
       const pos = this._gridCellCanvasPx(col, row);
@@ -2403,21 +2456,21 @@ function polygonEditor() {
     },
 
     // Commit the current input value to gridCellHeights.
+    // Task 774 (v5.34): clamp depends on gridMode (delta: ±20, absolute: 0–30).
     commitGridCell() {
       if (!this._gridActiveCell) return;
       const raw = parseFloat(this._gridInputValue);
       if (!isNaN(raw)) {
-        const clamped = Math.max(-20, Math.min(20, raw));
-        // Multi-select commit: apply value to EVERY cell in _gridMultiSelect.
-        // Single-select commit: apply to just the active cell.
+        const clamped = (this.gridMode === 'absolute')
+          ? Math.max(0, Math.min(30, raw))
+          : Math.max(-20, Math.min(20, raw));
         if (this._gridMultiSelect && this._gridMultiSelect.size > 0) {
-          for (const idx of this._gridMultiSelect) {
-            this.gridCellHeights[idx] = clamped;
-          }
+          for (const i of this._gridMultiSelect) this.gridCellHeights[i] = clamped;
         } else {
           this.gridCellHeights[this._gridActiveCell.idx] = clamped;
         }
       }
+      // Commit → autoSave so changes persist.
       this._gridActiveCell       = null;
       this._gridInputValue       = '';
       this._gridMultiSelect      = null;
@@ -2542,6 +2595,11 @@ function polygonEditor() {
       // legacy EGMs without this field are not unnecessarily enlarged.
       if (Object.keys(this.gridCellHeights).length > 0) {
         data.gridCellHeights = Object.assign({}, this.gridCellHeights);
+      }
+      // gridMode — task 774 (v5.34). Only persist when non-default so legacy EGMs
+      // round-trip unchanged (loader defaults missing field to 'delta').
+      if (this.gridMode && this.gridMode !== 'delta') {
+        data.gridMode = this.gridMode;
       }
       try {
         await fetch('/api/boundaries', {
@@ -2704,14 +2762,15 @@ function polygonEditor() {
       this.gpsPreviewDataUrl  = '';
       this.gpsPreviewError    = '';
       this.gpsPreviewNotes    = [];
-      // Grid cell elevation (v5.00)
+      // Grid cell elevation
       this.gridCellHeights    = {};
+      this.gridMode           = 'delta';
+      this._gridMultiSelect   = null;
+      this._gridMultiSelectAnchor = null;
       this._gridActiveCell    = null;
       this._gridInputValue    = '';
       this._gridHoveredCell   = null;
-      this._gridMouseDownAt   = null;  // v5.05
-      this._gridMultiSelect   = null;  // v5.09
-      this._gridMultiSelectAnchor = null;  // v5.09
+      this._gridMouseDownAt   = null;
       // Unsaved-changes guard
       this._pendingAutoSave   = false;
       // Clear the canvas so no stale image is visible while the fetch is in flight
@@ -2810,6 +2869,12 @@ function polygonEditor() {
         }
         // gridCellHeights — v5.00. Absent in legacy EGMs → default to empty dict.
         this.gridCellHeights = data.gridCellHeights || {};
+        // gridMode — v5.34 (task 774). Absent in legacy EGMs → default to 'delta'
+        // (current/legacy behavior).  Defensive validation: unknown values collapse to 'delta'.
+        {
+          const m = String(data.gridMode || 'delta').toLowerCase();
+          this.gridMode = (m === 'delta' || m === 'absolute' || m === 'off') ? m : 'delta';
+        }
         this._gridActiveCell = null;
         this._gridInputValue = '';
         // v4.83 — off-frame points are intentional (users can drag control
@@ -2883,6 +2948,7 @@ function polygonEditor() {
       this.polygons = [];
       // Grid cell elevation — reset on new project
       this.gridCellHeights  = {};
+      this.gridMode         = 'delta';  // v5.34 (task 774) — reset to default mode
       this._gridActiveCell  = null;
       this._gridInputValue  = '';
       this._gridHoveredCell = null;

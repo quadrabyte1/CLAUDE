@@ -1015,10 +1015,22 @@ def resolve_arrow_direction(
     """
     Resolve 180° ambiguity of the principal axis.
 
-    The chevron tip (head) is narrower (less perpendicular spread) than the tail.
-    We project pixels onto the principal axis to split into two halves.
-    The half with smaller perpendicular std is the HEAD.
-    The gradient direction is FROM head TO tail (downhill).
+    StrackaLine (and GolfLogix) slope arrows are classical arrows: a thin stem
+    (tail) with a flared triangular head.  Project pixels onto the principal
+    axis and split into two halves.  The half with the LARGER mean perpendicular
+    distance from the axis is the HEAD (flared / wide); the opposite half with
+    pixels packed close to the axis is the TAIL (thin stem).
+
+    Per [[project-stracka-arrow-semantics]], arrows point downhill — so the
+    HEAD end IS the downhill end.  We return the unit vector pointing toward
+    the HEAD = the downhill direction.
+
+    History: v5.32 used "narrower perp-std = HEAD" (the chevron-tip heuristic).
+    That is backwards for arrow-with-flared-head glyphs: the flared end has
+    MORE pixel spread, not less.  On Delaveaga H11 the inverted logic flipped
+    every detected arrow 180° and collapsed the direction field to the N/NW
+    quadrant (task 770 diagnosis — see owner_inbox/arrow_direction_debug_h11.png
+    and arrow_masks_h11/). Fixed to "wider mean-perp = HEAD" at v5.33.
 
     Returns (gradient_dx, gradient_dy) as a unit vector pointing downhill.
     """
@@ -1026,24 +1038,28 @@ def resolve_arrow_direction(
 
     # Project onto principal axis
     proj_along = coords @ np.array([dx, dy])        # scalar projection
-    # Perpendicular component
+    # Perpendicular component (vector), then per-pixel perp distance (scalar)
     perp = coords - np.outer(proj_along, np.array([dx, dy]))
-    perp_std = np.sqrt((perp ** 2).sum(axis=1))    # per-pixel perp distance
+    perp_dist = np.sqrt((perp ** 2).sum(axis=1))
 
     # Split: positive vs negative half
     pos_mask = proj_along >= 0
     neg_mask = ~pos_mask
 
-    std_pos = perp_std[pos_mask].std() if pos_mask.sum() > 1 else 1e9
-    std_neg = perp_std[neg_mask].std() if neg_mask.sum() > 1 else 1e9
+    # Need enough pixels on both sides to make a decision; otherwise fall back
+    # to the raw PCA direction (caller normalises).  Returning (0, 0) here
+    # would be filtered out by the mag < 1e-9 guard in detect_arrows.
+    if pos_mask.sum() < 2 or neg_mask.sum() < 2:
+        return dx, dy
 
-    # Head = narrower half (smaller std)
-    # Arrows point downhill, so gradient is FROM tail TO head (uphill direction)
-    if std_pos <= std_neg:
-        # Positive half is head → gradient points toward + direction → (dx, dy)
+    mean_perp_pos = float(perp_dist[pos_mask].mean())
+    mean_perp_neg = float(perp_dist[neg_mask].mean())
+
+    # Head = wider half (larger mean perp distance = flared arrowhead side).
+    # Arrows point downhill, so the head IS the downhill end.
+    if mean_perp_pos >= mean_perp_neg:
         return dx, dy
     else:
-        # Negative half is head → gradient points toward - direction → (-dx, -dy)
         return -dx, -dy
 
 
@@ -1488,10 +1504,17 @@ def save_arrow_vs_output_overlay(
         hsv_pixel = np.array([[[hue, 255, 255]]], dtype=np.uint8)
         rgb = cv2.cvtColor(hsv_pixel, cv2.COLOR_HSV2RGB)[0, 0] / 255.0
         length = 15
+        # Cosmetic-only fix (Topo-771): matplotlib `arrowstyle="->"` puts the
+        # head at `xy`.  Empirically on Delaveaga H11 v5.33 the marker arrows
+        # appeared to point OPPOSITE to the dark StrackaLine arrows underneath,
+        # which confused the reader.  Put the marker head at the centroid and
+        # extend the tail backward along -(dx,dy) so the visible arrowhead
+        # lines up with the dark arrow's head.  Pipeline (dx, dy) values are
+        # untouched — this is overlay-render-only.
         ax_img.annotate(
             "",
-            xy=(cx + dx * length, cy + dy * length),
-            xytext=(cx, cy),
+            xy=(cx, cy),
+            xytext=(cx - dx * length, cy - dy * length),
             arrowprops=dict(arrowstyle="->", color=rgb, lw=1.5),
         )
 
@@ -3566,26 +3589,41 @@ def _build_tps_grid_height_field(
     cell_defaults = bnd_z[nn_idx].copy()  # (400,) — mutable; user values go here
 
     # ── Step 2: Merge user-set values over defaults ───────────────────────────
+    # gridMode (task 774, v5.34) determines how gridCellHeights values are interpreted:
+    #   "delta"    — additive offset (±20 mm) over Poisson-nearest default (default/legacy behavior)
+    #   "absolute" — value REPLACES the Poisson default; clamped to [0, 30] mm, floored at BASE_THICKNESS_MM
+    #   "off"      — overrides disabled entirely; all 400 cells use Poisson defaults (gridCellHeights preserved on disk)
+    grid_mode = str(egm_data.get("gridMode") or "delta").lower()
+    if grid_mode not in ("delta", "absolute", "off"):
+        grid_mode = "delta"  # defensive fallback for unknown modes
     grid_cell_heights = egm_data.get("gridCellHeights") or {}
     n_overrides = 0
-    for key, val_mm in grid_cell_heights.items():
-        try:
-            ci = int(key)
-            val = float(val_mm)
-        except (TypeError, ValueError):
-            continue
-        if ci < 0 or ci >= n_cells:
-            continue
-        # User value is an ADDITIVE OFFSET in mm over the Poisson-nearest default.
-        # Zero / unset → no change.  Range ±20 mm, clamped defensively here even
-        # though the UI already enforces the same bounds.  Floor the resolved
-        # absolute Z at BASE_THICKNESS_MM so a large negative delta cannot push a
-        # cell below the base plate (invalid geometry).
-        val = max(-20.0, min(20.0, val))  # clamp delta to ±20 mm
-        cell_defaults[ci] = max(BASE_THICKNESS_MM, cell_defaults[ci] + val)
-        n_overrides += 1
+    if grid_mode != "off":
+        for key, val_mm in grid_cell_heights.items():
+            try:
+                ci = int(key)
+                val = float(val_mm)
+            except (TypeError, ValueError):
+                continue
+            if ci < 0 or ci >= n_cells:
+                continue
+            if grid_mode == "absolute":
+                # Value REPLACES the Poisson default.  Clamp to [0, 30] mm per UI spec,
+                # then floor the resolved Z at BASE_THICKNESS_MM so the cell cannot sit
+                # below the base plate (invalid geometry).
+                val = max(0.0, min(30.0, val))
+                cell_defaults[ci] = max(BASE_THICKNESS_MM, val)
+            else:  # delta (default/legacy)
+                # User value is an ADDITIVE OFFSET in mm over the Poisson-nearest default.
+                # Zero / unset → no change.  Range ±20 mm, clamped defensively here even
+                # though the UI already enforces the same bounds.  Floor the resolved
+                # absolute Z at BASE_THICKNESS_MM so a large negative delta cannot push a
+                # cell below the base plate (invalid geometry).
+                val = max(-20.0, min(20.0, val))  # clamp delta to ±20 mm
+                cell_defaults[ci] = max(BASE_THICKNESS_MM, cell_defaults[ci] + val)
+            n_overrides += 1
 
-    print(f"  [TPS-grid] 400 cells: {n_overrides} user-set (additive offsets), "
+    print(f"  [TPS-grid] mode={grid_mode}; 400 cells: {n_overrides} user-set, "
           f"{n_cells - n_overrides} Poisson-default; "
           f"resolved Z range [{float(cell_defaults.min()):.3f}, {float(cell_defaults.max()):.3f}] mm")
 

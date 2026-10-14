@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{# Boundary Editor v5.09 — Grid lines recolored to indigo; Cmd+drag multi-cell selection with shared-value edit (task 726) #}
+{# Boundary Editor v5.10 — Grid value 0 = empty cell (deleted on commit, dropped on load). Grid lines recolored to indigo; Cmd+drag multi-cell selection with shared-value edit (task 726) #}
 {% block title %}Boundary Editor — AI Team Workspace{% endblock %}
 {% block content_width %}max-w-6xl{% endblock %}
 {% block content %}
@@ -1458,6 +1458,7 @@ function polygonEditor() {
             ? 'rgba(249,115,22,0.95)'   // tailwind orange-500
             : 'rgba(99,102,241,0.92)';  // indigo text accent (delta)
           for (const [idxStr, mm] of Object.entries(this.gridCellHeights)) {
+            if (mm === 0) continue;  // zero = empty cell
             const idx = Number(idxStr);
             const col = idx % GRID_COLS;
             const row = Math.floor(idx / GRID_COLS);
@@ -2464,11 +2465,10 @@ function polygonEditor() {
         const clamped = (this.gridMode === 'absolute')
           ? Math.max(0, Math.min(30, raw))
           : Math.max(-20, Math.min(20, raw));
-        if (this._gridMultiSelect && this._gridMultiSelect.size > 0) {
-          for (const i of this._gridMultiSelect) this.gridCellHeights[i] = clamped;
-        } else {
-          this.gridCellHeights[this._gridActiveCell.idx] = clamped;
-        }
+        const targets = (this._gridMultiSelect && this._gridMultiSelect.size > 0)
+          ? [...this._gridMultiSelect] : [this._gridActiveCell.idx];
+        // Zero = empty cell: delete the key instead of storing 0.
+        for (const i of targets) { if (clamped === 0) delete this.gridCellHeights[i]; else this.gridCellHeights[i] = clamped; }
       }
       // Commit → autoSave so changes persist.
       this._gridActiveCell       = null;
@@ -2868,7 +2868,7 @@ function polygonEditor() {
           };
         }
         // gridCellHeights — v5.00. Absent in legacy EGMs → default to empty dict.
-        this.gridCellHeights = data.gridCellHeights || {};
+        this.gridCellHeights = Object.fromEntries(Object.entries(data.gridCellHeights || {}).filter(([, v]) => Number(v) !== 0));  // zero = empty
         // gridMode — v5.34 (task 774). Absent in legacy EGMs → default to 'delta'
         // (current/legacy behavior).  Defensive validation: unknown values collapse to 'delta'.
         {

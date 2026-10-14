@@ -1,0 +1,180 @@
+{
+  "course": "Stanford",
+  "hole": "3",
+  "image": "Stanford (hole 3, 5407).png",
+  "imageCourse": "Stanford",
+  "imageSize": {
+    "width": 812,
+    "height": 1236
+  },
+  "contourStep": 0.5,
+  "grassAmplitude": 0.5,
+  "grassSpacing": 0.05,
+  "greenStyle": "terraced",
+  "elevationRange": 14.5,
+  "zScale": 1,
+  "greenScale": 1.0065,
+  "fringeEdgeHeight": 10,
+  "baseThicknessMm": 1.5,
+  "includeBoundaryRegion": false,
+  "applyFringeFrameCap": true,
+  "includeFringeWithoutGrass": false,
+  "flagOffsetXMm": 0,
+  "flagOffsetYMm": 0,
+  "polygons": [
+    {
+      "name": "Green",
+      "type": "green",
+      "closed": true,
+      "points": [
+        {
+          "x": 550,
+          "y": 67
+        },
+        {
+          "x": 238,
+          "y": 124
+        },
+        {
+          "x": 74,
+          "y": 378
+        },
+        {
+          "x": 126,
+          "y": 675
+        },
+        {
+          "x": 321,
+          "y": 916
+        },
+        {
+          "x": 508,
+          "y": 916
+        },
+        {
+          "x": 679,
+          "y": 626
+        },
+        {
+          "x": 739,
+          "y": 221
+        }
+      ]
+    },
+    {
+      "name": "Trap 1",
+      "type": "trap",
+      "closed": true,
+      "points": [
+        {
+          "x": 87,
+          "y": 771
+        },
+        {
+          "x": 56,
+          "y": 788
+        },
+        {
+          "x": 8,
+          "y": 805
+        },
+        {
+          "x": 0,
+          "y": 933
+        },
+        {
+          "x": 18,
+          "y": 1077
+        },
+        {
+          "x": 56,
+          "y": 1131
+        },
+        {
+          "x": 58,
+          "y": 1176
+        },
+        {
+          "x": 126,
+          "y": 1204
+        },
+        {
+          "x": 202,
+          "y": 1150
+        },
+        {
+          "x": 222,
+          "y": 1182
+        },
+        {
+          "x": 174,
+          "y": 1237
+        },
+        {
+          "x": 281,
+          "y": 1243
+        },
+        {
+          "x": 368,
+          "y": 1198
+        },
+        {
+          "x": 375,
+          "y": 1077
+        },
+        {
+          "x": 346,
+          "y": 1053
+        },
+        {
+          "x": 344,
+          "y": 1022
+        },
+        {
+          "x": 287,
+          "y": 988
+        },
+        {
+          "x": 235,
+          "y": 999
+        },
+        {
+          "x": 194,
+          "y": 995
+        },
+        {
+          "x": 155,
+          "y": 970
+        },
+        {
+          "x": 213,
+          "y": 952
+        },
+        {
+          "x": 209,
+          "y": 924
+        },
+        {
+          "x": 155,
+          "y": 898
+        },
+        {
+          "x": 158,
+          "y": 851
+        },
+        {
+          "x": 126,
+          "y": 829
+        },
+        {
+          "x": 122,
+          "y": 799
+        }
+      ]
+    }
+  ],
+  "tee_hole": {
+    "x_mm": 30,
+    "y_mm": 30
+  }
+}

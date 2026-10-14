@@ -8980,6 +8980,7 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
             "Metadata/model_settings.config",
             "Metadata/project_settings.config",
             "[Content_Types].xml",
+            "_rels/.rels",
         }
         | set(new_tmpl_bytes.keys())
         | set(_PLATE2_TMPL_FILES.keys())
@@ -9012,6 +9013,25 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
                 ' <Default Extension="config" ContentType="text/xml"/>\n</Types>',
             )
 
+        # Build _rels/.rels: declare the 3dmodel and all thumbnail PNG relationships.
+        # Bambu Studio validates that every PNG in Metadata/ has a corresponding
+        # relationship entry; missing entries trigger the "invalid config" warning.
+        # Relationship IDs must be unique; we use rel-1, rel-2, rel-4, rel-5 pattern
+        # matching blank.3mf (skipping rel-3 for parity with Bambu exports).
+        rels_xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n'
+            ' <Relationship Target="/3D/3dmodel.model" Id="rel-1" '
+            'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n'
+            ' <Relationship Target="/Metadata/plate_1.png" Id="rel-2" '
+            'Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/thumbnail"/>\n'
+            ' <Relationship Target="/Metadata/plate_1.png" Id="rel-4" '
+            'Type="http://schemas.bambulab.com/package/2021/cover-thumbnail-middle"/>\n'
+            ' <Relationship Target="/Metadata/plate_1_small.png" Id="rel-5" '
+            'Type="http://schemas.bambulab.com/package/2021/cover-thumbnail-small"/>\n'
+            '</Relationships>'
+        )
+
         for item in zin.infolist():
             if item.filename in _SKIP_FILES:
                 # Skip files we're replacing so we write fresh copies below.
@@ -9022,6 +9042,8 @@ def _inject_bambu_extruder_metadata(path_3mf: str, scene_names: list) -> None:
         zout.writestr("3D/3dmodel.model", patched_model_xml.encode("utf-8"))
         # Write patched [Content_Types].xml.
         zout.writestr("[Content_Types].xml", ct_xml.encode("utf-8"))
+        # Write regenerated _rels/.rels with thumbnail relationship declarations.
+        zout.writestr("_rels/.rels", rels_xml.encode("utf-8"))
         # Write extruder assignments.
         zout.writestr("Metadata/model_settings.config", cfg_xml)
         # Write project_settings.config from template (if available).

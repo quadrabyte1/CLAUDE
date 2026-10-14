@@ -532,11 +532,12 @@ def _resolve_day(day_hint: Optional[str], now_local: datetime):
 
 
 _TIME_REGEX = re.compile(
-    r"""^\s*
+    r"""^\s*(?:at\s+)?
         (?P<hour>\d{1,2})
-        (?:[:.](?P<minute>\d{2}))?
+        (?:(?:[:.]|\s+)(?P<minute>\d{2}))?   # whisper writes "8 30" with a space
         \s*
         (?P<ampm>am|pm|a\.m\.|p\.m\.)?
+        (?(ampm)(?:\W.*)?)                    # tolerate trailing "." / words after a marker
         \s*$
     """,
     re.IGNORECASE | re.VERBOSE,

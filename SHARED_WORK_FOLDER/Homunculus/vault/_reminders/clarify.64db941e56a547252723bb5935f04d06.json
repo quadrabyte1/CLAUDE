@@ -1,0 +1,13 @@
+{
+  "event_id": "clarify.64db941e56a547252723bb5935f04d06",
+  "schedule": [
+    {
+      "event_id": "clarify.64db941e56a547252723bb5935f04d06",
+      "kind": "clarify_immediate",
+      "fire_at": "2026-10-14T22:50:42.154503+00:00",
+      "tz": "UTC",
+      "body": "Homunculus needs input: Did you mean AM or PM? (e.g. '9 AM' or '9 PM') (memo about 'Set a reminder for today at 8 30 p.m. di')",
+      "status": "acked"
+    }
+  ]
+}

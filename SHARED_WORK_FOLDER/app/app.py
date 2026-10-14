@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "db", "workspace.db")
 
-APP_VERSION = "v5.40"  # unified version for all main-app pages, shown in every sticky footer
+APP_VERSION = "v5.43"  # unified version for all main-app pages, shown in every sticky footer
 
 # ── detect_boundaries: classifier knobs ────────────────────────────────────
 # When True the green polygon interior is excluded from trap/water detection.
@@ -260,9 +260,50 @@ init_db()
 
 # ── Database helpers ────────────────────────────────────────────────────────
 
+# SQLite 3.51.0 (fixed in 3.51.2) can deadlock its unix-VFS mutex when several connections to one file
+# open/close concurrently in one process (2026-10-14 hang); serialize in-process DB use with this lock.
+import threading, faulthandler
+_DB_LOCK = threading.Lock()
+_DB_HELD_SINCE = [0.0]
+_WEDGE_LOG = os.path.join(os.path.dirname(__file__), "logs", "db_wedge.log")
+
+
+def _db_lock_acquire():
+    if _DB_LOCK.acquire(timeout=10):
+        _DB_HELD_SINCE[0] = time.time()
+        return True
+    return False  # wedged: proceed unserialized rather than hang forever
+
+
+def _db_lock_release(held):
+    if held:
+        _DB_HELD_SINCE[0] = 0.0
+        _DB_LOCK.release()
+
+
+def _db_watchdog():
+    while True:
+        time.sleep(5)
+        t = _DB_HELD_SINCE[0]
+        if t and time.time() - t > 20:
+            try:
+                os.makedirs(os.path.dirname(_WEDGE_LOG), exist_ok=True)
+                with open(_WEDGE_LOG, "a") as f:
+                    f.write(f"\n===== {datetime.now()} DB lock held >20s; all threads =====\n")
+                    f.flush()
+                    faulthandler.dump_traceback(file=f, all_threads=True)
+            except Exception:
+                pass
+            time.sleep(60)
+
+
+threading.Thread(target=_db_watchdog, daemon=True).start()
+
+
 def get_db():
     """Return a per-request database connection with standard PRAGMAs."""
     if "db" not in g:
+        g.db_locked = _db_lock_acquire()
         g.db = sqlite3.connect(DB_PATH)
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
@@ -274,8 +315,12 @@ def get_db():
 @app.teardown_appcontext
 def close_db(exc):
     db = g.pop("db", None)
-    if db is not None:
-        db.close()
+    held = g.pop("db_locked", False)
+    try:
+        if db is not None:
+            db.close()
+    finally:
+        _db_lock_release(held)
 
 
 def query(sql, args=(), one=False):
@@ -720,6 +765,7 @@ def update_team_member_model(member_id):
 @app.route("/api/tasks/running_count")
 def api_tasks_running_count():
     import sqlite3
+    held = _db_lock_acquire()
     con = sqlite3.connect(DB_PATH)
     con.row_factory = sqlite3.Row
     try:
@@ -729,7 +775,10 @@ def api_tasks_running_count():
         ).fetchone()
         return jsonify({"count": int(row["n"])})
     finally:
-        con.close()
+        try:
+            con.close()
+        finally:
+            _db_lock_release(held)
 
 
 @app.route("/tasks")

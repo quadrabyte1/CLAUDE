@@ -286,6 +286,10 @@ REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 OWNER_INBOX = os.path.join(REPO_ROOT, "owner_inbox")
 TEAM_INBOX  = os.path.join(REPO_ROOT, "team_inbox")
 
+# Diagnostic PNGs (arrows, height map, contours, arrows-vs-output) written per Generate.
+SAVE_DIAGNOSTIC_IMAGES = True
+DIAGNOSTICS_DIR = os.path.join(OWNER_INBOX, "diagnostics")
+
 
 # ---------------------------------------------------------------------------
 # Manifold gate
@@ -428,6 +432,8 @@ FLAT_FALLBACK_Z_WATER_MM: float = 5.0  # 2 mm water + 3 mm clearance
 # masquerading as arrows and forcing a non-flat Poisson solve on a hole that
 # should fall through to the flat-at-5 mm water-aware fallback.
 # ---------------------------------------------------------------------------
+ARROW_FULL_GLYPH: bool = True  # False = legacy head/tail from the polygon-clipped blob
+HEIGHT_SOLVER: str = "lsq"  # "lsq" (unpinned least squares) or "poisson_pinned" (legacy)
 BOUNDARY_PROXIMITY_PX: float = 3.0  # arrows must be at least this far inside the green polygon edge
 
 
@@ -1123,9 +1129,18 @@ def detect_arrows(
               f"candidate(s); will reject arrow candidates within "
               f"{DOT_PROXIMITY_PX:g} px of any of them")
 
+    # Unclipped navy components: edge arrows are cut by the green polygon, which
+    # removes the head; direction must come from the whole glyph (task 799).
+    _hsv_full = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    _navy_full = (((_hsv_full[:, :, 0] >= 90) & (_hsv_full[:, :, 0] <= 135)
+                   & (_hsv_full[:, :, 1] > 150) & (_hsv_full[:, :, 2] < 105))
+                  .astype(np.uint8) * 255)
+    _nf_n, _nf_labels, _nf_stats, _ = cv2.connectedComponentsWithStats(_navy_full, connectivity=8)
+
     arrows = []
     n_rejected_boundary = 0
     n_rejected_decimal = 0
+    n_full_blob = 0
     for lbl in range(1, n_labels):
         area = int(stats[lbl, cv2.CC_STAT_AREA])
         if area > max_arrow_area:
@@ -1142,7 +1157,9 @@ def detect_arrows(
         # Decimal-dot reject: candidate is near a tiny isolated dot → it's a
         # digit of a slope-grade number label on a StrackaLine image, not an
         # arrow.
-        if dot_centroids:
+        # Navy-ink blobs are real StrackaLine arrows (labels are black/grey), so exempt them.
+        _is_navy = bool((_navy_full[ys, xs] > 0).mean() >= 0.5)
+        if dot_centroids and not _is_navy:
             near_dot = False
             for (dcx, dcy) in dot_centroids:
                 if (cx_cent - dcx) ** 2 + (cy_cent - dcy) ** 2 < DOT_PROXIMITY_PX ** 2:
@@ -1164,12 +1181,21 @@ def detect_arrows(
         signed_dist = cv2.pointPolygonTest(
             boundary_i, (float(cx), float(cy)), measureDist=True
         )
-        if signed_dist <= BOUNDARY_PROXIMITY_PX:
+        if signed_dist <= BOUNDARY_PROXIMITY_PX and not (_is_navy and ARROW_FULL_GLYPH):
             n_rejected_boundary += 1
             continue
 
-        # Resolve ambiguity
-        gdx, gdy = resolve_arrow_direction(ys, xs, cx, cy, dx, dy)
+        # Resolve ambiguity (use the unclipped navy glyph when the polygon cut it)
+        r_ys, r_xs, r_cx, r_cy, r_dx, r_dy = ys, xs, cx, cy, dx, dy
+        _nl = np.bincount(_nf_labels[ys, xs]); _nl[0] = 0
+        if _nl.max() > 0:
+            _fl = int(_nl.argmax())
+            _fa = int(_nf_stats[_fl, cv2.CC_STAT_AREA])
+            if ARROW_FULL_GLYPH and area * 1.1 < _fa <= max_arrow_area:
+                r_ys, r_xs = np.where(_nf_labels == _fl)
+                r_cx, r_cy, r_dx, r_dy = pca_orientation(r_ys, r_xs)
+                n_full_blob += 1
+        gdx, gdy = resolve_arrow_direction(r_ys, r_xs, r_cx, r_cy, r_dx, r_dy)
 
         # Normalise
         mag = math.hypot(gdx, gdy)
@@ -1180,6 +1206,8 @@ def detect_arrows(
 
         arrows.append({"cx": cx, "cy": cy, "dx": gdx, "dy": gdy})
 
+    if n_full_blob:
+        print(f"  detect_arrows: {n_full_blob} edge arrow(s) resolved from the unclipped glyph")
     if n_rejected_boundary > 0:
         print(
             f"  detect_arrows: rejected {n_rejected_boundary} blob(s) within "
@@ -1278,13 +1306,13 @@ def build_gradient_field(
 # Step 4: Solve Poisson equation for height
 # ---------------------------------------------------------------------------
 
-def solve_poisson_height(
+def solve_poisson_height_pinned(
     inside_mask: np.ndarray,
     Gx: np.ndarray,
     Gy: np.ndarray,
 ) -> np.ndarray:
     """
-    Solve ∇²Z = div(G) = ∂Gx/∂x + ∂Gy/∂y inside the green mask.
+    Legacy pinned Poisson solve (kept for comparison). Solve ∇²Z = div(G) = ∂Gx/∂x + ∂Gy/∂y inside the green mask.
 
     Uses finite differences on a regular grid with Dirichlet BC at boundary
     (first interior cell fixed to 0 to remove the constant offset).
@@ -1379,6 +1407,48 @@ def solve_poisson_height(
                 Z[r, c] = z_vals[idx[r, c]]
 
     return Z
+
+
+def solve_lsq_height(
+    inside_mask: np.ndarray,
+    Gx: np.ndarray,
+    Gy: np.ndarray,
+) -> np.ndarray:
+    """Unpinned least-squares fit of Z to the gradient field (min anchored to 0; NaN outside)."""
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.linalg import lsqr
+    rows, cols = inside_mask.shape
+    idx = np.full((rows, cols), -1, dtype=np.int64)
+    idx[inside_mask] = np.arange(int(inside_mask.sum()))
+    n = int(inside_mask.sum())
+    eq_r, eq_c, eq_v, rhs = [], [], [], []
+    k = 0
+    for (a_m, b_m, a_i, b_i, G) in (
+        (inside_mask[:, :-1], inside_mask[:, 1:], idx[:, :-1], idx[:, 1:], 0.5 * (Gx[:, :-1] + Gx[:, 1:])),
+        (inside_mask[:-1, :], inside_mask[1:, :], idx[:-1, :], idx[1:, :], 0.5 * (Gy[:-1, :] + Gy[1:, :])),
+    ):
+        ok = a_m & b_m
+        m = int(ok.sum())
+        e = np.arange(k, k + m)
+        eq_r += [e, e]; eq_c += [b_i[ok], a_i[ok]]; eq_v += [np.ones(m), -np.ones(m)]
+        rhs.append(G[ok]); k += m
+    A = csr_matrix((np.concatenate(eq_v), (np.concatenate(eq_r), np.concatenate(eq_c))), shape=(k, n))
+    z = lsqr(A, np.concatenate(rhs), atol=1e-10, btol=1e-10, iter_lim=20000)[0]
+    Z = np.full((rows, cols), np.nan)
+    Z[inside_mask] = z - z.min()
+    print(f"  LSQ gradient fit: {n} unknowns, {k} equations")
+    return Z
+
+
+def solve_poisson_height(
+    inside_mask: np.ndarray,
+    Gx: np.ndarray,
+    Gy: np.ndarray,
+) -> np.ndarray:
+    """Height solve dispatcher (HEIGHT_SOLVER flag): unpinned LSQ by default."""
+    if HEIGHT_SOLVER == "poisson_pinned":
+        return solve_poisson_height_pinned(inside_mask, Gx, Gy)
+    return solve_lsq_height(inside_mask, Gx, Gy)
 
 
 # ---------------------------------------------------------------------------
@@ -10050,16 +10120,25 @@ def run_pipeline(
     print(f"    [generate] output 3MF dir:      {_3mf_dir}")
     print(f"    [generate] output images dir:   {_img_dir}")
 
-    # ── 5. Save diagnostic images ───────────────────────────────────────────
-    # Diagnostic PNG writes (arrow_directions, height_map) disabled to keep
-    # course Images/ folders clean. Helpers `save_arrow_directions` and
-    # `save_height_map` remain defined for one-off debugging — re-enable by
-    # uncommenting the calls below.
-    # print("\n[5] Saving diagnostic images…")
-    # arrow_out = os.path.join(_img_dir, f"{slug}_arrow_directions.png")
-    # save_arrow_directions(img, arrows, green_boundary_px, arrow_out)
-    # height_out = os.path.join(_img_dir, f"{slug}_height_map.png")
-    # save_height_map(Z, xs_grid, ys_grid, green_boundary_px, height_out)
+    # ── 5. Save diagnostic images → owner_inbox/diagnostics/ (not course Images/) ──
+    _diag_paths: list[str] = []
+    _diag_tag = f"[{serial}]" if serial is not None else __import__("time").strftime("%Y%m%d-%H%M%S")
+
+    def _save_diag(kind, fn, *a):
+        if not SAVE_DIAGNOSTIC_IMAGES:
+            return
+        try:
+            os.makedirs(DIAGNOSTICS_DIR, exist_ok=True)
+            out = os.path.join(DIAGNOSTICS_DIR, f"{slug}_{_diag_tag}_{kind}.png")
+            fn(*a, out)
+            _diag_paths.append(out)
+        except Exception as exc:  # never fail generation over a diagnostic
+            print(f"  WARNING: diagnostic image '{kind}' failed: {exc}")
+
+    print("\n[5] Saving diagnostic images…")
+    _save_diag("arrow_directions", save_arrow_directions, img, arrows, green_boundary_px)
+    _save_diag("height_map", save_height_map, Z, xs_grid, ys_grid, green_boundary_px)
+    _save_diag("arrow_vs_output", save_arrow_vs_output_overlay, img, arrows, Z, xs_grid, ys_grid, green_boundary_px)
 
     # ── 6. Build green surface meshes (smooth + stepped, in-memory) ─────────
     print("\n[6] Building green surface meshes…")
@@ -10488,15 +10567,9 @@ def run_pipeline(
     if not boulders_meshes:
         print("  (no boulders built)")
 
-    # ── 9. Contour debug image ──────────────────────────────────────────────
-    # Diagnostic gradient_contours.png write disabled to keep course Images/
-    # folders clean. Helper `save_contour_debug_image` remains defined for
-    # one-off debugging — re-enable by uncommenting the call below.
-    # print("\n[9] Saving contour lines debug image…")
-    # contour_out = os.path.join(_img_dir, f"{slug}_gradient_contours.png")
-    # save_contour_debug_image(
-    #     Z, xs_grid, ys_grid, inside_mask, img, green_boundary_px, contour_out
-    # )
+    # ── 9. Contour debug image → owner_inbox/diagnostics/ ───────────────────
+    print("\n[9] Saving contour lines debug image…")
+    _save_diag("gradient_contours", save_contour_debug_image, Z, xs_grid, ys_grid, inside_mask, img, green_boundary_px)
 
     # ── 10. Assemble 3MF ────────────────────────────────────────────────────
     print("\n[10] Assembling 3MF…")
@@ -10642,7 +10715,8 @@ def run_pipeline(
 
     print("\n" + "=" * 60)
     print("Done.")
-    # Diagnostic PNG paths suppressed — those writes are disabled (see steps 5 and 9).
+    for _p in _diag_paths:
+        print(f"  Diagnostic PNG:     {_p}")
     print(f"  3MF assembly:       {path_3mf}")
     print(f"  Scene objects:      {len(scene_names)} (green + fringe + {len(trap_meshes)} trap(s) + {len(water_meshes)} water + {len(boulders_meshes)} boulders)")
     print("=" * 60)

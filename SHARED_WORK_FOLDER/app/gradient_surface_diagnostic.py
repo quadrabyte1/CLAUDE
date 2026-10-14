@@ -7346,6 +7346,503 @@ def _apply_boundary_region_derivation(
 # Sand grain texture
 # ---------------------------------------------------------------------------
 
+def _fill_missing_ring_edges(
+    top_faces: "np.ndarray",
+    loops_local: "list[list[int]]",
+    all_xy: "np.ndarray",
+    n_ring: int,
+    shapely_poly,
+) -> "np.ndarray":
+    """Guarantee every boundary-ring edge appears in the top-face triangulation.
+
+    After Delaunay + centroid-clip, some ring edges (loop[i], loop[i+1]) may be
+    missing because Delaunay bridged ring[i]→ring[i+2] with a thin skip-triangle
+    that then got dropped. Those gaps leave pinhole holes that `fill_holes()`
+    can't close.
+
+    Strategy (Topo, 2026-10-14 — second pass): for each missing ring edge A-B,
+    find a vertex X that is ALREADY connected to BOTH A and B in `top_faces`.
+    Adding triangle (A, B, X) then closes the hole with ZERO new boundary edges
+    (since A-X and B-X already exist). If no such shared neighbour exists, fall
+    back to the nearest-interior-vertex fan (which may create new interior
+    boundary edges — captured by the caller's watertight assertion).
+    """
+    import numpy as np
+    from shapely import contains_xy
+
+    if top_faces.size == 0 or not loops_local:
+        return top_faces
+
+    # Existing undirected edges in top faces.
+    e_all = np.sort(
+        np.vstack([top_faces[:, [0, 1]], top_faces[:, [1, 2]], top_faces[:, [2, 0]]]),
+        axis=1,
+    )
+    present = {(int(a), int(b)) for a, b in e_all}
+    # Vertex adjacency: for each vertex, set of neighbours.
+    n_verts = int(top_faces.max()) + 1
+    adj: list[set[int]] = [set() for _ in range(n_verts)]
+    for u, v in e_all:
+        adj[int(u)].add(int(v))
+        adj[int(v)].add(int(u))
+
+    # Fallback KD-tree over interior points.
+    interior_xy = all_xy[n_ring:]
+    n_interior = len(interior_xy)
+    from scipy.spatial import cKDTree
+    kd = cKDTree(interior_xy) if n_interior else None
+
+    def _signed_area(ax, ay, bx, by, cx, cy):
+        return 0.5 * ((bx - ax) * (cy - ay) - (cx - ax) * (by - ay))
+
+    added: list[tuple[int, int, int]] = []
+    missing_count = 0
+    closed_via_shared = 0
+    closed_via_fan = 0
+    for loop in loops_local:
+        if len(loop) < 2:
+            continue
+        for i in range(len(loop)):
+            a = int(loop[i])
+            b = int(loop[(i + 1) % len(loop)])
+            key = (min(a, b), max(a, b))
+            if key in present:
+                continue
+            missing_count += 1
+            ax, ay = all_xy[a]
+            bx, by = all_xy[b]
+
+            # Preferred: find a vertex X already adjacent to BOTH A and B.
+            # Adding (A,B,X) adds no new boundary edges.
+            shared = adj[a] & adj[b] if a < n_verts and b < n_verts else set()
+            chosen = None
+            for xi in shared:
+                cx, cy = all_xy[xi]
+                cent = ((ax + bx + cx) / 3.0, (ay + by + cy) / 3.0)
+                if not bool(contains_xy(shapely_poly, cent[0], cent[1])):
+                    continue
+                # Winding — pick order producing CCW (positive) for Delaunay convention.
+                if _signed_area(ax, ay, bx, by, cx, cy) > 0.0:
+                    chosen = (a, b, int(xi))
+                elif _signed_area(bx, by, ax, ay, cx, cy) > 0.0:
+                    chosen = (b, a, int(xi))
+                else:
+                    continue
+                closed_via_shared += 1
+                break
+
+            # Fallback: nearest-interior fan (may add new boundary edges).
+            if chosen is None and kd is not None:
+                mid = np.array([(ax + bx) * 0.5, (ay + by) * 0.5])
+                k_try = min(32, n_interior)
+                _, nn = kd.query(mid, k=k_try)
+                nn_arr = np.atleast_1d(nn)
+                for ci in nn_arr:
+                    cx, cy = interior_xy[int(ci)]
+                    if _signed_area(ax, ay, bx, by, cx, cy) > 0.0:
+                        cent = ((ax + bx + cx) / 3.0, (ay + by + cy) / 3.0)
+                        if bool(contains_xy(shapely_poly, cent[0], cent[1])):
+                            chosen = (a, b, n_ring + int(ci))
+                            closed_via_fan += 1
+                            break
+                    if _signed_area(bx, by, ax, ay, cx, cy) > 0.0:
+                        cent = ((ax + bx + cx) / 3.0, (ay + by + cy) / 3.0)
+                        if bool(contains_xy(shapely_poly, cent[0], cent[1])):
+                            chosen = (b, a, n_ring + int(ci))
+                            closed_via_fan += 1
+                            break
+
+            if chosen is not None:
+                added.append(chosen)
+                present.add((min(chosen[0], chosen[1]), max(chosen[0], chosen[1])))
+                present.add((min(chosen[1], chosen[2]), max(chosen[1], chosen[2])))
+                present.add((min(chosen[0], chosen[2]), max(chosen[0], chosen[2])))
+                # Update adjacency so a subsequent missing edge can see this triangle.
+                adj[chosen[0]].add(chosen[1]); adj[chosen[1]].add(chosen[0])
+                adj[chosen[0]].add(chosen[2]); adj[chosen[2]].add(chosen[0])
+                adj[chosen[1]].add(chosen[2]); adj[chosen[2]].add(chosen[1])
+
+    if missing_count or added:
+        ring_edges_total = sum(len(lp) for lp in loops_local if len(lp) >= 2)
+        print(f"    Sand ring-stitch: ring_edges={ring_edges_total} "
+              f"present_before={ring_edges_total - missing_count} "
+              f"missing={missing_count} added={len(added)} "
+              f"(shared_vertex={closed_via_shared} nearest_fan={closed_via_fan})")
+    if not added:
+        return top_faces
+    return np.vstack([top_faces, np.array(added, dtype=top_faces.dtype)])
+
+
+def _close_interior_boundary_edges(
+    top_faces: "np.ndarray",
+    tri_faces_all: "np.ndarray",
+    all_xy: "np.ndarray",
+    shapely_poly,
+    ring_edges_set: "set[tuple[int, int]]",
+) -> "np.ndarray":
+    """Resurrect dropped Delaunay triangles that close INTERIOR boundary holes.
+
+    Any count=1 edge in `top_faces` that is NOT a ring edge is an interior
+    pinhole — likely a Delaunay edge whose other-side triangle got dropped by
+    the centroid-outside clip. Ring edges are naturally count=1 in the top
+    surface alone (they're closed later by the wall faces in step 6), so we
+    skip them.
+
+    For each interior boundary edge A-B, scan `tri_faces_all` for a triangle
+    that both contains this edge AND lies inside the polygon by centroid test.
+    Add it, bounded by iterations.
+    """
+    import numpy as np
+    from shapely import contains_xy
+
+    if top_faces.size == 0:
+        return top_faces
+
+    tri_arr = np.asarray(tri_faces_all)
+    edge_to_tris: dict[tuple[int, int], list[int]] = {}
+    for ti, (u, v, w) in enumerate(tri_arr):
+        for a, b in ((u, v), (v, w), (w, u)):
+            key = (min(int(a), int(b)), max(int(a), int(b)))
+            edge_to_tris.setdefault(key, []).append(ti)
+
+    def _tri_edges_set(face_set):
+        return np.sort(
+            np.vstack([face_set[:, [0, 1]], face_set[:, [1, 2]], face_set[:, [2, 0]]]),
+            axis=1,
+        )
+
+    added_rows: list[np.ndarray] = []
+    present_tris: set[tuple[int, int, int]] = {
+        tuple(sorted(int(x) for x in row)) for row in top_faces
+    }
+    for _ in range(8):
+        current = np.vstack([top_faces] + added_rows) if added_rows else top_faces
+        es = _tri_edges_set(current)
+        uniq, cnt = np.unique(es, axis=0, return_counts=True)
+        bedges = uniq[cnt == 1]
+        if len(bedges) == 0:
+            break
+        # Interior bedges only: those NOT in ring_edges_set.
+        interior_bedges = [
+            (int(a), int(b)) for a, b in bedges
+            if (int(a), int(b)) not in ring_edges_set
+        ]
+        if not interior_bedges:
+            break
+        present = {(int(a), int(b)) for a, b in uniq}
+        made_progress = False
+        for a, b in interior_bedges:
+            key = (int(a), int(b))
+            best_tri = None
+            best_new = 999
+            for ti in edge_to_tris.get(key, []):
+                tri = tri_arr[ti]
+                tri_key = tuple(sorted(int(x) for x in tri))
+                if tri_key in present_tris:
+                    continue
+                tri_edges = [
+                    (min(int(tri[0]), int(tri[1])), max(int(tri[0]), int(tri[1]))),
+                    (min(int(tri[1]), int(tri[2])), max(int(tri[1]), int(tri[2]))),
+                    (min(int(tri[0]), int(tri[2])), max(int(tri[0]), int(tri[2]))),
+                ]
+                cent = all_xy[tri].mean(axis=0)
+                if not bool(contains_xy(shapely_poly, cent[0], cent[1])):
+                    continue
+                new_edges = sum(1 for e in tri_edges if e not in present)
+                if new_edges < best_new:
+                    best_new = new_edges
+                    best_tri = tri
+                    if new_edges == 0:
+                        break
+            if best_tri is not None:
+                added_rows.append(np.asarray(best_tri).reshape(1, 3))
+                present_tris.add(tuple(sorted(int(x) for x in best_tri)))
+                for e in [
+                    (min(int(best_tri[0]), int(best_tri[1])), max(int(best_tri[0]), int(best_tri[1]))),
+                    (min(int(best_tri[1]), int(best_tri[2])), max(int(best_tri[1]), int(best_tri[2]))),
+                    (min(int(best_tri[0]), int(best_tri[2])), max(int(best_tri[0]), int(best_tri[2]))),
+                ]:
+                    present.add(e)
+                made_progress = True
+        if not made_progress:
+            break
+
+    if not added_rows:
+        return top_faces
+    print(f"    Sand interior-stitch: resurrected {len(added_rows)} Delaunay triangle(s)")
+    return np.vstack([top_faces, np.vstack(added_rows).astype(top_faces.dtype)])
+
+
+def _earcut_interior_pinholes(
+    top_faces: "np.ndarray",
+    ring_edges_set: "set[tuple[int, int]]",
+    all_xy: "np.ndarray",
+    dtype=None,
+) -> "np.ndarray":
+    """Find interior boundary-edge chains and earcut-triangulate them.
+
+    A boundary edge is count=1 in `top_faces`. We split them into ring edges
+    (left for the wall to close) and interior edges. Interior edges form one
+    or more closed chains (each surrounding a pinhole) — walk each chain and
+    earcut-triangulate it in 2D using the vertex XY positions.
+
+    Returns the augmented face array (possibly unchanged).
+    """
+    import numpy as np
+
+    if top_faces.size == 0:
+        return top_faces
+    if dtype is None:
+        dtype = top_faces.dtype
+
+    # 1. Collect interior boundary edges.
+    es = np.sort(
+        np.vstack([top_faces[:, [0, 1]], top_faces[:, [1, 2]], top_faces[:, [2, 0]]]),
+        axis=1,
+    )
+    uniq, cnt = np.unique(es, axis=0, return_counts=True)
+    bedges = uniq[cnt == 1]
+    interior_bedges = [
+        (int(a), int(b)) for a, b in bedges
+        if (int(a), int(b)) not in ring_edges_set
+    ]
+    if not interior_bedges:
+        return top_faces
+
+    # 2. Group into chains by vertex adjacency.
+    nbr: dict[int, list[int]] = {}
+    for a, b in interior_bedges:
+        nbr.setdefault(a, []).append(b)
+        nbr.setdefault(b, []).append(a)
+
+    visited_edges: set[tuple[int, int]] = set()
+    chains: list[list[int]] = []
+    for start in list(nbr.keys()):
+        # Walk connected edges from `start`.
+        if all(((min(start, v), max(start, v)) in visited_edges) for v in nbr.get(start, [])):
+            continue
+        comp_verts: set[int] = {start}
+        stack = [start]
+        while stack:
+            u = stack.pop()
+            for v in nbr.get(u, []):
+                key = (min(u, v), max(u, v))
+                if key in visited_edges:
+                    continue
+                visited_edges.add(key)
+                if v not in comp_verts:
+                    comp_verts.add(v)
+                    stack.append(v)
+        # Try to walk a closed loop over this component.
+        comp_edges = [
+            (a, b) for a, b in interior_bedges
+            if a in comp_verts and b in comp_verts
+        ]
+        if len(comp_edges) < 3:
+            continue
+        # Order the vertices into a cycle (greedy walker).
+        local_nbr: dict[int, list[int]] = {}
+        for a, b in comp_edges:
+            local_nbr.setdefault(a, []).append(b)
+            local_nbr.setdefault(b, []).append(a)
+        start_v = comp_edges[0][0]
+        chain = [start_v]
+        used_edges: set[tuple[int, int]] = set()
+        cur = start_v
+        prev = None
+        while True:
+            nxts = [n for n in local_nbr.get(cur, []) if (min(cur, n), max(cur, n)) not in used_edges]
+            if not nxts:
+                break
+            nxt = nxts[0]
+            used_edges.add((min(cur, nxt), max(cur, nxt)))
+            if nxt == start_v:
+                break
+            chain.append(nxt)
+            prev = cur
+            cur = nxt
+            if len(chain) > len(comp_edges) + 2:
+                break  # safety
+        # Only accept if we closed the loop (last-to-first edge exists).
+        if (min(chain[-1], chain[0]), max(chain[-1], chain[0])) not in {
+            (min(a, b), max(a, b)) for a, b in comp_edges
+        }:
+            continue
+        chains.append(chain)
+
+    if not chains:
+        return top_faces
+
+    # Build edge-count index for diagonal selection in quad cases.
+    _ec_init: dict[tuple[int, int], int] = {
+        (int(a), int(b)): int(c) for (a, b), c in zip(uniq, cnt)
+    }
+
+    # 3. Earcut each chain in 2D.
+    added_tris: list[list[int]] = []
+    for chain in chains:
+        pts = all_xy[chain]  # (K, 2)
+        area2 = 0.0
+        for i in range(len(chain)):
+            x1, y1 = pts[i]
+            x2, y2 = pts[(i + 1) % len(chain)]
+            area2 += (x1 * y2 - x2 * y1)
+        if area2 < 0:
+            chain = list(reversed(chain))
+            pts = all_xy[chain]
+        # Special case: quadrilateral — pick the diagonal with count 0 in top_faces
+        # so neither resulting triangle creates a non-manifold edge.
+        if len(chain) == 4:
+            a, b, c, d = chain
+            diag1 = (min(int(a), int(c)), max(int(a), int(c)))
+            diag2 = (min(int(b), int(d)), max(int(b), int(d)))
+            d1_c = _ec_init.get(diag1, 0)
+            d2_c = _ec_init.get(diag2, 0)
+            if d1_c < d2_c:
+                added_tris.extend([[a, b, c], [a, c, d]])
+                continue
+            if d2_c < d1_c or d1_c == 0:
+                added_tris.extend([[b, c, d], [b, d, a]])
+                continue
+        tris = _earcut_simple_polygon(pts, chain)
+        if tris:
+            added_tris.extend(tris)
+
+    if not added_tris:
+        return top_faces
+
+    # Dedup: skip earcut triangles whose edges are already count=2 in top_faces
+    # (adding them would create non-manifold edges). Also skip if the exact
+    # triangle (same 3 verts) already exists.
+    present_count: dict[tuple[int, int], int] = {}
+    for a, b in uniq:
+        present_count[(int(a), int(b))] = int(cnt[np.where((uniq == (a, b)).all(axis=1))[0][0]])
+    existing_tris = {tuple(sorted(int(x) for x in f)) for f in top_faces}
+
+    kept: list[list[int]] = []
+    for tri in added_tris:
+        t = tuple(sorted(int(x) for x in tri))
+        if t in existing_tris:
+            continue
+        tri_es = [
+            (min(int(tri[0]), int(tri[1])), max(int(tri[0]), int(tri[1]))),
+            (min(int(tri[1]), int(tri[2])), max(int(tri[1]), int(tri[2]))),
+            (min(int(tri[0]), int(tri[2])), max(int(tri[0]), int(tri[2]))),
+        ]
+        # Reject if any of this triangle's edges is already count=2 in top_faces
+        # (adding would make it count=3, i.e. non-manifold).
+        if any(present_count.get(e, 0) >= 2 for e in tri_es):
+            continue
+        kept.append(tri)
+        existing_tris.add(t)
+        for e in tri_es:
+            present_count[e] = present_count.get(e, 0) + 1
+
+    rejected = len(added_tris) - len(kept)
+    if not kept:
+        if rejected:
+            print(f"    Sand earcut-interior: rejected all {rejected} candidate triangle(s) (dup/non-manifold)")
+        return top_faces
+    print(f"    Sand earcut-interior: closed {len(chains)} pinhole(s) with "
+          f"{len(kept)} triangle(s) ({rejected} rejected)")
+    return np.vstack([top_faces, np.asarray(kept, dtype=dtype)])
+
+
+def _prune_non_manifold_additions(top_faces: "np.ndarray") -> "np.ndarray":
+    """Dedupe identical triangles and drop any triangle whose addition
+    would push an edge past count=2 (non-manifold).
+
+    The three repair passes (ring-stitch, Delaunay-resurrection, earcut) can
+    occasionally propose the same triangle twice, or two triangles that
+    together push an edge count to 3+. Walk `top_faces` in order and keep
+    only triangles that don't trip either invariant.
+    """
+    import numpy as np
+
+    if top_faces.size == 0:
+        return top_faces
+    seen_tris: set[tuple[int, int, int]] = set()
+    edge_count: dict[tuple[int, int], int] = {}
+    kept_mask = np.zeros(len(top_faces), dtype=bool)
+    for i, f in enumerate(top_faces):
+        t = tuple(sorted(int(x) for x in f))
+        if t in seen_tris:
+            continue
+        es = [
+            (min(int(f[0]), int(f[1])), max(int(f[0]), int(f[1]))),
+            (min(int(f[1]), int(f[2])), max(int(f[1]), int(f[2]))),
+            (min(int(f[0]), int(f[2])), max(int(f[0]), int(f[2]))),
+        ]
+        if any(edge_count.get(e, 0) >= 2 for e in es):
+            continue
+        seen_tris.add(t)
+        for e in es:
+            edge_count[e] = edge_count.get(e, 0) + 1
+        kept_mask[i] = True
+    pruned = int((~kept_mask).sum())
+    if pruned:
+        print(f"    Sand prune non-manifold: dropped {pruned} overlapping triangle(s)")
+    return top_faces[kept_mask]
+
+
+def _earcut_simple_polygon(pts_xy: "np.ndarray", vert_ids: "list[int]") -> "list[list[int]]":
+    """Simple ear-clipping triangulation of a CCW 2D polygon.
+
+    `pts_xy` is (K, 2) in CCW order; `vert_ids` are the corresponding global
+    vertex indices to emit in the result triangles. Returns a list of
+    [a, b, c] global-index triangles.
+    """
+    import numpy as np
+
+    n = len(vert_ids)
+    if n < 3:
+        return []
+    ids = list(vert_ids)
+    xy = {i: pts_xy[k] for k, i in enumerate(vert_ids)}
+
+    def _cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    def _point_in_tri(p, a, b, c):
+        d1 = _cross(a, b, p)
+        d2 = _cross(b, c, p)
+        d3 = _cross(c, a, p)
+        has_neg = (d1 < 0) or (d2 < 0) or (d3 < 0)
+        has_pos = (d1 > 0) or (d2 > 0) or (d3 > 0)
+        return not (has_neg and has_pos)
+
+    tris: list[list[int]] = []
+    guard = 2 * n
+    while len(ids) >= 3 and guard > 0:
+        guard -= 1
+        if len(ids) == 3:
+            tris.append([ids[0], ids[1], ids[2]])
+            break
+        for i in range(len(ids)):
+            a = ids[(i - 1) % len(ids)]
+            b = ids[i]
+            c = ids[(i + 1) % len(ids)]
+            A, B, C = xy[a], xy[b], xy[c]
+            if _cross(A, B, C) <= 0:
+                continue  # reflex or collinear
+            # Check no other vertex is inside this triangle.
+            ok = True
+            for other in ids:
+                if other in (a, b, c):
+                    continue
+                if _point_in_tri(xy[other], A, B, C):
+                    ok = False
+                    break
+            if not ok:
+                continue
+            tris.append([a, b, c])
+            ids.remove(b)
+            break
+        else:
+            break
+    return tris
+
+
 def apply_sand_texture(
     mesh: "trimesh.Trimesh",
     amplitude: float = 1.0,
@@ -7723,6 +8220,46 @@ def apply_sand_texture(
     print(f"    Sand texture: Delaunay → {len(tri_faces)} triangles, "
           f"{cent_inside.sum()} kept after centroid clipping")
 
+    # Fan-stitch any ring edge that Delaunay/centroid-clip dropped.
+    _loops_local: list[list[int]] = []
+    _off = 0
+    for lp in all_loops:
+        _loops_local.append(list(range(_off, _off + len(lp))))
+        _off += len(lp)
+    top_new_faces = _fill_missing_ring_edges(
+        top_new_faces, _loops_local, all_xy, n_ring, shapely_poly
+    )
+    # Build the ring-edge set so interior-stitch skips ring edges (they're
+    # legitimately count=1 in the top mesh — the wall faces close them later).
+    _ring_edges_set: set[tuple[int, int]] = set()
+    for _lp in _loops_local:
+        if len(_lp) < 2:
+            continue
+        for _i in range(len(_lp)):
+            _u, _v = int(_lp[_i]), int(_lp[(_i + 1) % len(_lp)])
+            _ring_edges_set.add((min(_u, _v), max(_u, _v)))
+    # Resurrect dropped Delaunay triangles that would close interior pinholes.
+    top_new_faces = _close_interior_boundary_edges(
+        top_new_faces, tri_faces, all_xy, shapely_poly, _ring_edges_set
+    )
+    # Final pass: find any INTERIOR boundary-edge chain in the top mesh
+    # (count=1 edges NOT part of the ring-edge set) and earcut-triangulate it.
+    # Interior pinholes left over from Delaunay + centroid-clip + ring-stitch
+    # + Delaunay-resurrection show up here. Each small chain is closed by
+    # ear-clipping its vertex sequence in 2D (XY plane). Iterate up to 5
+    # passes so partially-closed chains converge.
+    for _ in range(5):
+        _before = len(top_new_faces)
+        top_new_faces = _earcut_interior_pinholes(
+            top_new_faces, _ring_edges_set, all_xy, dtype=top_new_faces.dtype
+        )
+        if len(top_new_faces) == _before:
+            break
+    # Dedup + non-manifold-edge-prune: dedupe identical triangles, then drop
+    # any extra triangle sharing an edge that already appears in >=2 faces
+    # (would create a count=3+ non-manifold edge). Cleans up residual overlap.
+    top_new_faces = _prune_non_manifold_additions(top_new_faces)
+
     # ------------------------------------------------------------------
     # 6. Reassemble: new grid top + original wall/base faces
     # ------------------------------------------------------------------
@@ -7765,16 +8302,86 @@ def apply_sand_texture(
         faces=combined_faces,
         process=True,
     )
-    # Repair any remaining tiny seam gaps from floating-point mismatch
+    _e_pre = np.sort(new_mesh.edges, axis=1)
+    _u_pre, _c_pre = np.unique(_e_pre, axis=0, return_counts=True)
+    _nm_pre = int((_c_pre > 2).sum())
+    _be_pre_count = int((_c_pre == 1).sum())
+    if _nm_pre or _be_pre_count:
+        print(f"    Sand post-Trimesh(process=True): bedges={_be_pre_count} "
+              f"nmedges={_nm_pre} faces={len(new_mesh.faces)} verts={len(new_mesh.vertices)}")
+
+    # Final non-manifold prune on the FULL mesh (top + walls + base): if any
+    # face has an edge count=3+ (shared with 2 other faces), drop it. Only drop
+    # the earliest-encountered duplicate for each edge; walls take precedence.
+    _e2 = np.sort(new_mesh.edges, axis=1)
+    _u2, _c2 = np.unique(_e2, axis=0, return_counts=True)
+    _nm_edges = {(int(a), int(b)) for a, b in _u2[_c2 > 2]}
+    if _nm_edges:
+        edge_count = {(int(a), int(b)): int(c) for (a, b), c in zip(_u2, _c2) if c <= 2}
+        for e in _nm_edges:
+            edge_count[e] = 2  # pin manifold-ok at 2
+        kept = []
+        for f in new_mesh.faces:
+            es = [
+                (min(int(f[0]), int(f[1])), max(int(f[0]), int(f[1]))),
+                (min(int(f[1]), int(f[2])), max(int(f[1]), int(f[2]))),
+                (min(int(f[0]), int(f[2])), max(int(f[0]), int(f[2]))),
+            ]
+            # If adding this face would push a currently-manifold-pinned edge over, drop.
+            touches_nm = any(e in _nm_edges for e in es)
+            if touches_nm:
+                # Check: does the face use the NM edge AND is there already an alternate
+                # closure? If the edge is at count 2 (already satisfied by other faces),
+                # drop this face.
+                would_exceed = False
+                for e in es:
+                    if e in _nm_edges and edge_count.get(e, 0) >= 2:
+                        would_exceed = True
+                        break
+                if would_exceed:
+                    continue
+            for e in es:
+                if e in _nm_edges:
+                    edge_count[e] = edge_count.get(e, 0) + 1
+            kept.append(f)
+        kept_arr = np.asarray(kept, dtype=new_mesh.faces.dtype)
+        dropped = len(new_mesh.faces) - len(kept_arr)
+        if dropped:
+            new_mesh = trimesh.Trimesh(vertices=new_mesh.vertices, faces=kept_arr, process=False)
+            print(f"    Sand post-Trimesh NM prune: dropped {dropped} face(s)")
+
+    # Repair any remaining tiny seam gaps from floating-point mismatch.
+    # Avoid trimesh.repair.fill_holes here — it can add overlapping triangles
+    # that create non-manifold (count>=3) edges on this topology. Instead,
+    # merge coincident vertices and let the mesh settle; the earlier earcut
+    # pass handled interior pinholes.
     if not new_mesh.is_watertight:
+        _nfaces_before_repair = len(new_mesh.faces)
         new_mesh.merge_vertices(digits_vertex=3)
         trimesh.repair.fix_normals(new_mesh)
-        trimesh.repair.fill_holes(new_mesh)
+        # Only run fill_holes if there are no non-manifold edges to worry about.
+        _er = np.sort(new_mesh.edges, axis=1)
+        _ur, _cr = np.unique(_er, axis=0, return_counts=True)
+        if int((_cr > 2).sum()) == 0 and int((_cr == 1).sum()) > 0:
+            trimesh.repair.fill_holes(new_mesh)
+            # Verify fill_holes didn't introduce NM edges; roll back if so.
+            _er2 = np.sort(new_mesh.edges, axis=1)
+            _ur2, _cr2 = np.unique(_er2, axis=0, return_counts=True)
+            if int((_cr2 > 2).sum()) > 0:
+                print(f"    Sand repair rollback: fill_holes added NM edges "
+                      f"(nm={int((_cr2>2).sum())}); reverting fill_holes.")
+                # Keep only the original faces (strip the added trailing ones).
+                new_mesh.faces = new_mesh.faces[:_nfaces_before_repair]
         trimesh.repair.fix_winding(new_mesh)
 
+    # Final diagnosis line.
+    _e = np.sort(new_mesh.edges, axis=1)
+    _uniq, _cnt = np.unique(_e, axis=0, return_counts=True)
+    _bedges = int((_cnt == 1).sum())
+    _nmedges = int((_cnt > 2).sum())
     print(f"    Sand texture: reassembled mesh — "
           f"{len(new_mesh.vertices)} verts, {len(new_mesh.faces)} faces, "
-          f"watertight={new_mesh.is_watertight}")
+          f"watertight={new_mesh.is_watertight} bedges={_bedges} nmedges={_nmedges}")
 
     # Task 708 (Topo, 2026-10-04): sand-chunk scatter pass removed.
     # Trap top is now flat base + rake lines only.  No Gaussian bumps, no floor guard.
@@ -7782,6 +8389,12 @@ def apply_sand_texture(
     # Copy rebuilt geometry back into the caller's mesh object.
     mesh.vertices = new_mesh.vertices
     mesh.faces    = new_mesh.faces
+
+    if not new_mesh.is_watertight:
+        raise RuntimeError(
+            f"apply_sand_texture produced non-watertight trap mesh "
+            f"(trap_index={trap_index}, euler={new_mesh.euler_number})"
+        )
 
     return mesh
 

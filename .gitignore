@@ -4,3 +4,4 @@
 *.part
 x.py
 *blob
+SHARED_WORK_FOLDER/app/.DS_Store

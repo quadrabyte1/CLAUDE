@@ -3,10 +3,10 @@
 ## What this is
 
 This repo runs the **Boundary Editor** and **Plaque Editor** as a single local
-Flask web app on port **5051**. Each machine runs its own copy — its own
-`db/workspace.db`, its own `ItWentIn/GolfCourses/` tree. There is no network
-mount, no cloud sync, no shared state. Writes on your machine stay on your
-machine.
+Flask web app on port **5051**. Each machine runs its own copy with its own
+`db/workspace.db`. Course folders (`ItWentIn/GolfCourses/`) come with the
+clone. There is no network mount, no cloud sync, no shared state. Writes on
+your machine stay on your machine.
 
 ## Prerequisites
 
@@ -19,7 +19,7 @@ machine.
   pyenv local 3.13.1       # inside the repo root
   ```
 - **git**
-- **~2 GB free disk** for course data (not committed to the repo).
+- **~3 GB free disk** for the clone (course folders are in the repo).
 - **macOS or Linux**. The app assumes a POSIX shell (`run.sh`) and calls the
   macOS `open` command to hand `.3mf` files to Bambu Studio. On Linux `open`
   won't exist — the editor itself still works, but the "open in slicer"
@@ -29,8 +29,8 @@ machine.
 ## Install
 
 ```bash
-git clone <repo-url> SHARED_WORK_FOLDER
-cd SHARED_WORK_FOLDER
+git clone <repo-url> CLAUDE
+cd CLAUDE/SHARED_WORK_FOLDER
 python3.13 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
@@ -49,32 +49,6 @@ else in the file has 3.12 wheels at the pinned versions.
 
 **Python 3.11 and older are not supported.** `numpy 2.x` dropped 3.10 support
 and the pinned `shapely`/`trimesh` versions assume `numpy 2.x`.
-
-## Course data
-
-The editors read course assets from `ItWentIn/GolfCourses/<CourseName>/`. Each
-course folder must contain:
-
-```
-ItWentIn/GolfCourses/<CourseName>/
-├── 3MFs/        # 3MF print files (output of Plaque Editor + rendered models)
-├── EGMs/        # EliteGolfMoments JSON — the Boundary Editor's primary file
-└── Images/      # Heat-map PNGs, background photos, overlays
-```
-
-This tree is **not in git** (~1 GB per course). To get a course onto your
-machine, ask Thomas to rsync one folder to you — pick the course you need:
-
-```bash
-# Example: pulling Delaveaga from Thomas's machine over SSH.
-rsync -av --progress \
-  thomas@<thomas-host>:/path/to/SHARED_WORK_FOLDER/ItWentIn/GolfCourses/Delaveaga/ \
-  ./ItWentIn/GolfCourses/Delaveaga/
-```
-
-USB stick or a one-off Dropbox share works equally well — the folder just
-needs to end up at that path. Current active courses: **Delaveaga, Stanford,
-Firefly, Seabright**.
 
 ## Workspace DB
 
@@ -158,8 +132,8 @@ the venv. `source .venv/bin/activate` from the repo root.
 the pin loosening described above. If `pip` claims no wheel is available on
 3.13 either, your `pip` is stale: `pip install --upgrade pip` and retry.
 
-**Editor loads but course dropdowns are empty** — no course folders exist
-under `ItWentIn/GolfCourses/`. See the "Course data" section above.
+**Editor loads but course dropdowns are empty** — `ItWentIn/GolfCourses/`
+is missing; check you ran the app from the cloned `SHARED_WORK_FOLDER`.
 
 **Editor loads but no team/task data on sidebar** — `db/workspace.db` is
 missing. See the "Workspace DB" section above.
